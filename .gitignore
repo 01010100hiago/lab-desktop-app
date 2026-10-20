@@ -1,0 +1,22 @@
+# Gradle / Java
+.gradle/
+build/
+out/
+*.class
+*.log
+# IDEs
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+# macOS
+.DS_Store
+# segredos locais (cofre de desenvolvimento, nunca versionar)
+cofre-dev/
+*.pem
+*.key
+# chaves SSH soltas na raiz do repositório (id_ed25519, id_rsa...) e nas pastas de chave de teste; arquivos legítimos com esse prefixo em outras pastas não são escondidos
+/id_*
+!/id_*.pub
