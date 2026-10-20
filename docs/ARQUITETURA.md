@@ -1,0 +1,670 @@
+# lab-desktop: arquitetura
+
+Documento 1 de 2 (ARQUITETURA.md e CONTRATO-API.md). Cliente nativo de desktop (Java 21; macOS, Windows e Linux) para o Painel do Lab. Substitui o front web e o túnel SSH manual (um `ssh -L` para a porta do agente). O servidor continua sendo o agente Node que já existe; o app só o consome pela API.
+
+Convenção deste documento: "medido" = rodou na máquina de desenvolvimento; "extrapolado" = calculado a partir de uma medição; "a confirmar" = ainda sem prova real.
+
+## 1. Visão geral
+
+### 1.1 O que o app faz
+
+- Guarda no Mac, num cofre cifrado por senha-mestra, as chaves SSH e os tokens de cada servidor. As chaves nunca saem do Mac.
+- Abre e mantém sozinho a conexão SSH de cada servidor (reconecta, detecta queda e sono do Mac) e o túnel para o agente (`127.0.0.1:7000` do servidor).
+- Mostra o que o front web mostra, em telas nativas: projetos, projeto (abas), consumo e limites, servidor, sessão do Claude.
+- Abre o terminal do Claude como terminal nativo (JediTerm) sobre um canal SSH com PTY que roda `docker exec -it lab-claude-<p> tmux -u attach -t work`. Não usa ttyd nem WebSocket.
+- Mostra o estado de vários servidores na barra lateral. Notificações nativas (pausa por limite, crédito) e o ícone na barra de menus são planejados e ainda não existem (seção 9).
+
+### 1.2 Diagrama
+
+```
+Mac: Lab Desktop.app (Java 21, Swing + FlatLaf)             Servidor (lab: 192.0.2.5:2222, labuser)
++--------------------------------------------------+       +------------------------------------------------+
+| EDT: telas, diálogos, tema (só desenha snapshots)|       | sshd                                           |
+|        ^ snapshots imutáveis (invokeLater)       |       |                                                |
+| Sondador (1 por servidor, tópicos por tela)      |       |   forward direct-tcpip -> 127.0.0.1:7000 ------+--> agente (Node)
+|   ClienteApi (java.net.http, HTTP/1.1) --+--+    |                                                |       |-- docker
+|                                                  |  |    |   exec com PTY:                                |       |-- /api/*
+| PainelTerminal (JediTerm) <-> SshTtyConnector ---+--+--> |   docker exec -it lab-claude-<p>               |
+|                                                  |  |    |     tmux -u attach -t work                     |
+| ConexaoSsh (MINA SSHD): UMA sessão por servidor -+--+    +------------------------------------------------+
+|   + TunelSsh (127.0.0.1:<porta efêmera>)         |
+| Cofre local (Argon2id + AES-256-GCM)             |
++--------------------------------------------------+
+```
+
+Uma sessão SSH por servidor multiplexa o forward HTTP e todos os terminais. Assim o terminal continua vivo quando o agente reinicia (um `docker compose up -d --build` do painel não derruba as abas).
+
+### 1.3 Princípios
+
+1. O contrato da API do agente não muda (CONTRATO-API.md). O agente é opcional e o app só o consome pela API.
+2. Nada de rede, disco pesado, KDF ou `sleep` na EDT. Tela só recebe snapshot imutável pronto.
+3. Segredo só no cofre. Chave privada e token em `byte[]`, zerados ao bloquear; nunca em log, argumento, variável de ambiente ou arquivo temporário.
+4. Todo texto que vem do servidor é não confiável (o Swing renderiza HTML em rótulos).
+5. Crescimento por acréscimo de pacotes e telas, sem reescrever o que já existe.
+6. Sem framework de DI, sem barramento de eventos, sem Spring. Composição manual em `Aplicacao`.
+
+## 2. Decisões e como foram aplicadas
+
+### 2.1 Decisões fechadas
+
+| Decisão | Aplicação |
+|---|---|
+| Interface 100 % nativa, sem navegador e sem WebView | Swing + FlatLaf. Links externos abrem no navegador do sistema só por lista de permitidos. |
+| Java 21 (OpenJDK Homebrew), Gradle com wrapper, jpackage `.app` arm64 | seção 11 |
+| Terminal JediTerm sobre canal SSH com PTY (`docker exec -it ... tmux attach -t work`), sem ttyd | seção 7 |
+| SSH e túneis com Apache MINA SSHD | seção 6; `sshd-core` 2.20.0 estável + BouncyCastle |
+| Cofre local cifrado por senha-mestra digitada ao abrir; o app gera pares de chave e mostra a pública | seção 5 |
+| Vários servidores, cada um com o estado na barra lateral (notificações nativas e ícone na barra de menus: planejados, ainda não existem) | seções 8 e 9 |
+| Token para cliente nativo no agente, mantendo o túnel como canal | seção 10 e CONTRATO-API.md seção 6 |
+| Jackson, JUnit 5, sem frameworks pesados | seção 15 |
+| Identificadores em português sem acento, pacotes `br.com.labdesktop.*`, UI em pt-BR, sem emoji | todo o projeto |
+| Paleta quente (grafite, creme, âmbar), claro e escuro, nunca azul nem ciano | seção 8.2 |
+| Operador único, máquina do próprio usuário; segurança sem exagero corporativo | seção 13 |
+
+### 2.2 Decisões derivadas (resumo; justificativas nas seções)
+
+| Decisão derivada | Motivo curto |
+|---|---|
+| `HttpClient` sempre em HTTP/1.1 | o padrão tenta `Upgrade: h2c` e o handler de upgrade do agente destrói o socket |
+| `SshClient` blindado: sem identidades de `~/.ssh`, sem `~/.ssh/config`, só publickey | o cliente padrão do MINA oferece `~/.ssh/id_ed25519` junto com a chave do cofre e lê o `~/.ssh/config` |
+| Chave do host por sondagem separada e pin no cofre; o verificador nunca abre diálogo | um diálogo dentro do `ServerKeyVerifier` consome o prazo de `auth().verify(15 s)` |
+| O app gera a credencial dele | o valor em claro só existe no cofre cifrado do computador; nunca vai em argumento de comando |
+| `write` do terminal nunca enfileira e nunca reenvia teclas | uma tecla velha aprovaria depois um pedido de permissão do Claude |
+| Heartbeat de 10 s com 3 respostas perdidas (não 15 s) | com 15 s a queda foi detectada em 58 s (medido); com 10 s, cerca de 40 s (extrapolado) |
+| Argon2id 256 MiB, `t=6`, `p=1` | cerca de 1 s num computador de referência (medido); `p=4` não encarece para o defensor porque o BC roda as lanes em série |
+| Um projeto Gradle com `TesteCamadas` | em vez de subprojetos (exagero para operador único) |
+| Uma chave SSH por servidor | revogar um servidor não derruba os outros |
+| `tmux attach` SEM `-d` por padrão | é a regra adotada; `-d` fica como preferência por servidor |
+
+## 3. Ambiente de desenvolvimento
+
+Não há nada a instalar além do JDK e, para alguns testes, do Node.
+
+| Item | Estado |
+|---|---|
+| JDK 21 | Qualquer JDK 21 completo (com `javac`, `jlink`, `jpackage`, `jdeps` e `jmods`), por exemplo Temurin 21 ou o `openjdk@21` do Homebrew. Defina `JAVA_HOME` para ele; o Gradle 9 usa por padrão o JDK que achar primeiro, que pode ser mais novo que o 21. |
+| Gradle | O wrapper do repositório (`./gradlew`), Gradle 9. |
+| Node | Opcional (20 ou mais novo): só para `GabaritoIgualAoDoAgenteTest`, que compara o esqueleto de projeto do app com o do agente; sem `node` o teste é pulado. |
+| Ferramentas do sistema | Mac: Xcode Command Line Tools (`codesign`, `osascript`). Windows: WiX 3 só para gerar o `.msi`. |
+| Opcionais | `cloudflared` (transporte opcional por túnel da Cloudflare), `tmux` local. |
+| Repositório do agente | O agente é um repositório à parte. O app só o consome pela API; o pacote do agente que o instalador envia é montado por `./gradlew empacotarAgente` a partir de um clone dele (7.9). |
+
+## 4. Estrutura do projeto e pacotes
+
+### 4.1 Layout
+
+Um único projeto Gradle (sem subprojetos).
+
+```
+lab-desktop/
+  build.gradle.kts  settings.gradle.kts  gradle.properties
+  gradle/wrapper/                      (9.8.0)
+  gradle/verification-metadata.xml     (sha256 das dependências)
+  docs/                                (estes documentos)
+  empacotamento/                       (ícones e licença do instalador do Windows)
+  scripts/capturar-fixtures.sh         (grava respostas reais do lab em src/test/resources/lab-real/)
+  src/main/java/br/com/labdesktop/...
+  src/main/resources/br/com/labdesktop/ui/tema/    (FlatMacLightLaf.properties, FlatMacDarkLaf.properties)
+  src/main/resources/br/com/labdesktop/ui/icones/  (*.svg)
+  src/test/java/...   src/test/resources/lab-real/
+```
+
+### 4.2 Pacotes e classes principais
+
+Raiz: `br.com.labdesktop`.
+
+| Pacote | Responsabilidade | Classes principais | Depende de |
+|---|---|---|---|
+| `labdesktop` (raiz) | Ponto de entrada e composição manual. Define as propriedades do macOS antes de iniciar o AWT. | `Principal`, `Aplicacao`, `Versao` | todos |
+| `util` | Utilitários sem domínio: formatadores portados do front web original, executores, JSON, preferências, caminhos, log. | `Formato` (`fmtNum` com vírgula, `fmtBytes`, `fmtPct`, `fmtUptime`, `fmtHa`, `fmtUsd`, `fmtCompacto`, `fmtDiaCurto`), `Fundo` (`emFundo`, `naEdt`), `Json` (um `ObjectMapper`), `Preferencias`, `CaminhosApp`, `ConfiguracaoDeLog`, `Observavel`, `EdtWatchdog` (só em desenvolvimento) | JDK |
+| `seguranca` | Tratamento de dado não confiável e de segredo. | `TextoSeguro` (neutraliza `<html` do Swing, remove controles C0/C1 e bidi), `Redator` (tira a credencial do app, blocos `BEGIN/END`, valores de `Authorization`), `ListaPermitidaDeUrls`, `ValidadorDeNomes` (as regex do agente) | JDK |
+| `cofre` | Cofre local cifrado. Não conhece rede nem UI. | `CofreDeChaves`, `ArquivoCofre`, `DerivadorArgon2id`, `CifraAesGcm`, `ConteudoCofre`, `ChaveSsh`, `TokenAgente`, `ConfigServidor` (record sem segredo), `Pin`, `GeradorDeChaves`, `ImportadorDeChaves`, `TravaDeInstancia`, `SenhaIncorretaException`, `CofreCorrompidoException` | `util`, `seguranca` |
+| `ssh` | Tudo de SSH com MINA SSHD. | `ClienteSshFactory`, `ConexaoSsh`, `EstadoConexao`, `PoliticaDeBackoff`, `TunelSsh`, `VerificadorDeChaveDoServidor`, `SondagemDeHost`, `ExecRemoto`, `CanalPty`, `MonitorDeSono`, `ProvisionadorRemoto`, `TransporteCloudflared` | `util`, `seguranca`, `cofre` |
+| `api` e `api.modelo` | Contrato HTTP do agente: um método por rota, bloqueante, sempre fora da EDT. | `ClienteApi`, `ErroApi` (selada: `NaoAutorizado`, `Conflito`, `NaoEncontrado`, `ServidorErro`, `ErroRede`, `RespostaInvalida`), `TimeoutsPorRota`, `LeituraLimitada`; modelo (records): `ListaProjetos`, `Projeto`, `DetalheProjeto`, `DetalheRaiz`, `Container`, `GitInfo`, `Limite`, `LimitesConta`, `Freio`, `Pausado`, `InfoServidor`, `DetalheServidor`, `TelaSessao`, `Pergunta`, `Opcao`, `Tarefa`, `ConsumoGlobal`, `ConsumoProjeto`, `SessaoConsumo`, `Harness`, `VersaoAgente` | `util`, `seguranca` |
+| `servidor` | Um servidor vivo e o coordenador. | `ServidorLab`, `GerenciadorServidores`, `Sondador`, `Topico`, `EstadoServidor` (snapshot imutável), `Inscricao`, `AcoesDoServidor` | `ssh`, `api`, `cofre`, `util` |
+| `terminal` | Terminal nativo. | `SshTtyConnector`, `ConfigTerminal` (estende `DefaultSettingsProvider`), `PaletaTerminal` (estende `ColorPalette`), `PainelTerminal`, `SessaoTerminal`, `ClassificadorDeSaida`, `PortaoDeEntrada` | `ssh`, `servidor`, `util` |
+| `aviso` | Planejado (o pacote ainda não existe). Regras de alerta, notificação, barra de menus, Dock. | `AnalisadorLimites` (puro), `Notificador` (interface), `NotificadorTray`, `NotificadorOsascript`, `IconeBarraDeMenus`, `DockBadge`, `EstadoNotificacoes` | `servidor`, `api`, `util` |
+| `ui`, `ui.tema`, `ui.componentes` | Casca e componentes. | `JanelaPrincipal`, `Navegacao`, `BarraServidores`, `FaixaAviso`, `BarraDeStatus`, `MenuApp`, `GerenciadorTema`; componentes: `Selo`, `BarraSeveridade`, `Tile`, `Sparkline`, `GraficoBarras`, `Toast`, `ListaLinhas`, `MarkdownMini`, `Icones` | `servidor`, `util` |
+| `ui.telas` | Uma classe por página web. | `TelaProjetos`, `TelaProjeto`, `TelaConsumo`, `TelaServidor`, `TelaSessao`, `BarraLateralSessao`, `TelaMonitor`, `TelaServidores` | `ui`, `servidor`, `api`, `terminal` |
+| `ui.dialogos` | Diálogos modais. | `DialogoSenhaMestra`, `DialogoAdicionarServidor`, `DialogoConfiarHost`, `DialogoNovoProjeto`, `DialogoLimite`, `DialogoFreio`, `DialogoLimiteExcedido`, `DialogoReabrir`, `DialogoProcessos`, `DialogoLogin` | `ui`, `cofre`, `servidor` |
+
+### 4.3 Regras de dependência
+
+- Camada de domínio: `util`, `seguranca`, `cofre`, `ssh`, `api`, `servidor`. Não importa `java.awt`, `javax.swing`, `com.formdev` nem `com.jediterm`. O despacho para a EDT entra por `Fundo.definirEdt(...)`, que `Principal` liga a `SwingUtilities::invokeLater`.
+- `TesteCamadas` (JUnit simples) varre `src/main/java` e falha se a camada de domínio importar esses pacotes, ou se `cofre`, `ssh` e `api` importarem `ui`. É o substituto barato dos subprojetos.
+- Tipos que carregam segredo (`ChaveSsh`, `TokenAgente`) não são `record` e têm `toString` redigido. `ConfigServidor` é `record` precisamente porque não carrega segredo.
+- Nenhum DTO de tela contém segredo.
+
+### 4.4 Partida e composição
+
+`Principal.main`:
+
+1. Define `apple.laf.useScreenMenuBar=true` e `apple.awt.application.name=Lab Desktop` antes de qualquer classe do AWT (no `.app` já vêm como opções da JVM; isto cobre o `./gradlew run`).
+2. `ConfiguracaoDeLog` (arquivo em `~/Library/Logs/LabDesktop/`, `org.apache.sshd` em WARN).
+3. `TravaDeInstancia`: segunda instância avisa e sai.
+4. Tema FlatLaf (`GerenciadorTema`), fontes Inter e JetBrains Mono.
+5. `DialogoSenhaMestra`: cria o cofre (primeira vez) ou abre. O KDF roda numa thread própria, com indicador de progresso.
+6. `Aplicacao` instancia, na ordem e por construtor: `GerenciadorServidores` (um `ServidorLab` por servidor do cofre), `JanelaPrincipal` e e, quando existir, o pacote `aviso`.
+
+## 5. Cofre
+
+### 5.1 Local e arquivos
+
+Pasta `~/Library/Application Support/LabDesktop/` (modo 0700):
+
+| Arquivo | Conteúdo |
+|---|---|
+| `cofre.labcofre` (0600) | o cofre cifrado |
+| `cofre.labcofre.bak` | geração anterior |
+| `cofre.labcofre.tmp` | só existe durante a gravação |
+| `cofre.lock` | trava de instância (`FileChannel.tryLock`) |
+| `preferencias.json` | tema, janela, fonte do terminal, Option como Meta, copiar ao selecionar, avisos que disparam notificação, auto-bloqueio. Sem segredo. |
+| `estado-avisos.json` | o que já foi notificado (por servidor, janela, limiar e `zera_em`). Fora do cofre de propósito: cada aviso regravaria o cofre e giraria o `.bak`. Sem segredo. |
+
+As permissões são conferidas a cada abertura; se estiverem abertas demais, o app corrige e avisa. A pasta pode ser trocada por `--pasta <dir>` (usado nos testes e para abrir um backup do cofre em outro lugar).
+
+### 5.2 Formato binário (v1, big-endian)
+
+| Deslocamento | Tamanho | Campo |
+|---|---|---|
+| 0 | 8 | magic `LABCOFRE` |
+| 8 | 1 | versão do formato (1) |
+| 9 | 1 | id do KDF (1 = Argon2id v1.3) |
+| 10 | 4 | memória em KiB (u32) |
+| 14 | 1 | iterações (u8) |
+| 15 | 1 | paralelismo (u8) |
+| 16 | 16 | sal aleatório |
+| 32 | 12 | nonce aleatório (novo a cada gravação) |
+| 44 | n + 16 | texto cifrado AES-256-GCM com a tag de 16 bytes no fim |
+
+O AAD do GCM são os 32 primeiros bytes (cabeçalho mais sal). Adulterar qualquer parâmetro, inclusive baixar o custo do KDF para facilitar força bruta, falha a autenticação.
+
+Os parâmetros ficam no cabeçalho para poderem ser endurecidos depois. Se o cofre abre com parâmetros mais fracos que os atuais, o app regrava com os novos (sal novo) logo após o desbloqueio, com a senha ainda em memória, sem mudar o formato.
+
+Na leitura, o app recusa (arquivo malicioso ou corrompido não pode provocar `OutOfMemoryError`): memória fora de 19.456 a 1.048.576 KiB, iterações fora de 2 a 10, paralelismo fora de 1 a 8, KDF desconhecido e arquivo maior que 8 MiB.
+
+### 5.3 Conteúdo (JSON UTF-8, dentro do texto cifrado)
+
+```jsonc
+{
+  "versao": 1,
+  "chaves": [ { "id": "k1", "nome": "lab", "algoritmo": "ssh-ed25519",
+                "privadaOpenssh": "<base64 do PEM 'BEGIN OPENSSH PRIVATE KEY' sem passphrase>",
+                "publica": "ssh-ed25519 AAAA... lab-desktop@<mac>", "impressao": "SHA256:...", "criadaEm": "ISO" } ],
+  "servidores": [ { "id": "s1", "nome": "lab", "host": "192.0.2.5", "porta": 2222, "usuario": "labuser",
+                    "chaveId": "k1", "portaAgente": 7000,
+                    "tokenAgente": "<base64 do texto da credencial>",
+                    "pins": [ { "algoritmo": "ssh-ed25519", "impressao": "SHA256:..." } ],
+                    "transporte": { "tipo": "direto" } } ]
+}
+```
+
+`privadaOpenssh` e `tokenAgente` são guardados como base64 de bytes para o Jackson entregar `byte[]` direto, sem criar `String` com a chave. `transporte` pode ser `{ "tipo": "cloudflared", "hostname": "..." }`. Os pins ficam dentro do cofre de propósito: o GCM os autentica, e são o que impede o MITM silencioso.
+
+### 5.4 Criptografia e senha
+
+- KDF: Argon2id da API leve do BouncyCastle (`org.bouncycastle.crypto.generators.Argon2BytesGenerator`, bcprov 1.86, sem registrar provider), versão 1.3, saída de 32 bytes. Parâmetros adotados: **m = 262144 KiB (256 MiB), t = 6, p = 1**.
+- Medido num computador de referência (JDK 21, BC 1.86, 2 rodadas, heap de 512 MiB e de 768 MiB): m=256 MiB com t=3 levou 0,50 a 0,67 s; t=4, 0,64 a 0,84 s; **t=6, 0,96 a 1,01 s**; com p=4 e t=3, 0,49 a 0,59 s (não é mais caro que p=1, o BC executa as lanes em série); m=128 MiB, t=3, p=4, 0,23 s. O alvo é cerca de 1 s no desbloqueio; a calibração final é um teste (faixa aceita 0,3 a 4 s, para não ficar frágil).
+- Cifra: JCE puro, `AES/GCM/NoPadding`, chave de 256 bits, `GCMParameterSpec` de 128 bits, nonce de 96 bits de `SecureRandom`, novo a cada gravação.
+- Plano B se o BC sair: `PBKDF2WithHmacSHA256` do JCE com 1.000.000 de iterações (136 ms, medido).
+- Senha-mestra: `char[]` vindo do `JPasswordField`, mínimo de 12 caracteres, convertida para bytes UTF-8 exatamente como digitada (sem normalização Unicode, para não criar `String` da senha) e zerada depois de derivar. A tela de criação recomenda frase com espaços ou ASCII e avisa que **não há recuperação**.
+- Sem Keychain, sem Touch ID, sem chave de recuperação (ver 14).
+- Atraso crescente após senha errada. O app nunca apaga o cofre sozinho.
+
+### 5.5 Segredos em memória
+
+- `ChaveSsh` e `TokenAgente` guardam `byte[]` e têm `toString` redigido. Nenhum `record` carrega segredo.
+- A chave derivada de 32 bytes fica em `byte[]` só enquanto o cofre está aberto (permite salvar sem pedir a senha de novo). `SecretKeySpec` copia os bytes e a cópia do JCE não dá para zerar: limite aceito e documentado.
+- Limites residuais aceitos: o JSON decifrado passa por buffers do Jackson e por `String` (nome, host); o `KeyPair` do MINA e o `String` do cabeçalho `Authorization` existem enquanto a sessão existe. A mitigação é tempo de vida curto, não zeragem perfeita.
+
+### 5.6 Ciclo de vida
+
+1. **Desbloquear**: derivar na thread `cofre-kdf` (nunca na EDT), abrir, decifrar para `byte[]`, parsear, zerar os `byte[]` intermediários.
+2. **Conectar**: `ChaveSsh` reconstrói o `KeyPair` em memória (5.8) e o entrega ao MINA; a referência é solta logo depois da autenticação.
+3. **Bloquear** (menu, e opcionalmente ao suspender ou após N minutos sem uso; padrão: nunca automático): fecha canais e sessões SSH, descarta os `JediTermWidget` (o buffer da tela pode ter dado sensível), `Arrays.fill` em todos os segredos, solta o cofre aberto e volta ao diálogo de senha.
+4. **Encerrar**: o mesmo caminho, pelo `QuitHandler` e por um shutdown hook.
+5. JVM sobe com `-XX:+DisableAttachMechanism -XX:-HeapDumpOnOutOfMemoryError -XX:-CreateCoredumpOnCrash`. Nenhum segredo em argumento, ambiente ou arquivo temporário (o swap do macOS é cifrado).
+
+Fora do escopo: quem executa código como o mesmo usuário (pode trocar o `.app` ou ler a memória do processo).
+
+### 5.7 Gravação, recuperação e backup
+
+- `salvar()` roda numa thread única `cofre-io`: serializa, cifra com nonce novo, cria `cofre.labcofre.tmp` já com `rw-------`, `FileChannel.force(true)`, copia o atual para `.bak` e troca com `Files.move(tmp, cofre, ATOMIC_MOVE)`. Só mudança de verdade grava (servidor, chave, pin, token); "último uso" não vai para o cofre.
+- Na abertura, ordem de tentativa: `cofre.labcofre`, `.bak`, `.tmp`. Cada um precisa autenticar no GCM; o app informa qual usou.
+- **Exportar cofre** copia o arquivo já cifrado para onde o usuário quiser (seguro em iCloud ou pendrive; sem a senha não abre). **Importar** abre com a senha e substitui, com confirmação. **Trocar a senha** gera sal novo, chave nova e regrava. (Ainda não implementado.)
+
+### 5.8 Chaves SSH: geração, importação e entrega ao MINA
+
+- Gerar com `KeyUtils.generateKeyPair("ssh-ed25519", 256)` do MINA, NÃO com o `KeyPairGenerator` do JDK: o MINA 2.20.0 não decodifica a chave EdDSA do JDK (falha com `Cannot retrieve decoder for key=EdDSA`) e só suporta Ed25519 com BouncyCastle (`isEDDSACurveSupported()` é falso sem ele). Custo: bcprov mais bcpkix, cerca de 9 MB, e o MINA registra o provider BC na JVM.
+- Serializar com `OpenSSHKeyPairResourceWriter.INSTANCE.writePrivateKey(...)` no formato `BEGIN OPENSSH PRIVATE KEY` sem passphrase (o cofre inteiro já é cifrado).
+- Importar uma chave existente (`~/.ssh/id_ed25519`): `SecurityUtils.loadKeyPairIdentities(...)` com `FilePasswordProvider`, e re-serializar para dentro do cofre. Opcional; a recomendação é **gerar chave nova** e instalar a pública por uma conexão que já funcione (por exemplo, a do `ssh` do sistema), deixando a chave antiga de `~/.ssh` como rede de segurança.
+- A pública mostrada para colar sai de `PublicKeyEntry.toString(publicKey)` com o comentário `lab-desktop@<hostname do Mac>`, e a impressão de `KeyUtils.getFingerPrint(publicKey)` (`SHA256:...`, o mesmo formato do `ssh-keygen -lf`). O app copia só a pública; nunca oferece exportar a privada.
+- Linha de `authorized_keys` sugerida pelo assistente: `no-agent-forwarding,no-X11-forwarding,permitopen="127.0.0.1:7000" ssh-ed25519 AAAA... lab-desktop@<mac>`. Sem `command=` (o terminal usa `exec`), mas a chave não serve de pivô para a LAN.
+- Ao conectar: o cofre desserializa para `java.security.KeyPair` em memória e entrega a `ClientSession.addPublicKeyIdentity(keyPair)`. Sem arquivo temporário, sem ssh-agent, sem `-i`.
+
+### 5.9 Rotação (ainda não implementada)
+
+- Chave SSH: gerar par novo, instalar a pública nova pela sessão aberta (acrescentar a `~/.ssh/authorized_keys`), reconectar com a nova, testar, e só então remover a antiga do servidor e do cofre. A antiga fica no cofre até o teste passar (rollback).
+- Pin do host: redefinir só por ação explícita, pedindo a senha-mestra de novo.
+
+## 6. SSH, túnel e cliente da API
+
+### 6.1 Cliente SSH blindado (`ClienteSshFactory`)
+
+Um `SshClient` único (`SshClient.setUpDefaultClient()`), NIO2 do próprio `sshd-core` (sem `sshd-mina`/`sshd-netty`):
+
+- `setKeyIdentityProvider(KeyIdentityProvider.EMPTY_KEYS_PROVIDER)` e `setHostConfigEntryResolver(HostConfigEntryResolver.EMPTY)`: sem isso o cliente padrão oferece `~/.ssh/id_ed25519` e lê o `~/.ssh/config`. Sem `~/.ssh/known_hosts` também (a comparação é por pin do cofre).
+- `setUserAuthFactories(List.of(UserAuthPublicKeyFactory.INSTANCE))`: só publickey; sem senha, sem keyboard-interactive, sem agent e sem X11 forwarding.
+- KEX, cifras e MACs restritos por lista de nomes (`setKeyExchangeFactories`, `setCipherFactoriesNames`, `setMacFactoriesNames`): curve25519 e ECDH, AES-GCM, ChaCha20-Poly1305, AES-CTR, HMAC-SHA2 ETM. Um teste falha se aparecer SHA-1, CBC, 3DES, arcfour ou group1 na lista efetiva.
+- `org.apache.sshd` em WARN no log (DEBUG e TRACE imprimem pacotes).
+- Tempos: conectar 10 s, autenticar 15 s, abrir canal 10 s.
+- Propriedades de heartbeat (`CoreModuleProperties`): `HEARTBEAT_INTERVAL` 10 s, `HEARTBEAT_REQUEST` `keepalive@openssh.com`, `HEARTBEAT_NO_REPLY_MAX` 3.
+
+Teste obrigatório (SshServer embutido com `user.home` apontando para um diretório com `~/.ssh/id_ed25519` e `config` populados): o servidor de teste só pode ver a chave do cofre. Sem a blindagem, o servidor de teste recebeu duas chaves (a do cofre e a de `~/.ssh`) e o assistente "ficaria verde" pelo motivo errado.
+
+### 6.2 Chave do host: sondagem e pin
+
+- `SondagemDeHost`: conexão descartável que faz só o key exchange, captura a chave do host no verificador e aborta ANTES da autenticação. Nenhuma credencial vai a um host não confirmado. Mostra o algoritmo negociado e `SHA256:...`, com o comando de conferência por algoritmo (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`, ou `ssh_host_ecdsa_key.pub`, ou `ssh_host_rsa_key.pub`). O usuário compara e confirma no `DialogoConfiarHost`; o pin vai para o cofre.
+- `VerificadorDeChaveDoServidor` (o definitivo): só compara a impressão com o pin do algoritmo negociado; nunca abre diálogo. Um diálogo ali consome o prazo de `auth().verify(15 s)`: com o verificador bloqueado 20 s, a autenticação estourou aos 15 s (reproduzido).
+- Pin divergente ou ausente = `ERRO_CHAVE_HOST`, sem retry e sem "aceitar mesmo assim". Só "redefinir pin" explícito, com a senha-mestra.
+- O pin é por algoritmo. O MINA pode negociar um algoritmo diferente do que o `~/.ssh/known_hosts` do Mac tem para o lab (que registra `ecdsa-sha2-nistp256`); por isso o `known_hosts` não é usado e a sessão real pede o mesmo algoritmo do pin (`setSignatureFactoriesNames` no cliente, com a lista própria no `UserAuthPublicKeyFactory`). Ajuste fino a confirmar com um servidor de verdade.
+
+### 6.3 `ConexaoSsh`: estados, backoff, heartbeat e sono
+
+Cada servidor tem um ator de thread única (`conexao-<id>`): todo callback do MINA (`SessionListener`, heartbeat, tracker, canal fechado) e todo evento externo (sono, "tentar agora", bloquear cofre) apenas enfileira um evento nele, então as transições nunca correm em paralelo.
+
+| Estado | Significado |
+|---|---|
+| `DESCONECTADO` | parado |
+| `CONECTANDO` | conectando e autenticando |
+| `SSH_OK_SEM_AGENTE` | SSH de pé, `GET /api/versao` falhando (agente reiniciando); o Sondador insiste sem derrubar o SSH nem os terminais |
+| `CONECTADO` | só depois de `GET /api/versao` responder 200 |
+| `RECONECTANDO` | falha transitória; mostra tentativa e próxima em |
+| `ERRO_AUTENTICACAO` | chave recusada: UMA nova tentativa após 5 s e para (evita disparar fail2ban) |
+| `ERRO_CHAVE_HOST` | pin divergente: sem retry |
+| `TOKEN_RECUSADO` | 401 do agente: oferece reprovisionar o token |
+| `BLOQUEADO_COFRE` | cofre bloqueado |
+| `SUSPENSO` | Mac dormindo |
+
+- Backoff de reconexão: 1, 2, 4, 8, 15, 30, 60 s com jitter de 20 %, zerado depois de 60 s estável; botão "Tentar agora" com contagem regressiva. A tela mantém o último snapshot e mostra "sem conexão desde HH:MM" (nunca tela vazia).
+- Detecção de queda: heartbeat de 10 s com 3 respostas perdidas. Com 15 s a queda foi detectada em 58 s (medido); com 10 s o esperado é cerca de 40 s (extrapolado, confirmar no teste de integração com proxy TCP em buraco negro). Complemento ativo: quando uma consulta falha com `ErroRede`, o Sondador pede `verificarAgora()`: um pedido global de keepalive com resposta e prazo de 5 s; falhou, vai para `RECONECTANDO`.
+- Sono do Mac: `MonitorDeSono` (`SystemSleepListener` do `java.awt.desktop`) marca `SUSPENSO` ao dormir; ao acordar, espera 2 s pela rede, descarta a sessão (certamente morta) e reconecta sem esperar o heartbeat. Os canais PTY morrem junto, mas o tmux preserva a conversa.
+- Acesso fora da rede local: na primeira versão o app só fala direto na LAN; o MINA não executa `ProxyCommand` (fase 5 cobre com `cloudflared access tcp`, ver 14).
+
+### 6.4 Túnel
+
+`session.createLocalPortForwardingTracker(new SshdSocketAddress("127.0.0.1", 0), new SshdSocketAddress("127.0.0.1", 7000))`. A porta local é efêmera e só em loopback; `tracker.getBoundAddress().getPort()` entrega o valor. Nova porta a cada reconexão. O destino (7000) vem do cofre (`portaAgente`). Teste confere que o endereço de escuta é loopback.
+
+### 6.5 `ClienteApi`
+
+- Um `ClienteApi` novo por geração de túnel (base `http://127.0.0.1:<porta>`), descartado com `HttpClient.close()` (JDK 21) ao reconectar, para nunca reaproveitar keep-alive de uma porta morta.
+- `HttpClient`: `version(HTTP_1_1)`, `proxy(ProxySelector.of(null))`, `followRedirects(NEVER)`, `connectTimeout(3 s)`, executor de threads virtuais. Cabeçalhos em CONTRATO-API.md 1.1.
+- Timeouts por rota em `TimeoutsPorRota` (tabela completa em CONTRATO-API.md seção 2): leitura 15 s por padrão; servidor 20 s; logs 25 s; abrir e reabrir sessão e Retomar 6 min (o agente faz `pg_dump` de até 5 min antes do `docker run` de 120 s); iniciar, parar e reiniciar projeto 12 min (cada arquivo compose tem 10 min no agente, em sequência); reiniciar container 3 min.
+- POST e PUT nunca são reenviados sozinhos; GET faz no máximo uma nova tentativa depois de reconectar.
+- Respostas lidas por fluxo com teto (JSON 2 MiB, logs 8 MiB, que é o `maxBuffer` do agente) e `StreamReadConstraints` explícitos no Jackson. `FAIL_ON_UNKNOWN_PROPERTIES` desligado, `@JsonProperty` por campo (o contrato mistura camelCase e snake_case), todos os campos anuláveis, sem default typing.
+- Erros: `ErroApi(status, corpo JsonNode, mensagem do campo "erro")`. `Conflito` (409) carrega `usado_pp`, `teto_pct`, `pct_conta` e `freio_pct` para o diálogo "ainda estoura". `NaoEncontrado` com "Sessão não está aberta." é fluxo normal. 503 de `/api/tokens` significa "calculando" e repete em 6 s. `ErroRede` não é erro de tela: o Sondador confere o estado da conexão.
+- O token é montado uma vez por geração de túnel; o `Redator` o mascara em qualquer log ou mensagem de erro.
+
+### 6.6 Threads: tudo de rede fora da EDT
+
+| Thread ou pool | Quem usa | Regra |
+|---|---|---|
+| EDT | desenho, listeners, atualização de componentes | nunca E/S, KDF ou `sleep`. Recebe snapshots imutáveis por `Fundo.naEdt`. |
+| `io-virtual` (executor de threads virtuais) | `ClienteApi`, `ExecRemoto`, consultas do Sondador | bloquear é permitido. Iniciar e parar seguram uma requisição de até 12 min. |
+| `agenda` (`ScheduledThreadPool` de 2, daemon) | timers do Sondador, backoff | só dispara; o trabalho vai para `io-virtual`. |
+| `conexao-<id>` (1 thread por servidor) | ator da `ConexaoSsh` | callbacks do MINA só enfileiram; nada de Swing. |
+| `cofre-io` (1 thread) | gravação do cofre | serializa gravações. |
+| `cofre-kdf` (sob demanda) | Argon2id | heap de 256 MiB; mostra progresso. |
+| pool NIO2 do MINA | I/O SSH | nunca toca Swing. |
+| threads do JediTerm | emulador; `TerminalStarter` com executor único | `write` e `resize` na mesma fila (ver 7.2). |
+
+Em desenvolvimento, `EdtWatchdog` posta um `Runnable` a cada segundo e registra o stack da EDT se a latência passar de 500 ms; um `RepaintManager` verificador acusa Swing fora da EDT nos testes.
+
+### 6.7 `Sondador`: polling por tópicos com assinatura por tela
+
+Um `Sondador` por servidor. Reproduz a cadência do front web (uma aba esquecida custava cerca de 20 % de um núcleo no servidor): só consulta o que alguma tela visível assinou.
+
+- A tela assina ao ficar visível (`HierarchyListener` com `showing`) e solta ao esconder. Contagem de referências por tópico; sem assinante o tópico não roda.
+- Cada tópico não sobrepõe execuções (se a anterior não terminou, pula o tique) e só avisa as telas se o JSON mudou (igual ao `ultimoJson` do front).
+
+| Tópico | Rotas | Janela ativa | Sem foco ou minimizada | Condição |
+|---|---|---|---|---|
+| `LIMITES` | `/api/limites` | 60 s | 60 s (única exceção) | sempre ligado: alimenta faixa de crédito, ícone, notificações |
+| `PROJETOS` | `/api/projetos` e `/api/projetos/lab` | 10 s | 60 s | `TelaProjetos` visível, ou Monitor para o servidor visível |
+| `SERVIDOR` | `/api/servidor` | 10 s | 60 s | faixa Servidor aberta |
+| `SERVIDOR_DETALHE` | `/api/servidor/detalhe` | 10 s | 60 s | `TelaServidor` visível |
+| `TOKENS` | `/api/tokens` | ao abrir e a cada 60 s | parado | `TelaConsumo` visível (o cache do agente só muda a cada 60 s) |
+| `CONSUMO(p)` | `/api/tokens/:p` | ao abrir e a cada 60 s | parado | aba Consumo do projeto visível |
+| `DETALHE(p)` | `/api/projetos/:p` | 10 s | 60 s | `TelaProjeto` ou `TelaSessao` visível |
+| `TELA(p)` | `/api/projetos/:p/claude/tela` | 2 s | 12 s | só a aba de terminal selecionada, janela ativa |
+| `LOGS(p,c,n)` | `.../logs` | 5 s com "atualizar" | parado | aba Logs visível e "atualizar" marcado |
+
+- Janela escondida (fechada para a barra de menus): só `LIMITES`. Mac dormindo: nada.
+- Preferência "manter cadência cheia com a janela visível sem foco" (útil para o Monitor numa segunda tela), desligada por padrão.
+- Três falhas seguidas dobram o intervalo até 60 s.
+- Guarda de calor: se `servidor.cpu.temperatura` (já presente em `/api/projetos`) passar de 85 °C, os intervalos dobram até cair abaixo de 80 °C.
+- Cada `/api/projetos` custa um `docker ps` mais um `docker exec` por sessão aberta no servidor; por isso nunca é chamado em segundo plano nem para servidor que não está na tela. Vários servidores não multiplicam a carga de um mesmo servidor.
+- `AcoesDoServidor` envolve cada ação (iniciar, parar, abrir, retomar, limite, freio) e, ao terminar, força o refresh só dos tópicos afetados e de `LIMITES` (equivalente ao `atualizarTudo(true)` do front).
+
+## 7. Terminal: JediTerm sobre SSH com PTY
+
+### 7.1 Canal
+
+`ConexaoSsh.abrirCanalPty(projeto, colunas, linhas)` cria `session.createExecChannel(comando)` (um `ChannelExec`, `PtyCapableChannelSession`) na sessão já autenticada:
+
+- `setUsePty(true)`, `setPtyType("xterm-256color")`, colunas e linhas iniciais lidas de `TerminalPanel.getTerminalSizeFromComponent()` DEPOIS do primeiro layout (abrir com um tamanho padrão faz o tmux redesenhar a tela duas vezes); fallback 120 por 32.
+- Comando fixo, com o nome validado por `^[a-z0-9][a-z0-9-]{0,48}$` antes de entrar na linha: `docker exec -it -e LANG=C.UTF-8 -e TERM=xterm-256color -e COLORTERM=truecolor lab-claude-<p> tmux -u attach -t work`. É o mesmo container e a mesma sessão tmux `work` que o ttyd atendia e que `/claude/tela`, `/claude/texto` e `/claude/teclas` leem e escrevem. A sessão raiz usa `p = lab` (container `lab-claude-lab`).
+- SEM `-d` por padrão. Preferência por servidor "dono exclusivo" liga `attach -d`, que derruba clientes antigos e evita `docker exec` órfão depois de queda abrupta.
+- Fechar a aba só solta o cliente tmux; a conversa do Claude continua. Encerrar a sessão é `POST /claude/fechar`, explícito.
+- Limite de 8 abas de terminal por servidor (o OpenSSH padrão tem `MaxSessions=10`), com mensagem específica para `administratively prohibited`.
+- Nada do terminal depende do agente: com o agente fora (`SSH_OK_SEM_AGENTE`) o terminal continua.
+
+### 7.2 `SshTtyConnector`
+
+Implementa `com.jediterm.terminal.TtyConnector` (3.76): `read(char[],int,int)`, `write(byte[])`, `write(String)`, `isConnected`, `resize(TermSize)`, `waitFor`, `ready`, `getName`, `close`.
+
+- Leitura: `InputStreamReader(canal.getInvertedOut(), UTF-8)`, que trata caractere multibyte cortado entre pacotes; o stderr vem junto por causa do PTY.
+- Escrita: `getInvertedIn().write` mais `flush`.
+- `resize(TermSize)` chama `canal.sendWindowChange(colunas, linhas)`. A cadeia real (SIGWINCH no `docker exec` e no tmux) é critério de aceite.
+- `waitFor` espera `CLOSED` e devolve `getExitStatus()`; `isConnected` é `canal.isOpen()`; `close` é `canal.close(false)`.
+- **`write` nunca enfileira**: se o estado não é ATIVA, lança `IOException` na hora (tecla descartada, faixa "sem conexão: teclas descartadas") e NUNCA reenvia nada depois de reconectar. Um Enter ou "1" velho aprovaria depois um pedido de permissão do Claude.
+- **Watchdog de escrita**: o `TerminalStarter` do JediTerm executa `sendBytes` e `postResize` num executor de thread única, então um `write` travado segura teclas e resize. Se um `write` não voltar em 5 s, o canal é fechado, o que destrava o executor e dispara a reconexão.
+
+### 7.3 `SessaoTerminal`: ciclo de vida
+
+Estados: `ABRINDO`, `ATIVA`, `REANEXANDO(n)`, `SESSAO_FECHADA`, `ENCERRADA(exit)`, `BLOQUEADA`.
+
+- Cada anexação cria um `JediTermWidget` novo. O tmux repinta a tela inteira no attach, e reaproveitar o widget depois de `stop()` é frágil: no fonte do 3.76, `allSessionsClosed` dispara antes de a sessão ser limpa, então chamar `start()` dentro do listener cai em "Should not try to start session again" (guardar com `canOpenSession()` se mesmo assim reaproveitar). Perde-se só o scrollback local.
+- Queda do transporte: sobreposição "Conexão perdida, reconectando", entrada descartada. Quando a conexão volta a `CONECTADO`, `PainelTerminal` cria outro `SshTtyConnector` e outro widget.
+- `ClassificadorDeSaida`: canal que fecha em menos de 10 s com saída (últimos 2 KB) contendo `No such container`, `is not running`, `no sessions` ou `can't find session` NÃO entra em laço: vira `SESSAO_FECHADA`; a UI consulta `GET /api/projetos/:p` e decide entre "pausada" e "fechada". Saída com status 0 significa que o bash do tmux saiu: "sessão terminou", sem laço.
+- Reanexa sozinha quando o detalhe volta a dizer aberta (Retomar, Abrir, Reabrir produzem container novo), com 5 tentativas (2, 4, 8, 16, 30 s) e depois o botão "Reconectar".
+- O cartão "pausada pelo limite" ou "fechada" por cima do terminal só aparece com PROVA, a regra de `sessao.html`: o detalhe foi lido com sucesso E tem a forma esperada, E o painel diz pausada ou fechada, E o canal ou a tela estão falhando. Sem isso, uma pílula "sem resposta"; nunca um cartão opaco em cima de um terminal que pode estar vivo. Com prova, oferece Retomar (409 abre o diálogo "ainda estoura"), Definir limite ou Abrir sessão.
+
+### 7.4 Configuração, teclado e cópia
+
+`ConfigTerminal` (estende `DefaultSettingsProvider`) e `PaletaTerminal` (estende `ColorPalette`):
+
+| Item | Valor |
+|---|---|
+| Fonte | JetBrains Mono 13 (`flatlaf-fonts-jetbrains-mono`) |
+| Fundo e texto | `#12110E` e `#D8D2C6` (os `--logs-*` do `estilo.css`, escuros nos dois temas) |
+| ANSI 16 | tons quentes; azul e ciano dessaturados (ardósia e sálvia), para respeitar "sem azul nem ciano" |
+| Seleção | âmbar |
+| `altSendsEscape` | `false` por padrão (o padrão do JediTerm é verdadeiro e engoliria caracteres gerados com Option no teclado ABNT2); preferência "Option como Meta" |
+| `shiftEnterSendsEscCR` | `true` (Shift+Enter insere linha nova no Claude) |
+| `simulateMouseScrollWithArrowKeysInAlternativeScreen` | `false` (o padrão do `DefaultSettingsProvider` é verdadeiro e a roda digitaria setas no prompt do Claude) |
+| `copyOnSelect`, `emulateX11CopyPaste` | desligados (copiar sozinho sobrescreve a área de transferência sem aviso); preferência |
+| `audibleBell` | `false` |
+| Buffer | 10.000 linhas |
+| Mouse | reporting padrão: as sessões já sobem com `CLAUDE_CODE_DISABLE_MOUSE=1` (`sessao/managed-settings.json`); sessões abertas antes dessa mudança ainda capturam o mouse até serem reabertas (Shift+arrastar seleciona) |
+| Type-ahead | desligado (o eco previsto atrapalha tmux e Claude) |
+
+- `TerminalPanel` já faz `setFocusTraversalKeysEnabled(false)` (Tab e Shift+Tab chegam ao terminal) e `enableInputMethods(true)` (teclas mortas do pt-BR).
+- Regra de ouro: Cmd é do app e o resto é do terminal; nenhum atalho de janela usa Ctrl, Alt, Esc ou Tab. Cmd+C, Cmd+V, Cmd+K (limpar buffer) e Cmd+Seta (linha acima e abaixo) são atalhos nativos do JediTerm no macOS (conferido em `DefaultSettingsProvider`); NÃO se cria item de menu com esses aceleradores (o menu da tela do macOS engoliria o atalho). Sem paleta Cmd+K, que colidiria com o "limpar buffer". O atalho de "Bloquear cofre" fica fora do conjunto do JediTerm (a definir na matriz; sugestão Cmd+Shift+L).
+- Isto aposenta toda a engenharia de cópia do `sessao.html` (`execCommand`, Safari, caixa "Copiar na mão", `diag.html`). "Copiar tela inteira" continua via `GET /claude/texto` direto para a área de transferência.
+- OSC de título é limpo (controles e bidi) antes de virar nome da aba. Links: Cmd+clique só `http` e `https`, pela lista de permitidos. O JediTerm não trata OSC 52 (clipboard remoto); reconferir no 3.76.
+- Matriz de teste: Enter, Shift+Enter, Esc, Ctrl+C, Ctrl+D, Ctrl+R, Ctrl+L, Tab, Shift+Tab (alterna o modo do Claude), setas, Option+setas, Home, End, PgUp, PgDn, Cmd+V multilinha, acentos (´ ` ~ ^ ç) em ABNT2 e US-internacional, colar 4000 caracteres, colar emoji, redimensionar com o Claude em tela cheia. Atalhos globais do macOS (Ctrl+setas, Ctrl+Espaço) não são recuperáveis pelo app.
+
+### 7.5 Barra lateral em paralelo
+
+`BarraLateralSessao` (380 px, num `JSplitPane`) corre por HTTP, em paralelo ao canal PTY: o PTY é um canal SSH e a lateral é HTTP no forward, então uma pode falhar sem derrubar a outra. Assina `TELA(p)` (2 s, só com a aba selecionada e a janela ativa) e `DETALHE(p)` (10 s).
+
+Renderiza: pergunta pendente (cada opção vira botão que faz `POST /claude/teclas {texto:"n"}`; Confirmar e Cancelar mandam `Enter` e `Escape`), "Agora" (executando ou esperando você), "Limite da semana" (porta de `UI.limite`), "Enviar mensagem" (`POST teclas {texto, enter:true}`, Cmd+Enter envia) com atalhos Esc, Enter e Modo (`BTab`), tarefas, atividade recente e "Tela em texto". A pílula de estado mostra cada via separadamente (terminal e REST).
+
+`PortaoDeEntrada`: se o usuário digitou no terminal há menos de 800 ms, o envio da barra espera; clique em opção e envio de mensagem serializam numa fila de 1; a barra nunca envia enquanto o terminal está em `REANEXANDO`. Evita intercalar caracteres entre o PTY e o REST.
+
+### 7.6 Sobre o tamanho da janela do tmux
+
+Desde o tmux 3.1 o padrão de `window-size` é `latest`: a janela segue o cliente com atividade mais recente, não o menor cliente anexado (conferido: `tmux` 3.7c local devolve `latest`; a imagem de sessão é `node:22-bookworm`, tmux 3.3a do Debian, mesmo padrão). Com o ttyd antigo aberto junto, o tamanho pode oscilar por alternância de atividade; some quando o navegador for aposentado.
+
+## 8. Telas
+
+### 8.1 Mapa: tela, página web de origem, rotas
+
+| Tela | Página de origem | Rotas e tópicos |
+|---|---|---|
+| Desbloqueio do cofre | novo (substitui o túnel manual e o LaunchAgent) | nenhuma |
+| Servidores e Adicionar servidor | novo | `GET /api/versao`, `GET /api/limites` (teste), SSH `exec` para registrar a credencial |
+| Projetos | `index.html` | `PROJETOS` (`/api/projetos`, `/api/projetos/lab`), `SERVIDOR`, `LIMITES`; ações: `iniciar`, `parar`, `reiniciar`, `claude/abrir`, `claude/fechar`, `claude/reabrir`, `claude/codigo`, `projetos/novo`, `limite`, `limite/retomar`, `limites/freio` | 1 (leitura), 2 (faixa Servidor), 3 (ações) |
+| Projeto (6 abas) | `projeto.html` | `DETALHE(p)`, `LOGS(p,c,n)`, `TELA(p)` (resumo), `CONSUMO(p)`; ações: containers/reiniciar, iniciar/parar/reiniciar, claude/abrir/fechar/reabrir, limite, retomar | 2 (leitura), 3 (ações) |
+| Consumo | `consumo.html` | `TOKENS`, `LIMITES`; ação: `limites/freio` |
+| Servidor | `servidor.html` | `SERVIDOR_DETALHE` | 2 |
+| Sessão do Claude (terminal e barra lateral) | `sessao.html` | canal PTY por SSH; `TELA(p)`, `DETALHE(p)`; ações: `claude/teclas`, `claude/texto`, `claude/abrir`, `limite`, `limite/retomar` |
+| Monitor lado a lado | novo | `LIMITES`, `SERVIDOR`, `PROJETOS` do servidor visível |
+| Preferências | novo | nenhuma |
+
+### 8.2 Tema e componentes
+
+- Tema: `FlatMacLightLaf` e `FlatMacDarkLaf` com os tokens do `DESIGN.md` registrados por `FlatLaf.registerCustomDefaultsSource("br.com.labdesktop.ui.tema")`, com `FlatMacLightLaf.properties` e `FlatMacDarkLaf.properties` nesse pacote. "Sistema" lê `defaults read -g AppleInterfaceStyle` na abertura e ao ganhar foco; o tema troca sem reiniciar e gráfico e sparklines repintam.
+- Fontes: `FlatInterFont` e `FlatJetBrainsMonoFont` (`flatlaf-fonts-*`), definidas por `FlatLaf.setPreferredFontFamily` e `setPreferredMonospacedFontFamily`.
+- Ícones: SVG (viewBox 24, traço 2, sem emoji), um arquivo por ícone, carregados por `FlatSVGIcon` (`flatlaf-extras`) com `ColorFilter` para a cor do tema.
+- Tokens principais (do `estilo.css`):
+
+| Token | Claro | Escuro |
+|---|---|---|
+| fundo | `#F5F2EB` | `#0E0D0B` |
+| superfície | `#FFFFFF` | `#161512` (degraus `#1E1C18`, `#27241F`) |
+| texto | `#1C1A16` | `#EFEAE0` |
+| texto secundário | `#5C574D` | `#B3AB9C` |
+| acento | `#87621A` | `#D4A64C` |
+| ok | `#2A7A54` | `#5FBE8E` |
+| atenção | `#96620F` | `#E0B04F` |
+| perigo | `#B03F37` | `#E8807A` |
+| bordas | `#E4DFD4` | `#2A2722` |
+| série 5 a 8 (gráfico) | `#A65A22`, `#6E7A1F`, `#A2495A`, `#6B5A47` | `#E0995A`, `#B8C25A`, `#E08FA0`, `#B8A48C` |
+
+  Séries 1 a 4 reaproveitam acento, ok, perigo e atenção.
+- Estado nunca só pela cor: selo ou pílula sempre com ícone e texto, no vocabulário do painel web: pergunta pendente, login pendente, pausada pelo limite, pausada pelo freio, esperando você, executando, sessão aberta, sessão fechada; selos "desatualizada" (com o que falta no tooltip) e "sem resposta".
+- `TesteSemAzul`: varre o `UIManager` e reprova cor de matiz azul ou ciano fora da paleta ANSI do terminal.
+- Limiares de severidade das barras: alto acima de 75 %, crítico acima de 90 %. Faixa de crédito: a partir de 75 % (perigo a partir de 90 %), só com leitura `disponivel` e não `antiga`.
+- `TextoSeguro` em todo texto do servidor (descrição, README, branch, nome de container, texto de tela): `putClientProperty("html.disable", Boolean.TRUE)` em `JLabel`, `JButton`, `JMenuItem` e tooltips, neutralização de strings que começam com `<html`, controles C0/C1 e bidi removidos. Markdown do README e do STATUS por conversor mínimo para `StyledDocument` (nunca HTML).
+- `ListaPermitidaDeUrls` para `Desktop.browse`: login só `https://claude.ai/...` e `https://claude.com/...`; PR só `github.com/<repo>/pull/<n>`; hostnames de projeto só `*.example.com`.
+
+### 8.3 Notas por tela
+
+- **Projetos**: lista de linhas com `GridBagLayout` num `JScrollPane`, atualizada por nome (diff) para preservar foco, menu aberto e código de login digitado (equivalente de `capturarEstadoLista`). Colunas: estado, projeto e descrição, containers n/m, CPU, memória, consumo de 7 dias com limite e barra, git, URL, Claude, ações. Busca e filtros Todos, No ar, Com Claude, Pausados. Alerta de login pendente com botão de abrir a página e campo para colar o código.
+- **Projeto**: `JTabbedPane` com Visão geral (containers, detalhes), Logs (combo de container e de linhas 50 a 2000, "atualizar" a cada 5 s só com a aba visível, cores para erro e aviso, rolagem presa ao fim, Copiar), Sessão do Claude (resumo até a fase 3, depois abre `TelaSessao`), Arquivos (README e STATUS), Backups e Consumo (limite da semana, tiles Hoje, 7 dias, 30 dias e Total, `GraficoBarras` de 30 dias, por modelo, sessões recentes, entregas do Harness).
+- **Consumo**: duas barras grandes (5 h e semana) com marca do freio global e "zera em"; tiles; `GraficoBarras` empilhado por projeto com as séries 1 a 8 e legenda; tabela de projetos com coluna Limite; nota "fora do lab"; por modelo; histórico antigo; tabela de preços; bloco do freio. 503 mostra "ainda calculando" e repete em 6 s.
+- **Servidor**: alertas (temperatura, bateria, memória, disco, containers sem proprietário); temperaturas com sparkline; consumo por projeto expansível (que sobrevive ao polling); top 20 processos com o projeto; gráficos de 10 min; cartões Hardware e Sistema e software. Cada bloco renderiza isolado.
+- **Sessão**: ver seção 7.
+- **Monitor**: um cartão por servidor (estado da conexão, CPU, memória, disco, temperatura, % de 5 h e da semana, sessões pausadas, projetos no ar); clicar abre o workspace daquele servidor. Reaproveita tópicos existentes, sem polling novo.
+- **Adicionar servidor**: pré-preenche com os campos vazios (porta SSH 22 e agente 127.0.0.1:7000). Passos: dados; gerar Ed25519 e mostrar a pública com o comando de `authorized_keys` pronto e botão Copiar; sondagem do host e conferência da impressão; autenticar; gerar o token, registrar o hash por SSH e testar `GET /api/versao`; gravar no cofre e testar `GET /api/limites`. A não existem: editar, remover, redefinir pin e girar chave e token.
+
+## 9. Notificações, barra de menus e Dock (planejado, ainda não implementado)
+
+- `AnalisadorLimites` é puro e testável. Dispara: pausa nova (conjunto `pausados` por projeto e `em`), crédito cruzando 75 % e 90 % em cada janela (5 h e semana). Ignora leitura com `disponivel:false` ou `antiga:true` (o app usa o campo do agente, não recalcula os 30 min). Re-arma quando `zera_em` muda (janela nova) ou quando o percentual cai 5 pontos abaixo do limiar. Persistido em `estado-avisos.json` por servidor, janela, limiar e `zera_em`, então não repete ao reabrir o app.
+- Regra de foco: não notifica o que o usuário está olhando (sessão da aba visível com a janela em foco). "Silenciar por 1 h" no menu. A notificação identifica o servidor e o projeto; nunca carrega texto de tela nem segredo.
+- Entrega: interface `Notificador` com `NotificadorTray` (`TrayIcon.displayMessage`) e `NotificadorOsascript` de reserva; o `osascript` recebe o texto por `argv` (`on run argv`, `display notification item 1 of argv`), nunca texto interpolado no AppleScript (nome de projeto vem do servidor). Qual é o padrão se decide depois de testar no `.app` empacotado; há botão "Testar notificação" nas preferências.
+- `IconeBarraDeMenus`: `SystemTray` e `TrayIcon` com a imagem do percentual desenhada em Java2D (2x), cor por severidade (sempre com o número), tooltip com o nome do servidor; mostra o MAIOR percentual da semana entre os servidores. O menu lista servidores e estado, semana e 5 h, Abrir, Bloquear cofre, Sair.
+- `DockBadge`: `Taskbar.setIconBadge` com o número de sessões pausadas.
+- Fechar a janela não encerra o app (`HIDE_ON_CLOSE`); Cmd+Q encerra. O Notificador e o ícone seguem vivos com a janela escondida, e o polling de `LIMITES` continua a cada 60 s (App Nap desligado no `Info.plist`).
+- `BarraDeStatus` inferior: um segmento por servidor com 5 h, semana, marca do freio e "zera em", visível em qualquer tela, inclusive sobre o terminal.
+
+## 10. Acesso ao agente e confirmação em dois passos
+
+O app guarda o acesso ao agente no cofre cifrado do computador; quem o gera e o registra no servidor é o próprio app, por SSH, sem você digitar nada. Se o servidor pedir confirmação em dois passos, o app pergunta o código (o de qualquer aplicativo autenticador) e continua; o menu Servidor tem "Configurar 2FA…" e "Desativar 2FA…". O código não vai para log, para o cofre nem para as preferências. O que o usuário precisa saber está em CONTRATO-API.md, seção 6; como o agente confere isso por dentro não faz parte deste documento.
+
+## 11. Build e empacotamento
+
+### 11.1 Gradle e JDK
+
+- `gradle.properties` o JDK 21 vem de `JAVA_HOME`; para fixar o daemon num caminho, descomente `org.gradle.java.home` no arquivo (comentado de propósito, porque o caminho muda de máquina para máquina).
+- Wrapper `gradle wrapper --gradle-version 9.8.0`, com `distributionSha256Sum=bafd5ce9cfaea0fbccfdc8439a1ac42fbd4cd9c89dc9a988228d8a2639a58e6c` (o `.sha256` oficial de `gradle-9.8.0-bin.zip`) e `validateDistributionUrl=true`. É a versão exercitada nos testes. O 9.8.1 (2026-10-07) e o 9.8.2 (2026-10-19) existem, mas ficam para depois da maturação.
+- `gradle --write-verification-metadata sha256 build` gera `gradle/verification-metadata.xml` (um arquivo; vale também para o repositório da JetBrains).
+
+### 11.2 `build.gradle.kts` (esqueleto)
+
+```kotlin
+plugins { application }
+
+repositories {
+    mavenCentral()
+    // JediTerm NÃO está no Maven Central: só neste repositório, só para este grupo
+    exclusiveContent {
+        forRepository { maven { url = uri("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies") } }
+        filter { includeGroup("org.jetbrains.jediterm") }
+    }
+}
+
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+tasks.withType<JavaCompile> { options.release = 21; options.encoding = "UTF-8" }
+
+dependencies {
+    implementation("org.apache.sshd:sshd-core:2.20.0")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.86")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.86")
+    implementation("org.jetbrains.jediterm:jediterm-core:3.76")
+    implementation("org.jetbrains.jediterm:jediterm-ui:3.76")
+    implementation("com.formdev:flatlaf:3.7.2")
+    implementation("com.formdev:flatlaf-extras:3.7.2")
+    implementation("com.formdev:flatlaf-fonts-inter:4.1")
+    implementation("com.formdev:flatlaf-fonts-jetbrains-mono:2.304")
+    implementation(platform("com.fasterxml.jackson:jackson-bom:2.22.3"))
+    implementation("com.fasterxml.jackson.core:jackson-databind")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+    implementation("org.slf4j:slf4j-api:2.0.17")
+    runtimeOnly("org.slf4j:slf4j-simple:2.0.17")
+    testImplementation(platform("org.junit:junit-bom:5.14.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher") // obrigatório no Gradle 9
+}
+
+tasks.test { useJUnitPlatform() }
+application {
+    mainClass = "br.com.labdesktop.Principal"
+    applicationDefaultJvmArgs = listOf(
+        "-Dapple.laf.useScreenMenuBar=true", "-Dapple.awt.application.name=Lab Desktop",
+        "-Dfile.encoding=UTF-8", "-Xmx768m",
+        "-XX:+DisableAttachMechanism", "-XX:-HeapDumpOnOutOfMemoryError", "-XX:-CreateCoredumpOnCrash")
+}
+```
+
+O tema FlatLaf (propriedades `FlatMacLightLaf.properties` e `FlatMacDarkLaf.properties`, fontes e ícones) está descrito em 8.2.
+
+Notas: o MINA declara `slf4j-api` 1.7.36 e o JediTerm 2.0.9; a versão 2.0.17 declarada resolve o conflito. `-Xmx768m` dá folga para o Argon2id de 256 MiB (funcionou com 512 MiB nas medições).
+
+### 11.3 Empacotamento (esqueleto 4)
+
+Tarefas Gradle: `jlinkRuntime`, `jpackageApp`, `empacotar` (depende de `test`) e `instalarApp` (copia para `~/Applications`).
+
+1. `jdeps --print-module-deps --ignore-missing-deps --multi-release 21` sobre `build/install/lab-desktop/lib/*` define os módulos. Ponto de partida validado: `java.base,java.desktop,java.logging,java.naming,java.net.http,jdk.crypto.ec,jdk.unsupported`, mais `jdk.localedata` (sem ele a formatação pt-BR cai em en-US sem erro) e `jdk.accessibility`. Runtime de teste: 45 MB.
+2. `jlink --add-modules <lista> --strip-debug --no-header-files --no-man-pages --output build/runtime`.
+3. `jpackage --type app-image --name "Lab Desktop" --mac-package-identifier br.com.labdesktop --runtime-image build/runtime --input build/install/lab-desktop/lib --main-jar lab-desktop.jar --main-class br.com.labdesktop.Principal --icon packaging/LabDesktop.icns --dest build/dist --java-options ...` com as opções de JVM da seção 11.2, mais `-Dapple.awt.application.appearance=system`. Nome com espaço entre aspas.
+4. `Info.plist` pós-jpackage com `PlistBuddy`: `NSLocalNetworkUsageDescription` (sem ela, o `.app` pode falhar com `EHOSTUNREACH` para um servidor da rede local mesmo com o `gradle run` funcionando, porque o `run` herda a permissão do Terminal) e `NSAppSleepDisabled = true` (App Nap coalesce timers com a janela escondida, que é o modo de operação do menu bar e das notificações). Depois, `codesign --force --deep --sign - "build/dist/Lab Desktop.app"` (ad-hoc, suficiente para uso local; a edição do plist invalida a assinatura anterior).
+5. Resultado: `.app` arm64 que abre por duplo clique sem Java instalado. Atualização é manual (`./gradlew empacotar` e substituir o `.app`).
+6. Logs em `~/Library/Logs/LabDesktop/lab-desktop.log` (0600). `slf4j-simple` não rotaciona: o `ConfiguracaoDeLog` renomeia para `.1` na partida se passar de 2 MB.
+
+## 12. Testes
+
+JUnit 5.14.4. Sem Mockito e sem AssertJ: o `SshServer` embutido do `sshd-core` e o `com.sun.net.httpserver.HttpServer` do JDK bastam, e os fakes são escritos à mão (como o `guarda.test.js`).
+
+| Área | O que os testes provam |
+|---|---|
+| Cofre | ida e volta; senha errada falha; alterar um byte do cabeçalho, do nonce ou do cifrado falha; parâmetros de KDF fora da faixa recusados; arquivo > 8 MiB recusado; permissões 0600 em pasta 0700; queda no meio da gravação nunca deixa o cofre ilegível (cai no `.bak`); o arquivo não contém a chave nem o token em claro; segredos zerados depois de bloquear; KDF dentro de 0,3 a 4 s; `TravaDeInstancia` |
+| SSH (servidor embutido) | só a chave do cofre é oferecida mesmo com `~/.ssh` populado; pin divergente = `ERRO_CHAVE_HOST` sem retry; a sondagem encerra antes da autenticação (zero tentativas no servidor); forward só em loopback respondendo a um agente falso que exige `Authorization`; buraco negro detectado e retomado; backoff; 401 = `TOKEN_RECUSADO`; lista efetiva de algoritmos sem SHA-1, CBC, 3DES, arcfour, group1; `sendWindowChange` recebido |
+| API (`HttpServer` do JDK) | 200, 401, 409 com corpo, 503; HTTP/1.1 forçado (o agente falso fecha o socket se vier `Upgrade`); timeouts por rota; respostas acima do teto |
+| Contrato | cada DTO parseia a fixture real correspondente (`lab-real/`), incluindo a forma de `/api/projetos/lab`, e tolera campo desconhecido e ausente. Nunca o mock do front. |
+| Sondador (relógio falso) | nenhuma consulta sem tela visível; só `LIMITES` com a janela escondida; ×6 sem foco; dedupe por JSON; não sobrepõe execuções; dobra com 3 falhas e com calor |
+| Terminal | `SshTtyConnector` contra servidor embutido (leitura UTF-8 cortada entre pacotes, `write` descartando fora de ATIVA, watchdog de 5 s, `resize`); `ClassificadorDeSaida` com as saídas do Docker; `PortaoDeEntrada` |
+| Segurança de dado | `TextoSeguro` (HTML em descrição, README, branch e nome de container aparece como texto; bidi e controles removidos); `ListaPermitidaDeUrls`; `ValidadorDeNomes`; `Redator` |
+| Camadas e aparência | `TesteCamadas`; `TesteSemAzul` |
+| Notificação | `AnalisadorLimites` nas bordas 74,9, 75, 89,9, 90 e virada de semana, sem repetição |
+| Empacotado | formatação pt-BR dentro do runtime do `.app` |
+
+`scripts/capturar-fixtures.sh` grava em `src/test/resources/lab-real/` uma resposta real de cada rota de leitura (um projeto comum, o `lab` e um projeto sem sessão), via `ssh <alvo> 'curl -s 127.0.0.1:7000/...'`. O mock do front diverge do agente real (texto contra bytes, datas com macro `@+5d3h`), por isso não vale como fixture. As fixtures contêm nomes e descrições reais de projetos: por isso ficam fora do git (`.gitignore`) e não devem ser publicadas.
+
+
+
+## 13. Riscos
+
+| Risco | Mitigação |
+|---|---|
+| Vazamento de chave, senha ou token (memória, heap dump, crash, log). O JCE não zera objetos de chave e `String` é imutável. | `byte[]` zerados; tipos com segredo fora de `record` e com `toString` redigido; `Redator` nos logs; flags de JVM; sem segredo em argumento, ambiente ou arquivo; bloqueio manual e opcional. Residual aceito: código malicioso rodando como o mesmo usuário. |
+| Cofre corrompido ou senha esquecida = perda das chaves | gravação atômica com `fsync`, `.bak` e `.tmp`; exportar cofre; as chaves SSH são recriáveis (basta instalar uma chave nova com a senha do usuário do servidor); sem chave de recuperação por padrão |
+| MITM no primeiro contato ou chave do host trocada | sondagem sem autenticar, conferência da impressão com `ssh-keygen -lf`, pin no cofre, divergência = bloqueio duro |
+| A porta do forward é acessível por outros processos do Mac | loopback, porta efêmera e credencial do app obrigatória no agente |
+| Terminal que come teclas (Tab, acentos do pt-BR, Option, Shift+Enter) | regra "Cmd é do app"; `altSendsEscape=false`; `shiftEnterSendsEscCR`; matriz de teste do terminal |
+| Tecla velha reenviada depois de reconectar aprovando pedido de permissão | `write` nunca enfileira nem reenvia; faixa "teclas descartadas" |
+| Escrita travada no executor único do JediTerm com conexão meio morta | watchdog de 5 s derruba o canal; heartbeat pega o resto |
+| Sleep e wake derrubam o TCP sem avisar | heartbeat de 10 s, `MonitorDeSono`, verificação ativa no `ErroRede` |
+| Processos `docker exec` órfãos e dois clientes tmux | `attach -d` opcional; teste de contagem de clientes (`tmux list-clients`) depois de 10 quedas abruptas |
+| Conteúdo hostil vindo do servidor (prompt injection em README, branch, texto de tela, URL de login) | `TextoSeguro`, `ListaPermitidaDeUrls`, Jackson sem default typing, tetos de tamanho |
+| Injeção de comando nos `exec` | nome de projeto e de container só entram na linha depois da regex do agente; dados do registro da credencial são gerados e validados pelo app; payload por stdin |
+| JediTerm: fora do Maven Central, API muda entre versões, Kotlin stdlib transitivo, mantido sobretudo para o IntelliJ | versão fixada em 3.76; adaptador estreito no pacote `terminal`; `exclusiveContent` + verification-metadata; testado antes de investir nas telas. Licença: o POM declara LGPL 3.0 e o README do projeto declara dupla licença (LGPLv3 ou Apache 2.0, à escolha); sem impacto para uso pessoal sem distribuição. |
+| MINA 2.20.0: Ed25519 só com BouncyCastle; o `3.0.0-M6` é marco, não release | usar 2.20.0; testes (gerar, instalar, autenticar) com `SshServer` embutido |
+| HttpClient em h2c quebra no upgrade do agente | HTTP/1.1 explícito com teste (o agente falso fecha o socket se vier `Upgrade`) |
+| Gradle 9 sem ajuste roda no JDK mais novo que achar | rodar com `JAVA_HOME` num JDK 21; `org.gradle.java.home` em `gradle.properties` é opcional (vem comentado, porque o caminho muda de máquina para máquina) |
+| Carga no servidor (cada `/api/projetos` faz `docker exec` por sessão aberta; um servidor pequeno sente) | tópicos por assinatura, ×6 sem foco, guarda de calor, só `LIMITES` em segundo plano |
+| macOS: permissão de Rede Local, App Nap, notificações a partir de Java | `Info.plist` com as chaves; `Notificador` com duas implementações e botão Testar; testar o `.app` pelo Finder, não só o `gradle run` |
+| `jlink` sem `jdk.localedata` formata números em en-US sem erro | módulos explícitos e teste dentro do runtime empacotado |
+| Iniciar, parar e reiniciar seguram uma requisição de até 12 min | estado "em andamento"; estourar o prazo não marca falha se o heartbeat está ok |
+| `docker` fora do PATH do shell não interativo, ou usuário fora do grupo `docker` | já vale para o script de publicação do painel; se falhar, a aba mostra o erro do canal em vez de um terminal vazio |
+| Cofre sem recuperação | aviso na criação; exportar o cofre de vez em quando |
+| Fixtures com nomes reais | ficam fora do git (`src/test/resources/lab-real/` está no `.gitignore`) |
+| Acesso fora da rede local | primeira versão só na LAN; fase 5 cobre com `cloudflared access tcp` (já instalado) |
+
+## 14. Limites conhecidos e trabalho futuro
+
+Cada item traz o padrão adotado hoje; o que mudaria se fosse diferente.
+
+| # | Questão | Padrão adotado |
+|---|---|---|
+| 1 | MINA: `sshd-core` 2.20.0 estável + BouncyCastle, ou 3.0.0-M6 sem BC (marco, menos jars; os testes passaram nos dois) | 2.20.0 + BC (estável, e o BC já traz o Argon2id) |
+| 2 | Remover os rastros do front web antigo | feito junto com a migração |
+| 3 | Notificações: `TrayIcon.displayMessage`, `osascript` direto, ou helper Swift com `UNUserNotificationCenter` | `TrayIcon` com `osascript` de reserva; decidir depois de testar no `.app` |
+| 4 | Acesso a um servidor fora da rede local | transporte opcional na fase 5; até lá só a LAN |
+| 5 | Auto-bloqueio do cofre | desligado, tempo configurável em Preferências |
+| 6 | Entrega do `jpackage`: app-image em `~/Applications` ou `.dmg` | app-image com assinatura ad-hoc |
+| 7 | Versões: JUnit 5.14.4 (a linha 6.1.3 existe), Jackson 2.22.3 (a 2.22.4 saiu em 2026-10-17, ainda sem maturação; sem diferença de API), Gradle 9.8.0 | essas, conforme a decisão de "JUnit 5" e "Jackson 2.x" |
+| 8 | Importar a chave de `~/.ssh` para o cofre ou só gerar chaves novas | gerar nova (importar fica opcional) |
+| 9 | Chave de recuperação do cofre (256 bits mostrados uma vez) | não ter; rede de segurança é a chave antiga e a exportação do cofre |
+| 10 | `tmux attach -d` (o app como único cliente da sessão) | desligado; preferência por servidor |
+| 11 | Option como Meta no terminal; Shift+Enter como ESC+CR | Option desligado e Shift+Enter ligado, conforme o teclado do usuário (ABNT2 ou US-internacional) |
+| 12 | Qual % mostrar na barra de menus com vários servidores | o maior da semana, com o nome do servidor no tooltip |
+| 13 | Copiar ao selecionar no terminal | desligado; preferência |
+| 14 | Touch ID para desbloquear o cofre (exige helper nativo e Keychain, fora do puro Java) | não fazer |
+| 15 | Notificar também "pergunta pendente" do Claude (exige polling de tela em segundo plano) | fora do escopo |
+
+O repositório do app é separado do painel; as mudanças do agente vão no repositório do agente.
+
+## 15. Dependências
+
+Coordenadas Maven e versões conferidas contra o Maven Central e o repositório da JetBrains em 2026-10-20 (POM existe; data de publicação pelo `Last-Modified` do Central).
+
+| Coordenada | Versão | Publicada | Uso e observações |
+|---|---|---|---|
+| `org.apache.sshd:sshd-core` | 2.20.0 | 2026-09-26 | SSH, forward, `SshServer` para testes. Traz `sshd-common` 2.20.0 e o NIO2. NÃO usar `sshd-mina` nem `sshd-netty`. |
+| `org.bouncycastle:bcprov-jdk18on` | 1.86 | 2026-09-11 | Ed25519 do MINA e Argon2id do cofre |
+| `org.bouncycastle:bcpkix-jdk18on` | 1.86 | 2026-09-11 | leitura e escrita de chaves (puxa `bcutil-jdk18on` 1.86) |
+| `org.jetbrains.jediterm:jediterm-core` | 3.76 | 2026-09-09 | repositório JetBrains `https://packages.jetbrains.team/maven/p/ij/intellij-dependencies` (NÃO está no Central); POM declara LGPL 3.0 |
+| `org.jetbrains.jediterm:jediterm-ui` | 3.76 | 2026-09-09 | idem; traz `kotlin-stdlib` 2.4.0 (Central, 2026-06-03) e `org.jetbrains:annotations` 24.0.1 |
+| `com.formdev:flatlaf` | 3.7.2 | 2026-07-09 | inclui `FlatMacLightLaf`, `FlatMacDarkLaf` e o dylib macos-arm64 |
+| `com.formdev:flatlaf-extras` | 3.7.2 | 2026-07-09 | `FlatSVGIcon` (traz `com.github.weisj:jsvg` 2.1.0) |
+| `com.formdev:flatlaf-fonts-inter` | 4.1 | 2025-03-09 | fonte da interface |
+| `com.formdev:flatlaf-fonts-jetbrains-mono` | 2.304 | 2024-01-24 | fonte do terminal e dos blocos mono |
+| `com.fasterxml.jackson.core:jackson-databind` | 2.22.3 | 2026-09-21 | via `jackson-bom:2.22.3`; traz `jackson-core` 2.22.3 e `jackson-annotations` 2.22. Jackson 3 (`tools.jackson`) fica de fora de propósito. |
+| `com.fasterxml.jackson.datatype:jackson-datatype-jsr310` | 2.22.3 | 2026-09-21 | `Instant` nos records |
+| `org.slf4j:slf4j-api` | 2.0.17 | 2025-02-25 | resolve o conflito entre o 1.7.36 do MINA e o 2.0.9 do JediTerm |
+| `org.slf4j:slf4j-simple` | 2.0.17 | 2025-02-25 | runtime; arquivo de log via propriedades; a 2.1.0-alpha1 existe e NÃO se usa |
+| `org.junit:junit-bom` e `org.junit.jupiter:junit-jupiter` | 5.14.4 | 2026-04-26 | testes |
+| `org.junit.platform:junit-platform-launcher` | 1.14.4 (pela BOM) | 2026-04-26 | `testRuntimeOnly`, obrigatório no Gradle 9 |
+
+Ferramentas de desenvolvimento: JDK 21, Gradle 9.8.0 (wrapper com checksum), Node 20 ou mais novo (opcional), `cloudflared` e `tmux` (opcionais). Deliberadamente fora do projeto: Spring, JavaFX, Mockito, AssertJ, Awaitility, `sshd-mina`, `sshd-netty`, `net.i2p.crypto:eddsa` (sem manutenção desde 2018), Jackson 3, JNA e `argon2-jvm` (nativos), `pty4j`.
+
+## Apêndice A: decisões e limites
+
+Regras técnicas que não ficam óbvias nas seções acima, e o que ficou de fora de propósito. Cada item vale com `EMPTY_KEYS_PROVIDER` e `HostConfigEntryResolver.EMPTY` |
+
+## Apêndice B: o que foi conferido nesta máquina (2026-10-20)
+
+Conferido e reproduzível:
+
+- Ambiente: arm64, macOS 26.6; `openjdk@21` 21.0.12 com `jlink`/`jpackage`/`jdeps`; Gradle 9.8.0 em JVM 27; Node v20.20.2; Xcode CLT; `cloudflared` e `tmux` instalados.
+- Argon2id com BouncyCastle 1.86 no JDK 21 (tabela em 5.4), com heap de 512 MiB e 768 MiB.
+- `tmux` 3.7c: `window-size` padrão `latest`, em servidor descartável.
+- Nomes de API por `javap` nos JARs de `sshd-core` 2.20.0, BouncyCastle 1.86, JediTerm 3.76 e FlatLaf 3.7.2: `KeyIdentityProvider.EMPTY_KEYS_PROVIDER`, `HostConfigEntryResolver.EMPTY`, `UserAuthPublicKeyFactory.INSTANCE`, `ServerKeyVerifier.verifyServerKey`, `ClientSession.createLocalPortForwardingTracker`, `PortForwardingTracker.getBoundAddress`, `CoreModuleProperties.HEARTBEAT_*`, `KeyUtils.generateKeyPair/getFingerPrint`, `PublicKeyEntry.toString`, `OpenSSHKeyPairResourceWriter.INSTANCE`, `SecurityUtils.loadKeyPairIdentities/isEDDSACurveSupported`, `PtyCapableChannelSession.setUsePty/setPtyType/sendWindowChange`, `SignatureFactoriesManager.setSignatureFactoriesNames`, `TtyConnector`, `TerminalPanel.getTerminalSizeFromComponent`, `UserSettingsProvider.shiftEnterSendsEscCR`, `FlatLaf.registerCustomDefaultsSource`, `FlatMacLightLaf`/`FlatMacDarkLaf`, dylib `macos-arm64`.
+- Dependências: POMs existem no Central (e no repositório da JetBrains para o JediTerm 3.76), datas de publicação, transitivos de `flatlaf-extras` (jsvg 2.1.0), `jediterm-core` (kotlin-stdlib 2.4.0, slf4j 2.0.9, annotations 24.0.1), licença do POM do JediTerm e do README upstream.
+- Fonte do JediTerm 3.76: `TerminalStarter` usa um executor de thread única; `allSessionsClosed` dispara antes de a sessão ser limpa e `start()` repetido registra "Should not try to start session again"; `TerminalPanel` faz `setFocusTraversalKeysEnabled(false)` e `enableInputMethods(true)`; `DefaultSettingsProvider` mapeia Cmd+C, Cmd+V e Cmd+K no macOS.
+- POMs do MINA 2.20.0: `bcprov`/`bcpkix`/`bcpg` e o `net.i2p.crypto:eddsa` são dependências opcionais do `sshd-common` (por isso o projeto declara BC explicitamente); versão de referência do BC é 1.86; `slf4j-api` 1.7.36 com limite superior 3.
+- Gradle 9.8.0: checksum oficial; versões 9.8.1 e 9.8.2 existentes.
+
