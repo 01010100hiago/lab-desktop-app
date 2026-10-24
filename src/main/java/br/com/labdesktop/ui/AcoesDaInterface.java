@@ -12,7 +12,10 @@ import br.com.labdesktop.ui.dialogos.Apresentador;
 import br.com.labdesktop.ui.dialogos.Configurar2fa;
 import br.com.labdesktop.ui.dialogos.DialogoAdicionarServidor;
 import br.com.labdesktop.ui.dialogos.DialogoConfiarHost;
+import br.com.labdesktop.ui.dialogos.DialogoEditarServidor;
 import br.com.labdesktop.ui.dialogos.DialogoRegistrarToken;
+import br.com.labdesktop.ui.dialogos.DialogoRemoverServidor;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -46,6 +49,27 @@ public final class AcoesDaInterface {
     public void adicionarServidor() {
         boolean primeiro = gerenciador.servidores().isEmpty();
         apresentador.mostrar(new DialogoAdicionarServidor(assistente, primeiro, avisos, aoSelecionar));
+    }
+
+    /**
+     * "Editar": nome, endereço, porta e usuário do servidor. Salvar grava no cofre fora da EDT e reconecta; mudar o endereço
+     * ou a porta apaga a impressão digital guardada (o diálogo avisa).
+     */
+    public void editar(ServidorLab lab) {
+        apresentador.mostrar(new DialogoEditarServidor(lab.config(), dados -> gerenciador.atualizar(lab.id(), dados), avisos));
+    }
+
+    /**
+     * "Remover": o diálogo com as duas escolhas (apagar a chave do cofre, revogar o acesso no servidor). A remoção de fato
+     * roda fora da EDT; as telas se atualizam sozinhas pela lista de servidores, e sem nenhum servidor sobra o convite para
+     * adicionar.
+     */
+    public void remover(ServidorLab lab) {
+        EstadoServidor e = lab.estado();
+        List<String> outrosQueUsamAChave = gerenciador.outrosQueUsamAChaveDe(lab.id());
+        apresentador.mostrar(new DialogoRemoverServidor(e.nome(), lab.config().usuario(), e.conexao().permiteExec(),
+            outrosQueUsamAChave, gerenciador.origemDaChaveDe(lab.id()), opcoes -> gerenciador.removerServidor(lab.id(), opcoes),
+            avisos));
     }
 
     /** "Configurar 2FA" (ou "Desativar", conforme o estado que o agente informa). */
@@ -117,6 +141,7 @@ public final class AcoesDaInterface {
             case DIGITAR_CODIGO -> digitarCodigo(lab);
             case CONFERIR_IMPRESSAO -> conferirImpressao(lab);
             case REGISTRAR_TOKEN -> registrarToken(lab);
+            case REMOVER_SERVIDOR -> remover(lab);
         }
     }
 }

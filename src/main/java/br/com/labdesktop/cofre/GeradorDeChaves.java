@@ -40,22 +40,22 @@ public final class GeradorDeChaves {
         }
         try {
             KeyPair par = KeyUtils.generateKeyPair(ChaveSsh.ALGORITMO_ED25519, 256);
-            return empacotar(novoId(), nomeLimpo, par, comentarioDo(nomeDoMac), Instant.now());
+            return empacotar(novoId(), nomeLimpo, par, comentarioDo(nomeDoMac), Instant.now(), InfoChave.Origem.GERADA_PELO_APP);
         } catch (GeneralSecurityException | IOException e) {
             throw new CofreException("Não consegui gerar a chave Ed25519.", e);
         }
     }
 
     /** Serializa o par no formato do cofre. Compartilhado com o {@link ImportadorDeChaves}. */
-    static ChaveSsh empacotar(String id, String nome, KeyPair par, String comentario, Instant criadaEm)
-        throws IOException, GeneralSecurityException {
+    static ChaveSsh empacotar(String id, String nome, KeyPair par, String comentario, Instant criadaEm,
+                              InfoChave.Origem origem) throws IOException, GeneralSecurityException {
         SaidaZeravel saida = new SaidaZeravel();
         try {
             OpenSSHKeyPairResourceWriter.INSTANCE.writePrivateKey(par, comentario, null, saida);
             byte[] pem = saida.copiaExata();
             String publica = PublicKeyEntry.toString(par.getPublic()) + " " + comentario;
             String impressao = KeyUtils.getFingerPrint(par.getPublic());
-            return new ChaveSsh(id, nome, ChaveSsh.ALGORITMO_ED25519, publica, impressao, criadaEm, pem);
+            return new ChaveSsh(id, nome, ChaveSsh.ALGORITMO_ED25519, publica, impressao, criadaEm, origem, pem);
         } finally {
             saida.zerar();
         }

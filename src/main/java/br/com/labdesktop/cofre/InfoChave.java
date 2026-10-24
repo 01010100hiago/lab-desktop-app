@@ -8,8 +8,33 @@ import java.time.Instant;
  *
  * @param publica   linha completa da chave pública, pronta para o {@code authorized_keys}: {@code ssh-ed25519 AAAA... lab-desktop@mac}
  * @param impressao {@code SHA256:...}
+ * @param origem    quem criou a chave: decide se o app pode tirá-la do servidor ao remover o servidor
  */
-public record InfoChave(String id, String nome, String algoritmo, String publica, String impressao, Instant criadaEm) {
+public record InfoChave(String id, String nome, String algoritmo, String publica, String impressao, Instant criadaEm,
+                        Origem origem) {
+
+    /**
+     * De onde a chave veio. Só uma chave que o PRÓPRIO app criou é dele para revogar: ela existe só neste cofre e em nenhum
+     * outro lugar. Uma chave importada de um arquivo do usuário (o {@code ~/.ssh/id_ed25519} dele, por exemplo) é usada também
+     * no terminal e em outras máquinas, e tirá-la do servidor tiraria o acesso dele por fora do app.
+     */
+    public enum Origem {
+        /** Criada pelo app ao cadastrar o servidor: existe só neste cofre. */
+        GERADA_PELO_APP,
+        /** Importada de um arquivo do usuário: o app não a tira do servidor. */
+        IMPORTADA,
+        /** Cofre de uma versão que não gravava a origem: por segurança, tratada como se fosse do usuário. */
+        DESCONHECIDA;
+
+        /** {@code true} só se o app pode tirar esta chave do {@code authorized_keys} ao remover o servidor. */
+        public boolean podeSerTiradaDoServidor() {
+            return this == GERADA_PELO_APP;
+        }
+    }
+
+    public InfoChave {
+        origem = origem == null ? Origem.DESCONHECIDA : origem;
+    }
 
     /**
      * O que a linha de {@link #linhaDeAuthorizedKeys} restringe DE VERDADE e o que não restringe, em texto para o usuário

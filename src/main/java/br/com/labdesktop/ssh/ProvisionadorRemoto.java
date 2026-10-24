@@ -73,6 +73,66 @@ public final class ProvisionadorRemoto {
     }
 
     /**
+     * O comando que tira UMA linha do {@code ~/.ssh/authorized_keys} do usuário do servidor. FIXO, como os outros: o texto da
+     * chave (só a parte em base64, que identifica a linha) vai por STDIN e o {@code grep} o lê com {@code -f -}, então nada
+     * que o usuário ou o servidor escrevam entra na linha de comando. {@code sh -c '...'} para valer em qualquer shell de login.
+     *
+     * <p>Sai com 0 (tirou, ou a linha nem estava lá), 2 (erro de leitura ou de escrita) ou 3 (a chave era a ÚNICA linha do
+     * arquivo: não se apaga, para não trancar o usuário fora do próprio servidor). O arquivo é reescrito no mesmo lugar
+     * ({@code cat > arquivo}), o que preserva dono e permissões.
+     */
+    static final String COMANDO_REMOVER_CHAVE_AUTORIZADA = "sh -c '"
+        + "f=\"$HOME/.ssh/authorized_keys\"; [ -f \"$f\" ] || exit 0; "
+        + "t=$(mktemp) || exit 2; "
+        + "grep -vFf - \"$f\" > \"$t\"; r=$?; "
+        + "if [ \"$r\" -gt 1 ]; then rm -f \"$t\"; exit 2; fi; "
+        + "if [ ! -s \"$t\" ]; then rm -f \"$t\"; exit 3; fi; "
+        + "cat \"$t\" > \"$f\"; r=$?; rm -f \"$t\"; exit \"$r\"'";
+
+    /** O que aconteceu com a chave deste app no {@code authorized_keys} do servidor. */
+    public enum ResultadoDaChaveAutorizada {
+        /** A linha foi tirada (ou já não estava lá). */
+        REMOVIDA,
+        /** Era a única chave do arquivo: ficou, para o usuário não perder o acesso ao servidor. */
+        MANTIDA_POR_SER_A_UNICA
+    }
+
+    /**
+     * Tira a chave pública deste app do {@code authorized_keys} do usuário no servidor (é o que de fato revoga o acesso por
+     * SSH). Só a chave Ed25519 do app é reconhecida; o texto em base64 é validado antes de ir por stdin.
+     *
+     * @param chavePublica a linha {@code ssh-ed25519 AAAA... comentário}
+     * @throws IllegalArgumentException se não parece uma chave pública Ed25519
+     * @throws ErroProvisionamento      sem conexão, ou o servidor não conseguiu mexer no arquivo
+     */
+    public ResultadoDaChaveAutorizada removerChaveAutorizada(String chavePublica) throws ErroProvisionamento {
+        String[] partes = chavePublica == null ? new String[0] : chavePublica.strip().split("\\s+");
+        if (partes.length < 2 || !"ssh-ed25519".equals(partes[0]) || !partes[1].matches("[A-Za-z0-9+/]{20,100}={0,2}")) {
+            throw new IllegalArgumentException("A chave pública não parece uma chave Ed25519.");
+        }
+        ResultadoExec exec;
+        try {
+            exec = executor.executar(COMANDO_REMOVER_CHAVE_AUTORIZADA, (partes[1] + "\n").getBytes(StandardCharsets.UTF_8), PRAZO);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ErroProvisionamento(ErroProvisionamento.SEM_RESPOSTA, "Interrompido.", e);
+        } catch (IOException e) {
+            throw new ErroProvisionamento(ErroProvisionamento.SEM_SESSAO,
+                "Sem conexão SSH para tirar a chave do servidor: " + Redator.redigir(e), e);
+        }
+        return switch (exec.status()) {
+            case 0 -> ResultadoDaChaveAutorizada.REMOVIDA;
+            case 3 -> ResultadoDaChaveAutorizada.MANTIDA_POR_SER_A_UNICA;
+            default -> {
+                String dica = TextoSeguro.truncar(TextoSeguro.limparLinha(Redator.redigir(exec.stderr())), 200);
+                throw new ErroProvisionamento(ErroProvisionamento.SEM_RESPOSTA,
+                    "O servidor não conseguiu tirar a chave do arquivo de acessos (status " + exec.status() + ")."
+                        + (dica.isEmpty() ? "" : " " + dica));
+            }
+        };
+    }
+
+    /**
      * Gera o segredo do 2FA no servidor (fica {@code pendente}: não exige nada até a confirmação). O segredo
      * volta UMA vez, aqui; quem recebe o {@link SegredoTotp} o zera ao fechar o diálogo.
      */

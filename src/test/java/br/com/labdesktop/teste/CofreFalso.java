@@ -5,16 +5,20 @@ import br.com.labdesktop.cofre.CofreBloqueadoException;
 import br.com.labdesktop.cofre.CofreException;
 import br.com.labdesktop.cofre.ConfigServidor;
 import br.com.labdesktop.cofre.Estado2fa;
+import br.com.labdesktop.cofre.InfoChave;
 import br.com.labdesktop.cofre.Pin;
 import br.com.labdesktop.cofre.TokenAgente;
 import br.com.labdesktop.cofre.Transporte;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.UnaryOperator;
 import org.apache.sshd.common.config.keys.KeyUtils;
+import org.apache.sshd.common.config.keys.PublicKeyEntry;
 
 /**
  * Um {@link AcessoAoCofre} de 40 linhas para os testes de ssh, api e servidor: evita abrir um cofre de verdade
@@ -28,9 +32,14 @@ public final class CofreFalso implements AcessoAoCofre {
     private final KeyPair par;
     private volatile TokenAgente token;
     private volatile boolean bloqueado;
+    private volatile boolean removido;
+    private volatile InfoChave.Origem origemDaChave = InfoChave.Origem.GERADA_PELO_APP;
     private final List<Runnable> aoBloquear = new CopyOnWriteArrayList<>();
     public final AtomicInteger leiturasDaChave = new AtomicInteger();
     public final List<String> pinsGravados = new CopyOnWriteArrayList<>();
+    /** Ids dos servidores que o teste mandou remover, e se a chave foi junto. */
+    public final List<String> servidoresRemovidos = new CopyOnWriteArrayList<>();
+    public final List<Boolean> chavesApagadas = new CopyOnWriteArrayList<>();
 
     public CofreFalso(String host, int portaSsh, List<Pin> pins) {
         try {
@@ -50,6 +59,12 @@ public final class CofreFalso implements AcessoAoCofre {
         ConfigServidor c = config;
         config = new ConfigServidor(c.id(), c.nome(), c.host(), c.porta(), c.usuario(), c.chaveId(), portaAgente,
             c.pins(), c.transporte(), c.nomeDoDispositivo(), c.estado2fa());
+        return this;
+    }
+
+    /** Quem criou a chave do servidor (o padrão é o app): decide se a remoção a tira do servidor. */
+    public CofreFalso comOrigemDaChave(InfoChave.Origem origem) {
+        this.origemDaChave = origem;
         return this;
     }
 
@@ -73,13 +88,13 @@ public final class CofreFalso implements AcessoAoCofre {
     @Override
     public List<ConfigServidor> servidores() {
         exigirAberto();
-        return List.of(config);
+        return removido ? List.of() : List.of(config);
     }
 
     @Override
     public Optional<ConfigServidor> servidor(String servidorId) {
         exigirAberto();
-        return ID.equals(servidorId) ? Optional.of(config) : Optional.empty();
+        return ID.equals(servidorId) && !removido ? Optional.of(config) : Optional.empty();
     }
 
     @Override
@@ -119,6 +134,35 @@ public final class CofreFalso implements AcessoAoCofre {
     public void gravarEstado2fa(String servidorId, Estado2fa estado) {
         exigirAberto();
         config = config.comEstado2fa(estado);
+    }
+
+    @Override
+    public void alterarServidor(String servidorId, UnaryOperator<ConfigServidor> mudanca) {
+        exigirAberto();
+        if (!ID.equals(servidorId) || removido) {
+            throw new IllegalArgumentException("Servidor desconhecido.");
+        }
+        config = mudanca.apply(config);
+    }
+
+    @Override
+    public boolean removerServidor(String servidorId, boolean apagarAChaveSeLivre) {
+        exigirAberto();
+        if (!ID.equals(servidorId) || removido) {
+            throw new IllegalArgumentException("Servidor desconhecido.");
+        }
+        removido = true;
+        servidoresRemovidos.add(servidorId);
+        chavesApagadas.add(apagarAChaveSeLivre);
+        return apagarAChaveSeLivre;
+    }
+
+    @Override
+    public Optional<InfoChave> infoDaChave(String chaveId) {
+        exigirAberto();
+        return Optional.of(new InfoChave("k1", "lab", "ssh-ed25519",
+            PublicKeyEntry.toString(par.getPublic()) + " lab-desktop@teste", KeyUtils.getFingerPrint(par.getPublic()),
+            Instant.parse("2026-10-24T12:00:00Z"), origemDaChave));
     }
 
     @Override

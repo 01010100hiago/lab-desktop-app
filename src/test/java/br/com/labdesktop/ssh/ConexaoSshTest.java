@@ -458,4 +458,47 @@ class ConexaoSshTest {
             assertEquals(EstadoConexao.DESCONECTADO, vistos.get(0).estado());
         }
     }
+
+    @Test
+    void reconectarJogaForaASessaoEConectaDeNovoComOQueOCofreTemAgora() throws Exception {
+        try (CenarioDeConexao c = CenarioDeConexao.novo().sondaPorHttp()) {
+            c.conexao.iniciar();
+            Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.CONECTADO);
+            long geracaoAntes = c.info().geracao();
+            int autenticacoesAntes = c.ssh.autenticacoesAceitas.get();
+
+            c.conexao.reconectar(); // "tentar agora" não faria nada com a conexão de pé
+
+            Espera.ate(PRAZO, () -> "reconectou, info=" + c.info(),
+                () -> c.estado() == EstadoConexao.CONECTADO && c.info().geracao() > geracaoAntes);
+            assertTrue(c.ssh.autenticacoesAceitas.get() > autenticacoesAntes, "abriu uma sessão SSH nova");
+
+            // Agora o cofre perde o pin (o usuário mudou o endereço): reconectar já usa o cofre de agora e para na confirmação.
+            c.cofre.limparPins(CofreFalso.ID);
+            int sessoesAntes = c.ssh.sessoesAbertas.get();
+            c.conexao.reconectar();
+            Espera.ate(PRAZO, () -> "pin ausente, info=" + c.info(), () -> c.estado() == EstadoConexao.ERRO_CHAVE_HOST);
+            assertEquals(Falha.Tipo.PIN_AUSENTE, c.info().falha().tipo());
+            assertTrue(c.conexao.tunel().isEmpty(), "a sessão e o túnel antigos foram fechados");
+            assertEquals(sessoesAntes, c.ssh.sessoesAbertas.get());
+        }
+    }
+
+    @Test
+    void reconectarNaoMexeComOCofreBloqueadoNemComOMacDormindo() throws Exception {
+        try (CenarioDeConexao c = CenarioDeConexao.novo().sondaPorHttp()) {
+            c.conexao.iniciar();
+            Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.CONECTADO);
+
+            c.conexao.aoDormir();
+            Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.SUSPENSO);
+            c.conexao.reconectar();
+            Espera.naoAcontece(Duration.ofMillis(600), "reconectar com o Mac dormindo", () -> c.estado() != EstadoConexao.SUSPENSO);
+
+            c.conexao.bloquear();
+            Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.BLOQUEADO_COFRE);
+            c.conexao.reconectar();
+            Espera.naoAcontece(Duration.ofMillis(600), "reconectar com o cofre bloqueado", () -> c.estado() != EstadoConexao.BLOQUEADO_COFRE);
+        }
+    }
 }

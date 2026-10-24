@@ -125,7 +125,7 @@ class AssistenteDeServidorTest {
 
         ErroDoAssistente erro = assertThrows(ErroDoAssistente.class, () -> assistente.concluir(lab, DISPOSITIVO, e -> { }));
         assertEquals(ErroDoAssistente.Motivo.CHAVE_RECUSADA, erro.motivo());
-        assertTrue(erro.getMessage().contains("authorized_keys"), erro.getMessage());
+        assertTrue(erro.getMessage().contains("instalar a chave pública"), erro.getMessage());
         assertTrue(agente.tokens.isEmpty(), "sem sessão SSH nada foi registrado");
 
         instalarAChavePublica(lab);
@@ -208,6 +208,24 @@ class AssistenteDeServidorTest {
 
         Espera.ate(Duration.ofSeconds(20), () -> "estado=" + lab.estado(), () -> lab.estado().conexao() == EstadoConexao.CONECTADO);
         assertEquals(List.of(sonda.pin()), cofre.servidor(lab.id()).orElseThrow().pins());
+    }
+
+    @Test
+    void importarOMesmoArquivoDeNovoReaproveitaAChaveEmVezDeCriarUmaCopia() throws Exception {
+        java.io.ByteArrayOutputStream saida = new java.io.ByteArrayOutputStream();
+        org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyPairResourceWriter.INSTANCE.writePrivateKey(
+            org.apache.sshd.common.config.keys.KeyUtils.generateKeyPair("ssh-ed25519", 256), "usuario@notebook", null, saida);
+        Path arquivo = tmp.resolve("id_ed25519");
+        java.nio.file.Files.write(arquivo, saida.toByteArray());
+
+        InfoChave primeira = assistente.importarChave(arquivo, null, "para o lab");
+        InfoChave segunda = assistente.importarChave(arquivo, null, "para o outro servidor");
+
+        assertEquals(InfoChave.Origem.IMPORTADA, primeira.origem());
+        assertEquals(primeira.id(), segunda.id(), "é a mesma chave: não nasce uma segunda entrada no cofre");
+        assertEquals(1, cofre.chaves().size());
+        assertEquals("para o lab", cofre.chaves().get(0).nome(), "a que já existia fica como estava");
+        assertEquals(InfoChave.Origem.GERADA_PELO_APP, assistente.gerarChave("outra").origem(), "a criada pelo app é do app");
     }
 
     @Test

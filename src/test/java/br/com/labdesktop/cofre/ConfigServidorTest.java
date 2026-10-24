@@ -1,6 +1,7 @@
 package br.com.labdesktop.cofre;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -76,6 +77,62 @@ class ConfigServidorTest {
         assertEquals(List.of(ed2), com.comPin(ed2).pins(), "mesmo algoritmo: troca");
         assertTrue(com.semPins().pins().isEmpty());
         assertEquals("k9", c.comChaveId("k9").chaveId());
+    }
+
+    private static final Pin PIN = new Pin("ssh-ed25519", "SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+    @Test
+    void editarSoONomeOuOUsuarioOuAPortaDoAgenteMantemOsPins() {
+        ConfigServidor c = base().comPin(PIN).comNomeDoDispositivo("mac").comEstado2fa(Estado2fa.ATIVO);
+
+        ConfigServidor soNome = c.editar("outro", "192.0.2.5", 2222, "labuser", 7000);
+        assertEquals("outro", soNome.nome());
+        assertEquals(List.of(PIN), soNome.pins(), "só o nome mudou: a impressão digital continua valendo");
+
+        ConfigServidor soUsuario = c.editar("lab", "192.0.2.5", 2222, "outrousuario", 7000);
+        assertEquals(List.of(PIN), soUsuario.pins());
+        assertEquals("outrousuario", soUsuario.usuario());
+
+        ConfigServidor soAgente = c.editar("lab", "192.0.2.5", 2222, "labuser", 7100);
+        assertEquals(List.of(PIN), soAgente.pins());
+        assertEquals(7100, soAgente.portaAgente());
+
+        // O resto não se mexe: id, chave, token, 2FA, transporte.
+        assertEquals(c.id(), soNome.id());
+        assertEquals(c.chaveId(), soNome.chaveId());
+        assertEquals("mac", soNome.nomeDoDispositivo());
+        assertEquals(Estado2fa.ATIVO, soNome.estado2fa());
+        assertEquals(c.transporte(), soNome.transporte());
+    }
+
+    @Test
+    void editarOEnderecoOuAPortaDoSshApagaOsPins() {
+        ConfigServidor c = base().comPin(PIN);
+        assertTrue(c.editar("lab", "outro.local", 2222, "labuser", 7000).pins().isEmpty(), "outro endereço");
+        assertTrue(c.editar("lab", "192.0.2.5", 22, "labuser", 7000).pins().isEmpty(), "outra porta");
+        assertTrue(c.editar("lab", "outro.local", 22, "labuser", 7000).pins().isEmpty(), "os dois");
+        assertEquals(List.of(PIN), c.pins(), "o original não muda");
+    }
+
+    @Test
+    void oEnderecoSoComparaSemDiferencaDeMaiusculasEIgnoraEspacosNasPontas() {
+        ConfigServidor c = new ConfigServidor("s1", "lab", "Lab.Local", 22, "u", "k1", 7000, List.of(PIN), null, null, null);
+        assertEquals(List.of(PIN), c.editar("lab", "lab.local", 22, "u", 7000).pins(), "DNS não distingue maiúsculas");
+        assertEquals(List.of(PIN), c.editar("lab", "  Lab.Local  ", 22, "u", 7000).pins());
+        assertEquals("Lab.Local", c.editar("lab", "  Lab.Local  ", 22, "u", 7000).host());
+        assertTrue(c.mesmoEnderecoQue(c.editar("lab", "LAB.LOCAL", 22, "u", 7000)));
+        assertFalse(c.mesmoEnderecoQue(c.editar("lab", "lab.local", 23, "u", 7000)));
+    }
+
+    @Test
+    void editarValidaComAsRegrasDoConstrutor() {
+        ConfigServidor c = base();
+        assertThrows(IllegalArgumentException.class, () -> c.editar("", "h", 22, "u", 7000));
+        assertThrows(IllegalArgumentException.class, () -> c.editar("lab", "-oProxyCommand=x", 22, "u", 7000));
+        assertThrows(IllegalArgumentException.class, () -> c.editar("lab", null, 22, "u", 7000));
+        assertThrows(IllegalArgumentException.class, () -> c.editar("lab", "h", 0, "u", 7000));
+        assertThrows(IllegalArgumentException.class, () -> c.editar("lab", "h", 22, "-u", 7000));
+        assertThrows(IllegalArgumentException.class, () -> c.editar("lab", "h", 22, "u", 70000));
     }
 
     @Test

@@ -127,4 +127,26 @@ public record ConfigServidor(
         return new ConfigServidor(id, nome, host, porta, usuario, novaChaveId, portaAgente, pins, transporte,
             nomeDoDispositivo, estado2fa);
     }
+
+    /**
+     * O que o usuário muda na tela "Editar servidor". A regra do pin mora aqui, junto do dado: mudar o ENDEREÇO ou a PORTA do
+     * SSH apaga as impressões digitais guardadas, porque elas eram as daquela máquina naquela porta; outra máquina (ou
+     * outro serviço na outra porta) precisa ser conferida de novo, senão o app passaria a confiar às cegas num servidor que
+     * o usuário nunca conferiu. Mudar só o nome, o usuário ou a porta do agente mantém os pins (a máquina é a mesma). O
+     * endereço é comparado sem diferença de maiúsculas, como o DNS faz.
+     *
+     * @throws IllegalArgumentException se algum campo não vale (as mesmas regras do construtor)
+     */
+    public ConfigServidor editar(String novoNome, String novoHost, int novaPorta, String novoUsuario, int novaPortaAgente) {
+        String hostLimpo = novoHost == null ? null : novoHost.strip();
+        String usuarioLimpo = novoUsuario == null ? null : novoUsuario.strip();
+        boolean mudouOEndereco = hostLimpo == null || !host.equalsIgnoreCase(hostLimpo) || porta != novaPorta;
+        return new ConfigServidor(id, novoNome, hostLimpo, novaPorta, usuarioLimpo, chaveId, novaPortaAgente,
+            mudouOEndereco ? List.of() : pins, transporte, nomeDoDispositivo, estado2fa);
+    }
+
+    /** {@code true} se {@code outra} aponta para o mesmo endereço e a mesma porta do SSH (o que decide se os pins ainda valem). */
+    public boolean mesmoEnderecoQue(ConfigServidor outra) {
+        return host.equalsIgnoreCase(outra.host) && porta == outra.porta;
+    }
 }

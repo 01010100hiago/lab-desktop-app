@@ -3,6 +3,7 @@ package br.com.labdesktop.cofre;
 import java.security.KeyPair;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 /**
  * O que os módulos {@code ssh}, {@code api} e {@code servidor} enxergam do cofre. É uma interface estreita de
@@ -59,6 +60,28 @@ public interface AcessoAoCofre {
 
     /** Atualiza a dica do estado do 2FA lida de {@code GET /api/versao}. Sem mudança, não regrava o arquivo. */
     void gravarEstado2fa(String servidorId, Estado2fa estado) throws CofreException;
+
+    /**
+     * Aplica uma mudança à configuração do servidor (nome, endereço, porta, usuário, pins...), de forma atômica com as
+     * outras escritas: o que a função recebe é a configuração de AGORA, então uma dica do 2FA gravada no meio do caminho não
+     * se perde. A função decide também os pins (é onde mora a regra "mudou o endereço, apaga o pin": veja
+     * {@link ConfigServidor#editar}). Devolver uma configuração igual não regrava o arquivo. O token não muda.
+     *
+     * @throws IllegalArgumentException se o servidor não existe, se a função mudar o id ou apontar para uma chave que não está no cofre
+     */
+    void alterarServidor(String servidorId, UnaryOperator<ConfigServidor> mudanca) throws CofreException;
+
+    /**
+     * Remove o servidor e zera o token dele, numa gravação só. Com {@code apagarAChaveSeLivre}, apaga também a chave SSH dele
+     * (e zera a parte privada na memória) desde que nenhum OUTRO servidor a use; se outro a usa, a chave fica.
+     *
+     * @return {@code true} se a chave também foi apagada
+     * @throws IllegalArgumentException se o servidor não existe
+     */
+    boolean removerServidor(String servidorId, boolean apagarAChaveSeLivre) throws CofreException;
+
+    /** A chave SSH (sem a parte privada) pelo id, por exemplo para mostrar a pública ou tirá-la do servidor. */
+    Optional<InfoChave> infoDaChave(String chaveId);
 
     /**
      * Pede para ser avisado quando o cofre for bloqueado (menu, auto-bloqueio, encerramento): é o gancho para

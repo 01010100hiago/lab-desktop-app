@@ -119,8 +119,13 @@ class ConteudoDosAvisosTest {
             estado(EstadoConexao.ERRO_CHAVE_HOST, new Falha(Falha.Tipo.PIN_AUSENTE, "sem pin"), null), AGORA, FUSO).acoes());
         AvisoDeConexao mudou = ConteudoDosAvisos.deConexao(
             estado(EstadoConexao.ERRO_CHAVE_HOST, new Falha(Falha.Tipo.PIN_DIVERGENTE, "mudou"), null), AGORA, FUSO);
-        assertEquals(List.of(), mudou.acoes(), "chave que mudou NÃO tem 'aceitar mesmo assim'");
+        assertEquals(List.of(Acao.REMOVER_SERVIDOR), mudou.acoes(),
+            "chave que mudou NÃO tem 'aceitar mesmo assim': o único caminho é remover e adicionar de novo");
         assertEquals(Gravidade.PERIGO, mudou.gravidade());
+        assertFalse(mudou.texto().toLowerCase().contains("etapa"), "numeração interna do projeto não diz nada ao usuário: " + mudou.texto());
+        assertTrue(mudou.texto().contains("Remover servidor") && mudou.texto().contains("adicione-o de novo"), mudou.texto());
+        assertTrue(mudou.texto().contains("Se não reinstalou, não conecte"), mudou.texto());
+        assertFalse(mudou.texto().contains("só pode"), "Editar o endereço também troca a impressão: nada de 'só pode': " + mudou.texto());
         assertEquals(List.of(Acao.REGISTRAR_TOKEN), ConteudoDosAvisos.deConexao(
             estado(EstadoConexao.TOKEN_RECUSADO, new Falha(Falha.Tipo.TOKEN_RECUSADO, "401"), null), AGORA, FUSO).acoes());
         AvisoDeConexao codigo = ConteudoDosAvisos.deConexao(

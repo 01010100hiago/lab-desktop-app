@@ -13,6 +13,7 @@ import br.com.labdesktop.cofre.CofreBloqueadoException;
 import br.com.labdesktop.cofre.CofreException;
 import br.com.labdesktop.cofre.ConfigServidor;
 import br.com.labdesktop.cofre.Estado2fa;
+import br.com.labdesktop.cofre.InfoChave;
 import br.com.labdesktop.cofre.TokenAgente;
 import br.com.labdesktop.seguranca.Redator;
 import br.com.labdesktop.seguranca.ValidadorDeNomes;
@@ -29,6 +30,7 @@ import br.com.labdesktop.util.Agendador;
 import br.com.labdesktop.util.Fundo;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -87,6 +89,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private long geracaoDaApi = -1;
     private EstadoServidor estado;
     private boolean encerrado;
+    private boolean removidoDoCofre;
+    /** A última configuração lida do cofre: o que as telas ainda desenham depois de o servidor sair dele (ver {@link #config()}). */
+    private volatile ConfigServidor ultimaConfig;
     private volatile Duration prazoDoTesteDoToken = PRAZO_PADRAO_DO_TESTE_DO_TOKEN;
 
     /** Para produção: tempos do SSH padrão, agendador do {@code Fundo} e entrega pela EDT. */
@@ -107,6 +112,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         this.entrega = entrega;
         ConfigServidor config = cofre.servidor(servidorId)
             .orElseThrow(() -> new IllegalArgumentException("Servidor desconhecido no cofre: " + servidorId));
+        this.ultimaConfig = config;
         this.estado = new EstadoServidor(config.id(), config.nome(),
             br.com.labdesktop.ssh.EstadoConexao.DESCONECTADO, null, 0, null, null, 0,
             config.estado2fa(), config.nomeDoDispositivo(), null, null);
@@ -133,9 +139,35 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         return id;
     }
 
-    /** A configuração atual do servidor no cofre (sem segredo). */
+    /**
+     * A configuração atual do servidor no cofre (sem segredo). Depois de o servidor ser FECHADO e removido do cofre
+     * ("Remover servidor"), devolve a última que se leu: um retrato que já estava na fila da EDT ainda vai desenhar o
+     * cartão dele, e isso não pode estourar uma exceção na tela.
+     */
     public ConfigServidor config() {
-        return cofre.servidor(id).orElseThrow(() -> new IllegalStateException("Servidor removido do cofre: " + id));
+        ConfigServidor atual = cofre.servidor(id).orElse(null);
+        if (atual != null) {
+            ultimaConfig = atual;
+            return atual;
+        }
+        boolean fechado;
+        synchronized (trava) {
+            fechado = encerrado || removidoDoCofre;
+        }
+        if (fechado) {
+            return ultimaConfig;
+        }
+        throw new IllegalStateException("Servidor removido do cofre: " + id);
+    }
+
+    /**
+     * O cofre acabou de esquecer este servidor, mas a conexão segue de pé por mais um instante (a revogação no servidor
+     * precisa dela): até ser fechada, {@link #config()} devolve a última leitura em vez de estourar.
+     */
+    void aoSairDoCofre() {
+        synchronized (trava) {
+            removidoDoCofre = true;
+        }
     }
 
     /** O retrato atual. */
@@ -216,6 +248,17 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     public void aoAcordar() {
         conexao.aoAcordar();
         sondador.definirSuspenso(false);
+    }
+
+    /**
+     * O usuário editou o servidor (nome, endereço, porta, usuário) e o cofre já tem os dados novos: mostra o nome novo e
+     * reconecta do zero com eles. Se o endereço mudou, os pins já foram apagados no cofre e a conexão para em "Confirmar
+     * servidor" até o usuário conferir a impressão digital de novo.
+     */
+    void aoEditarNoCofre() {
+        ConfigServidor nova = config();
+        atualizarEstado(e -> e.comNome(nova.nome()));
+        conexao.reconectar();
     }
 
     /** O cofre foi bloqueado: fecha sessão e túnel e para de consultar. Depois, {@link #fechar()}. */
@@ -566,6 +609,116 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         } catch (ErroProvisionamento e) {
             LOG.warn("Não consegui revogar o registro órfão '{}': {}", nome, e.getMessage());
         }
+    }
+
+    // =====================================================================================================
+    // Revogar o acesso do app (bloqueia: SSH exec)
+    // =====================================================================================================
+
+    /**
+     * O que a revogação conseguiu fazer no servidor. {@code avisos} diz em português o que NÃO deu certo (ou não se aplicou),
+     * para o diálogo contar ao usuário: a revogação é melhor esforço e nunca impede a remoção.
+     */
+    public record ResultadoDaRevogacao(boolean tokenRevogado, boolean chaveTiradaDoServidor, List<String> avisos) {
+
+        public ResultadoDaRevogacao {
+            avisos = List.copyOf(avisos);
+        }
+    }
+
+    /**
+     * O que a revogação precisa saber do servidor, lido do cofre ANTES de ele esquecer o servidor: depois da remoção a
+     * chave pública, a origem dela e o nome do dispositivo já não estão lá, e a revogação roda por último.
+     *
+     * @param nomeDoDispositivo {@code null} se o token deste Mac nunca foi registrado
+     * @param chavePublica      {@code null} se a chave já não estava no cofre
+     * @param origemDaChave     quem criou a chave: só a que o app criou é tirada do servidor
+     */
+    public record AcessoDoApp(String servidor, String usuario, String nomeDoDispositivo, String chavePublica,
+                              InfoChave.Origem origemDaChave) { }
+
+    /** Lê do cofre o que a revogação vai precisar, ou vazio se o servidor já não está lá. Não mexe em nada. */
+    public Optional<AcessoDoApp> lerAcessoDoApp() {
+        try {
+            ConfigServidor cfg = config();
+            InfoChave chave = cofre.infoDaChave(cfg.chaveId()).orElse(null);
+            return Optional.of(new AcessoDoApp(cfg.nome(), cfg.usuario(), cfg.nomeDoDispositivo(),
+                chave == null ? null : chave.publica(), chave == null ? InfoChave.Origem.DESCONHECIDA : chave.origem()));
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * "Revogar o acesso deste app no servidor", ao remover o servidor: apaga o token deste Mac no agente
+     * (revogar o acesso) e, se pedido, tira a chave pública do {@code authorized_keys} do usuário (o que de fato
+     * fecha a porta do SSH). Só funciona com a conexão SSH de pé. NUNCA lança: o que falhar vira aviso e a remoção
+     * segue (o usuário continua podendo pedir a quem administra o servidor que tire a chave).
+     *
+     * <p>A chave só é tirada do servidor se foi o PRÓPRIO app que a criou. Uma chave importada de um arquivo do usuário é
+     * (quase sempre) a mesma que ele usa no terminal e em outras máquinas: tirá-la o deixaria sem acesso por fora do app.
+     * Chave de origem desconhecida (cofre de uma versão antiga) recebe o mesmo cuidado.
+     *
+     * @param acesso                o que {@link #lerAcessoDoApp()} leu antes de o cofre esquecer o servidor
+     * @param tirarAChaveDoServidor {@code false} quando a chave é de outro servidor também (tirá-la quebraria o outro)
+     */
+    public ResultadoDaRevogacao revogarAcessoDoApp(AcessoDoApp acesso, boolean tirarAChaveDoServidor) {
+        List<String> avisos = new ArrayList<>();
+        if (acesso == null) {
+            return new ResultadoDaRevogacao(false, false, List.of("Não consegui ler os dados do servidor no cofre."));
+        }
+        if (!conexao.info().estado().permiteExec()) {
+            avisos.add("O app não estava conectado a " + acesso.servidor() + ", então o acesso dele não foi revogado no servidor. "
+                + "Quem administra o servidor pode tirar a chave do acesso do usuário " + acesso.usuario() + ".");
+            return new ResultadoDaRevogacao(false, false, avisos);
+        }
+        boolean token = false;
+        String dispositivo = acesso.nomeDoDispositivo();
+        if (dispositivo != null) {
+            try {
+                provisionador.revogarToken(dispositivo);
+                token = true;
+            } catch (ErroProvisionamento e) {
+                if (ErroProvisionamento.TOKEN_INEXISTENTE.equals(e.codigo())) {
+                    token = true; // já não existia no agente: o resultado é o mesmo
+                } else {
+                    LOG.warn("Não consegui revogar o token de {}: {}", id, e.getMessage());
+                    avisos.add("Não consegui apagar o token deste Mac no painel do servidor (" + e.getMessage() + ").");
+                }
+            }
+        }
+        boolean chave = false;
+        if (tirarAChaveDoServidor) {
+            chave = tirarAChaveDoAuthorizedKeys(acesso, avisos);
+        }
+        return new ResultadoDaRevogacao(token, chave, avisos);
+    }
+
+    private boolean tirarAChaveDoAuthorizedKeys(AcessoDoApp acesso, List<String> avisos) {
+        if (acesso.chavePublica() == null) {
+            avisos.add("A chave deste servidor já não estava no cofre, então não há o que tirar do servidor.");
+            return false;
+        }
+        if (!acesso.origemDaChave().podeSerTiradaDoServidor()) {
+            avisos.add("A chave deste servidor não foi criada pelo app (veio de um arquivo seu), então o app NÃO a tirou do "
+                + "acesso do usuário " + acesso.usuario() + " no servidor: você pode estar usando a mesma chave fora do app. "
+                + "Se quiser, tire-a à mão.");
+            return false;
+        }
+        try {
+            switch (provisionador.removerChaveAutorizada(acesso.chavePublica())) {
+                case REMOVIDA -> {
+                    return true;
+                }
+                case MANTIDA_POR_SER_A_UNICA -> avisos.add("A chave deste app é a única no acesso do usuário " + acesso.usuario()
+                    + " no servidor, então ela ficou lá para você não perder o acesso. Se quiser, tire-a à mão.");
+            }
+        } catch (ErroProvisionamento | IllegalArgumentException e) {
+            LOG.warn("Não consegui tirar a chave de {} do servidor: {}", id, e.getMessage());
+            avisos.add("Não consegui tirar a chave deste app do acesso do usuário " + acesso.usuario() + " no servidor ("
+                + e.getMessage() + ").");
+        }
+        return false;
     }
 
     // =====================================================================================================

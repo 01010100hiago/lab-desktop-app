@@ -22,7 +22,7 @@ class InfoChaveTest {
     private static final String PUBLICA = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBase64DaChave lab-desktop@mac-de-teste";
 
     private static InfoChave chave(String publica) {
-        return new InfoChave("k1", "lab", ChaveSsh.ALGORITMO_ED25519, publica, "SHA256:abc", Instant.EPOCH);
+        return new InfoChave("k1", "lab", ChaveSsh.ALGORITMO_ED25519, publica, "SHA256:abc", Instant.EPOCH, InfoChave.Origem.GERADA_PELO_APP);
     }
 
     @Test

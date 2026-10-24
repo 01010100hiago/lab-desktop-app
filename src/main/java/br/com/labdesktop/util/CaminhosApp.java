@@ -32,6 +32,11 @@ public final class CaminhosApp {
     }
 
     /** Os caminhos de produção, sob {@code user.home}. */
+    /** {@code true} se a pasta de dados é a de produção (a mesma de {@link #padrao()}), onde mora o cofre de verdade. */
+    public boolean ehPastaPadrao() {
+        return pastaDados.equals(pastaDadosPadrao().toAbsolutePath().normalize());
+    }
+
     public static CaminhosApp padrao() {
         return new CaminhosApp(pastaDadosPadrao(), pastaLogsPadrao());
     }

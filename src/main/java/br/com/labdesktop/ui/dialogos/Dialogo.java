@@ -2,6 +2,7 @@ package br.com.labdesktop.ui.dialogos;
 
 import br.com.labdesktop.ui.componentes.Caixa;
 import br.com.labdesktop.ui.componentes.Icones;
+import br.com.labdesktop.ui.componentes.MioloRolavel;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
 import br.com.labdesktop.ui.componentes.TextoCorrido;
@@ -9,6 +10,11 @@ import br.com.labdesktop.ui.tema.Tokens;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dialog;
+import java.awt.GraphicsConfiguration;
+import java.awt.GraphicsEnvironment;
+import java.awt.Insets;
+import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
@@ -36,11 +42,23 @@ public abstract class Dialogo {
     /** Largura do texto corrido nos diálogos comuns. */
     public static final int LARGURA_DO_TEXTO = 440;
 
+    /** Quanto da altura útil da tela um diálogo com miolo rolável pode ocupar. */
+    private static final double FRACAO_DA_TELA = 0.8;
+    /** Altura útil da tela quando não há tela (testes sem cabeça): a de um notebook comum, 1280 por 800. */
+    private static final int ALTURA_DA_TELA_SEM_CABECA = 800;
+    /** A barra de título e a borda da janela, que o {@code pack} soma ao conteúdo. */
+    private static final int ALTURA_DA_BARRA_DE_TITULO = 32;
+    private static final int FOLGA_DO_RODAPE = 12;
+    /** Só os testes mexem: a altura da tela "de mentira" (0 ou menos volta a perguntar à tela de verdade). */
+    private static volatile int alturaDaTelaParaTeste;
+
     private final String titulo;
     private final Painel raiz = new Painel(new BorderLayout());
     private JDialog janela;
     private JButton botaoPadrao;
     private boolean fechado;
+    private MioloRolavel miolo;
+    private JComponent rodapeFixo;
 
     protected Dialogo(String titulo) {
         this.titulo = titulo;
@@ -60,6 +78,70 @@ public abstract class Dialogo {
     /** Define o conteúdo. */
     protected final void conteudo(JComponent c) {
         raiz.add(c, BorderLayout.CENTER);
+    }
+
+    /**
+     * Define o conteúdo em duas partes: o {@code corpo} ROLA quando passa de 80 % da altura da tela, e o {@code rodape}
+     * (os botões) fica fixo embaixo, sempre à vista. Para diálogos cujo conteúdo cresce (seções que abrem), de modo que a
+     * janela, que não é redimensionável, nunca fique maior que a tela e esconda o botão que o usuário precisa clicar.
+     */
+    protected final void conteudoComRodape(JComponent corpo, JComponent rodape) {
+        miolo = new MioloRolavel(corpo, this::alturaMaximaDoMiolo);
+        rodapeFixo = rodape;
+        JPanel embaixo = new Painel(new BorderLayout());
+        embaixo.setBorder(new EmptyBorder(FOLGA_DO_RODAPE, 0, 0, 0));
+        embaixo.add(rodape, BorderLayout.CENTER);
+        raiz.add(miolo, BorderLayout.CENTER);
+        raiz.add(embaixo, BorderLayout.SOUTH);
+    }
+
+    /** O miolo rolável, se o diálogo usa {@link #conteudoComRodape}; {@code null} nos outros. */
+    public final MioloRolavel mioloRolavel() {
+        return miolo;
+    }
+
+    /** Volta o miolo ao começo (troca de passo). Não faz nada se o diálogo não tem miolo rolável. */
+    protected final void rolarParaOTopo() {
+        if (miolo != null) {
+            miolo.rolarParaOTopo();
+        }
+    }
+
+    /**
+     * A altura que o miolo pode pedir: 80 % da altura útil da tela menos o que o resto do diálogo já ocupa (a borda interna,
+     * o rodapé e a barra de título).
+     */
+    private int alturaMaximaDoMiolo() {
+        Insets margem = raiz.getInsets();
+        int rodape = rodapeFixo == null ? 0 : rodapeFixo.getPreferredSize().height + FOLGA_DO_RODAPE;
+        int disponivel = (int) (alturaUtilDaTela() * FRACAO_DA_TELA) - margem.top - margem.bottom - rodape - ALTURA_DA_BARRA_DE_TITULO;
+        return Math.max(160, disponivel);
+    }
+
+    /** A altura da tela onde o diálogo aparece, sem as barras do sistema (menu do macOS, Dock). */
+    private int alturaUtilDaTela() {
+        if (alturaDaTelaParaTeste > 0) {
+            return alturaDaTelaParaTeste;
+        }
+        if (GraphicsEnvironment.isHeadless()) {
+            return ALTURA_DA_TELA_SEM_CABECA;
+        }
+        Rectangle area = areaUtilDaTela();
+        return area.height;
+    }
+
+    private Rectangle areaUtilDaTela() {
+        GraphicsConfiguration tela = janela != null ? janela.getGraphicsConfiguration()
+            : GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration();
+        Rectangle limites = tela.getBounds();
+        Insets barras = Toolkit.getDefaultToolkit().getScreenInsets(tela);
+        return new Rectangle(limites.x + barras.left, limites.y + barras.top,
+            limites.width - barras.left - barras.right, limites.height - barras.top - barras.bottom);
+    }
+
+    /** Só para os testes: finge uma tela com esta altura útil. Passe 0 para voltar à tela de verdade. */
+    public static void definirAlturaDaTelaParaTeste(int altura) {
+        alturaDaTelaParaTeste = altura;
     }
 
     /** O botão que responde ao Enter. */
@@ -124,6 +206,21 @@ public abstract class Dialogo {
         raiz.revalidate();
         if (janela != null) {
             janela.pack();
+            manterNaTela();
+        }
+    }
+
+    /** Crescer para baixo a partir do canto de cima pode empurrar a janela para fora da tela: sobe o quanto precisar. */
+    private void manterNaTela() {
+        if (GraphicsEnvironment.isHeadless() || !janela.isShowing()) {
+            return;
+        }
+        Rectangle area = areaUtilDaTela();
+        Rectangle atual = janela.getBounds();
+        int x = Math.max(area.x, Math.min(atual.x, area.x + area.width - atual.width));
+        int y = Math.max(area.y, Math.min(atual.y, area.y + area.height - atual.height));
+        if (x != atual.x || y != atual.y) {
+            janela.setLocation(x, y);
         }
     }
 
@@ -157,6 +254,22 @@ public abstract class Dialogo {
 
     protected static Rotulo erro() {
         return new Rotulo().corDoToken(Tokens.PERIGO).tamanho(12.5f);
+    }
+
+    /**
+     * Mensagem de erro que QUEBRA linha (um {@link Rotulo} cortaria com reticências as frases longas, como as do importar
+     * chave) e só ocupa lugar quando tem texto. Escreva nela com {@link #dizerErro}.
+     */
+    protected static TextoCorrido erroCorrido() {
+        TextoCorrido t = new TextoCorrido("", LARGURA_DO_TEXTO).corDoToken(Tokens.PERIGO).tamanho(12.5f);
+        t.setVisible(false);
+        return t;
+    }
+
+    /** Põe (ou tira, com texto vazio) a mensagem de uma {@link #erroCorrido()}. */
+    protected static void dizerErro(TextoCorrido destino, String texto) {
+        destino.setText(texto == null ? "" : texto);
+        destino.setVisible(!destino.getText().isEmpty());
     }
 
     /** Uma linha de botões à direita; o primeiro componente de {@code esquerda} (se houver) fica à esquerda. */

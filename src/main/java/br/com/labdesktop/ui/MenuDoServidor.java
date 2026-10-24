@@ -16,7 +16,7 @@ import javax.swing.JPopupMenu;
  * As ações de um servidor, na ordem em que aparecem no menu de contexto da barra de servidores (ARQUITETURA 8.3: na
  * o "Configurar 2FA" mora aqui e no menu do app) e no menu "Servidor" do app. A lista depende do estado:
  * "Conferir impressão" só quando falta o pin, "Digitar código" só quando o agente pede o autenticador, "Registrar token"
- * quando o token falta ou foi recusado. Puro: devolve descrições; quem monta o menu é o Swing.
+ * quando o token falta ou foi recusado; "Editar" e "Remover" sempre. Puro: devolve descrições; quem monta o menu é o Swing.
  */
 public final class MenuDoServidor {
 
@@ -28,7 +28,11 @@ public final class MenuDoServidor {
         DIGITAR_CODIGO("Digitar o código do autenticador…", "chave"),
         REGISTRAR_TOKEN("Registrar o token deste Mac…", "chave"),
         CONFIGURAR_2FA("Configurar 2FA…", "chave"),
-        DESATIVAR_2FA("Desativar 2FA…", "chave");
+        DESATIVAR_2FA("Desativar 2FA…", "chave"),
+        /** Nome, endereço, porta e usuário do servidor. Sempre disponível. */
+        EDITAR("Editar…", "config"),
+        /** Tira o servidor do app (com as opções de apagar a chave e revogar o acesso). Sempre disponível. */
+        REMOVER("Remover…", "lixeira");
 
         private final String rotulo;
         private final String icone;
@@ -70,6 +74,10 @@ public final class MenuDoServidor {
         if (c.permiteExec() || c == EstadoConexao.CONECTADO) {
             itens.add(e.estado2fa() == Estado2fa.ATIVO ? Item.DESATIVAR_2FA : Item.CONFIGURAR_2FA);
         }
+        // Editar e remover valem em QUALQUER estado: é justamente quando a conexão está quebrada (endereço errado, host
+        // trocado) que o usuário precisa deles.
+        itens.add(Item.EDITAR);
+        itens.add(Item.REMOVER);
         return itens;
     }
 
@@ -82,6 +90,8 @@ public final class MenuDoServidor {
             case DIGITAR_CODIGO -> acoes.digitarCodigo(lab);
             case REGISTRAR_TOKEN -> acoes.registrarToken(lab);
             case CONFIGURAR_2FA, DESATIVAR_2FA -> acoes.configurar2fa(lab);
+            case EDITAR -> acoes.editar(lab);
+            case REMOVER -> acoes.remover(lab);
         }
     }
 
@@ -89,6 +99,9 @@ public final class MenuDoServidor {
     public static JPopupMenu popup(ServidorLab lab, AcoesDaInterface acoes) {
         JPopupMenu menu = new JPopupMenu();
         for (Item i : itensPara(lab.estado())) {
+            if (i == Item.EDITAR) {
+                menu.addSeparator(); // o que mexe nos dados do servidor fica separado das ações do dia a dia
+            }
             menu.add(itemSwing(i, () -> executar(i, lab, acoes)));
         }
         return menu;
@@ -98,7 +111,7 @@ public final class MenuDoServidor {
         JMenuItem m = new JMenuItem(i.rotulo());
         m.putClientProperty("html.disable", Boolean.TRUE);
         m.setIcon(Icones.de(i.icone(), 14));
-        m.setForeground(Tokens.cor(Tokens.TEXTO));
+        m.setForeground(Tokens.cor(i == Item.REMOVER ? Tokens.PERIGO : Tokens.TEXTO));
         m.addActionListener(e -> acao.run());
         return m;
     }

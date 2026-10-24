@@ -66,6 +66,12 @@ public record EstadoServidor(
             geracao, estado2fa, nomeNovo, versao, limites);
     }
 
+    /** Copia com o nome novo (o usuário editou o servidor). */
+    EstadoServidor comNome(String nomeNovo) {
+        return new EstadoServidor(servidorId, nomeNovo, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
+            geracao, estado2fa, nomeDoDispositivo, versao, limites);
+    }
+
     /** O % usado da semana, para a barra lateral e o ícone; {@code null} sem leitura que valha. */
     public Double pctDaSemana() {
         return limites == null || !limites.leituraUtil() || limites.semana() == null ? null : limites.semana().usadoPct();

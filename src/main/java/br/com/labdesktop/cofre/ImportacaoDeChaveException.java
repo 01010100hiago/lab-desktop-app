@@ -13,6 +13,10 @@ public final class ImportacaoDeChaveException extends CofreException {
         SENHA_INCORRETA,
         /** O conteúdo não é uma chave OpenSSH legível. */
         FORMATO_INVALIDO,
+        /** O texto é a impressão digital de um servidor ({@code SHA256:...}), não uma chave. */
+        IMPRESSAO_DE_SERVIDOR,
+        /** É a chave PÚBLICA ({@code ssh-ed25519 AAAA...}); o app precisa da privada. */
+        CHAVE_PUBLICA,
         /** É uma chave válida, mas não Ed25519. */
         ALGORITMO_NAO_SUPORTADO,
         /** O arquivo não pôde ser lido ou é grande demais. */

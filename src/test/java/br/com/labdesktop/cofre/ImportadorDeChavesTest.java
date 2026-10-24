@@ -116,6 +116,60 @@ class ImportadorDeChavesTest {
     }
 
     @Test
+    void asMensagensDeErroSaoClarasParaQuemNaoEhTecnico() throws Exception {
+        // Arquivo que não é chave.
+        ImportacaoDeChaveException naoEChave = assertThrows(ImportacaoDeChaveException.class,
+            () -> ImportadorDeChaves.importar("isto não é uma chave".getBytes(StandardCharsets.UTF_8), null, "k", "mac"));
+        assertEquals("Esse arquivo não é uma chave SSH.", naoEChave.getMessage());
+        assertEquals(Motivo.FORMATO_INVALIDO, naoEChave.motivo());
+
+        // Chave protegida por senha, sem a senha: não é a senha-mestra.
+        byte[] cifrada = escrever(par("ssh-ed25519", 256), "frase");
+        ImportacaoDeChaveException pedeSenha = assertThrows(ImportacaoDeChaveException.class,
+            () -> ImportadorDeChaves.importar(cifrada, null, "k", "mac"));
+        assertEquals("Este arquivo está protegido por uma senha própria, que não é a senha-mestra. Digite-a abaixo.",
+            pedeSenha.getMessage());
+        assertEquals(Motivo.PEDE_SENHA, pedeSenha.motivo());
+
+        ImportacaoDeChaveException errada = assertThrows(ImportacaoDeChaveException.class,
+            () -> ImportadorDeChaves.importar(cifrada, "errada".toCharArray(), "k", "mac"));
+        assertEquals("A senha do arquivo não confere. Confira e tente de novo.", errada.getMessage());
+        assertEquals(Motivo.SENHA_INCORRETA, errada.motivo());
+    }
+
+    @Test
+    void aImpressaoDigitalDeUmServidorNaoEChaveEODonoLeIssoEmPortugues() {
+        String sha = "SHA256:" + "A".repeat(43);
+        for (String texto : new String[] {sha, sha + "\n", "256 " + sha + " host (ED25519)", "  " + sha + "  ",
+            "MD5:" + "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"}) {
+            ImportacaoDeChaveException e = assertThrows(ImportacaoDeChaveException.class,
+                () -> ImportadorDeChaves.importar(texto.getBytes(StandardCharsets.UTF_8), null, "k", "mac"), texto);
+            assertEquals(Motivo.IMPRESSAO_DE_SERVIDOR, e.motivo(), texto);
+            assertEquals("Isso é a impressão digital de um servidor, não uma chave. Você não precisa dela aqui.", e.getMessage());
+        }
+    }
+
+    @Test
+    void aChavePublicaNoLugarDaPrivadaTemMensagemPropria() throws Exception {
+        String publica = org.apache.sshd.common.config.keys.PublicKeyEntry.toString(par("ssh-ed25519", 256).getPublic())
+            + " alguem@mac\n";
+        ImportacaoDeChaveException e = assertThrows(ImportacaoDeChaveException.class,
+            () -> ImportadorDeChaves.importar(publica.getBytes(StandardCharsets.UTF_8), null, "k", "mac"));
+        assertEquals(Motivo.CHAVE_PUBLICA, e.motivo());
+        assertTrue(e.getMessage().startsWith("Isso é uma chave pública."), e.getMessage());
+    }
+
+    @Test
+    void umaChaveDeVerdadeNuncaEConfundidaComImpressaoNemComPublica() throws Exception {
+        // A privada tem texto comprido em base64 e um comentário que cita SHA256: não pode cair no reconhecimento.
+        KeyPair original = par("ssh-ed25519", 256);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        OpenSSHKeyPairResourceWriter.INSTANCE.writePrivateKey(original, "SHA256:" + "B".repeat(43) + " ssh-ed25519 AAAA", null, out);
+        ChaveSsh chave = ImportadorDeChaves.importar(out.toByteArray(), null, "k", "mac");
+        assertEquals(KeyUtils.getFingerPrint(original.getPublic()), chave.impressao());
+    }
+
+    @Test
     void importaDeArquivoEnaoMexeNele(@TempDir Path tmp) throws Exception {
         KeyPair original = par("ssh-ed25519", 256);
         Path arquivo = tmp.resolve("id_teste");

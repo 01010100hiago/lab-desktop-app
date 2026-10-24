@@ -43,7 +43,7 @@ import javax.swing.SwingConstants;
  * A tela de servidores (ARQUITETURA 8.1): a lista de servidores cadastrados, cada um com o estado da
  * conexão em TEXTO mais ÍCONE (nunca só cor), o endereço, o token deste Mac, o estado do 2FA e a impressão digital do
  * host que o usuário confirmou; e os botões de cada um (conectar, conferir impressão, registrar token, configurar ou
- * desativar o 2FA). "Adicionar servidor" abre o assistente.
+ * desativar o 2FA e, no canto direito, Editar e Remover). "Adicionar servidor" abre o assistente.
  *
  * <p>Só desenha os retratos imutáveis dos servidores ({@link EstadoServidor}); toda ação passa por
  * {@link AcoesDaInterface}, que roda SSH e rede fora da EDT.
@@ -280,9 +280,17 @@ public final class TelaServidores extends Painel {
             itensAtuais = itens;
             linhaDeAcoes.removeAll();
             boolean primeiro = true;
+            boolean depoisDaMola = false;
             for (Item i : itens) {
+                if (!depoisDaMola && (i == Item.EDITAR || i == Item.REMOVER)) {
+                    // Editar e Remover ficam no canto direito, longe das ações do dia a dia.
+                    linhaDeAcoes.add(Caixa.mola());
+                    depoisDaMola = true;
+                    primeiro = true;
+                }
                 Botao b = i == Item.CONFERIR_IMPRESSAO || i == Item.REGISTRAR_TOKEN || i == Item.DIGITAR_CODIGO
-                    ? Botoes.miniPrimario(i.rotulo(), i.icone()) : Botoes.mini(i.rotulo(), i.icone());
+                    ? Botoes.miniPrimario(i.rotulo(), i.icone())
+                    : i == Item.REMOVER ? Botoes.miniPerigo(i.rotulo(), i.icone()) : Botoes.mini(i.rotulo(), i.icone());
                 b.setName("acao-" + i.name());
                 b.addActionListener(ev -> MenuDoServidor.executar(i, lab, acoes));
                 if (!primeiro) {
@@ -291,7 +299,9 @@ public final class TelaServidores extends Painel {
                 linhaDeAcoes.add(b);
                 primeiro = false;
             }
-            linhaDeAcoes.add(Caixa.mola());
+            if (!depoisDaMola) {
+                linhaDeAcoes.add(Caixa.mola());
+            }
         }
 
         public String textoDoNome() {

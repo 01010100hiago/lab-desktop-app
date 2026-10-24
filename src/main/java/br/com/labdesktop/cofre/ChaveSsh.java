@@ -35,17 +35,19 @@ public final class ChaveSsh implements Segredo {
     private final String publica;
     private final String impressao;
     private final Instant criadaEm;
+    private final InfoChave.Origem origem;
     private final byte[] privadaOpenssh;
     private volatile boolean zerada;
 
     ChaveSsh(String id, String nome, String algoritmo, String publica, String impressao, Instant criadaEm,
-             byte[] privadaOpenssh) {
+             InfoChave.Origem origem, byte[] privadaOpenssh) {
         this.id = id;
         this.nome = nome;
         this.algoritmo = algoritmo;
         this.publica = publica;
         this.impressao = impressao;
         this.criadaEm = criadaEm;
+        this.origem = origem == null ? InfoChave.Origem.DESCONHECIDA : origem;
         this.privadaOpenssh = privadaOpenssh;
     }
 
@@ -75,9 +77,14 @@ public final class ChaveSsh implements Segredo {
         return criadaEm;
     }
 
+    /** Quem criou a chave (o app ou o usuário, por arquivo). */
+    public InfoChave.Origem origem() {
+        return origem;
+    }
+
     /** A parte pública, sem segredo, para telas. */
     public InfoChave info() {
-        return new InfoChave(id, nome, algoritmo, publica, impressao, criadaEm);
+        return new InfoChave(id, nome, algoritmo, publica, impressao, criadaEm, origem);
     }
 
     /**

@@ -27,7 +27,9 @@ public final class ConteudoDosAvisos {
         CONECTAR("Conectar"),
         DIGITAR_CODIGO("Digitar código"),
         CONFERIR_IMPRESSAO("Conferir impressão"),
-        REGISTRAR_TOKEN("Registrar token");
+        REGISTRAR_TOKEN("Registrar token"),
+        /** Abre o diálogo "Remover servidor" (que pede confirmação): o caminho para quem reinstalou o servidor. */
+        REMOVER_SERVIDOR("Remover servidor");
 
         private final String rotulo;
 
@@ -63,6 +65,15 @@ public final class ConteudoDosAvisos {
 
     /** Uma sessão pausada; {@code projeto} é o nome real (para Retomar) e {@code nome} o que se mostra. */
     public record Pausada(String projeto, String nome, String motivo) { }
+
+    /**
+     * O que fazer quando a chave do servidor mudou, em palavras simples. O único caminho que existe é remover o servidor e
+     * adicioná-lo de novo (o assistente pede a conferência da impressão digital outra vez). Não há "aceitar mesmo assim"
+     * de propósito.
+     */
+    public static final String TEXTO_DA_CHAVE_QUE_MUDOU = "Se você reinstalou o servidor, use \"Remover servidor\" e "
+        + "adicione-o de novo para o app conferir a impressão digital outra vez. Se não reinstalou, não conecte: pode ser "
+        + "outra máquina.";
 
     /** No máximo 3 nomes de sessões pausadas na faixa. */
     public static final int MAX_PAUSADAS = 3;
@@ -129,11 +140,12 @@ public final class ConteudoDosAvisos {
                     "O SSH está de pé; o app insiste a cada poucos segundos (o painel pode estar reiniciando)." + detalhe,
                     List.of(Acao.TENTAR_AGORA));
             case ERRO_AUTENTICACAO -> new AvisoDeConexao(Gravidade.PERIGO, "chave", nome + " recusou a chave deste app",
-                "Instale a chave pública no authorized_keys do servidor e tente de novo." + detalhe, List.of(Acao.TENTAR_AGORA));
+                "Falta instalar a chave deste app no servidor: peça a quem administra o servidor para adicioná-la ao acesso do usuário. "
+                    + "Depois, tente de novo." + detalhe, List.of(Acao.TENTAR_AGORA));
             case ERRO_CHAVE_HOST -> tipo == Falha.Tipo.PIN_DIVERGENTE
                 ? new AvisoDeConexao(Gravidade.PERIGO, "erro", "A chave do servidor " + nome + " mudou",
-                    "O app não conecta, para o caso de ser um intruso entre você e o servidor. Se você reinstalou o servidor, "
-                        + "o pin só pode ser redefinido de propósito.", List.of())
+                    "O app não conecta, para o caso de ser outra máquina fazendo-se passar pelo servidor. " + TEXTO_DA_CHAVE_QUE_MUDOU,
+                    List.of(Acao.REMOVER_SERVIDOR))
                 : new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "Confirme o servidor " + nome,
                     "A chave do servidor ainda não foi confirmada: compare a impressão digital antes de conectar.",
                     List.of(Acao.CONFERIR_IMPRESSAO));

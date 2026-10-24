@@ -557,6 +557,230 @@ class CofreDeChavesTest {
         }
     }
 
+    /** Dois servidores no mesmo cofre, os dois com a MESMA chave (a opção "usar uma chave que já está no cofre"). */
+    private static ConfigServidor[] doisServidoresComAMesmaChave(CofreDeChaves cofre) throws Exception {
+        ChaveSsh chave = GeradorDeChaves.gerar("compartilhada", "mac");
+        cofre.adicionarChave(chave);
+        ConfigServidor a = ConfigServidor.novo("a", "a.local", 22, "u", chave.id());
+        ConfigServidor b = ConfigServidor.novo("b", "b.local", 22, "u", chave.id());
+        cofre.adicionarServidor(a, TokenAgente.gerar());
+        cofre.adicionarServidor(b, TokenAgente.gerar());
+        return new ConfigServidor[] {a, b};
+    }
+
+    @Test
+    void removerServidorComAChaveLivreApagaAChaveJuntaNumaGravacaoSoEZeraOsSegredos(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Fixtures.popular(c);
+        try (CofreDeChaves cofre = abrir(c)) {
+            ConfigServidor cfg = cofre.servidores().get(0);
+            ChaveSsh chave = cofre.chaveSsh(cfg.chaveId()).orElseThrow();
+            TokenAgente token = cofre.tokenDoServidor(cfg.id()).orElseThrow();
+
+            boolean apagou = cofre.removerServidor(cfg.id(), true);
+
+            assertTrue(apagou, "ninguém mais usava a chave: ela saiu junto");
+            assertTrue(cofre.servidores().isEmpty());
+            assertTrue(cofre.chaves().isEmpty());
+            assertTrue(chave.estaZerado(), "a parte privada foi zerada na memória");
+            assertTrue(token.estaZerado());
+        }
+        try (CofreDeChaves cofre = abrir(c)) {
+            assertTrue(cofre.servidores().isEmpty(), "e o disco concorda");
+            assertTrue(cofre.chaves().isEmpty());
+        }
+    }
+
+    @Test
+    void removerServidorMantemAChaveQuandoOutroServidorAindaAUsa(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        try (CofreDeChaves cofre = criar(c)) {
+            ConfigServidor[] dois = doisServidoresComAMesmaChave(cofre);
+            ChaveSsh chave = cofre.chaveSsh(dois[0].chaveId()).orElseThrow();
+
+            boolean apagou = cofre.removerServidor(dois[0].id(), true);
+
+            assertFalse(apagou, "o outro servidor ainda usa a chave");
+            assertEquals(List.of(dois[1].id()), cofre.servidores().stream().map(ConfigServidor::id).toList());
+            assertEquals(1, cofre.chaves().size());
+            assertFalse(chave.estaZerado(), "a chave do outro servidor continua inteira");
+            assertNotNull(cofre.keyPairDoServidor(dois[1].id()));
+
+            assertTrue(cofre.removerServidor(dois[1].id(), true), "agora que ele era o último, a chave sai");
+            assertTrue(chave.estaZerado());
+        }
+    }
+
+    /** O conteúdo de um arquivo de chave do usuário (o que ele tem em ~/.ssh), como o OpenSSH o escreve. */
+    private static byte[] arquivoDeChaveDoDono() throws Exception {
+        java.io.ByteArrayOutputStream saida = new java.io.ByteArrayOutputStream();
+        org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyPairResourceWriter.INSTANCE
+            .writePrivateKey(KeyUtils.generateKeyPair("ssh-ed25519", 256), "usuario@notebook", null, saida);
+        return saida.toByteArray();
+    }
+
+    @Test
+    void aOrigemDaChaveSobreviveIdaEVoltaEUmCofreAntigoValeDesconhecida(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        String idGerada;
+        String idImportada;
+        String idAntiga;
+        try (CofreDeChaves cofre = criar(c)) {
+            ChaveSsh gerada = GeradorDeChaves.gerar("gerada", "mac");
+            ChaveSsh importada = ImportadorDeChaves.importar(arquivoDeChaveDoDono(), null, "importada", "mac");
+            ChaveSsh base = GeradorDeChaves.gerar("antiga", "mac");
+            // Uma chave de um cofre que ainda não gravava a origem: o arquivo não tem o campo.
+            ChaveSsh antiga = new ChaveSsh(base.id(), base.nome(), base.algoritmo(), base.publica(), base.impressao(),
+                base.criadaEm(), null, base.privadaInterna().clone());
+            idGerada = gerada.id();
+            idImportada = importada.id();
+            idAntiga = antiga.id();
+            cofre.adicionarChave(gerada);
+            cofre.adicionarChave(importada);
+            cofre.adicionarChave(antiga);
+            assertEquals(InfoChave.Origem.GERADA_PELO_APP, cofre.chave(idGerada).orElseThrow().origem());
+            assertEquals(InfoChave.Origem.IMPORTADA, cofre.chave(idImportada).orElseThrow().origem());
+            assertEquals(InfoChave.Origem.DESCONHECIDA, cofre.chave(idAntiga).orElseThrow().origem());
+        }
+        try (CofreDeChaves cofre = abrir(c)) {
+            assertEquals(InfoChave.Origem.GERADA_PELO_APP, cofre.chave(idGerada).orElseThrow().origem());
+            assertEquals(InfoChave.Origem.IMPORTADA, cofre.chave(idImportada).orElseThrow().origem());
+            assertEquals(InfoChave.Origem.DESCONHECIDA, cofre.chave(idAntiga).orElseThrow().origem());
+            assertTrue(InfoChave.Origem.GERADA_PELO_APP.podeSerTiradaDoServidor());
+            assertFalse(InfoChave.Origem.IMPORTADA.podeSerTiradaDoServidor());
+            assertFalse(InfoChave.Origem.DESCONHECIDA.podeSerTiradaDoServidor(), "na dúvida, o app não tira do servidor");
+        }
+    }
+
+    @Test
+    void achaAChavePelaImpressaoDigitalNaoPeloId(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        try (CofreDeChaves cofre = criar(c)) {
+            ChaveSsh chave = ImportadorDeChaves.importar(arquivoDeChaveDoDono(), null, "de-teste", "mac");
+            cofre.adicionarChave(chave);
+
+            assertEquals(chave.id(), cofre.chaveComAImpressao(chave.impressao()).orElseThrow().id());
+            assertTrue(cofre.chaveComAImpressao("SHA256:naoexiste").isEmpty());
+        }
+    }
+
+    @Test
+    void removerServidorMantemAChaveQuandoOutroServidorUsaUmaEntradaComAMesmaChavePublica(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        try (CofreDeChaves cofre = criar(c)) {
+            byte[] arquivo = arquivoDeChaveDoDono();
+            ChaveSsh k1 = ImportadorDeChaves.importar(arquivo, null, "de-teste-1", "mac");
+            ChaveSsh k2 = ImportadorDeChaves.importar(arquivo, null, "de-teste-2", "mac"); // outro id, mesma chave
+            cofre.adicionarChave(k1);
+            cofre.adicionarChave(k2);
+            assertNotEquals(k1.id(), k2.id());
+            ConfigServidor a = ConfigServidor.novo("a", "a.local", 22, "u", k1.id());
+            ConfigServidor b = ConfigServidor.novo("b", "b.local", 22, "u", k2.id());
+            cofre.adicionarServidor(a, TokenAgente.gerar());
+            cofre.adicionarServidor(b, TokenAgente.gerar());
+
+            assertFalse(cofre.removerServidor(a.id(), true), "b usa a mesma chave pública: a chave não sai");
+            assertEquals(2, cofre.chaves().size());
+            assertFalse(k1.estaZerado());
+            assertTrue(cofre.removerServidor(b.id(), true), "agora ninguém usa essa chave pública: sai a do b");
+            assertTrue(k2.estaZerado());
+        }
+    }
+
+    @Test
+    void removerServidorSemPedirParaApagarAChaveDeixaAChaveNoCofre(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Fixtures.popular(c);
+        try (CofreDeChaves cofre = abrir(c)) {
+            ConfigServidor cfg = cofre.servidores().get(0);
+            ChaveSsh chave = cofre.chaveSsh(cfg.chaveId()).orElseThrow();
+            assertFalse(cofre.removerServidor(cfg.id(), false));
+            assertEquals(1, cofre.chaves().size());
+            assertFalse(chave.estaZerado());
+        }
+    }
+
+    @Test
+    void removerServidorQueNaoExisteRecusaSemMexerEmNada(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Fixtures.popular(c);
+        try (CofreDeChaves cofre = abrir(c)) {
+            byte[] antes = ler(c.arquivoCofre());
+            assertThrows(IllegalArgumentException.class, () -> cofre.removerServidor("nao-existe", true));
+            assertEquals(1, cofre.servidores().size());
+            assertEquals(1, cofre.chaves().size());
+            assertArrayEquals(antes, ler(c.arquivoCofre()), "nada foi regravado");
+        }
+    }
+
+    @Test
+    void alterarServidorAplicaAMudancaSobreAConfiguracaoDeAgoraEMantemOToken(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Fixtures.popular(c);
+        try (CofreDeChaves cofre = abrir(c)) {
+            ConfigServidor antes = cofre.servidores().get(0);
+            TokenAgente token = cofre.tokenDoServidor(antes.id()).orElseThrow();
+
+            cofre.alterarServidor(antes.id(), cfg -> cfg.editar("novo nome", "outro.local", 2222, "outro", 7001));
+
+            ConfigServidor depois = cofre.servidor(antes.id()).orElseThrow();
+            assertEquals("novo nome", depois.nome());
+            assertEquals("outro.local", depois.host());
+            assertEquals(2222, depois.porta());
+            assertEquals("outro", depois.usuario());
+            assertEquals(7001, depois.portaAgente());
+            assertTrue(depois.pins().isEmpty(), "mudou o endereço: o pin foi embora");
+            assertEquals(antes.chaveId(), depois.chaveId());
+            assertEquals(antes.nomeDoDispositivo(), depois.nomeDoDispositivo());
+            assertSame(token, cofre.tokenDoServidor(antes.id()).orElseThrow(), "o token não muda nem é zerado");
+            assertFalse(token.estaZerado());
+        }
+        try (CofreDeChaves cofre = abrir(c)) {
+            assertEquals("novo nome", cofre.servidores().get(0).nome());
+            assertTrue(cofre.servidores().get(0).pins().isEmpty());
+        }
+    }
+
+    @Test
+    void alterarServidorRecusaMudarOIdApontarParaChaveQueNaoExisteOuServidorDesconhecido(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Fixtures.popular(c);
+        try (CofreDeChaves cofre = abrir(c)) {
+            ConfigServidor cfg = cofre.servidores().get(0);
+            assertThrows(IllegalArgumentException.class, () -> cofre.alterarServidor(cfg.id(),
+                x -> ConfigServidor.novo("x", "h.local", 22, "u", x.chaveId())), "outro id");
+            assertThrows(IllegalArgumentException.class, () -> cofre.alterarServidor(cfg.id(), x -> x.comChaveId("naoexiste")));
+            assertThrows(IllegalArgumentException.class, () -> cofre.alterarServidor("nao-existe", x -> x));
+            assertThrows(IllegalArgumentException.class, () -> cofre.alterarServidor(cfg.id(), x -> x.editar("lab", "-oProxyCommand=x", 22, "u", 7000)));
+            assertEquals(cfg, cofre.servidor(cfg.id()).orElseThrow(), "nenhuma tentativa mudou nada");
+        }
+    }
+
+    @Test
+    void alterarServidorSemMudancaNaoRegravaOArquivo(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Fixtures.popular(c);
+        try (CofreDeChaves cofre = abrir(c)) {
+            ConfigServidor cfg = cofre.servidores().get(0);
+            byte[] antes = ler(c.arquivoCofre());
+            cofre.alterarServidor(cfg.id(), x -> x.editar(x.nome(), x.host(), x.porta(), x.usuario(), x.portaAgente()));
+            assertArrayEquals(antes, ler(c.arquivoCofre()));
+        }
+    }
+
+    @Test
+    void infoDaChaveNaoTrazAParteSecreta(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Fixtures.popular(c);
+        try (CofreDeChaves cofre = abrir(c)) {
+            ConfigServidor cfg = cofre.servidores().get(0);
+            InfoChave info = cofre.infoDaChave(cfg.chaveId()).orElseThrow();
+            assertTrue(info.publica().startsWith("ssh-ed25519 "));
+            assertFalse(info.toString().contains("PRIVATE"));
+            assertTrue(cofre.infoDaChave("naoexiste").isEmpty());
+        }
+    }
+
     @Test
     void trocarOTokenZeraOAntigo(@TempDir Path tmp) throws Exception {
         CaminhosApp c = caminhos(tmp);

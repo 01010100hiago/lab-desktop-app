@@ -84,6 +84,9 @@ public final class MenuApp {
             () -> painel.acoes().adicionarServidor()));
         menuServidor.addSeparator();
         for (Item i : Item.values()) {
+            if (i == Item.EDITAR) {
+                menuServidor.addSeparator();
+            }
             JMenuItem mi = item(i.rotulo(), i == Item.ATUALIZAR ? KeyStroke.getKeyStroke(KeyEvent.VK_R, atalho()) : null,
                 () -> executarNoServidorEmFoco(i));
             itensDoServidor.put(i, mi);

@@ -67,6 +67,31 @@ class DialogosDeDecisaoTest {
     }
 
     @Test
+    void confiarNoHostExplicaEmPalavrasSimplesEDaOComandoDeConferirNumaLinhaCopiavel() throws Exception {
+        Visual.tema(Tema.CLARO);
+        java.awt.datatransfer.Clipboard area = new java.awt.datatransfer.Clipboard("teste");
+        SondagemDeHost.Resultado sonda = sonda();
+        DialogoConfiarHost d = Visual.naEdt(() -> new DialogoConfiarHost("lab", "192.0.2.5:2222", sonda, avisos, x -> { },
+            new br.com.labdesktop.ui.componentes.CopiadorDeTexto(() -> area)));
+
+        String explicacao = Visual.naEdt(d::textoDaExplicacao);
+        assertTrue(explicacao.contains("identifica o servidor"), explicacao);
+        assertTrue(explicacao.contains("só é pedida agora"), explicacao);
+        assertTrue(explicacao.contains("Se um dia ela mudar, o app recusa conectar, por segurança"), explicacao);
+        assertEquals("Confere, confiar neste servidor", Visual.naEdt(() -> d.botaoConfiar().getText()));
+        assertEquals("Não confere, cancelar", Visual.naEdt(() -> d.botaoCancelar().getText()));
+        assertEquals("ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub", Visual.naEdt(d::comandoMostrado));
+        assertFalse(Visual.naEdt(d::comandoMostrado).contains("\n"), "uma linha só, para copiar de uma vez");
+
+        Visual.naEdt(() -> d.botaoCopiarComando().doClick());
+        assertEquals("ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub", area.getData(java.awt.datatransfer.DataFlavor.stringFlavor));
+        assertEquals("Copiado", Visual.naEdt(() -> d.botaoCopiarComando().getText()));
+        Visual.naEdt(() -> d.botaoCopiarImpressao().doClick());
+        assertEquals(sonda.impressao(), area.getData(java.awt.datatransfer.DataFlavor.stringFlavor));
+        assertTrue(avisos.disse("info", "Copiado"));
+    }
+
+    @Test
     void cancelarOuFecharNaoConfiaENaoGravaNada() throws Exception {
         Visual.tema(Tema.CLARO);
         List<Boolean> decisoes = new ArrayList<>();

@@ -551,6 +551,15 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
         return exigirAberto().chave(chaveId).map(ChaveSsh::info);
     }
 
+    /**
+     * A chave do cofre com esta impressão digital, se houver. É a chave de verdade que importa, não o id: o mesmo arquivo
+     * importado duas vezes cria dois ids com a mesma chave pública, e para o servidor (o {@code authorized_keys}) é UMA
+     * chave só.
+     */
+    public Optional<InfoChave> chaveComAImpressao(String impressao) {
+        return exigirAberto().chaves.stream().filter(c -> c.impressao().equals(impressao)).findFirst().map(ChaveSsh::info);
+    }
+
     /** A chave com a parte privada. Pertence ao cofre: não zere. Para entregar ao MINA use {@link #keyPairDoServidor}. */
     public Optional<ChaveSsh> chaveSsh(String chaveId) {
         return exigirAberto().chave(chaveId);
@@ -682,12 +691,54 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
 
     /** Remove o servidor e zera o token dele. A chave SSH fica no cofre (remova com {@link #removerChave}). */
     public void removerServidor(String servidorId) throws CofreException {
+        removerServidor(servidorId, false);
+    }
+
+    /**
+     * Remove o servidor e, se pedido e se ninguém mais a usa, a chave dele, TUDO numa gravação só: ou sai tudo ou nada
+     * muda, nunca sobra uma chave órfã por uma falha entre duas gravações. Token e chave removidos são zerados na memória.
+     * "Ninguém mais a usa" compara a chave pública (a impressão digital), não só o id: dois ids com a mesma chave pública são
+     * a mesma chave para o servidor, e a apagada deixaria o outro servidor sem a que o usuário vê no cofre.
+     */
+    @Override
+    public boolean removerServidor(String servidorId, boolean apagarAChaveSeLivre) throws CofreException {
+        boolean[] chaveApagada = {false};
         mutar(atual -> {
-            if (atual.servidor(servidorId).isEmpty()) {
-                throw new IllegalArgumentException("Servidor desconhecido.");
+            ServidorGuardado servidor = atual.servidor(servidorId)
+                .orElseThrow(() -> new IllegalArgumentException("Servidor desconhecido."));
+            ConteudoEmMemoria restante = atual.semServidor(servidorId);
+            ConteudoEmMemoria novo = restante;
+            String chaveId = servidor.config.chaveId();
+            String impressao = atual.chave(chaveId).map(ChaveSsh::impressao).orElse(null);
+            boolean outroUsa = restante.servidores.stream().anyMatch(s -> s.config.chaveId().equals(chaveId)
+                || (impressao != null && restante.chave(s.config.chaveId()).map(c -> impressao.equals(c.impressao())).orElse(false)));
+            if (apagarAChaveSeLivre && !outroUsa && novo.chave(chaveId).isPresent()) {
+                novo = novo.semChave(chaveId);
+                chaveApagada[0] = true;
             }
-            return atual.semServidor(servidorId);
+            return novo;
         });
+        return chaveApagada[0];
+    }
+
+    @Override
+    public void alterarServidor(String servidorId, UnaryOperator<ConfigServidor> mudanca) throws CofreException {
+        Objects.requireNonNull(mudanca, "mudanca");
+        alterarConfig(servidorId, cfg -> {
+            ConfigServidor nova = mudanca.apply(cfg);
+            if (!nova.id().equals(servidorId)) {
+                throw new IllegalArgumentException("A edição não pode mudar o id do servidor.");
+            }
+            if (chave(nova.chaveId()).isEmpty()) {
+                throw new IllegalArgumentException("A chave do servidor não está no cofre.");
+            }
+            return nova;
+        });
+    }
+
+    @Override
+    public Optional<InfoChave> infoDaChave(String chaveId) {
+        return chave(chaveId);
     }
 
     @Override

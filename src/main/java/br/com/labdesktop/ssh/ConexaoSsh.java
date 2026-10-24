@@ -186,6 +186,21 @@ public final class ConexaoSsh implements AutoCloseable {
     }
 
     /**
+     * Joga fora a sessão atual (se houver) e conecta de novo do zero, com o que o cofre tem AGORA. É o que se faz depois de
+     * editar o endereço, a porta ou o usuário do servidor: "Tentar agora" não serve, porque com a conexão de pé ele não
+     * reconecta. Mac dormindo e cofre bloqueado ficam como estão (acordar e desbloquear já reconectam).
+     */
+    public void reconectar() {
+        post(() -> {
+            if (encerrado || estado == EstadoConexao.SUSPENSO || estado == EstadoConexao.BLOQUEADO_COFRE) {
+                return;
+            }
+            tentativa = 0;
+            reiniciarDoZero();
+        });
+    }
+
+    /**
      * Confere agora se a sessão e o agente respondem: um keepalive com resposta (prazo de 5 s) e depois o teste
      * do agente. É o que o Sondador pede quando uma consulta falha com erro de rede (ARQUITETURA 6.3).
      * Sessão morta vai para RECONECTANDO; agente mudo com o SSH de pé vai para SSH_OK_SEM_AGENTE.
@@ -809,7 +824,7 @@ public final class ConexaoSsh implements AutoCloseable {
 
         static Falha chaveRecusada() {
             return new Falha(Falha.Tipo.CHAVE_RECUSADA,
-                "O servidor recusou a chave do app. Instale a chave pública no authorized_keys do servidor.");
+                "O servidor recusou a chave do app. Falta instalar a chave pública no acesso do usuário no servidor.");
         }
 
         static Falha tokenRecusado() {

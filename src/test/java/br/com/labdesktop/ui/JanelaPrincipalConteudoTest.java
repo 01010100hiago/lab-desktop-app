@@ -115,8 +115,8 @@ class JanelaPrincipalConteudoTest {
         assertEquals("mac-de-teste", Visual.naEdt(cartao::textoDoToken));
         assertEquals("2FA DESLIGADO", Visual.naEdt(cartao::textoDoSelo2fa));
         assertTrue(Visual.naEdt(cartao::textoDaImpressao).startsWith("ssh-ed25519  SHA256:"), Visual.naEdt(cartao::textoDaImpressao));
-        assertEquals(List.of(Item.ATUALIZAR, Item.CONFIGURAR_2FA), Visual.naEdt(cartao::acoesMostradas),
-            "conectado e com token: só atualizar e configurar o 2FA");
+        assertEquals(List.of(Item.ATUALIZAR, Item.CONFIGURAR_2FA, Item.EDITAR, Item.REMOVER), Visual.naEdt(cartao::acoesMostradas),
+            "conectado e com token: atualizar e configurar o 2FA, mais Editar e Remover");
         for (Tema t : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
             Visual.tema(t);
             Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(painel));
@@ -165,15 +165,18 @@ class JanelaPrincipalConteudoTest {
     void ositensDoMenuDeContextoDependemDoEstado() {
         ServidorLab lab = cenario.lab;
         List<Item> itens = MenuDoServidor.itensPara(lab.estado());
-        assertEquals(List.of(Item.ATUALIZAR, Item.CONFIGURAR_2FA), itens);
+        assertEquals(List.of(Item.ATUALIZAR, Item.CONFIGURAR_2FA, Item.EDITAR, Item.REMOVER), itens);
         List<String> rotulos = new ArrayList<>();
         Visual.naEdt(() -> {
             for (var c : MenuDoServidor.popup(lab, painel.acoes()).getComponents()) {
                 if (c instanceof javax.swing.JMenuItem m) {
                     rotulos.add(m.getText());
+                } else if (c instanceof javax.swing.JPopupMenu.Separator) {
+                    rotulos.add("---");
                 }
             }
         });
-        assertEquals(List.of("Atualizar agora", "Configurar 2FA…"), rotulos);
+        assertEquals(List.of("Atualizar agora", "Configurar 2FA…", "---", "Editar…", "Remover…"), rotulos,
+            "Editar e Remover ficam separados das ações do dia a dia");
     }
 }

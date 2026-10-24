@@ -18,7 +18,11 @@ import br.com.labdesktop.util.Fundo;
 import java.awt.Desktop;
 import java.awt.Window;
 import java.awt.desktop.AppReopenedListener;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,7 +86,45 @@ public final class Aplicacao {
     // Cofre
     // ---------------------------------------------------------------------------------------------
 
+    /** Só desenvolvimento: arquivo da senha de um cofre de TESTE (ver {@code SenhaDeTeste}); {@code null} no uso normal. */
+    private Path arquivoDaSenhaDeTeste;
+
+    /** Liga a abertura automática do cofre de teste. O chamador já conferiu as condições de segurança. */
+    public Aplicacao comSenhaDeTeste(Path arquivo) {
+        this.arquivoDaSenhaDeTeste = arquivo;
+        return this;
+    }
+
     private void desbloquear() {
+        if (arquivoDaSenhaDeTeste != null && cofreExiste && abrirComSenhaDeTeste()) {
+            return;
+        }
+        pedirSenha();
+    }
+
+    /** Abre o cofre de teste sem diálogo. {@code false} se nem deu para ler a senha (aí o diálogo aparece). */
+    private boolean abrirComSenhaDeTeste() {
+        char[] senha;
+        try {
+            senha = Files.readString(arquivoDaSenhaDeTeste).strip().toCharArray();
+        } catch (IOException e) {
+            LOG.warn("--senha-de-teste: não consegui ler a senha ({}); vou pedir.", e.getMessage());
+            return false;
+        }
+        LOG.warn("MODO DE DESENVOLVIMENTO: abrindo o cofre de TESTE com a senha do arquivo, sem diálogo.");
+        abridor.abrir(senha).whenComplete((aberto, erro) -> {
+            Arrays.fill(senha, '\0');
+            if (erro == null) {
+                Fundo.naEdt(() -> montar(aberto));
+            } else {
+                LOG.warn("--senha-de-teste: o cofre não abriu ({}); vou pedir a senha.", erro.toString());
+                Fundo.naEdt(this::pedirSenha);
+            }
+        });
+        return true;
+    }
+
+    private void pedirSenha() {
         DialogoSenhaMestra dialogo = new DialogoSenhaMestra(!cofreExiste, abridor, atraso, Instant::now, resultado -> {
             if (resultado.isPresent()) {
                 // Depois que o diálogo fechar: montar a janela de dentro do callback de um modal ainda aberto confunde o foco.

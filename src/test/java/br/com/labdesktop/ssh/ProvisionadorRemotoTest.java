@@ -102,6 +102,100 @@ class ProvisionadorRemotoTest {
         assertEquals(List.of("mac-de-teste\n"), fake.entradas);
     }
 
+    private static final String BLOB = "AAAAC3NzaC1lZDI1NTE5AAAAIAppKeyAppKeyAppKeyAppKeyAppKeyAppKey99";
+    private static final String LINHA_PUBLICA = "ssh-ed25519 " + BLOB + " lab-desktop@mac";
+
+    @Test
+    void removerChaveAutorizadaMandaSoOTextoDaChavePorStdinNuncaNaLinhaDeComando() throws Exception {
+        Fake fake = new Fake();
+
+        ProvisionadorRemoto.ResultadoDaChaveAutorizada r = new ProvisionadorRemoto(fake).removerChaveAutorizada(LINHA_PUBLICA);
+
+        assertEquals(ProvisionadorRemoto.ResultadoDaChaveAutorizada.REMOVIDA, r);
+        assertEquals(List.of(ProvisionadorRemoto.COMANDO_REMOVER_CHAVE_AUTORIZADA), fake.comandos);
+        assertEquals(List.of(BLOB + "\n"), fake.entradas, "só o texto em base64 vai, por stdin");
+        assertFalse(fake.comandos.get(0).contains(BLOB), "a linha de comando é FIXA");
+        assertFalse(fake.comandos.get(0).contains("lab-desktop@mac"));
+    }
+
+    @Test
+    void removerChaveAutorizadaDiferenciaAUnicaChaveDoArquivoDeErroDeVerdade() throws Exception {
+        Fake fake = new Fake();
+        fake.status = 3;
+        assertEquals(ProvisionadorRemoto.ResultadoDaChaveAutorizada.MANTIDA_POR_SER_A_UNICA,
+            new ProvisionadorRemoto(fake).removerChaveAutorizada(LINHA_PUBLICA));
+
+        fake.status = 2;
+        fake.stderr = "grep: /home/x/.ssh/authorized_keys: Permission denied";
+        ErroProvisionamento e = assertThrows(ErroProvisionamento.class,
+            () -> new ProvisionadorRemoto(fake).removerChaveAutorizada(LINHA_PUBLICA));
+        assertEquals(ErroProvisionamento.SEM_RESPOSTA, e.codigo());
+        assertTrue(e.getMessage().contains("status 2"), e.getMessage());
+        assertTrue(e.getMessage().contains("Permission denied"), e.getMessage());
+
+        fake.erro = new IOException("sessão fechada");
+        ErroProvisionamento semSessao = assertThrows(ErroProvisionamento.class,
+            () -> new ProvisionadorRemoto(fake).removerChaveAutorizada(LINHA_PUBLICA));
+        assertEquals(ErroProvisionamento.SEM_SESSAO, semSessao.codigo());
+    }
+
+    @Test
+    void removerChaveAutorizadaRecusaTextoQueNaoParecaChaveEd25519SemExecutarNada() {
+        Fake fake = new Fake();
+        ProvisionadorRemoto p = new ProvisionadorRemoto(fake);
+        for (String ruim : new String[] {null, "", "ssh-rsa " + BLOB + " x", "ssh-ed25519", "ssh-ed25519 curta",
+            "ssh-ed25519 " + BLOB + "'; rm -rf / #", "ssh-ed25519 $(touch x)AAAAAAAAAAAAAAAAAAAAAAAA", "ssh-ed25519 AAAA\nBBBB"}) {
+            assertThrows(IllegalArgumentException.class, () -> p.removerChaveAutorizada(ruim), String.valueOf(ruim));
+        }
+        assertTrue(fake.comandos.isEmpty(), "nada pode ter sido executado");
+    }
+
+    /**
+     * Roda o comando FIXO de verdade num shell, com a casa apontando para uma pasta temporária (nunca a do usuário): tira só a
+     * linha da chave, preserva as outras e as permissões, é idempotente e recusa deixar o arquivo vazio.
+     */
+    @Test
+    void oComandoDeRemoverAChaveFuncionaDeVerdadeNumShellComUmaCasaTemporaria(@org.junit.jupiter.api.io.TempDir java.nio.file.Path casa)
+        throws Exception {
+        java.nio.file.Path ssh = java.nio.file.Files.createDirectories(casa.resolve(".ssh"));
+        java.nio.file.Path arquivo = ssh.resolve("authorized_keys");
+        String outra = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOutraChaveOutraChaveOutraChave1234567 admin@casa";
+        String doApp = "no-agent-forwarding,permitopen=\"127.0.0.1:7000\" " + LINHA_PUBLICA;
+        java.nio.file.Files.writeString(arquivo, outra + "\n" + doApp + "\n");
+        java.nio.file.Files.setPosixFilePermissions(arquivo, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        ProvisionadorRemoto.Executor emShell = (comando, stdin, prazo) -> {
+            ProcessBuilder pb = new ProcessBuilder("sh", "-c", comando);
+            pb.environment().put("HOME", casa.toString());
+            pb.redirectErrorStream(false);
+            Process proc = pb.start();
+            proc.getOutputStream().write(stdin);
+            proc.getOutputStream().close();
+            String out = new String(proc.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String err = new String(proc.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            int status = proc.waitFor();
+            return new ResultadoExec(status, out.getBytes(StandardCharsets.UTF_8), err.getBytes(StandardCharsets.UTF_8), false);
+        };
+        ProvisionadorRemoto p = new ProvisionadorRemoto(emShell);
+
+        assertEquals(ProvisionadorRemoto.ResultadoDaChaveAutorizada.REMOVIDA, p.removerChaveAutorizada(LINHA_PUBLICA));
+        assertEquals(outra + "\n", java.nio.file.Files.readString(arquivo), "só a linha do app saiu");
+        assertEquals("rw-------", java.nio.file.attribute.PosixFilePermissions.toString(java.nio.file.Files.getPosixFilePermissions(arquivo)));
+
+        assertEquals(ProvisionadorRemoto.ResultadoDaChaveAutorizada.REMOVIDA, p.removerChaveAutorizada(LINHA_PUBLICA),
+            "repetir é inofensivo");
+        assertEquals(outra + "\n", java.nio.file.Files.readString(arquivo));
+
+        // Era a ÚNICA chave: fica, para o usuário não perder o acesso ao próprio servidor.
+        assertEquals(ProvisionadorRemoto.ResultadoDaChaveAutorizada.MANTIDA_POR_SER_A_UNICA,
+            p.removerChaveAutorizada(outra.split(" ")[0] + " " + outra.split(" ")[1] + " x"));
+        assertEquals(outra + "\n", java.nio.file.Files.readString(arquivo));
+
+        // Sem o arquivo: nada a fazer, sem erro.
+        java.nio.file.Files.delete(arquivo);
+        assertEquals(ProvisionadorRemoto.ResultadoDaChaveAutorizada.REMOVIDA, p.removerChaveAutorizada(LINHA_PUBLICA));
+        assertFalse(java.nio.file.Files.exists(arquivo), "não cria arquivo");
+    }
+
     @Test
     void totpIniciarDevolveOSegredoRedigidoEZeravel() throws Exception {
         Fake fake = new Fake();

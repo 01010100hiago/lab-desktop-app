@@ -33,3 +33,14 @@ escuro); abra-os para conferir o visual depois de mexer em layout. Em `run`, o a
 A fase 1 está implementada e testada (`./gradlew build`), mas NÃO está fechada: nada foi executado contra um servidor real. Pendem, e estão detalhadas em `` ("Pendências que dependem dum servidor real"): publicar o painel atualizado (com `GET /api/versao`); capturar as fixtures reais (`scripts/capturar-fixtures.sh`; até lá `ContratoComFixturesReaisTest` fica "skipped" e o critério "contrato" é parcial); os spikes B1 (terminal) e B2 (`.app`) com `docs/spikes.md`;.
 
 Ao acrescentar uma dependência: `./gradlew --write-verification-metadata sha256 build` e revise o diff do `verification-metadata.xml`.
+
+## Desenvolvimento: cofre de teste
+
+`./gradlew run --args="--pasta <dir> --senha-de-teste"` abre um cofre de TESTE sem pedir a senha: lê só
+`<dir>/SENHA-DE-TESTE.txt`, e apenas se `--pasta` foi dada (nunca na pasta padrão, a do cofre de verdade), se for arquivo
+comum, do usuário e com permissão 0600 (`util/SenhaDeTeste`). Qualquer dúvida, o app pede a senha como sempre.
+
+`src/test/.../dev/ProvisionarCofreDev` monta esse cofre já ligado a um servidor real, em duas fases, só com as variáveis
+`LABDEV_FASE`, `LABDEV_PASTA` (e `LABDEV_IMPRESSAO` na fase 2). Fase 1: cria cofre, chave e servidor e grava
+`linha-authorized-keys.txt`; depois de instalar essa linha no servidor, fase 2: confere a impressão digital do host,
+grava o pin, conecta e registra o token. A pasta `cofre-dev/` fica fora do git.

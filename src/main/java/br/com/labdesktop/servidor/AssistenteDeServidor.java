@@ -74,7 +74,7 @@ public final class AssistenteDeServidor {
                 throw new IllegalArgumentException("O usuário do SSH é inválido.");
             }
             if (portaDoAgente < 1 || portaDoAgente > 65_535) {
-                throw new IllegalArgumentException("A porta do agente vai de 1 a 65535.");
+                throw new IllegalArgumentException("A porta do painel no servidor vai de 1 a 65535.");
             }
         }
     }
@@ -152,13 +152,41 @@ public final class AssistenteDeServidor {
     }
 
     /**
+     * Apaga do cofre uma chave que nenhum servidor usa: a que o assistente criou sozinho e o usuário trocou por outra
+     * (importada ou já existente), ou que o usuário pediu para gerar de novo. Melhor esforço: se falhar, a chave só fica no cofre,
+     * onde "usar uma chave que já está no cofre" ainda a enxerga. Nunca apaga chave em uso.
+     *
+     * @return {@code true} se apagou
+     */
+    public boolean descartarChaveNaoUsada(String chaveId) {
+        try {
+            if (cofre.servidores().stream().anyMatch(s -> s.chaveId().equals(chaveId))) {
+                return false;
+            }
+            cofre.removerChave(chaveId);
+            return true;
+        } catch (CofreException | RuntimeException e) {
+            LOG.warn("Não consegui descartar a chave {} que ninguém usa: {}", chaveId, e.toString());
+            return false;
+        }
+    }
+
+    /**
      * Importa uma chave Ed25519 OpenSSH (por exemplo {@code ~/.ssh/id_ed25519}) para o cofre. O app só lê o arquivo
-     * que o usuário escolheu.
+     * que o usuário escolheu. Se o cofre já tem essa mesma chave (mesma impressão digital), devolve a que já existe.
      *
      * @param passphrase passphrase da chave, ou {@code null}; não é zerada aqui (é de quem chama)
      */
     public InfoChave importarChave(Path arquivo, char[] passphrase, String nome) throws CofreException {
         ChaveSsh chave = ImportadorDeChaves.importarDeArquivo(arquivo, passphrase, nome, NomeDoMac.hostname());
+        // O mesmo arquivo importado de novo (para outro servidor, ou outro nome do mesmo) não cria uma segunda cópia: o
+        // servidor enxerga UMA chave só, e duas entradas com a mesma chave pública enganariam a conta de "quem mais a usa"
+        // na hora de remover um servidor e tirar a chave do authorized_keys.
+        InfoChave jaTenho = cofre.chaveComAImpressao(chave.impressao()).orElse(null);
+        if (jaTenho != null) {
+            chave.zerar();
+            return jaTenho;
+        }
         try {
             cofre.adicionarChave(chave);
         } catch (CofreException | RuntimeException e) {
@@ -294,7 +322,7 @@ public final class AssistenteDeServidor {
             }
             switch (c) {
                 case ERRO_AUTENTICACAO -> throw new ErroDoAssistente(ErroDoAssistente.Motivo.CHAVE_RECUSADA,
-                    "O servidor recusou a chave. Instale a chave pública no authorized_keys e tente de novo.");
+                    "O servidor recusou a chave. Falta instalar a chave pública no servidor (veja o passo abaixo) e tentar de novo.");
                 case ERRO_CHAVE_HOST -> throw new ErroDoAssistente(ErroDoAssistente.Motivo.CHAVE_DO_HOST,
                     e.falha() == null ? "A chave do servidor não confere com a confirmada." : e.falha().mensagem());
                 case BLOQUEADO_COFRE -> throw new ErroDoAssistente(ErroDoAssistente.Motivo.COFRE_BLOQUEADO,

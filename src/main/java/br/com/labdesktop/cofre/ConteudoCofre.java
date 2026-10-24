@@ -59,6 +59,9 @@ final class ConteudoCofre {
         String impressao;
         @JsonProperty("criadaEm")
         Instant criadaEm;
+        /** {@code gerada} ou {@code importada}; ausente (cofre antigo) = origem desconhecida. */
+        @JsonProperty("origem")
+        String origem;
 
         @Override
         public String toString() {
@@ -139,6 +142,7 @@ final class ConteudoCofre {
             j.publica = c.publica();
             j.impressao = c.impressao();
             j.criadaEm = c.criadaEm();
+            j.origem = rotuloDaOrigem(c.origem());
             json.chaves.add(j);
         }
         for (ServidorGuardado s : memoria.servidores) {
@@ -193,7 +197,7 @@ final class ConteudoCofre {
                     throw new CofreCorrompidoException("Cofre com chave incompleta.");
                 }
                 chavesProntas.add(new ChaveSsh(j.id, j.nome, j.algoritmo, j.publica, j.impressao,
-                    j.criadaEm == null ? Instant.EPOCH : j.criadaEm, j.privadaOpenssh));
+                    j.criadaEm == null ? Instant.EPOCH : j.criadaEm, origemDe(j.origem), j.privadaOpenssh));
             }
             Set<String> idsDeServidor = new HashSet<>();
             for (ServidorJson j : servidores == null ? List.<ServidorJson>of() : servidores) {
@@ -231,6 +235,26 @@ final class ConteudoCofre {
             // JSON de forma inesperada (elemento nulo numa lista, por exemplo): é arquivo corrompido, não bug.
             throw new CofreCorrompidoException("O conteúdo do cofre tem uma forma inesperada.", e);
         }
+    }
+
+    private static String rotuloDaOrigem(InfoChave.Origem origem) {
+        return switch (origem) {
+            case GERADA_PELO_APP -> "gerada";
+            case IMPORTADA -> "importada";
+            case DESCONHECIDA -> null; // não grava: o arquivo continua igual ao de antes para quem não sabe
+        };
+    }
+
+    /** Rótulo que não conheço (versão futura) vale como desconhecido, nunca como "gerada": o erro seguro é não revogar. */
+    private static InfoChave.Origem origemDe(String rotulo) {
+        if (rotulo == null) {
+            return InfoChave.Origem.DESCONHECIDA;
+        }
+        return switch (rotulo) {
+            case "gerada" -> InfoChave.Origem.GERADA_PELO_APP;
+            case "importada" -> InfoChave.Origem.IMPORTADA;
+            default -> InfoChave.Origem.DESCONHECIDA;
+        };
     }
 
     private static ConfigServidor configDe(ServidorJson j) {

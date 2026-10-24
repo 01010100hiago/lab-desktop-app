@@ -12,8 +12,10 @@ import br.com.labdesktop.util.ConfiguracaoDeLog;
 import br.com.labdesktop.util.EdtWatchdog;
 import br.com.labdesktop.util.Fundo;
 import br.com.labdesktop.util.Preferencias;
+import br.com.labdesktop.util.SenhaDeTeste;
 import java.awt.GraphicsEnvironment;
 import java.io.IOException;
+import java.nio.file.Path;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import org.slf4j.Logger;
@@ -91,12 +93,26 @@ public final class Principal {
             EdtWatchdog.emDesenvolvimento().iniciar();
         }
         log.info("{} {} iniciando (dados em {}).", Versao.NOME, Versao.atual(), caminhos.pastaDados());
+        // Só desenvolvimento: conferido aqui, fora da EDT, porque faz E/S (ver SenhaDeTeste).
+        Path arquivoDaSenhaDeTeste = null;
+        if (SenhaDeTeste.pedida(args)) {
+            StringBuilder motivo = new StringBuilder();
+            arquivoDaSenhaDeTeste = SenhaDeTeste.arquivoSeguro(caminhos, motivo).orElse(null);
+            if (arquivoDaSenhaDeTeste == null) {
+                log.warn("{} ignorada: {}.", SenhaDeTeste.OPCAO, motivo);
+            }
+        }
+        final Path arquivoDaSenhaDeTesteFinal = arquivoDaSenhaDeTeste;
         SwingUtilities.invokeLater(() -> {
             GerenciadorTema tema = new GerenciadorTema(preferencias.get().tema(), sistemaEscuro, true);
-            new Aplicacao(caminhos, preferencias, tema, cofreExiste, () -> {
+            Aplicacao app = new Aplicacao(caminhos, preferencias, tema, cofreExiste, () -> {
                 trava.close();
                 System.exit(0);
-            }).iniciar();
+            });
+            if (arquivoDaSenhaDeTesteFinal != null) {
+                app.comSenhaDeTeste(arquivoDaSenhaDeTesteFinal);
+            }
+            app.iniciar();
         });
     }
 
