@@ -11,6 +11,7 @@ import br.com.labdesktop.api.modelo.Ativacao2fa;
 import br.com.labdesktop.api.modelo.Detalhe;
 import br.com.labdesktop.api.modelo.DetalheProjeto;
 import br.com.labdesktop.api.modelo.DetalheRaiz;
+import br.com.labdesktop.api.modelo.DetalheServidor;
 import br.com.labdesktop.api.modelo.InfoServidor;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.ListaProjetos;
@@ -160,6 +161,11 @@ public final class ClienteApi implements AutoCloseable {
     /** {@code GET /api/servidor}. */
     public InfoServidor servidor() throws ErroApi {
         return get("/api/servidor", Rota.SERVIDOR, InfoServidor.class);
+    }
+
+    /** {@code GET /api/servidor/detalhe}: sensores, energia e hardware (mais pesado que {@code /api/servidor}). */
+    public DetalheServidor servidorDetalhe() throws ErroApi {
+        return get("/api/servidor/detalhe", Rota.SERVIDOR_DETALHE, DetalheServidor.class);
     }
 
     /** {@code GET /api/limites}. */

@@ -8,6 +8,8 @@ import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.dialogos.Apresentador;
 import br.com.labdesktop.ui.telas.FluxosDeProjeto;
 import br.com.labdesktop.ui.telas.TelaProjetos;
+import br.com.labdesktop.ui.telas.TelaServidor;
+import br.com.labdesktop.ui.telas.TelaServidor.Aba;
 import br.com.labdesktop.ui.telas.TelaServidores;
 import br.com.labdesktop.ui.tema.Tokens;
 import java.awt.CardLayout;
@@ -17,9 +19,10 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * A área de conteúdo da janela (ARQUITETURA 4.2): uma {@link TelaProjetos} por servidor e a {@link TelaServidores},
- * uma de cada vez. Cada tela de projetos assina o servidor ao ficar visível e solta ao esconder, então só a que está
- * na tela consulta o agente. Sem nenhum servidor cadastrado, mostra a tela de servidores (com o convite para adicionar
+ * A área de conteúdo da janela (ARQUITETURA 4.2): uma {@link TelaServidor} por servidor (com as abas "Visão geral" e
+ * "Projetos") e a {@link TelaServidores}, uma de cada vez. Cada aba assina o servidor ao ficar visível e solta ao
+ * esconder, então só a que está na tela consulta o agente. A tela de cada servidor é criada uma vez, e por isso a aba
+ * escolhida fica lembrada enquanto o app estiver aberto. Sem nenhum servidor cadastrado, mostra a tela de servidores (com o convite para adicionar
  * o primeiro).
  */
 public final class Navegacao extends Painel {
@@ -34,7 +37,7 @@ public final class Navegacao extends Painel {
     private final Notificacoes avisos;
     private final Apresentador apresentador;
     private final CardLayout cartoes = new CardLayout();
-    private final Map<String, TelaProjetos> telas = new LinkedHashMap<>();
+    private final Map<String, TelaServidor> telas = new LinkedHashMap<>();
     private final TelaServidores telaServidores;
     private final Inscricao inscricaoDaLista;
     private final java.util.List<Consumer<String>> ouvintes = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -56,10 +59,11 @@ public final class Navegacao extends Painel {
         inscricaoDaLista = gerenciador.observarLista(this::aoMudarALista);
     }
 
-    private TelaProjetos garantirTela(ServidorLab lab) {
+    private TelaServidor garantirTela(ServidorLab lab) {
         return telas.computeIfAbsent(lab.id(), id -> {
             FluxosDeProjeto fluxos = new FluxosDeProjeto(lab, avisos, apresentador, FluxosDeProjeto.liberadasPorPropriedade());
-            TelaProjetos t = new TelaProjetos(lab, fluxos, navegador, acoes);
+            TelaProjetos projetos = new TelaProjetos(lab, fluxos, navegador, acoes);
+            TelaServidor t = new TelaServidor(lab, projetos, () -> acoes.atualizar(lab));
             add(t, PREFIXO_DO_SERVIDOR + id);
             return t;
         });
@@ -71,8 +75,8 @@ public final class Navegacao extends Painel {
             ids.add(lab.id());
             garantirTela(lab);
         }
-        for (java.util.Iterator<Map.Entry<String, TelaProjetos>> it = telas.entrySet().iterator(); it.hasNext();) {
-            Map.Entry<String, TelaProjetos> par = it.next();
+        for (java.util.Iterator<Map.Entry<String, TelaServidor>> it = telas.entrySet().iterator(); it.hasNext();) {
+            Map.Entry<String, TelaServidor> par = it.next();
             if (!ids.contains(par.getKey())) {
                 par.getValue().soltar();
                 remove(par.getValue());
@@ -86,9 +90,19 @@ public final class Navegacao extends Painel {
         repaint();
     }
 
-    /** Mostra a lista de projetos de um servidor. */
+    /** Mostra a página de um servidor, na aba em que ele estava (a "Visão geral", na primeira vez). */
     public void mostrarServidor(ServidorLab lab) {
         garantirTela(lab);
+        mostrarCartao(lab);
+    }
+
+    /** Mostra a página de um servidor numa aba escolhida (e passa a lembrá-la). */
+    public void mostrarServidor(ServidorLab lab, Aba aba) {
+        garantirTela(lab).mostrarAba(aba);
+        mostrarCartao(lab);
+    }
+
+    private void mostrarCartao(ServidorLab lab) {
         atual = PREFIXO_DO_SERVIDOR + lab.id();
         cartoes.show(this, atual);
         ouvintes.forEach(o -> o.accept(atual));
@@ -119,7 +133,14 @@ public final class Navegacao extends Painel {
         ouvintes.add(ouvinte);
     }
 
+    /** A lista de projetos do servidor (a aba "Projetos"). */
     public TelaProjetos telaDe(String servidorId) {
+        TelaServidor t = telas.get(servidorId);
+        return t == null ? null : t.projetos();
+    }
+
+    /** A página do servidor, com as duas abas. */
+    public TelaServidor telaServidorDe(String servidorId) {
         return telas.get(servidorId);
     }
 
@@ -130,7 +151,7 @@ public final class Navegacao extends Painel {
     /** Solta tudo (a janela fechou ou o cofre foi bloqueado). */
     public void encerrar() {
         inscricaoDaLista.close();
-        telas.values().forEach(TelaProjetos::soltar);
+        telas.values().forEach(TelaServidor::soltar);
         telas.clear();
         telaServidores.encerrar();
     }

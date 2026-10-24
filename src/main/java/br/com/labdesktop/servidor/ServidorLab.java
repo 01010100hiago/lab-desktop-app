@@ -79,6 +79,8 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private final Sondador sondador;
     private final AcoesDoServidor acoes;
     private final ProvisionadorRemoto provisionador;
+    /** A leitura de segurança (SSH exec, somente leitura) deste servidor, com o tópico que a entrega às telas. */
+    private final Topico<ResumoDeSeguranca> topicoDeSeguranca;
     private final Inscricao assinaturaDeLimites;
     private final Runnable desinscreverConexao;
 
@@ -122,6 +124,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             new PoliticaDeBackoff(cfgSsh.escalaBackoff(), Math::random));
         this.acoes = new AcoesDoServidor(this::apiAtual, sondador);
         this.provisionador = new ProvisionadorRemoto(conexao::executar);
+        this.topicoDeSeguranca = Topico.seguranca(new LeitorDeSegurancaPorSsh(conexao::executar, Instant::now));
         this.desinscreverConexao = conexao.observar(this::aoMudarConexao);
         this.assinaturaDeLimites = sondador.assinar(Topico.LIMITES, new OuvinteDeTopico<LimitesConta>() {
             @Override
@@ -191,6 +194,14 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     /** Assina um tópico (a tela ao ficar visível; solta ao esconder). */
     public <T> Inscricao assinar(Topico<T> topico, OuvinteDeTopico<T> ouvinte) {
         return sondador.assinar(topico, ouvinte);
+    }
+
+    /**
+     * Assina a leitura de segurança (a Visão geral do servidor, ao ficar visível). Cadência lenta, nunca na EDT, nunca
+     * sem tela visível; só roda com a conexão de pé.
+     */
+    public Inscricao assinarSeguranca(OuvinteDeTopico<ResumoDeSeguranca> ouvinte) {
+        return sondador.assinar(topicoDeSeguranca, ouvinte);
     }
 
     /** As ações (iniciar, parar, abrir sessão, limite...). */

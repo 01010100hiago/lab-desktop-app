@@ -13,7 +13,7 @@ public final class ResultadoExec {
     private final byte[] stderr;
     private final boolean truncado;
 
-    ResultadoExec(int status, byte[] stdout, byte[] stderr, boolean truncado) {
+    public ResultadoExec(int status, byte[] stdout, byte[] stderr, boolean truncado) {
         this.status = status;
         this.stdout = stdout;
         this.stderr = stderr;

@@ -6,6 +6,7 @@ import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.ui.componentes.Notificacoes;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.dialogos.Apresentador;
+import br.com.labdesktop.ui.telas.TelaServidor;
 import java.awt.BorderLayout;
 import java.util.function.Consumer;
 
@@ -73,7 +74,7 @@ public final class PainelPrincipal extends Painel {
         return navegador;
     }
 
-    /** Mostra a lista de projetos de um servidor e marca a barra. */
+    /** Mostra a página de um servidor (na aba em que estava) e marca a barra. */
     public void mostrarServidor(ServidorLab lab) {
         navegacao.mostrarServidor(lab);
     }
@@ -82,14 +83,25 @@ public final class PainelPrincipal extends Painel {
         navegacao.mostrarServidores();
     }
 
-    /** A lista de projetos do servidor em foco (ou do primeiro cadastrado, se está na tela de servidores). */
+    /** A aba "Projetos" do servidor em foco (ou do primeiro cadastrado, se está na tela de servidores). */
     public void mostrarProjetos() {
         ServidorLab lab = servidorEmFoco();
         if (lab == null && !gerenciador.servidores().isEmpty()) {
             lab = gerenciador.servidores().get(0);
         }
         if (lab != null) {
-            mostrarServidor(lab);
+            navegacao.mostrarServidor(lab, TelaServidor.Aba.PROJETOS);
+        }
+    }
+
+    /** A visão geral do servidor em foco (ou do primeiro cadastrado). */
+    public void mostrarVisaoGeral() {
+        ServidorLab lab = servidorEmFoco();
+        if (lab == null && !gerenciador.servidores().isEmpty()) {
+            lab = gerenciador.servidores().get(0);
+        }
+        if (lab != null) {
+            navegacao.mostrarServidor(lab, TelaServidor.Aba.VISAO_GERAL);
         }
     }
 

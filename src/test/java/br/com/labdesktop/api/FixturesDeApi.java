@@ -38,4 +38,26 @@ public final class FixturesDeApi {
     public static LimitesConta limitesDoMock() {
         return de(MocksDoFront.ler("limites.json"), LimitesConta.class);
     }
+
+    /** {@code GET /api/servidor}, fixture SINTÉTICA (valores inventados) em {@code src/test/resources/servidor}. */
+    public static br.com.labdesktop.api.modelo.InfoServidor servidorSintetico() {
+        return de(lerRecurso("servidor-sintetico.json"), br.com.labdesktop.api.modelo.InfoServidor.class);
+    }
+
+    /** {@code GET /api/servidor/detalhe}, fixture SINTÉTICA. */
+    public static br.com.labdesktop.api.modelo.DetalheServidor detalheSintetico() {
+        return de(lerRecurso("servidor-detalhe-sintetico.json"), br.com.labdesktop.api.modelo.DetalheServidor.class);
+    }
+
+    /** O texto de um arquivo de {@code src/test/resources/servidor}. */
+    public static String lerRecurso(String nome) {
+        try (java.io.InputStream in = FixturesDeApi.class.getResourceAsStream("/servidor/" + nome)) {
+            if (in == null) {
+                throw new IllegalStateException("fixture ausente: " + nome);
+            }
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 }

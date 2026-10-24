@@ -6,6 +6,7 @@ import br.com.labdesktop.api.ErroApi.ErroRede;
 import br.com.labdesktop.api.ErroApi.NaoAutorizado;
 import br.com.labdesktop.api.modelo.Detalhe;
 import br.com.labdesktop.api.modelo.DetalheRaiz;
+import br.com.labdesktop.api.modelo.DetalheServidor;
 import br.com.labdesktop.api.modelo.InfoServidor;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.ListaProjetos;
@@ -22,6 +23,8 @@ import java.util.function.Function;
  * LIMITES         60 s    60 s       60 s   (alimenta faixa de crédito, ícone, notificações)
  * PROJETOS        10 s    60 s       parado
  * SERVIDOR        10 s    60 s       parado
+ * DETALHE_SERVIDOR 10 s    60 s       parado   (só com a Visão geral do servidor visível)
+ * SEGURANCA        60 s    6 min      parado   (por SSH exec; um por servidor, ver ServidorLab)
  * DETALHE(p)      10 s    60 s       parado
  * </pre>
  *
@@ -39,6 +42,7 @@ public final class Topico<T> {
 
     private static final Duration DEZ_SEGUNDOS = Duration.ofSeconds(10);
     private static final Duration SESSENTA_SEGUNDOS = Duration.ofSeconds(60);
+    private static final Duration SEIS_MINUTOS = Duration.ofMinutes(6);
 
     /** Limites do plano, freio e pausados. SEMPRE ligado: nem a janela escondida o para. */
     public static final Topico<LimitesConta> LIMITES = new Topico<>("limites", ClienteApi::limites,
@@ -52,6 +56,18 @@ public final class Topico<T> {
     /** Métricas do servidor com histórico de 10 min e processos. */
     public static final Topico<InfoServidor> SERVIDOR = new Topico<>("servidor", ClienteApi::servidor,
         DEZ_SEGUNDOS, SESSENTA_SEGUNDOS, false, InfoServidor::temperatura);
+
+    /** Sensores, energia e hardware: mais pesado no servidor, assinado só pela Visão geral visível. */
+    public static final Topico<DetalheServidor> DETALHE_SERVIDOR = new Topico<>("servidor-detalhe",
+        ClienteApi::servidorDetalhe, DEZ_SEGUNDOS, SESSENTA_SEGUNDOS, false, DetalheServidor::temperatura);
+
+    /**
+     * A leitura de segurança (somente leitura, por SSH {@code exec}): cadência lenta, de 60 s com a janela ativa. A consulta
+     * não usa a API do agente; o {@code ServidorLab} cria o tópico ligado ao leitor da sua conexão.
+     */
+    static Topico<ResumoDeSeguranca> seguranca(LeitorDeSeguranca leitor) {
+        return new Topico<>("seguranca", api -> leitor.ler(), SESSENTA_SEGUNDOS, SEIS_MINUTOS, false, null);
+    }
 
     /**
      * Um tópico sob medida (a cadência e a consulta são do chamador). Existe para os tópicos das próximas etapas

@@ -31,6 +31,13 @@ public final class AgenteDoLab implements AutoCloseable {
     public final Set<String> dispositivosConfirmados = ConcurrentHashMap.newKeySet();
     public final AtomicInteger consultasDeProjetos = new AtomicInteger();
     public final AtomicInteger chamadasDeLimites = new AtomicInteger();
+    /** Quantas vezes o app consultou {@code /api/servidor} e {@code /api/servidor/detalhe} (a prova de "só com a tela visível"). */
+    public final AtomicInteger consultasDeServidor = new AtomicInteger();
+    public final AtomicInteger consultasDeDetalhe = new AtomicInteger();
+    /** Os comandos de segurança (somente leitura) que o app mandou por SSH. */
+    public final List<String> comandosDeSeguranca = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** O usuário não tem sudo sem senha: os comandos de segurança com sudo falham como no servidor real. */
+    public volatile boolean segurancaSemSudo;
     /** Tudo o que o servidor SSH de teste recebeu como linha de comando e stdin, na ordem. */
     public final List<String> comandosCli = new java.util.concurrent.CopyOnWriteArrayList<>();
     public final List<String> entradasCli = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -124,7 +131,12 @@ public final class AgenteDoLab implements AutoCloseable {
             return Resposta.json(200, MocksDoFront.ler("projetos/app-loja.json"));
         }
         if ("/api/servidor".equals(caminho)) {
+            consultasDeServidor.incrementAndGet();
             return Resposta.json(200, MocksDoFront.ler("servidor.json"));
+        }
+        if ("/api/servidor/detalhe".equals(caminho)) {
+            consultasDeDetalhe.incrementAndGet();
+            return Resposta.json(200, br.com.labdesktop.api.FixturesDeApi.lerRecurso("servidor-detalhe-sintetico.json"));
         }
         if (caminho.endsWith("/limite/retomar")) {
             return Resposta.json(409, MocksDoFront.ler("projetos/app-loja-retomar.POST.json"));
@@ -155,6 +167,10 @@ public final class AgenteDoLab implements AutoCloseable {
     /** O manipulador que o {@link ServidorSshDeTeste} usa para os comandos do agente. */
     public ServidorSshDeTeste.Manipulador comandosPorSsh() {
         return (linha, stdin, saida) -> {
+            if (ehComandoDeSeguranca(linha)) {
+                comandosDeSeguranca.add(linha);
+                return responderSeguranca(linha, saida);
+            }
             comandosCli.add(linha);
             entradasCli.add(stdin);
             if (agenteAntigo) {
@@ -236,6 +252,40 @@ public final class AgenteDoLab implements AutoCloseable {
                 return falha(saida, "entrada_invalida", "Entrada inválida.");
             }
         };
+    }
+
+    private static boolean ehComandoDeSeguranca(String linha) {
+        return linha.startsWith("sudo -n ") || linha.startsWith("ss ") || linha.startsWith("systemctl ");
+    }
+
+    /** As saídas SINTÉTICAS dos comandos de segurança (o registro tem um ataque simulado). */
+    private int responderSeguranca(String linha, StringBuilder saida) {
+        if (segurancaSemSudo && linha.startsWith("sudo -n ")) {
+            saida.append(ServidorSshDeTeste.PREFIXO_STDERR).append("sudo: a password is required\n");
+            return 1;
+        }
+        java.time.Instant agora = java.time.Instant.now();
+        if (linha.contains("journalctl")) {
+            saida.append(SaidasDeSeguranca.registroComAtaque(agora));
+            return 0;
+        }
+        if (linha.startsWith("ss ")) {
+            saida.append(SaidasDeSeguranca.SS);
+            return 0;
+        }
+        if (linha.contains("nft list")) {
+            saida.append(SaidasDeSeguranca.NFT);
+            return 0;
+        }
+        if (linha.contains("sshd -T")) {
+            saida.append(SaidasDeSeguranca.SSHD_SEGURO);
+            return 0;
+        }
+        if (linha.startsWith("systemctl is-active")) {
+            saida.append("inactive\n");
+            return 3;
+        }
+        return 127;
     }
 
     private static int falha(StringBuilder saida, String codigo, String erro) {

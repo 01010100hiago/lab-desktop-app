@@ -42,6 +42,9 @@ public final class ServidorSshDeTeste implements AutoCloseable {
         int executar(String linhaDeComando, String stdin, StringBuilder saida);
     }
 
+    /** Uma linha da saída do manipulador que começa com isto vai para o STDERR do comando (sem o prefixo). */
+    public static final String PREFIXO_STDERR = "\u0001";
+
     public final SshServer sshd;
     public final KeyPair chaveDoHost;
     /** Impressão de cada chave pública que o cliente ofereceu na autenticação. */
@@ -185,8 +188,21 @@ public final class ServidorSshDeTeste implements AutoCloseable {
                     entradas.add(stdin);
                     StringBuilder out = new StringBuilder();
                     int status = manipulador.executar(linha, stdin, out);
-                    saida.write(out.toString().getBytes(StandardCharsets.UTF_8));
+                    StringBuilder so = new StringBuilder();
+                    StringBuilder se = new StringBuilder();
+                    for (String l : out.toString().split("(?<=\n)")) {
+                        if (l.startsWith(PREFIXO_STDERR)) {
+                            se.append(l.substring(PREFIXO_STDERR.length()));
+                        } else {
+                            so.append(l);
+                        }
+                    }
+                    saida.write(so.toString().getBytes(StandardCharsets.UTF_8));
                     saida.flush();
+                    if (se.length() > 0 && erro != null) {
+                        erro.write(se.toString().getBytes(StandardCharsets.UTF_8));
+                        erro.flush();
+                    }
                     chamada.onExit(status);
                 } catch (IOException e) {
                     chamada.onExit(255, e.toString());
