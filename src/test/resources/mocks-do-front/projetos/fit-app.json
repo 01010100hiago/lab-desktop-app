@@ -1,0 +1,127 @@
+{
+  "nome": "fit-app",
+  "descricao": "Aplicativo de exemplo (API e banco de dados).",
+  "readme": "# fit-app\n\nApp de exemplo.\n\n## Serviços\n- `api` — REST\n- `db` — banco\n\n## Como rodar\n```\ndocker compose up -d --build\n```\n\nVeja `STATUS.md` para o estado atual.\n",
+  "status": "# STATUS — fit-app\n\nEm andamento.\n\n- [x] Esqueleto\n- [ ] Autenticação\n",
+  "composes": [
+    {
+      "arquivo": "docker-compose.yml",
+      "projetoCompose": "fit-app"
+    }
+  ],
+  "containers": [
+    {
+      "nome": "fit-app-api-1",
+      "estado": "running",
+      "status": "Up 3 hours",
+      "portas": "127.0.0.1:8101->3000/tcp",
+      "imagem": "fit-app-api:latest",
+      "criado": "2026-09-23T13:27:40.190Z",
+      "cpu": 3.4,
+      "mem": 195035136,
+      "memLimite": 1073741824,
+      "net": "4.2MB / 1.8MB",
+      "bloco": "12MB / 640KB",
+      "pids": 24
+    },
+    {
+      "nome": "fit-app-db-1",
+      "estado": "running",
+      "status": "Up 3 hours",
+      "portas": "127.0.0.1:5433->5432/tcp",
+      "imagem": "postgres:16-alpine",
+      "criado": "2026-09-23T13:26:40.190Z",
+      "cpu": 1.2,
+      "mem": 101121896,
+      "memLimite": 1073741824,
+      "net": "1.1MB / 980KB",
+      "bloco": "4.8MB / 220KB",
+      "pids": 9
+    }
+  ],
+  "urls": [
+    "fit.example.com"
+  ],
+  "sessao": {
+    "aberta": true,
+    "container": "lab-claude-fit-app",
+    "desde": "2026-09-23T13:35:40.190Z",
+    "url": "/sessao/fit-app"
+  },
+  "git": {
+    "branch": "main",
+    "commit": "a91f3c2",
+    "quando": "2026-09-23T12:47:40.190Z",
+    "sujo": true
+  },
+  "backups": [
+    {
+      "arquivo": "fit-app-presessao-2026092309.sql.gz",
+      "tamanho": 4582912,
+      "quando": "2026-09-23T13:47:40.190Z"
+    },
+    {
+      "arquivo": "fit-app-presessao-2026092216.sql.gz",
+      "tamanho": 4411204,
+      "quando": "2026-09-22T16:47:40.190Z"
+    },
+    {
+      "arquivo": "fit-app-presessao-2026092108.sql.gz",
+      "tamanho": 4398776,
+      "quando": "2026-09-21T16:47:40.190Z"
+    }
+  ],
+  "tamanho": 812345678,
+  "mexido": 1790180980190,
+  "acessoDocker": true,
+  "redes": [
+    "fit-app_default"
+  ],
+  "arquivos": [
+    {
+      "nome": "README.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "STATUS.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "CLAUDE.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "docker-compose.yml",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": ".env.example",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": ".lab-acesso-docker",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "api",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "app",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "backups",
+      "tipo": "pasta"
+    }
+  ],
+  "limite": {
+    "teto_pct": 20,
+    "usado_pp": 16.0,
+    "estado": "atencao",
+    "liberado": true,
+    "pausa": null,
+    "zera_em": "@+5d3h",
+    "desde": "@-1d21h"
+  }
+}

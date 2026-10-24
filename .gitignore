@@ -20,3 +20,15 @@ cofre-dev/
 # chaves SSH soltas na raiz do repositório (id_ed25519, id_rsa...) e nas pastas de chave de teste; arquivos legítimos com esse prefixo em outras pastas não são escondidos
 /id_*
 !/id_*.pub
+/chaves/
+/chaves-dev/
+
+# capturas do scripts/capturar-fixtures.sh interrompidas no meio
+src/test/resources/lab-real/.captura.*
+
+# fixtures reais do lab (nomes e descricoes de projetos de verdade: nao publicar)
+src/test/resources/lab-real/
+
+# pacote do agente montado por `./gradlew empacotarAgente` (vem do repositório do agente e pode ter dado pessoal): nunca versionar
+src/main/resources/agente/agente-*.tar.gz
+src/main/resources/agente/agente.json

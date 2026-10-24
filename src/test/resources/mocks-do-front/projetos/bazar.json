@@ -1,0 +1,83 @@
+{
+  "nome": "bazar",
+  "descricao": "Vitrine de produtos de exemplo.",
+  "readme": "# bazar\n\nVitrine de produtos de exemplo.\n",
+  "status": "# STATUS — bazar\n\nEm andamento.\n",
+  "composes": [
+    {
+      "arquivo": "docker-compose.yml",
+      "projetoCompose": "bazar"
+    }
+  ],
+  "containers": [
+    {
+      "nome": "bazar-web-1",
+      "estado": "exited",
+      "status": "Exited (0) 6 hours ago",
+      "portas": "",
+      "imagem": "bazar-web:latest",
+      "criado": "@-5h",
+      "cpu": null,
+      "mem": null,
+      "memLimite": null,
+      "net": null,
+      "bloco": null,
+      "pids": null
+    }
+  ],
+  "urls": [],
+  "sessao": {
+    "aberta": false,
+    "container": null,
+    "desde": null,
+    "url": "/sessao/bazar"
+  },
+  "git": {
+    "branch": "main",
+    "commit": "b72e8f0",
+    "quando": "2026-09-22T09:20:40.190Z",
+    "sujo": true
+  },
+  "backups": [],
+  "tamanho": 82314200,
+  "mexido": 1790120000190,
+  "acessoDocker": false,
+  "redes": [
+    "bazar_default"
+  ],
+  "arquivos": [
+    {
+      "nome": "README.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "STATUS.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "docker-compose.yml",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "app",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "api",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "worker",
+      "tipo": "pasta"
+    }
+  ],
+  "limite": {
+    "teto_pct": 25,
+    "usado_pp": 6.0,
+    "estado": "ok",
+    "liberado": false,
+    "pausa": null,
+    "zera_em": "@+5d3h",
+    "desde": "@-1d21h"
+  }
+}

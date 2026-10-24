@@ -1,0 +1,8 @@
+{
+  "_status": 409,
+  "erro": "Ainda acima do limite — a sessão pausaria de novo.",
+  "usado_pp": 22.4,
+  "teto_pct": 20,
+  "pct_conta": 92,
+  "freio_pct": 90
+}

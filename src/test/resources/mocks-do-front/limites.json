@@ -1,0 +1,72 @@
+{
+  "disponivel": true,
+  "antiga": false,
+  "lido_em": "@-1m",
+  "fonte": {
+    "projeto": "fit-app"
+  },
+  "cinco_horas": {
+    "usado_pct": 82,
+    "zera_em": "@+2h30m"
+  },
+  "semana": {
+    "usado_pct": 92,
+    "zera_em": "@+5d3h"
+  },
+  "freio": {
+    "pct": 90,
+    "ativo": true
+  },
+  "pausados": [
+    {
+      "projeto": "app-loja",
+      "motivo": "teto",
+      "em": "@-35m"
+    },
+    {
+      "projeto": "vendas",
+      "motivo": "freio",
+      "em": "@-12m"
+    },
+    {
+      "projeto": "lab",
+      "motivo": "freio",
+      "em": "@-12m"
+    }
+  ],
+  "por_projeto": {
+    "fit-app": {
+      "usado_pp": 16.0,
+      "teto_pct": 20,
+      "estado": "atencao"
+    },
+    "app-loja": {
+      "usado_pp": 22.4,
+      "teto_pct": 20,
+      "estado": "pausado"
+    },
+    "vendas": {
+      "usado_pp": 18.5,
+      "teto_pct": 30,
+      "estado": "pausado"
+    },
+    "ponto-api": {
+      "usado_pp": 2.1,
+      "teto_pct": null,
+      "estado": "ok"
+    },
+    "bazar": {
+      "usado_pp": 6.0,
+      "teto_pct": 25,
+      "estado": "ok"
+    },
+    "lab": {
+      "usado_pp": 21.9,
+      "teto_pct": null,
+      "estado": "pausado"
+    },
+    "_fora_do_lab": {
+      "usado_pp": 5.1
+    }
+  }
+}

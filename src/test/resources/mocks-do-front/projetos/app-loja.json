@@ -1,0 +1,116 @@
+{
+  "nome": "app-loja",
+  "descricao": "Loja de exemplo (pedidos e cardápio).",
+  "readme": "# app-loja\n\nApp de exemplo.\n\n## Serviços\n- `api` — REST\n- `worker` — filas\n- `redis` — cache/filas\n",
+  "status": "# STATUS — app-loja\n\nNo ar (`lab-app-loja.example.com`).\n",
+  "composes": [
+    {
+      "arquivo": "docker-compose.yml",
+      "projetoCompose": "app-loja"
+    }
+  ],
+  "containers": [
+    {
+      "nome": "app-loja-api-1",
+      "estado": "running",
+      "status": "Up 41 minutes",
+      "portas": "127.0.0.1:8102->3000/tcp",
+      "imagem": "app-loja-api:latest",
+      "criado": "2026-09-23T16:06:40.190Z",
+      "cpu": 6.7,
+      "mem": 142606336,
+      "memLimite": 1073741824,
+      "net": "8.9MB / 6.1MB",
+      "bloco": "2.1MB / 88KB",
+      "pids": 18
+    },
+    {
+      "nome": "app-loja-worker-1",
+      "estado": "running",
+      "status": "Up 41 minutes",
+      "portas": "",
+      "imagem": "app-loja-worker:latest",
+      "criado": "2026-09-23T16:06:40.190Z",
+      "cpu": 1.9,
+      "mem": 98566144,
+      "memLimite": 536870912,
+      "net": "2.2MB / 1.9MB",
+      "bloco": "0B / 0B",
+      "pids": 11
+    },
+    {
+      "nome": "app-loja-redis-1",
+      "estado": "exited",
+      "status": "Exited (0) 2 hours ago",
+      "portas": "",
+      "imagem": "redis:7-alpine",
+      "criado": "2026-09-23T10:47:40.190Z",
+      "cpu": null,
+      "mem": null,
+      "memLimite": null,
+      "net": "—",
+      "bloco": "—",
+      "pids": null
+    }
+  ],
+  "urls": [
+    "lab-app-loja.example.com"
+  ],
+  "sessao": {
+    "aberta": false,
+    "container": null,
+    "desde": null,
+    "url": "/sessao/app-loja"
+  },
+  "git": {
+    "branch": "main",
+    "commit": "7be0d41",
+    "quando": "2026-09-23T16:06:40.190Z",
+    "sujo": false
+  },
+  "backups": [],
+  "tamanho": 1284193456,
+  "mexido": 1790179600190,
+  "acessoDocker": false,
+  "redes": [
+    "app-loja_default"
+  ],
+  "arquivos": [
+    {
+      "nome": "README.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "STATUS.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "docker-compose.yml",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "app",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "api",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "worker",
+      "tipo": "pasta"
+    }
+  ],
+  "limite": {
+    "teto_pct": 20,
+    "usado_pp": 22.4,
+    "estado": "pausado",
+    "liberado": false,
+    "pausa": {
+      "motivo": "teto",
+      "em": "@-35m"
+    },
+    "zera_em": "@+5d3h",
+    "desde": "@-1d21h"
+  }
+}

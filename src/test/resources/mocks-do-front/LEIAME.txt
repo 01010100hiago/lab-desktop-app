@@ -1,0 +1,8 @@
+Cópias dos mocks do front web (do front web do agente), usadas SÓ para provar que o cliente da API
+tolera as divergências do mock em relação ao agente real (mem em texto, datas com macro @+5d3h).
+NAO sao o contrato: o contrato e testado com respostas reais do lab (scripts/capturar-fixtures.sh).
+
+Copiados: limites, projetos, servidor e o detalhe de cada projeto (app-loja, bazar, fit-app, lab, vendas,
+ponto-api), mais a resposta de retomar do app-loja. Ficam de fora tokens.json e tokens/ (rotas de tokens) e
+os logs.txt (texto puro). Ao mudar o mock do front, copie de novo: ClienteApiTest.todosOsDetalhesDoMockParseiam
+percorre a pasta projetos/.

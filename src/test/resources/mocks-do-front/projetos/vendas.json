@@ -1,0 +1,102 @@
+{
+  "nome": "vendas",
+  "descricao": "Painel de vendas de exemplo.",
+  "readme": "# vendas\n\nPainel de vendas de exemplo.\n",
+  "status": "# STATUS — vendas\n\nEm andamento.\n",
+  "composes": [
+    {
+      "arquivo": "docker-compose.yml",
+      "projetoCompose": "vendas"
+    }
+  ],
+  "containers": [
+    {
+      "nome": "vendas-web-1",
+      "estado": "running",
+      "status": "Up 5 hours",
+      "portas": "127.0.0.1:8103->3000/tcp",
+      "imagem": "vendas-web:latest",
+      "criado": "@-5h",
+      "cpu": 2.2,
+      "mem": 165675008,
+      "memLimite": 1073741824,
+      "net": "2.0MB / 900KB",
+      "bloco": "6MB / 120KB",
+      "pids": 18
+    },
+    {
+      "nome": "vendas-db-1",
+      "estado": "running",
+      "status": "Up 5 hours",
+      "portas": "",
+      "imagem": "postgres:16-alpine",
+      "criado": "@-5h",
+      "cpu": 2.2,
+      "mem": 165675008,
+      "memLimite": 1073741824,
+      "net": "2.0MB / 900KB",
+      "bloco": "6MB / 120KB",
+      "pids": 18
+    }
+  ],
+  "urls": [
+    "lab-vendas.example.com"
+  ],
+  "sessao": {
+    "aberta": false,
+    "container": null,
+    "desde": null,
+    "url": "/sessao/vendas"
+  },
+  "git": {
+    "branch": "main",
+    "commit": "3c9d1ab",
+    "quando": "2026-09-23T15:10:40.190Z",
+    "sujo": false
+  },
+  "backups": [],
+  "tamanho": 452198400,
+  "mexido": 1790178000190,
+  "acessoDocker": false,
+  "redes": [
+    "vendas_default"
+  ],
+  "arquivos": [
+    {
+      "nome": "README.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "STATUS.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "docker-compose.yml",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "app",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "api",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "worker",
+      "tipo": "pasta"
+    }
+  ],
+  "limite": {
+    "teto_pct": 30,
+    "usado_pp": 18.5,
+    "estado": "pausado",
+    "liberado": false,
+    "pausa": {
+      "motivo": "freio",
+      "em": "@-12m"
+    },
+    "zera_em": "@+5d3h",
+    "desde": "@-1d21h"
+  }
+}

@@ -1,6 +1,6 @@
 # lab-desktop: contrato da API do agente
 
-Documento 2 de 2 (ARQUITETURA.md e CONTRATO-API.md). Descreve o que o app nativo pode pedir ao agente Node do Painel do Lab, rota por rota, e o que o usuário precisa saber sobre como o app se identifica a ele. Como o agente confere essa para cliente nativo.
+Documento 2 de 2 (ARQUITETURA.md e CONTRATO-API.md). Descreve o que o app nativo pode pedir ao agente Node do Painel do Lab, rota por rota, e o que o usuário precisa saber sobre como o app se identifica a ele. Como o agente confere essa identificação por dentro não faz parte deste contrato.
 
 ## 0. Origem e validade
 
@@ -25,6 +25,7 @@ Regras obrigatórias do cliente HTTP do app:
 - Sem proxy do sistema (`ProxySelector.of(null)`), sem seguir redirect.
 - Um cabeçalho de identificação do app (seção 6), `Accept: application/json`, `Content-Type: application/json` quando há corpo, `User-Agent: LabDesktop/<versão>`.
 - A credencial do app nunca vai em URL, log ou mensagem de erro.
+- Se o servidor pedir confirmação em dois passos, o app pergunta o código ao usuário e repete a chamada (seção 6). Qualquer outro `401` é credencial recusada.
 
 ### 1.2 Respostas de recusa
 
@@ -65,7 +66,7 @@ Regra do app: todo campo é anulável, `FAIL_ON_UNKNOWN_PROPERTIES` desligado, u
 |---|---|
 | 200 | sucesso (inclusive `logs` com erro do Docker dentro do corpo, ver 3.9) |
 | 400 | nome inválido, corpo inválido, container que não é do projeto, tecla não permitida, código inválido |
-| 401 | credencial ausente ou recusada (seção 6 |
+| 401 | credencial ausente ou recusada (seção 6) |
 | 404 | projeto inexistente; `Sessão não está aberta.`; rota desconhecida (texto puro) |
 | 409 | sessão pausada pelo limite; Retomar que ainda estoura |
 | 500 | falha do Docker ou do compose; `Projeto não existe.` ao abrir sessão |
@@ -106,12 +107,13 @@ Fora do app: `POST /api/diag`, `GET /terminal/<p>/*` (HTTP e WebSocket do ttyd) 
 
 ### 3.1 `GET /api/versao` (nova, proposta)
 
-Resposta `200`: `{ "api": 1, "painel": "v22.x", "cliente": "mac-de-teste" }`.
+Resposta `200`: `{ "api": 1, "painel": "v22.x", "cliente": "mac-de-teste", "totp": "desligado" }`.
 
 - `api`: versão do contrato; o app avisa "agente incompatível" se for diferente de 1.
 - `painel`: `process.version` do Node do agente.
 - `cliente`: o nome do dispositivo desta conexão, ou `null`.
 
+Erros: `401` com o campo `erro` em JSON (credencial recusada, seção 6).
 
 Uso no app: é o teste de saúde. A conexão só vira CONECTADO depois de um 200 aqui. `401` significa credencial recusada (oferece registrar de novo). Falha de conexão significa túnel ou agente fora (SSH_OK_SEM_AGENTE se o SSH está de pé).
 
@@ -485,3 +487,4 @@ Permissões mínimas do token: Zona > Zona > Ler, Zona > DNS > Editar (só na zo
 - Qualquer `ErroRede` não é erro de tela: o Sondador pergunta ao estado da conexão (reconectando, agente fora) e mantém o último snapshot com a faixa "sem conexão desde HH:MM".
 - Dado vindo do servidor é não confiável (descrição de projeto, README, branch, nome de container, texto da tela, `login.url`): texto sem HTML, controles e bidi removidos, URLs só por lista de permitidos.
 - Não existe `GET /api/projetos/:p/login`: a URL de login só vem em `projetos[].login.url`.
+- Se o servidor pedir confirmação em dois passos, o `ClienteApi` pede o código e repete a chamada uma única vez; uma segunda recusa é normal, sem laço. Um `401` sem esse pedido continua levando a `TOKEN_RECUSADO`.

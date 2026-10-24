@@ -1,0 +1,103 @@
+{
+  "nome": "ponto-api",
+  "descricao": "Projeto de exemplo, parado.",
+  "readme": "# ponto-api\n\nDados fictícios.\n",
+  "status": "# STATUS — ponto-api\n\nParado no momento.\n",
+  "composes": [
+    {
+      "arquivo": "docker-compose.yml",
+      "projetoCompose": "ponto-api"
+    }
+  ],
+  "containers": [
+    {
+      "nome": "ponto-api-proxy-1",
+      "estado": "exited",
+      "status": "Exited (0) 2 days ago",
+      "portas": "",
+      "imagem": "nginx:alpine",
+      "criado": "2026-09-18T16:47:40.190Z",
+      "cpu": null,
+      "mem": null,
+      "memLimite": null,
+      "net": "—",
+      "bloco": "—",
+      "pids": null
+    },
+    {
+      "nome": "ponto-api-db-1",
+      "estado": "exited",
+      "status": "Exited (0) 2 days ago",
+      "portas": "",
+      "imagem": "postgres:16-alpine",
+      "criado": "2026-09-18T16:47:40.190Z",
+      "cpu": null,
+      "mem": null,
+      "memLimite": null,
+      "net": "—",
+      "bloco": "—",
+      "pids": null
+    }
+  ],
+  "urls": [],
+  "sessao": {
+    "aberta": false,
+    "container": null,
+    "desde": null,
+    "url": "/sessao/ponto-api"
+  },
+  "git": {
+    "branch": "main",
+    "commit": "f10ac03",
+    "quando": "2026-09-21T16:47:40.190Z",
+    "sujo": false
+  },
+  "backups": [
+    {
+      "arquivo": "ponto-api-presessao-2026092108.sql.gz",
+      "tamanho": 1204112,
+      "quando": "2026-09-21T16:47:40.190Z"
+    }
+  ],
+  "tamanho": 154982301,
+  "mexido": 1790009260190,
+  "acessoDocker": true,
+  "redes": [
+    "ponto-api_default"
+  ],
+  "arquivos": [
+    {
+      "nome": "README.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "STATUS.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "CLAUDE.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "docker-compose.yml",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": ".env.example",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": ".lab-acesso-docker",
+      "tipo": "arquivo"
+    }
+  ],
+  "limite": {
+    "teto_pct": null,
+    "usado_pp": 2.1,
+    "estado": "ok",
+    "liberado": false,
+    "pausa": null,
+    "zera_em": "@+5d3h",
+    "desde": "@-1d21h"
+  }
+}

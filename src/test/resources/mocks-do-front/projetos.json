@@ -1,0 +1,412 @@
+{
+  "projetos": [
+    {
+      "nome": "fit-app",
+      "descricao": "Aplicativo de exemplo (API e banco de dados).",
+      "composes": [
+        "docker-compose.yml"
+      ],
+      "containers": [
+        {
+          "nome": "fit-app-api-1",
+          "estado": "running",
+          "status": "Up 3 hours",
+          "portas": "127.0.0.1:8101->3000/tcp",
+          "cpu": 3.4,
+          "mem": "186MiB"
+        },
+        {
+          "nome": "fit-app-db-1",
+          "estado": "running",
+          "status": "Up 3 hours",
+          "portas": "127.0.0.1:5433->5432/tcp",
+          "cpu": 1.2,
+          "mem": "96.4MiB"
+        }
+      ],
+      "rodando": true,
+      "urls": [
+        "fit.example.com"
+      ],
+      "tamanho": 812345678,
+      "mexido": 1790180980190,
+      "sessaoClaude": true,
+      "login": null,
+      "cpu": 4.6,
+      "mem": 282591232,
+      "acessoDocker": true,
+      "git": {
+        "branch": "main",
+        "commit": "a91f3c2",
+        "quando": "2026-09-23T12:47:40.190Z",
+        "sujo": true
+      },
+      "backups": 3,
+      "tokens": {
+        "semana_custo_usd": 0.385,
+        "semana_saida": 11200,
+        "hoje_custo_usd": 0.0795
+      },
+      "limite": {
+        "teto_pct": 20,
+        "usado_pp": 16.0,
+        "estado": "atencao",
+        "liberado": true,
+        "pausa": null,
+        "zera_em": "@+5d3h",
+        "desde": "@-1d21h"
+      }
+    },
+    {
+      "nome": "app-loja",
+      "descricao": "Loja de exemplo (pedidos e cardápio).",
+      "composes": [
+        "docker-compose.yml"
+      ],
+      "containers": [
+        {
+          "nome": "app-loja-api-1",
+          "estado": "running",
+          "status": "Up 41 minutes",
+          "portas": "127.0.0.1:8102->3000/tcp",
+          "cpu": 6.7,
+          "mem": "136MiB"
+        },
+        {
+          "nome": "app-loja-worker-1",
+          "estado": "running",
+          "status": "Up 41 minutes",
+          "portas": "",
+          "cpu": 1.9,
+          "mem": "94MiB"
+        },
+        {
+          "nome": "app-loja-redis-1",
+          "estado": "exited",
+          "status": "Exited (0) 2 hours ago",
+          "portas": "",
+          "cpu": null,
+          "mem": null
+        }
+      ],
+      "rodando": true,
+      "urls": [
+        "lab-app-loja.example.com"
+      ],
+      "tamanho": 1284193456,
+      "mexido": 1790179600190,
+      "sessaoClaude": false,
+      "login": null,
+      "cpu": 8.6,
+      "mem": 240123904,
+      "acessoDocker": false,
+      "git": {
+        "branch": "main",
+        "commit": "7be0d41",
+        "quando": "2026-09-23T16:06:40.190Z",
+        "sujo": false
+      },
+      "backups": 6,
+      "tokens": {
+        "semana_custo_usd": 0.096,
+        "semana_saida": 2600,
+        "hoje_custo_usd": 0.054
+      },
+      "limite": {
+        "teto_pct": 20,
+        "usado_pp": 22.4,
+        "estado": "pausado",
+        "liberado": false,
+        "pausa": {
+          "motivo": "teto",
+          "em": "@-35m"
+        },
+        "zera_em": "@+5d3h",
+        "desde": "@-1d21h"
+      }
+    },
+    {
+      "nome": "vendas",
+      "descricao": "Painel de vendas de exemplo.",
+      "composes": [
+        "docker-compose.yml"
+      ],
+      "containers": [
+        {
+          "nome": "vendas-web-1",
+          "estado": "running",
+          "status": "Up 5 hours",
+          "portas": "127.0.0.1:8103->3000/tcp",
+          "cpu": 2.2,
+          "mem": "158MiB"
+        },
+        {
+          "nome": "vendas-db-1",
+          "estado": "running",
+          "status": "Up 5 hours",
+          "portas": "",
+          "cpu": 0.8,
+          "mem": "120MiB"
+        }
+      ],
+      "rodando": true,
+      "urls": [
+        "lab-vendas.example.com"
+      ],
+      "tamanho": 452198400,
+      "mexido": 1790178000190,
+      "sessaoClaude": false,
+      "login": null,
+      "cpu": 3.0,
+      "mem": 291504128,
+      "acessoDocker": true,
+      "git": {
+        "branch": "main",
+        "commit": "3c9d1ab",
+        "quando": "2026-09-23T15:10:40.190Z",
+        "sujo": false
+      },
+      "backups": 2,
+      "tokens": {
+        "semana_custo_usd": 0.212,
+        "semana_saida": 6100,
+        "hoje_custo_usd": 0.0
+      },
+      "limite": {
+        "teto_pct": 30,
+        "usado_pp": 18.5,
+        "estado": "pausado",
+        "liberado": false,
+        "pausa": {
+          "motivo": "freio",
+          "em": "@-12m"
+        },
+        "zera_em": "@+5d3h",
+        "desde": "@-1d21h"
+      }
+    },
+    {
+      "nome": "ponto-api",
+      "descricao": "Projeto de exemplo, parado.",
+      "composes": [
+        "docker-compose.yml"
+      ],
+      "containers": [
+        {
+          "nome": "ponto-api-proxy-1",
+          "estado": "exited",
+          "status": "Exited (0) 2 days ago",
+          "portas": "",
+          "cpu": null,
+          "mem": null
+        },
+        {
+          "nome": "ponto-api-db-1",
+          "estado": "exited",
+          "status": "Exited (0) 2 days ago",
+          "portas": "",
+          "cpu": null,
+          "mem": null
+        }
+      ],
+      "rodando": false,
+      "urls": [],
+      "tamanho": 154982301,
+      "mexido": 1790009260190,
+      "sessaoClaude": false,
+      "login": null,
+      "cpu": null,
+      "mem": null,
+      "acessoDocker": true,
+      "git": {
+        "branch": "main",
+        "commit": "f10ac03",
+        "quando": "2026-09-21T16:47:40.190Z",
+        "sujo": false
+      },
+      "backups": 1,
+      "tokens": null,
+      "limite": {
+        "teto_pct": null,
+        "usado_pp": 2.1,
+        "estado": "ok",
+        "liberado": false,
+        "pausa": null,
+        "zera_em": "@+5d3h",
+        "desde": "@-1d21h"
+      }
+    },
+    {
+      "nome": "bazar",
+      "descricao": "Vitrine de produtos de exemplo.",
+      "composes": [
+        "docker-compose.yml"
+      ],
+      "containers": [
+        {
+          "nome": "bazar-web-1",
+          "estado": "exited",
+          "status": "Exited (0) 6 hours ago",
+          "portas": "",
+          "cpu": null,
+          "mem": null
+        }
+      ],
+      "rodando": false,
+      "urls": [],
+      "tamanho": 82314200,
+      "mexido": 1790120000190,
+      "sessaoClaude": false,
+      "login": null,
+      "cpu": null,
+      "mem": null,
+      "acessoDocker": true,
+      "git": {
+        "branch": "main",
+        "commit": "b72e8f0",
+        "quando": "2026-09-22T09:20:40.190Z",
+        "sujo": true
+      },
+      "backups": 0,
+      "tokens": {
+        "semana_custo_usd": 0.061,
+        "semana_saida": 1800,
+        "hoje_custo_usd": 0.0
+      },
+      "limite": {
+        "teto_pct": 25,
+        "usado_pp": 6.0,
+        "estado": "ok",
+        "liberado": false,
+        "pausa": null,
+        "zera_em": "@+5d3h",
+        "desde": "@-1d21h"
+      }
+    }
+  ],
+  "servidor": {
+    "quando": "2026-09-23T16:47:40.190Z",
+    "hostname": "servidor-exemplo",
+    "sistema": "Linux de exemplo 1.0",
+    "kernel": "6.1.0-exemplo",
+    "uptime": 801660,
+    "carga": [
+      0.42,
+      0.61,
+      0.58
+    ],
+    "cpu": {
+      "uso": 0.27,
+      "porNucleo": [
+        0.31,
+        0.22,
+        0.44,
+        0.18,
+        0.29,
+        0.36,
+        0.15,
+        0.21
+      ],
+      "nucleos": 8,
+      "modelo": "AMD Ryzen 5 5600G",
+      "temperatura": 54.5
+    },
+    "memoria": {
+      "total": 33654927360,
+      "usada": 17732030464,
+      "disponivel": 15922896896,
+      "livre": 2318954496,
+      "cache": 12684710912,
+      "buffers": 728363008,
+      "swap": {
+        "total": 8589934592,
+        "usada": 536870912
+      }
+    },
+    "discos": [
+      {
+        "montagem": "/",
+        "total": 512110190592,
+        "usado": 298452631552,
+        "livre": 213657559040
+      },
+      {
+        "montagem": "/srv/lab",
+        "total": 1998215168000,
+        "usado": 742193213440,
+        "livre": 1256021954560
+      }
+    ],
+    "rede": {
+      "interface": "eth0",
+      "rx_bps": 326385,
+      "tx_bps": 98280
+    },
+    "docker": {
+      "versao": "27.3.1",
+      "containers": 14,
+      "rodando": 9,
+      "pausados": 0,
+      "parados": 5,
+      "imagens": 22,
+      "volumes": 11,
+      "tamanhos": {
+        "imagens": 8512845312,
+        "containers": 612368896,
+        "volumes": 4231512064,
+        "cache": 2147483648
+      }
+    },
+    "sessoes": [
+      {
+        "projeto": "fit-app",
+        "container": "lab-claude-fit-app",
+        "desde": "2026-09-23T13:35:40.190Z",
+        "cpu": 4.8,
+        "mem": 197132288,
+        "redes": [
+          "bridge",
+          "fit-app_default"
+        ]
+      }
+    ],
+    "node": {
+      "painel": "v22.9.0",
+      "imagemSessao": {
+        "node": "v22.9.0",
+        "claude": "2.0.14",
+        "docker": "27.3.1",
+        "compose": "v2.29.7",
+        "pnpm": "9.12.1"
+      }
+    },
+    "limites_plano": {
+      "disponivel": true,
+      "antiga": false,
+      "lido_em": "@-1m",
+      "fonte": {
+        "projeto": "fit-app",
+        "sessao": "a1b2c3d4",
+        "modelo": "claude-sonnet-5"
+      },
+      "cinco_horas": {
+        "usado_pct": 82,
+        "zera_em": "@+2h30m"
+      },
+      "semana": {
+        "usado_pct": 92,
+        "zera_em": "@+5d3h"
+      },
+      "leituras": [
+        {
+          "projeto": "fit-app",
+          "lido_em": "@-1m"
+        },
+        {
+          "projeto": "app-loja",
+          "lido_em": "@-1m"
+        }
+      ]
+    }
+  }
+}

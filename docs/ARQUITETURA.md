@@ -11,6 +11,7 @@ Convenção deste documento: "medido" = rodou na máquina de desenvolvimento; "e
 - Guarda no Mac, num cofre cifrado por senha-mestra, as chaves SSH e os tokens de cada servidor. As chaves nunca saem do Mac.
 - Abre e mantém sozinho a conexão SSH de cada servidor (reconecta, detecta queda e sono do Mac) e o túnel para o agente (`127.0.0.1:7000` do servidor).
 - Mostra o que o front web mostra, em telas nativas: projetos, projeto (abas), consumo e limites, servidor, sessão do Claude.
+- Pede o código do autenticador (2FA, TOTP) quando o servidor o exige, e configura o 2FA por um diálogo com QR (10).
 - Abre o terminal do Claude como terminal nativo (JediTerm) sobre um canal SSH com PTY que roda `docker exec -it lab-claude-<p> tmux -u attach -t work`. Não usa ttyd nem WebSocket.
 - Mostra o estado de vários servidores na barra lateral. Notificações nativas (pausa por limite, crédito) e o ícone na barra de menus são planejados e ainda não existem (seção 9).
 
@@ -56,6 +57,7 @@ Uma sessão SSH por servidor multiplexa o forward HTTP e todos os terminais. Ass
 | Cofre local cifrado por senha-mestra digitada ao abrir; o app gera pares de chave e mostra a pública | seção 5 |
 | Vários servidores, cada um com o estado na barra lateral (notificações nativas e ícone na barra de menus: planejados, ainda não existem) | seções 8 e 9 |
 | Token para cliente nativo no agente, mantendo o túnel como canal | seção 10 e CONTRATO-API.md seção 6 |
+| Código do autenticador (2FA) opcional, por servidor, pedido pelo app quando o servidor o exige | seção 10 e CONTRATO-API.md seção 6 |
 | Jackson, JUnit 5, sem frameworks pesados | seção 15 |
 | Identificadores em português sem acento, pacotes `br.com.labdesktop.*`, UI em pt-BR, sem emoji | todo o projeto |
 | Paleta quente (grafite, creme, âmbar), claro e escuro, nunca azul nem ciano | seção 8.2 |
@@ -116,23 +118,23 @@ Raiz: `br.com.labdesktop`.
 | Pacote | Responsabilidade | Classes principais | Depende de |
 |---|---|---|---|
 | `labdesktop` (raiz) | Ponto de entrada e composição manual. Define as propriedades do macOS antes de iniciar o AWT. | `Principal`, `Aplicacao`, `Versao` | todos |
-| `util` | Utilitários sem domínio: formatadores portados do front web original, executores, JSON, preferências, caminhos, log. | `Formato` (`fmtNum` com vírgula, `fmtBytes`, `fmtPct`, `fmtUptime`, `fmtHa`, `fmtUsd`, `fmtCompacto`, `fmtDiaCurto`), `Fundo` (`emFundo`, `naEdt`), `Json` (um `ObjectMapper`), `Preferencias`, `CaminhosApp`, `ConfiguracaoDeLog`, `Observavel`, `EdtWatchdog` (só em desenvolvimento) | JDK |
-| `seguranca` | Tratamento de dado não confiável e de segredo. | `TextoSeguro` (neutraliza `<html` do Swing, remove controles C0/C1 e bidi), `Redator` (tira a credencial do app, blocos `BEGIN/END`, valores de `Authorization`), `ListaPermitidaDeUrls`, `ValidadorDeNomes` (as regex do agente) | JDK |
+| `util` | Utilitários sem domínio: formatadores portados do front web original, executores, JSON, preferências, caminhos, log. | `Formato` (`fmtNum` com vírgula, `fmtBytes`, `fmtPct`, `fmtUptime`, `fmtHa`, `fmtUsd`, `fmtCompacto`, `fmtDiaCurto`), `Fundo` (`emFundo`, `naEdt`), `Json` (um `ObjectMapper`), `Preferencias`, `CaminhosApp`, `ConfiguracaoDeLog`, `LogDeRequisicoes` (o log de requisições em modo debug, 6.7), `Observavel`, `EdtWatchdog` (só em desenvolvimento) | JDK |
+| `seguranca` | Tratamento de dado não confiável e de segredo. | `TextoSeguro` (neutraliza `<html` do Swing, remove controles C0/C1 e bidi), `Redator` (tira a credencial do app, blocos `BEGIN/END`, valores de `Authorization` e o `secret=` de URIs `otpauth://`), `ListaPermitidaDeUrls`, `ValidadorDeNomes` (as regex do agente), `ForcaDeSenha` (a régua da senha-mestra, 5.4) com `EstimadorDeSenha`, `ListaDeSenhasComuns` (recurso `senhas-comuns.txt`) e `Dobra` | JDK |
 | `cofre` | Cofre local cifrado. Não conhece rede nem UI. | `CofreDeChaves`, `ArquivoCofre`, `DerivadorArgon2id`, `CifraAesGcm`, `ConteudoCofre`, `ChaveSsh`, `TokenAgente`, `ConfigServidor` (record sem segredo), `Pin`, `GeradorDeChaves`, `ImportadorDeChaves`, `TravaDeInstancia`, `SenhaIncorretaException`, `CofreCorrompidoException` | `util`, `seguranca` |
-| `ssh` | Tudo de SSH com MINA SSHD. | `ClienteSshFactory`, `ConexaoSsh`, `EstadoConexao`, `PoliticaDeBackoff`, `TunelSsh`, `VerificadorDeChaveDoServidor`, `SondagemDeHost`, `ExecRemoto`, `CanalPty`, `MonitorDeSono`, `ProvisionadorRemoto`, `TransporteCloudflared` | `util`, `seguranca`, `cofre` |
-| `api` e `api.modelo` | Contrato HTTP do agente: um método por rota, bloqueante, sempre fora da EDT. | `ClienteApi`, `ErroApi` (selada: `NaoAutorizado`, `Conflito`, `NaoEncontrado`, `ServidorErro`, `ErroRede`, `RespostaInvalida`), `TimeoutsPorRota`, `LeituraLimitada`; modelo (records): `ListaProjetos`, `Projeto`, `DetalheProjeto`, `DetalheRaiz`, `Container`, `GitInfo`, `Limite`, `LimitesConta`, `Freio`, `Pausado`, `InfoServidor`, `DetalheServidor`, `TelaSessao`, `Pergunta`, `Opcao`, `Tarefa`, `ConsumoGlobal`, `ConsumoProjeto`, `SessaoConsumo`, `Harness`, `VersaoAgente` | `util`, `seguranca` |
-| `servidor` | Um servidor vivo e o coordenador. | `ServidorLab`, `GerenciadorServidores`, `Sondador`, `Topico`, `EstadoServidor` (snapshot imutável), `Inscricao`, `AcoesDoServidor` | `ssh`, `api`, `cofre`, `util` |
+| `ssh` | Tudo de SSH com MINA SSHD. | `ClienteSshFactory`, `ConexaoSsh`, `EstadoConexao`, `PoliticaDeBackoff`, `TunelSsh`, `VerificadorDeChaveDoServidor`, `SondagemDeHost`, `ExecRemoto`, `CanalPty`, `MonitorDeSono`, `ProvisionadorRemoto` (token e 2FA por `exec`), `SegredoTotp`, `TransporteCloudflared`. Apoio: `ConfigSsh` (tempos e limites; `padrao()` e `rapida()` para teste), `InfoConexao` (retrato imutável), `Falha`, `AlgoritmosDeHost`, `SondaDoAgente` (interface do `GET /api/versao` que a conexão pede; mora aqui para `ssh` não depender de `api`), `ResultadoExec`, `ErroProvisionamento`, `SondagemException` | `util`, `seguranca`, `cofre` |
+| `api` e `api.modelo` | Contrato HTTP do agente: um método por rota, bloqueante, sempre fora da EDT. | `ClienteApi`, `PedidoDeCodigo2fa` (interface do callback do 2FA), `ErroApi` (selada: `NaoAutorizado` com o `codigo` do corpo, `Conflito`, `NaoEncontrado`, `ServidorErro`, `ErroRede`, `RespostaInvalida`), `TimeoutsPorRota`, `LeituraLimitada`; modelo (records): `ListaProjetos`, `Projeto`, `DetalheProjeto`, `DetalheRaiz`, `Container`, `GitInfo`, `Limite`, `LimitesConta`, `Freio`, `Pausado`, `InfoServidor`, `DetalheServidor`, `TelaSessao`, `Pergunta`, `Opcao`, `Tarefa`, `ConsumoGlobal`, `ConsumoProjeto`, `SessaoConsumo`, `Harness`, `VersaoAgente` (com `totp`), `Ativacao2fa`. Apoio: `Rota` (a rota e o prazo dela), `ContratoJson` (o mapper do contrato, tolerante a número e data fora do tipo), `Detalhe` (interface de `DetalheProjeto` e `DetalheRaiz`), `EstadoProjeto`, `RespostaLimite`, `RespostaRetomar`, `ResultadoAcao`, `SessaoAberta` | `util`, `seguranca` |
+| `servidor` | Um servidor vivo e o coordenador. | `ServidorLab` (a fachada que a interface usa: estado, tópicos, ações, token e 2FA; sem Swing), `GerenciadorServidores`, `Sondador`, `Topico`, `EstadoServidor` (snapshot imutável), `Inscricao`, `AcoesDoServidor`, `OuvinteDeTopico`, `EstadoJanela`, `VisaoProjetos` | `ssh`, `api`, `cofre`, `util` |
 | `terminal` | Terminal nativo. | `SshTtyConnector`, `ConfigTerminal` (estende `DefaultSettingsProvider`), `PaletaTerminal` (estende `ColorPalette`), `PainelTerminal`, `SessaoTerminal`, `ClassificadorDeSaida`, `PortaoDeEntrada` | `ssh`, `servidor`, `util` |
 | `aviso` | Planejado (o pacote ainda não existe). Regras de alerta, notificação, barra de menus, Dock. | `AnalisadorLimites` (puro), `Notificador` (interface), `NotificadorTray`, `NotificadorOsascript`, `IconeBarraDeMenus`, `DockBadge`, `EstadoNotificacoes` | `servidor`, `api`, `util` |
-| `ui`, `ui.tema`, `ui.componentes` | Casca e componentes. | `JanelaPrincipal`, `Navegacao`, `BarraServidores`, `FaixaAviso`, `BarraDeStatus`, `MenuApp`, `GerenciadorTema`; componentes: `Selo`, `BarraSeveridade`, `Tile`, `Sparkline`, `GraficoBarras`, `Toast`, `ListaLinhas`, `MarkdownMini`, `Icones` | `servidor`, `util` |
+| `ui`, `ui.tema`, `ui.componentes` | Casca e componentes. | `JanelaPrincipal`, `Navegacao`, `BarraServidores`, `FaixaAviso`, `BarraDeStatus`, `MenuApp`, `GerenciadorTema`; componentes: `Selo`, `BarraSeveridade`, `Tile`, `Sparkline`, `GraficoBarras`, `Toast`, `ListaLinhas`, `MarkdownMini`, `Icones`, `CopiaTemporaria` (copia um segredo e o tira da área de transferência, 10.1) | `servidor`, `util` |
 | `ui.telas` | Uma classe por página web. | `TelaProjetos`, `TelaProjeto`, `TelaConsumo`, `TelaServidor`, `TelaSessao`, `BarraLateralSessao`, `TelaMonitor`, `TelaServidores` | `ui`, `servidor`, `api`, `terminal` |
-| `ui.dialogos` | Diálogos modais. | `DialogoSenhaMestra`, `DialogoAdicionarServidor`, `DialogoConfiarHost`, `DialogoNovoProjeto`, `DialogoLimite`, `DialogoFreio`, `DialogoLimiteExcedido`, `DialogoReabrir`, `DialogoProcessos`, `DialogoLogin` | `ui`, `cofre`, `servidor` |
+| `ui.dialogos` | Diálogos modais. | `DialogoSenhaMestra`, `DialogoAdicionarServidor`, `DialogoConfiarHost`, `DialogoNovoProjeto`, `DialogoLimite`, `DialogoFreio`, `DialogoLimiteExcedido`, `DialogoReabrir`, `DialogoProcessos`, `DialogoLogin`, `DialogoCodigo2fa`, `Configurar2fa` (diálogo "Configurar 2FA", o único que usa ZXing) | `ui`, `cofre`, `servidor`, ZXing |
 
 ### 4.3 Regras de dependência
 
 - Camada de domínio: `util`, `seguranca`, `cofre`, `ssh`, `api`, `servidor`. Não importa `java.awt`, `javax.swing`, `com.formdev` nem `com.jediterm`. O despacho para a EDT entra por `Fundo.definirEdt(...)`, que `Principal` liga a `SwingUtilities::invokeLater`.
 - `TesteCamadas` (JUnit simples) varre `src/main/java` e falha se a camada de domínio importar esses pacotes, ou se `cofre`, `ssh` e `api` importarem `ui`. É o substituto barato dos subprojetos.
-- Tipos que carregam segredo (`ChaveSsh`, `TokenAgente`) não são `record` e têm `toString` redigido. `ConfigServidor` é `record` precisamente porque não carrega segredo.
+- Tipos que carregam segredo (`ChaveSsh`, `TokenAgente`, `SegredoTotp`) não são `record` e têm `toString` redigido. `ConfigServidor` é `record` precisamente porque não carrega segredo.
 - Nenhum DTO de tela contém segredo.
 
 ### 4.4 Partida e composição
@@ -207,7 +209,7 @@ Na leitura, o app recusa (arquivo malicioso ou corrompido não pode provocar `Ou
 - Medido num computador de referência (JDK 21, BC 1.86, 2 rodadas, heap de 512 MiB e de 768 MiB): m=256 MiB com t=3 levou 0,50 a 0,67 s; t=4, 0,64 a 0,84 s; **t=6, 0,96 a 1,01 s**; com p=4 e t=3, 0,49 a 0,59 s (não é mais caro que p=1, o BC executa as lanes em série); m=128 MiB, t=3, p=4, 0,23 s. O alvo é cerca de 1 s no desbloqueio; a calibração final é um teste (faixa aceita 0,3 a 4 s, para não ficar frágil).
 - Cifra: JCE puro, `AES/GCM/NoPadding`, chave de 256 bits, `GCMParameterSpec` de 128 bits, nonce de 96 bits de `SecureRandom`, novo a cada gravação.
 - Plano B se o BC sair: `PBKDF2WithHmacSHA256` do JCE com 1.000.000 de iterações (136 ms, medido).
-- Senha-mestra: `char[]` vindo do `JPasswordField`, mínimo de 12 caracteres, convertida para bytes UTF-8 exatamente como digitada (sem normalização Unicode, para não criar `String` da senha) e zerada depois de derivar. A tela de criação recomenda frase com espaços ou ASCII e avisa que **não há recuperação**.
+- Senha-mestra: `char[]` vindo do `JPasswordField`, convertida para bytes UTF-8 exatamente como digitada (sem normalização Unicode, para não criar `String` da senha) e zerada depois de derivar. O piso técnico do cofre é de 12 caracteres (`CofreDeChaves.SENHA_MINIMA`), mas a tela de criação aplica a régua `ForcaDeSenha`, porque a senha-mestra é a ÚNICA proteção do cofre (a chave SSH do lab, de um usuário do grupo `docker`, equivale a root) e o arquivo `cofre.labcofre` pode sair do Mac (backup, iCloud, disco roubado), caso em que a senha é atacada offline contra o Argon2id (cerca de 1 s por palpite). A régua exige: (1) 12 caracteres, (2) nada de repetição, de poucos caracteres diferentes ou de sequência inteira, (3) no mínimo 48 bits no `EstimadorDeSenha`, que recusa senha, palavra, nome ou data da lista de senhas comuns (`senhas-comuns.txt`: 94 mil entradas, as 30 mil senhas mais usadas e palavras do zxcvbn mais um complemento em português; gerada por `scripts/gerar-lista-de-senhas.py`) mesmo com inicial maiúscula, letras trocadas por símbolos (`P@ssw0rd`), de trás para a frente, número ou ano no fim, data ou repetição (uma palavra rara fora da lista que PARECE palavra, com vogais e consoantes alternadas, custa como um sorteio numa lista de cerca de um milhão de palavras, uns 20 bits, e não como letras ao acaso: `Jabuticabeira#99` não passa; efeito colateral aceito: uma senha só de letras minúsculas sorteadas às vezes é subestimada e recusada, e maiúsculas, dígitos ou símbolos resolvem), e (4) **16 caracteres ou mais, OU uma frase de 4 palavras diferentes** (`Password1234`, `iloveyou1234`, `Corinthians10` e `Passw0rd!!!!!` eram aceitas como "razoáveis" pela régua antiga de "12 caracteres que não são sequência"). O nível mostrado ao usuário é texto: fraca, razoável (48 a 69 bits) ou forte (70 bits ou mais). A estimativa não é prova (uma palavra rara que não parece palavra conta como letras ao acaso, e uma senha que o atacante tenha numa lista vazada específica vale um palpite): por isso a tela recomenda a frase com espaços e avisa que **não há recuperação**. A lista é lida (1,3 MB) numa thread de fundo ao abrir a tela de criação; a comparação é por trecho de `char[]`, sem `String` da senha.
 - Sem Keychain, sem Touch ID, sem chave de recuperação (ver 14).
 - Atraso crescente após senha errada. O app nunca apaga o cofre sozinho.
 
@@ -239,12 +241,13 @@ Fora do escopo: quem executa código como o mesmo usuário (pode trocar o `.app`
 - Serializar com `OpenSSHKeyPairResourceWriter.INSTANCE.writePrivateKey(...)` no formato `BEGIN OPENSSH PRIVATE KEY` sem passphrase (o cofre inteiro já é cifrado).
 - Importar uma chave existente (`~/.ssh/id_ed25519`): `SecurityUtils.loadKeyPairIdentities(...)` com `FilePasswordProvider`, e re-serializar para dentro do cofre. Opcional; a recomendação é **gerar chave nova** e instalar a pública por uma conexão que já funcione (por exemplo, a do `ssh` do sistema), deixando a chave antiga de `~/.ssh` como rede de segurança.
 - A pública mostrada para colar sai de `PublicKeyEntry.toString(publicKey)` com o comentário `lab-desktop@<hostname do Mac>`, e a impressão de `KeyUtils.getFingerPrint(publicKey)` (`SHA256:...`, o mesmo formato do `ssh-keygen -lf`). O app copia só a pública; nunca oferece exportar a privada.
-- Linha de `authorized_keys` sugerida pelo assistente: `no-agent-forwarding,no-X11-forwarding,permitopen="127.0.0.1:7000" ssh-ed25519 AAAA... lab-desktop@<mac>`. Sem `command=` (o terminal usa `exec`), mas a chave não serve de pivô para a LAN.
+- Linha de `authorized_keys` sugerida pelo assistente: `no-agent-forwarding,no-X11-forwarding,permitopen="127.0.0.1:7000" ssh-ed25519 AAAA... lab-desktop@<mac>`. Sem `command=` (o terminal usa `exec`), mas a chave não serve de pivô para a LAN. A linha só impede agente SSH, X11 e túnel para outras portas: **a chave AINDA abre shell e executa comandos** como o usuário do servidor, porque o app precisa disso (o registro da credencial no agente, o 2FA e o terminal são `exec`). Não há `no-pty`, `restrict` nem `command=`. O texto da tela "Adicionar servidor" (`InfoChave.RESTRICOES_DA_LINHA`) diz exatamente isto, e um teste falha se a linha ganhar uma dessas restrições sem o texto mudar.
 - Ao conectar: o cofre desserializa para `java.security.KeyPair` em memória e entrega a `ClientSession.addPublicKeyIdentity(keyPair)`. Sem arquivo temporário, sem ssh-agent, sem `-i`.
 
 ### 5.9 Rotação (ainda não implementada)
 
 - Chave SSH: gerar par novo, instalar a pública nova pela sessão aberta (acrescentar a `~/.ssh/authorized_keys`), reconectar com a nova, testar, e só então remover a antiga do servidor e do cofre. A antiga fica no cofre até o teste passar (rollback).
+- Token: gerar novo, registrar o hash novo, testar, remover o hash antigo (CONTRATO-API.md seção 6). Com o 2FA ativo, o teste do token novo pede o código do autenticador.
 - Pin do host: redefinir só por ação explícita, pedindo a senha-mestra de novo.
 
 ## 6. SSH, túnel e cliente da API
@@ -277,15 +280,18 @@ Cada servidor tem um ator de thread única (`conexao-<id>`): todo callback do MI
 |---|---|
 | `DESCONECTADO` | parado |
 | `CONECTANDO` | conectando e autenticando |
-| `SSH_OK_SEM_AGENTE` | SSH de pé, `GET /api/versao` falhando (agente reiniciando); o Sondador insiste sem derrubar o SSH nem os terminais |
+| `SSH_OK_SEM_AGENTE` | SSH de pé, `GET /api/versao` falhando (agente reiniciando); o Sondador insiste sem derrubar o SSH nem os terminais. Um 404 ali é o agente de antes do app nativo (falta publicar o painel atualizado): mesmo estado, com a mensagem própria `Falha.Tipo.AGENTE_DESATUALIZADO`, para o usuário não procurar um agente parado que está de pé |
 | `CONECTADO` | só depois de `GET /api/versao` responder 200 |
 | `RECONECTANDO` | falha transitória; mostra tentativa e próxima em |
 | `ERRO_AUTENTICACAO` | chave recusada: UMA nova tentativa após 5 s e para (evita disparar fail2ban) |
 | `ERRO_CHAVE_HOST` | pin divergente: sem retry |
-| `TOKEN_RECUSADO` | 401 do agente: oferece reprovisionar o token |
+| `TOKEN_RECUSADO` | 401 do agente sem `codigo` (token errado ou revogado): oferece reprovisionar o token (`ServidorLab.reprovisionarToken`: revoga a credencial de mesmo nome e registra uma nova) |
+| `AGUARDANDO_2FA` | SSH, túnel e agente de pé, mas o agente pediu confirmação em dois passos: espera o código do autenticador (10). Sem retry automático e sem consultas do Sondador; o terminal segue vivo, porque não depende do agente |
 | `BLOQUEADO_COFRE` | cofre bloqueado |
 | `SUSPENSO` | Mac dormindo |
 
+- O que se aprende de cada tentativa de conexão (veredito do pin, "chave recusada", último erro da sessão) fica na própria `ClientSession`, em atributos do MINA, e não em campos da `ConexaoSsh`: o `SshClient` é um só por servidor, e uma tentativa velha ainda bloqueada num connect (o Mac dormiu no meio) não pode sujar a classificação da tentativa nova.
+- `AGUARDANDO_2FA` abre o `DialogoCodigo2fa` uma vez ao entrar no estado, não a cada tentativa. Se o usuário cancela, a `FaixaAviso` mostra "Código do autenticador pendente" com o botão "Digitar código", e só um 200 de `GET /api/versao` leva a `CONECTADO`.
 - Backoff de reconexão: 1, 2, 4, 8, 15, 30, 60 s com jitter de 20 %, zerado depois de 60 s estável; botão "Tentar agora" com contagem regressiva. A tela mantém o último snapshot e mostra "sem conexão desde HH:MM" (nunca tela vazia).
 - Detecção de queda: heartbeat de 10 s com 3 respostas perdidas. Com 15 s a queda foi detectada em 58 s (medido); com 10 s o esperado é cerca de 40 s (extrapolado, confirmar no teste de integração com proxy TCP em buraco negro). Complemento ativo: quando uma consulta falha com `ErroRede`, o Sondador pede `verificarAgora()`: um pedido global de keepalive com resposta e prazo de 5 s; falhou, vai para `RECONECTANDO`.
 - Sono do Mac: `MonitorDeSono` (`SystemSleepListener` do `java.awt.desktop`) marca `SUSPENSO` ao dormir; ao acordar, espera 2 s pela rede, descarta a sessão (certamente morta) e reconecta sem esperar o heartbeat. Os canais PTY morrem junto, mas o tmux preserva a conversa.
@@ -300,9 +306,9 @@ Cada servidor tem um ator de thread única (`conexao-<id>`): todo callback do MI
 - Um `ClienteApi` novo por geração de túnel (base `http://127.0.0.1:<porta>`), descartado com `HttpClient.close()` (JDK 21) ao reconectar, para nunca reaproveitar keep-alive de uma porta morta.
 - `HttpClient`: `version(HTTP_1_1)`, `proxy(ProxySelector.of(null))`, `followRedirects(NEVER)`, `connectTimeout(3 s)`, executor de threads virtuais. Cabeçalhos em CONTRATO-API.md 1.1.
 - Timeouts por rota em `TimeoutsPorRota` (tabela completa em CONTRATO-API.md seção 2): leitura 15 s por padrão; servidor 20 s; logs 25 s; abrir e reabrir sessão e Retomar 6 min (o agente faz `pg_dump` de até 5 min antes do `docker run` de 120 s); iniciar, parar e reiniciar projeto 12 min (cada arquivo compose tem 10 min no agente, em sequência); reiniciar container 3 min.
-- POST e PUT nunca são reenviados sozinhos; GET faz no máximo uma nova tentativa depois de reconectar.
+- POST e PUT nunca são reenviados sozinhos; GET faz no máximo uma nova tentativa depois de reconectar. Única exceção: o pedido de confirmação em dois passos, que vem antes de a rota executar, então a chamada original é repetida uma vez, seja qual for o método (10).
 - Respostas lidas por fluxo com teto (JSON 2 MiB, logs 8 MiB, que é o `maxBuffer` do agente) e `StreamReadConstraints` explícitos no Jackson. `FAIL_ON_UNKNOWN_PROPERTIES` desligado, `@JsonProperty` por campo (o contrato mistura camelCase e snake_case), todos os campos anuláveis, sem default typing.
-- Erros: `ErroApi(status, corpo JsonNode, mensagem do campo "erro")`. `Conflito` (409) carrega `usado_pp`, `teto_pct`, `pct_conta` e `freio_pct` para o diálogo "ainda estoura". `NaoEncontrado` com "Sessão não está aberta." é fluxo normal. 503 de `/api/tokens` significa "calculando" e repete em 6 s. `ErroRede` não é erro de tela: o Sondador confere o estado da conexão.
+- Erros: `ErroApi(status, corpo JsonNode, mensagem do campo "erro")`; `NaoAutorizado` separa "pedir o código" de "token recusado". `Conflito` (409) carrega `usado_pp`, `teto_pct`, `pct_conta` e `freio_pct` para o diálogo "ainda estoura". `NaoEncontrado` com "Sessão não está aberta." é fluxo normal. 503 de `/api/tokens` significa "calculando" e repete em 6 s. `ErroRede` não é erro de tela: o Sondador confere o estado da conexão.
 - O token é montado uma vez por geração de túnel; o `Redator` o mascara em qualquer log ou mensagem de erro.
 
 ### 6.6 Threads: tudo de rede fora da EDT
@@ -310,7 +316,7 @@ Cada servidor tem um ator de thread única (`conexao-<id>`): todo callback do MI
 | Thread ou pool | Quem usa | Regra |
 |---|---|---|
 | EDT | desenho, listeners, atualização de componentes | nunca E/S, KDF ou `sleep`. Recebe snapshots imutáveis por `Fundo.naEdt`. |
-| `io-virtual` (executor de threads virtuais) | `ClienteApi`, `ExecRemoto`, consultas do Sondador | bloquear é permitido. Iniciar e parar seguram uma requisição de até 12 min. |
+| `io-virtual` (executor de threads virtuais) | `ClienteApi`, `ExecRemoto`, consultas do Sondador | bloquear é permitido. Iniciar e parar seguram uma requisição de até 12 min. O `PedidoDeCodigo2fa` espera o diálogo aqui (thread virtual), nunca na EDT. |
 | `agenda` (`ScheduledThreadPool` de 2, daemon) | timers do Sondador, backoff | só dispara; o trabalho vai para `io-virtual`. |
 | `conexao-<id>` (1 thread por servidor) | ator da `ConexaoSsh` | callbacks do MINA só enfileiram; nada de Swing. |
 | `cofre-io` (1 thread) | gravação do cofre | serializa gravações. |
@@ -327,24 +333,25 @@ Um `Sondador` por servidor. Reproduz a cadência do front web (uma aba esquecida
 - A tela assina ao ficar visível (`HierarchyListener` com `showing`) e solta ao esconder. Contagem de referências por tópico; sem assinante o tópico não roda.
 - Cada tópico não sobrepõe execuções (se a anterior não terminou, pula o tique) e só avisa as telas se o JSON mudou (igual ao `ultimoJson` do front).
 
-| Tópico | Rotas | Janela ativa | Sem foco ou minimizada | Condição |
-|---|---|---|---|---|
-| `LIMITES` | `/api/limites` | 60 s | 60 s (única exceção) | sempre ligado: alimenta faixa de crédito, ícone, notificações |
-| `PROJETOS` | `/api/projetos` e `/api/projetos/lab` | 10 s | 60 s | `TelaProjetos` visível, ou Monitor para o servidor visível |
-| `SERVIDOR` | `/api/servidor` | 10 s | 60 s | faixa Servidor aberta |
-| `SERVIDOR_DETALHE` | `/api/servidor/detalhe` | 10 s | 60 s | `TelaServidor` visível |
-| `TOKENS` | `/api/tokens` | ao abrir e a cada 60 s | parado | `TelaConsumo` visível (o cache do agente só muda a cada 60 s) |
-| `CONSUMO(p)` | `/api/tokens/:p` | ao abrir e a cada 60 s | parado | aba Consumo do projeto visível |
-| `DETALHE(p)` | `/api/projetos/:p` | 10 s | 60 s | `TelaProjeto` ou `TelaSessao` visível |
-| `TELA(p)` | `/api/projetos/:p/claude/tela` | 2 s | 12 s | só a aba de terminal selecionada, janela ativa |
-| `LOGS(p,c,n)` | `.../logs` | 5 s com "atualizar" | parado | aba Logs visível e "atualizar" marcado |
+| Tópico | Rotas | Janela ativa | Sem foco | Escondida ou minimizada | Condição |
+|---|---|---|---|---|---|
+| `LIMITES` | `/api/limites` | 60 s | 60 s | 60 s (única exceção) | sempre ligado: alimenta faixa de crédito, ícone, notificações |
+| `PROJETOS` | `/api/projetos` e `/api/projetos/lab` | 10 s | 60 s | parado | `TelaProjetos` visível, ou Monitor para o servidor visível |
+| `SERVIDOR` | `/api/servidor` | 10 s | 60 s | parado | faixa Servidor aberta |
+| `SERVIDOR_DETALHE` | `/api/servidor/detalhe` | 10 s | 60 s | parado | `TelaServidor` visível |
+| `TOKENS` | `/api/tokens` | ao abrir e a cada 60 s | parado | parado | `TelaConsumo` visível (o cache do agente só muda a cada 60 s) |
+| `CONSUMO(p)` | `/api/tokens/:p` | ao abrir e a cada 60 s | parado | parado | aba Consumo do projeto visível |
+| `DETALHE(p)` | `/api/projetos/:p` | 10 s | 60 s | parado | `TelaProjeto` ou `TelaSessao` visível |
+| `TELA(p)` | `/api/projetos/:p/claude/tela` | 2 s | 12 s | parado | só a aba de terminal selecionada, janela ativa |
+| `LOGS(p,c,n)` | `.../logs` | 5 s com "atualizar" | parado | parado | aba Logs visível e "atualizar" marcado |
 
-- Janela escondida (fechada para a barra de menus): só `LIMITES`. Mac dormindo: nada.
+- Janela escondida (fechada para a barra de menus) OU **minimizada**: só `LIMITES`. É a regra única: minimizada, o quadro continua "visível" para o Swing (`isShowing()`) e as telas não soltariam a assinatura, então quem decide é o estado da janela (`EstadoJanela.de(visivel, minimizada, ativa)`, aplicado pela `JanelaPrincipal`), não a visibilidade da tela. "Sem foco" é a janela visível, fora de foco: ×6. Mac dormindo: nada.
 - Preferência "manter cadência cheia com a janela visível sem foco" (útil para o Monitor numa segunda tela), desligada por padrão.
 - Três falhas seguidas dobram o intervalo até 60 s.
 - Guarda de calor: se `servidor.cpu.temperatura` (já presente em `/api/projetos`) passar de 85 °C, os intervalos dobram até cair abaixo de 80 °C.
 - Cada `/api/projetos` custa um `docker ps` mais um `docker exec` por sessão aberta no servidor; por isso nunca é chamado em segundo plano nem para servidor que não está na tela. Vários servidores não multiplicam a carga de um mesmo servidor.
 - `AcoesDoServidor` envolve cada ação (iniciar, parar, abrir, retomar, limite, freio) e, ao terminar, força o refresh só dos tópicos afetados e de `LIMITES` (equivalente ao `atualizarTudo(true)` do front).
+- **Log de requisições (modo debug)**, a prova da carga: com `-Dlabdesktop.debug=true` (no `./gradlew run`: `-Plabdesktop.debug=true`) ou `LABDESKTOP_DEBUG=1`, o `ClienteApi` escreve UMA linha por chamada no log do app (`[lab] GET /api/projetos -> 200 em 54 ms`, ou `-> sem resposta (HttpTimeoutException) em 15012 ms`): método, rota SEM a query, status e tempo, nunca cabeçalho, token, corpo nem código de 2FA. É um logger próprio (`LogDeRequisicoes`, `br.com.labdesktop.api.Requisicoes`), em `info` por padrão (desligado); `ConfiguracaoDeLog` o põe em `debug` na partida, antes de o logger existir.
 
 ## 7. Terminal: JediTerm sobre SSH com PTY
 
@@ -425,6 +432,7 @@ Desde o tmux 3.1 o padrão de `window-size` é `latest`: a janela segue o client
 |---|---|---|
 | Desbloqueio do cofre | novo (substitui o túnel manual e o LaunchAgent) | nenhuma |
 | Servidores e Adicionar servidor | novo | `GET /api/versao`, `GET /api/limites` (teste), SSH `exec` para registrar a credencial |
+| Código do autenticador e Configurar 2FA | novo | SSH `exec` (comandos fixos do agente) |
 | Projetos | `index.html` | `PROJETOS` (`/api/projetos`, `/api/projetos/lab`), `SERVIDOR`, `LIMITES`; ações: `iniciar`, `parar`, `reiniciar`, `claude/abrir`, `claude/fechar`, `claude/reabrir`, `claude/codigo`, `projetos/novo`, `limite`, `limite/retomar`, `limites/freio` | 1 (leitura), 2 (faixa Servidor), 3 (ações) |
 | Projeto (6 abas) | `projeto.html` | `DETALHE(p)`, `LOGS(p,c,n)`, `TELA(p)` (resumo), `CONSUMO(p)`; ações: containers/reiniciar, iniciar/parar/reiniciar, claude/abrir/fechar/reabrir, limite, retomar | 2 (leitura), 3 (ações) |
 | Consumo | `consumo.html` | `TOKENS`, `LIMITES`; ação: `limites/freio` |
@@ -462,13 +470,13 @@ Desde o tmux 3.1 o padrão de `window-size` é `latest`: a janela segue o client
 
 ### 8.3 Notas por tela
 
-- **Projetos**: lista de linhas com `GridBagLayout` num `JScrollPane`, atualizada por nome (diff) para preservar foco, menu aberto e código de login digitado (equivalente de `capturarEstadoLista`). Colunas: estado, projeto e descrição, containers n/m, CPU, memória, consumo de 7 dias com limite e barra, git, URL, Claude, ações. Busca e filtros Todos, No ar, Com Claude, Pausados. Alerta de login pendente com botão de abrir a página e campo para colar o código.
+- **Projetos**: lista de linhas com `GridBagLayout` num `JScrollPane`, atualizada por nome (diff) para preservar foco, menu aberto e código de login digitado (equivalente de `capturarEstadoLista`). Colunas: estado, projeto e descrição, containers n/m, CPU, memória, consumo de 7 dias com limite e barra, git, URL, Claude, ações. Busca e filtros Todos, No ar, Com Claude, Pausados. Alerta de login pendente com botão de abrir a página e campo para colar o código. **Com as ações desligadas (`-Dlabdesktop.acoes=false`) a lista é SOMENTE LEITURA**: nenhum botão que mude o servidor aparece (iniciar, parar, Abrir Claude, menu de ações, Reabrir, Retomar, enviar o código de login, nem o Retomar da faixa de pausas) e `FluxosDeProjeto` recusa essas chamadas com um aviso, mesmo que algo as dispare; o alerta de login e os selos de sessão aberta, desatualizada e pausada continuam, só informando. As ações vêm ligadas por padrão.
 - **Projeto**: `JTabbedPane` com Visão geral (containers, detalhes), Logs (combo de container e de linhas 50 a 2000, "atualizar" a cada 5 s só com a aba visível, cores para erro e aviso, rolagem presa ao fim, Copiar), Sessão do Claude (resumo até a fase 3, depois abre `TelaSessao`), Arquivos (README e STATUS), Backups e Consumo (limite da semana, tiles Hoje, 7 dias, 30 dias e Total, `GraficoBarras` de 30 dias, por modelo, sessões recentes, entregas do Harness).
 - **Consumo**: duas barras grandes (5 h e semana) com marca do freio global e "zera em"; tiles; `GraficoBarras` empilhado por projeto com as séries 1 a 8 e legenda; tabela de projetos com coluna Limite; nota "fora do lab"; por modelo; histórico antigo; tabela de preços; bloco do freio. 503 mostra "ainda calculando" e repete em 6 s.
-- **Servidor**: alertas (temperatura, bateria, memória, disco, containers sem proprietário); temperaturas com sparkline; consumo por projeto expansível (que sobrevive ao polling); top 20 processos com o projeto; gráficos de 10 min; cartões Hardware e Sistema e software. Cada bloco renderiza isolado.
+- **Servidor**: alertas (temperatura, bateria, memória, disco, containers sem proprietário); temperaturas com sparkline; consumo por projeto expansível (que sobrevive ao polling); top 20 processos com o projeto; gráficos de 10 min; cartões Hardware e Sistema e software. Cada bloco renderiza isolado. O cabeçalho ganha o botão "2FA" (Configurar ou Desativar, 10.1); na fase 1, antes de esta tela existir, a mesma ação fica no menu de contexto do servidor na `BarraServidores` e no `MenuApp`.
 - **Sessão**: ver seção 7.
 - **Monitor**: um cartão por servidor (estado da conexão, CPU, memória, disco, temperatura, % de 5 h e da semana, sessões pausadas, projetos no ar); clicar abre o workspace daquele servidor. Reaproveita tópicos existentes, sem polling novo.
-- **Adicionar servidor**: pré-preenche com os campos vazios (porta SSH 22 e agente 127.0.0.1:7000). Passos: dados; gerar Ed25519 e mostrar a pública com o comando de `authorized_keys` pronto e botão Copiar; sondagem do host e conferência da impressão; autenticar; gerar o token, registrar o hash por SSH e testar `GET /api/versao`; gravar no cofre e testar `GET /api/limites`. A não existem: editar, remover, redefinir pin e girar chave e token.
+- **Adicionar servidor**: pré-preenche com os campos vazios (porta SSH 22 e agente 127.0.0.1:7000). Passos: dados; gerar Ed25519 e mostrar a pública com o comando de `authorized_keys` pronto e botão Copiar; sondagem do host e conferência da impressão; autenticar; gerar o token, registrar a credencial por SSH e testar `GET /api/versao`; gravar no cofre e testar `GET /api/limites`. Se o painel do servidor é o de antes do app (a sonda do `GET /api/versao` deu 404, `Falha.Tipo.AGENTE_DESATUALIZADO`), o assistente PARA antes de tentar registrar o token, com `ErroDoAssistente.Motivo.AGENTE_DESATUALIZADO` e a mensagem "Publique o painel com o script de publicação do agente e tente de novo", em vez de deixar a mensagem crua do `node` ("Cannot find module") chegar ao usuário. A não existem: editar, remover, redefinir pin e girar chave e token.
 
 ## 9. Notificações, barra de menus e Dock (planejado, ainda não implementado)
 
@@ -519,6 +527,11 @@ dependencies {
     implementation("com.formdev:flatlaf-extras:3.7.2")
     implementation("com.formdev:flatlaf-fonts-inter:4.1")
     implementation("com.formdev:flatlaf-fonts-jetbrains-mono:2.304")
+    implementation("com.google.zxing:core:3.5.4")          // QR do "Configurar 2FA"
+    implementation("com.google.zxing:javase:3.5.4") {      // MatrixToImageWriter; sem o CLI do ZXing nem os leitores extras do ImageIO
+        exclude(group = "org.jcommander")
+        exclude(group = "com.github.jai-imageio")
+    }
     implementation(platform("com.fasterxml.jackson:jackson-bom:2.22.3"))
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
@@ -541,7 +554,7 @@ application {
 
 O tema FlatLaf (propriedades `FlatMacLightLaf.properties` e `FlatMacDarkLaf.properties`, fontes e ícones) está descrito em 8.2.
 
-Notas: o MINA declara `slf4j-api` 1.7.36 e o JediTerm 2.0.9; a versão 2.0.17 declarada resolve o conflito. `-Xmx768m` dá folga para o Argon2id de 256 MiB (funcionou com 512 MiB nas medições).
+Notas: o MINA declara `slf4j-api` 1.7.36 e o JediTerm 2.0.9; a versão 2.0.17 declarada resolve o conflito. `-Xmx768m` dá folga para o Argon2id de 256 MiB (funcionou com 512 MiB nas medições). O `zxing:javase` declara `jcommander` 1.85 (só para o `CommandLineRunner` dele) e `jai-imageio-core` 1.4.0 (runtime, leitores extras do ImageIO); o app só usa `MatrixToImageWriter` e `BufferedImageLuminanceSource`, então os dois são excluídos. A exclusão é conferida pelo teste de ida e volta do QR (10).
 
 ### 11.3 Empacotamento (esqueleto 4)
 
@@ -561,15 +574,17 @@ JUnit 5.14.4. Sem Mockito e sem AssertJ: o `SshServer` embutido do `sshd-core` e
 | Área | O que os testes provam |
 |---|---|
 | Cofre | ida e volta; senha errada falha; alterar um byte do cabeçalho, do nonce ou do cifrado falha; parâmetros de KDF fora da faixa recusados; arquivo > 8 MiB recusado; permissões 0600 em pasta 0700; queda no meio da gravação nunca deixa o cofre ilegível (cai no `.bak`); o arquivo não contém a chave nem o token em claro; segredos zerados depois de bloquear; KDF dentro de 0,3 a 4 s; `TravaDeInstancia` |
-| SSH (servidor embutido) | só a chave do cofre é oferecida mesmo com `~/.ssh` populado; pin divergente = `ERRO_CHAVE_HOST` sem retry; a sondagem encerra antes da autenticação (zero tentativas no servidor); forward só em loopback respondendo a um agente falso que exige `Authorization`; buraco negro detectado e retomado; backoff; 401 = `TOKEN_RECUSADO`; lista efetiva de algoritmos sem SHA-1, CBC, 3DES, arcfour, group1; `sendWindowChange` recebido |
+| SSH (servidor embutido) | só a chave do cofre é oferecida mesmo com `~/.ssh` populado; pin divergente = `ERRO_CHAVE_HOST` sem retry; a sondagem encerra antes da autenticação (zero tentativas no servidor); forward só em loopback respondendo a um agente falso que exige `Authorization`; buraco negro detectado e retomado; backoff; 401 sem pedido de código = `TOKEN_RECUSADO` e pedido de código = `AGUARDANDO_2FA`; lista efetiva de algoritmos sem SHA-1, CBC, 3DES, arcfour, group1; `sendWindowChange` recebido |
 | API (`HttpServer` do JDK) | 200, 401, 409 com corpo, 503; HTTP/1.1 forçado (o agente falso fecha o socket se vier `Upgrade`); timeouts por rota; respostas acima do teto |
-| Contrato | cada DTO parseia a fixture real correspondente (`lab-real/`), incluindo a forma de `/api/projetos/lab`, e tolera campo desconhecido e ausente. Nunca o mock do front. |
+| Contrato | cada DTO parseia a fixture real correspondente (`lab-real/`), incluindo a forma de `/api/projetos/lab`, e tolera campo desconhecido e ausente. Nunca o mock do front. `ContratoComFixturesReaisTest` faz isso e confere a forma que o mock esconde (`mem` número, datas ISO); **PENDENTE até `scripts/capturar-fixtures.sh` rodar contra um servidor real**: sem as fixtures os testes ficam "skipped" e o critério 1 conta como parcial. |
 | Sondador (relógio falso) | nenhuma consulta sem tela visível; só `LIMITES` com a janela escondida; ×6 sem foco; dedupe por JSON; não sobrepõe execuções; dobra com 3 falhas e com calor |
 | Terminal | `SshTtyConnector` contra servidor embutido (leitura UTF-8 cortada entre pacotes, `write` descartando fora de ATIVA, watchdog de 5 s, `resize`); `ClassificadorDeSaida` com as saídas do Docker; `PortaoDeEntrada` |
 | Segurança de dado | `TextoSeguro` (HTML em descrição, README, branch e nome de container aparece como texto; bidi e controles removidos); `ListaPermitidaDeUrls`; `ValidadorDeNomes`; `Redator` |
 | Camadas e aparência | `TesteCamadas`; `TesteSemAzul` |
+| 2FA | `ClienteApi` contra `HttpServer` falso: o pedido de código chama o `PedidoDeCodigo2fa` uma vez, envia o código e repete a chamada original UMA vez (também em POST e PUT); segunda 401 vira `NaoAutorizado` sem laço; chamadas concorrentes compartilham um único pedido; cancelar leva a `AGUARDANDO_2FA` sem laço; código incorreto volta ao pedido com o aviso; 401 sem pedido de código continua `TOKEN_RECUSADO`. `Redator` mascara `secret=` de `otpauth://`. QR de ida e volta (gera e decodifica a mesma URI). `ProvisionadorRemoto` contra `SshServer` embutido: o código do 2FA só chega por stdin (o servidor de teste confere que a linha de comando não o contém) |
 | Notificação | `AnalisadorLimites` nas bordas 74,9, 75, 89,9, 90 e virada de semana, sem repetição |
 | Empacotado | formatação pt-BR dentro do runtime do `.app` |
+| Agente | os testes do próprio agente ficam no repositório dele (fora deste repositório); aqui o app é provado contra um agente de mentira |
 
 `scripts/capturar-fixtures.sh` grava em `src/test/resources/lab-real/` uma resposta real de cada rota de leitura (um projeto comum, o `lab` e um projeto sem sessão), via `ssh <alvo> 'curl -s 127.0.0.1:7000/...'`. O mock do front diverge do agente real (texto contra bytes, datas com macro `@+5d3h`), por isso não vale como fixture. As fixtures contêm nomes e descrições reais de projetos: por isso ficam fora do git (`.gitignore`) e não devem ser publicadas.
 
@@ -589,7 +604,7 @@ JUnit 5.14.4. Sem Mockito e sem AssertJ: o `SshServer` embutido do `sshd-core` e
 | Sleep e wake derrubam o TCP sem avisar | heartbeat de 10 s, `MonitorDeSono`, verificação ativa no `ErroRede` |
 | Processos `docker exec` órfãos e dois clientes tmux | `attach -d` opcional; teste de contagem de clientes (`tmux list-clients`) depois de 10 quedas abruptas |
 | Conteúdo hostil vindo do servidor (prompt injection em README, branch, texto de tela, URL de login) | `TextoSeguro`, `ListaPermitidaDeUrls`, Jackson sem default typing, tetos de tamanho |
-| Injeção de comando nos `exec` | nome de projeto e de container só entram na linha depois da regex do agente; dados do registro da credencial são gerados e validados pelo app; payload por stdin |
+| Injeção de comando nos `exec` | nome de projeto e de container só entram na linha depois da regex do agente; dados do registro da credencial são gerados e validados pelo app; payload por stdin (inclusive o código e o nome do 2FA) |
 | JediTerm: fora do Maven Central, API muda entre versões, Kotlin stdlib transitivo, mantido sobretudo para o IntelliJ | versão fixada em 3.76; adaptador estreito no pacote `terminal`; `exclusiveContent` + verification-metadata; testado antes de investir nas telas. Licença: o POM declara LGPL 3.0 e o README do projeto declara dupla licença (LGPLv3 ou Apache 2.0, à escolha); sem impacto para uso pessoal sem distribuição. |
 | MINA 2.20.0: Ed25519 só com BouncyCastle; o `3.0.0-M6` é marco, não release | usar 2.20.0; testes (gerar, instalar, autenticar) com `SshServer` embutido |
 | HttpClient em h2c quebra no upgrade do agente | HTTP/1.1 explícito com teste (o agente falso fecha o socket se vier `Upgrade`) |
@@ -600,6 +615,11 @@ JUnit 5.14.4. Sem Mockito e sem AssertJ: o `SshServer` embutido do `sshd-core` e
 | Iniciar, parar e reiniciar seguram uma requisição de até 12 min | estado "em andamento"; estourar o prazo não marca falha se o heartbeat está ok |
 | `docker` fora do PATH do shell não interativo, ou usuário fora do grupo `docker` | já vale para o script de publicação do painel; se falhar, a aba mostra o erro do canal em vez de um terminal vazio |
 | Cofre sem recuperação | aviso na criação; exportar o cofre de vez em quando |
+| Segredo do TOTP vazando (QR, chave em texto, URI) por log, tela compartilhada, arquivo ou área de transferência | `SegredoTotp` fora de `record`, com `toString` redigido e zerado ao fechar o diálogo; `Redator` mascara `secret=`; a saída da configuração do 2FA nunca vai para log; o app não grava o segredo; o QR só existe na tela do diálogo; a chave copiada sai da área de transferência em 30 s, ao confirmar e ao fechar (`CopiaTemporaria`); limite aceito: um gerenciador de histórico que registra cada mudança já terá visto o texto uma vez |
+| Senha-mestra fraca (de dicionário) com o `cofre.labcofre` fora do Mac | régua `ForcaDeSenha` (5.4): lista de 94 mil senhas comuns com leet, sufixo e ano, piso de 48 bits e 16 caracteres ou 4 palavras; a estimativa não é prova, por isso a tela recomenda frase e o Argon2id custa cerca de 1 s por palpite |
+| Usuário perde o celular e fica sem entrar | o 2FA só passa a ser exigido depois da primeira confirmação; a saída de emergência é o SSH, que continua existindo |
+| 2FA passar a falsa sensação de proteção contra quem tem a chave SSH | o código protege o caminho HTTP do agente, não a chave SSH nem o cofre aberto; a fronteira segue sendo o computador do usuário |
+| Relógio do servidor ou do celular fora de hora faz o código certo parecer incorreto | janela de ±1 passo (cerca de 30 s); a mensagem de código incorreto lembra de conferir a hora do celular |
 | Fixtures com nomes reais | ficam fora do git (`src/test/resources/lab-real/` está no `.gitignore`) |
 | Acesso fora da rede local | primeira versão só na LAN; fase 5 cobre com `cloudflared access tcp` (já instalado) |
 
@@ -624,6 +644,7 @@ Cada item traz o padrão adotado hoje; o que mudaria se fosse diferente.
 | 13 | Copiar ao selecionar no terminal | desligado; preferência |
 | 14 | Touch ID para desbloquear o cofre (exige helper nativo e Keychain, fora do puro Java) | não fazer |
 | 15 | Notificar também "pergunta pendente" do Claude (exige polling de tela em segundo plano) | fora do escopo |
+| 16 | 2FA local ao destravar o cofre (segredo TOTP dentro do cofre, conferido pelo app; não é criptográfico, ver 10.1) | não fazer por ora; opção se o usuário pedir |
 
 O repositório do app é separado do painel; as mudanças do agente vão no repositório do agente.
 
@@ -644,27 +665,15 @@ Coordenadas Maven e versões conferidas contra o Maven Central e o repositório 
 | `com.formdev:flatlaf-fonts-jetbrains-mono` | 2.304 | 2024-01-24 | fonte do terminal e dos blocos mono |
 | `com.fasterxml.jackson.core:jackson-databind` | 2.22.3 | 2026-09-21 | via `jackson-bom:2.22.3`; traz `jackson-core` 2.22.3 e `jackson-annotations` 2.22. Jackson 3 (`tools.jackson`) fica de fora de propósito. |
 | `com.fasterxml.jackson.datatype:jackson-datatype-jsr310` | 2.22.3 | 2026-09-21 | `Instant` nos records |
+| `com.google.zxing:core` | 3.5.4 | 2025-11-11 | QR do "Configurar 2FA" (`QRCodeWriter`) e leitura de volta no teste (`MultiFormatReader`); Apache 2.0, alvo Java 8, sem dependências de execução |
+| `com.google.zxing:javase` | 3.5.4 | 2025-11-11 | `MatrixToImageWriter` e `BufferedImageLuminanceSource`; traz `core` 3.5.4, `org.jcommander:jcommander` 1.85 e `com.github.jai-imageio:jai-imageio-core` 1.4.0 (runtime, 2018-04-16); os dois últimos são excluídos (11.2) |
 | `org.slf4j:slf4j-api` | 2.0.17 | 2025-02-25 | resolve o conflito entre o 1.7.36 do MINA e o 2.0.9 do JediTerm |
 | `org.slf4j:slf4j-simple` | 2.0.17 | 2025-02-25 | runtime; arquivo de log via propriedades; a 2.1.0-alpha1 existe e NÃO se usa |
 | `org.junit:junit-bom` e `org.junit.jupiter:junit-jupiter` | 5.14.4 | 2026-04-26 | testes |
 | `org.junit.platform:junit-platform-launcher` | 1.14.4 (pela BOM) | 2026-04-26 | `testRuntimeOnly`, obrigatório no Gradle 9 |
 
-Ferramentas de desenvolvimento: JDK 21, Gradle 9.8.0 (wrapper com checksum), Node 20 ou mais novo (opcional), `cloudflared` e `tmux` (opcionais). Deliberadamente fora do projeto: Spring, JavaFX, Mockito, AssertJ, Awaitility, `sshd-mina`, `sshd-netty`, `net.i2p.crypto:eddsa` (sem manutenção desde 2018), Jackson 3, JNA e `argon2-jvm` (nativos), `pty4j`.
+Ferramentas de desenvolvimento: JDK 21, Gradle 9.8.0 (wrapper com checksum), Node 20 ou mais novo (opcional), `cloudflared` e `tmux` (opcionais). Deliberadamente fora do projeto: Spring, JavaFX, Mockito, AssertJ, Awaitility, `sshd-mina`, `sshd-netty`, `net.i2p.crypto:eddsa` (sem manutenção desde 2018), Jackson 3, JNA e `argon2-jvm` (nativos), `pty4j`, e `jcommander` e `jai-imageio-core` (puxados pelo `zxing:javase`, excluídos).
 
 ## Apêndice A: decisões e limites
 
-Regras técnicas que não ficam óbvias nas seções acima, e o que ficou de fora de propósito. Cada item vale com `EMPTY_KEYS_PROVIDER` e `HostConfigEntryResolver.EMPTY` |
-
-## Apêndice B: o que foi conferido nesta máquina (2026-10-20)
-
-Conferido e reproduzível:
-
-- Ambiente: arm64, macOS 26.6; `openjdk@21` 21.0.12 com `jlink`/`jpackage`/`jdeps`; Gradle 9.8.0 em JVM 27; Node v20.20.2; Xcode CLT; `cloudflared` e `tmux` instalados.
-- Argon2id com BouncyCastle 1.86 no JDK 21 (tabela em 5.4), com heap de 512 MiB e 768 MiB.
-- `tmux` 3.7c: `window-size` padrão `latest`, em servidor descartável.
-- Nomes de API por `javap` nos JARs de `sshd-core` 2.20.0, BouncyCastle 1.86, JediTerm 3.76 e FlatLaf 3.7.2: `KeyIdentityProvider.EMPTY_KEYS_PROVIDER`, `HostConfigEntryResolver.EMPTY`, `UserAuthPublicKeyFactory.INSTANCE`, `ServerKeyVerifier.verifyServerKey`, `ClientSession.createLocalPortForwardingTracker`, `PortForwardingTracker.getBoundAddress`, `CoreModuleProperties.HEARTBEAT_*`, `KeyUtils.generateKeyPair/getFingerPrint`, `PublicKeyEntry.toString`, `OpenSSHKeyPairResourceWriter.INSTANCE`, `SecurityUtils.loadKeyPairIdentities/isEDDSACurveSupported`, `PtyCapableChannelSession.setUsePty/setPtyType/sendWindowChange`, `SignatureFactoriesManager.setSignatureFactoriesNames`, `TtyConnector`, `TerminalPanel.getTerminalSizeFromComponent`, `UserSettingsProvider.shiftEnterSendsEscCR`, `FlatLaf.registerCustomDefaultsSource`, `FlatMacLightLaf`/`FlatMacDarkLaf`, dylib `macos-arm64`.
-- Dependências: POMs existem no Central (e no repositório da JetBrains para o JediTerm 3.76), datas de publicação, transitivos de `flatlaf-extras` (jsvg 2.1.0), `jediterm-core` (kotlin-stdlib 2.4.0, slf4j 2.0.9, annotations 24.0.1), licença do POM do JediTerm e do README upstream.
-- Fonte do JediTerm 3.76: `TerminalStarter` usa um executor de thread única; `allSessionsClosed` dispara antes de a sessão ser limpa e `start()` repetido registra "Should not try to start session again"; `TerminalPanel` faz `setFocusTraversalKeysEnabled(false)` e `enableInputMethods(true)`; `DefaultSettingsProvider` mapeia Cmd+C, Cmd+V e Cmd+K no macOS.
-- POMs do MINA 2.20.0: `bcprov`/`bcpkix`/`bcpg` e o `net.i2p.crypto:eddsa` são dependências opcionais do `sshd-common` (por isso o projeto declara BC explicitamente); versão de referência do BC é 1.86; `slf4j-api` 1.7.36 com limite superior 3.
-- Gradle 9.8.0: checksum oficial; versões 9.8.1 e 9.8.2 existentes.
-
+Regras técnicas que não ficam óbvias nas seções acima, e o que ficou de fora de propósito. Cada item vale hoje.

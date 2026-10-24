@@ -1,0 +1,213 @@
+package br.com.labdesktop.ui;
+
+import br.com.labdesktop.api.modelo.LimitesConta;
+import br.com.labdesktop.api.modelo.Pausado;
+import br.com.labdesktop.servidor.EstadoServidor;
+import br.com.labdesktop.ssh.Falha;
+import br.com.labdesktop.util.Formato;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * O que a {@code FaixaAviso} diz sobre um servidor (ARQUITETURA 6.3, 8.2 e 9): o problema de conexão (com a ação
+ * certa), o crédito do plano a partir de 75 % (perigo a partir de 90 %) e as sessões pausadas. É a tradução de
+ * {@code UI.avisoCredito} do painel web, mais a faixa de conexão que o app nativo precisa ("sem conexão desde
+ * HH:MM": a tela mantém o último retrato e nunca fica vazia).
+ *
+ * <p>Puro: recebe o retrato do servidor e o instante, devolve registros. Quem desenha é a {@code FaixaAviso}.
+ */
+public final class ConteudoDosAvisos {
+
+    /** O que um botão da faixa de conexão faz. */
+    public enum Acao {
+        TENTAR_AGORA("Tentar agora"),
+        CONECTAR("Conectar"),
+        DIGITAR_CODIGO("Digitar código"),
+        CONFERIR_IMPRESSAO("Conferir impressão"),
+        REGISTRAR_TOKEN("Registrar token");
+
+        private final String rotulo;
+
+        Acao(String rotulo) {
+            this.rotulo = rotulo;
+        }
+
+        public String rotulo() {
+            return rotulo;
+        }
+    }
+
+    /** Uma faixa. */
+    public sealed interface Aviso permits AvisoDeConexao, AvisoDeCredito, AvisoDePausas {
+        Gravidade gravidade();
+
+        String icone();
+    }
+
+    /** Problema de conexão, agente ou token, com o botão que resolve. */
+    public record AvisoDeConexao(Gravidade gravidade, String icone, String titulo, String texto, List<Acao> acoes)
+        implements Aviso {
+    }
+
+    /** Crédito do plano em 75 % ou mais. As partes são "janela de 5 h em 42%", "semana em 61% (zera em 5 d 3 h)". */
+    public record AvisoDeCredito(Gravidade gravidade, String icone, String titulo, List<String> partes) implements Aviso {
+    }
+
+    /** Sessões pausadas pelo teto do projeto ou pelo freio global (no máximo 3 nomes; o resto vira "e mais N"). */
+    public record AvisoDePausas(Gravidade gravidade, String icone, String titulo, List<Pausada> itens, int maisN)
+        implements Aviso {
+    }
+
+    /** Uma sessão pausada; {@code projeto} é o nome real (para Retomar) e {@code nome} o que se mostra. */
+    public record Pausada(String projeto, String nome, String motivo) { }
+
+    /** No máximo 3 nomes de sessões pausadas na faixa. */
+    public static final int MAX_PAUSADAS = 3;
+
+    private ConteudoDosAvisos() { }
+
+    /** Todas as faixas do servidor, na ordem em que aparecem: conexão, crédito, pausas. */
+    public static List<Aviso> de(EstadoServidor e, Instant agora, ZoneId fuso) {
+        List<Aviso> faixas = new ArrayList<>();
+        AvisoDeConexao conexao = deConexao(e, agora, fuso);
+        if (conexao != null) {
+            faixas.add(conexao);
+        }
+        LimitesConta limites = e.limites();
+        AvisoDeCredito credito = deCredito(limites, agora, fuso);
+        if (credito != null) {
+            faixas.add(credito);
+        }
+        AvisoDePausas pausas = dePausas(limites);
+        if (pausas != null) {
+            faixas.add(pausas);
+        }
+        return faixas;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Conexão
+    // ---------------------------------------------------------------------------------------------
+
+    /** A faixa do problema de conexão, ou {@code null} quando está tudo bem (ou conectando pela primeira vez). */
+    public static AvisoDeConexao deConexao(EstadoServidor e, Instant agora, ZoneId fuso) {
+        String nome = e.nome();
+        Falha falha = e.falha();
+        Falha.Tipo tipo = falha == null ? null : falha.tipo();
+        String detalhe = falha == null ? "" : " " + falha.mensagem();
+        return switch (e.conexao()) {
+            case CONECTANDO, BLOQUEADO_COFRE -> null;
+            case CONECTADO -> {
+                if (e.agenteIncompativel()) {
+                    yield new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente de " + nome + " fala outra versão do contrato",
+                        "Atualize o app ou o painel do servidor (o agente informou a versão da API "
+                            + (e.versao().api() == null ? "desconhecida" : e.versao().api()) + ").", List.of());
+                }
+                if (e.semToken()) {
+                    yield new AvisoDeConexao(Gravidade.ACENTO, "chave", "Este Mac ainda não tem token em " + nome,
+                        "O agente ainda aceita chamadas sem token, mas o token identifica este app (e é exigido depois do corte).",
+                        List.of(Acao.REGISTRAR_TOKEN));
+                }
+                yield null;
+            }
+            case DESCONECTADO -> new AvisoDeConexao(Gravidade.NEUTRO, "rede", nome + " está desconectado",
+                "O app não está conectado a este servidor.", List.of(Acao.CONECTAR));
+            case RECONECTANDO -> {
+                String desde = e.semConexaoDesde() == null ? "" : " desde " + Formato.fmtHora(e.semConexaoDesde(), fuso)
+                    .substring(0, 5);
+                yield new AvisoDeConexao(Gravidade.ATENCAO, "atualizar", "Sem conexão com " + nome + desde,
+                    "Reconectando" + (e.tentativa() > 0 ? " (tentativa " + e.tentativa() + proxima(e, agora) + ")" : "")
+                        + ". Os dados na tela são os da última leitura." + detalhe, List.of(Acao.TENTAR_AGORA));
+            }
+            case SSH_OK_SEM_AGENTE -> tipo == Falha.Tipo.AGENTE_DESATUALIZADO
+                ? new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente de " + nome + " é de antes do app nativo",
+                    "Falta publicar o painel com o acesso.js: a rota /api/versao não existe lá (404).", List.of(Acao.TENTAR_AGORA))
+                : new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente do painel em " + nome + " não responde",
+                    "O SSH está de pé; o app insiste a cada poucos segundos (o painel pode estar reiniciando)." + detalhe,
+                    List.of(Acao.TENTAR_AGORA));
+            case ERRO_AUTENTICACAO -> new AvisoDeConexao(Gravidade.PERIGO, "chave", nome + " recusou a chave deste app",
+                "Instale a chave pública no authorized_keys do servidor e tente de novo." + detalhe, List.of(Acao.TENTAR_AGORA));
+            case ERRO_CHAVE_HOST -> tipo == Falha.Tipo.PIN_DIVERGENTE
+                ? new AvisoDeConexao(Gravidade.PERIGO, "erro", "A chave do servidor " + nome + " mudou",
+                    "O app não conecta, para o caso de ser um intruso entre você e o servidor. Se você reinstalou o servidor, "
+                        + "o pin só pode ser redefinido de propósito.", List.of())
+                : new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "Confirme o servidor " + nome,
+                    "A chave do servidor ainda não foi confirmada: compare a impressão digital antes de conectar.",
+                    List.of(Acao.CONFERIR_IMPRESSAO));
+            case TOKEN_RECUSADO -> new AvisoDeConexao(Gravidade.PERIGO, "chave", "O agente de " + nome + " não aceita o token deste Mac",
+                "O token foi revogado ou o cofre foi recriado. Registre um token novo.", List.of(Acao.REGISTRAR_TOKEN));
+            case AGUARDANDO_2FA -> new AvisoDeConexao(Gravidade.ATENCAO, "chave", "Código do autenticador pendente",
+                nome + " pede o código de 6 dígitos do autenticador para este Mac.", List.of(Acao.DIGITAR_CODIGO));
+            case SUSPENSO -> new AvisoDeConexao(Gravidade.NEUTRO, "pausa", "O Mac está em repouso",
+                "A conexão com " + nome + " volta quando ele acordar.", List.of());
+        };
+    }
+
+    private static String proxima(EstadoServidor e, Instant agora) {
+        if (e.proximaTentativaEm() == null) {
+            return "";
+        }
+        long s = Math.max(0, Duration.between(agora, e.proximaTentativaEm()).toSeconds());
+        return ", próxima em " + s + " s";
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Crédito e pausas
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * A faixa de crédito, a partir de 75 % (perigo a partir de 90 %), só com leitura {@code disponivel} e não
+     * {@code antiga}. {@code null} abaixo disso.
+     */
+    public static AvisoDeCredito deCredito(LimitesConta l, Instant agora, ZoneId fuso) {
+        if (l == null || !l.leituraUtil()) {
+            return null;
+        }
+        List<Janela> janelas = new ArrayList<>();
+        acrescentar(janelas, "janela de 5 h", l.cincoHoras());
+        acrescentar(janelas, "semana", l.semana());
+        double pior = janelas.stream().mapToDouble(j -> j.fracao).max().orElse(0);
+        if (pior < LimitesConta.LIMIAR_ATENCAO / 100.0) {
+            return null;
+        }
+        boolean perigo = pior >= LimitesConta.LIMIAR_PERIGO / 100.0;
+        List<String> partes = new ArrayList<>();
+        for (Janela j : janelas) {
+            String t = j.rotulo + " em " + Formato.fmtPct(j.fracao);
+            String zera = TextosDeLimite.restante(j.zeraEm, agora);
+            partes.add(j.fracao >= LimitesConta.LIMIAR_ATENCAO / 100.0 && zera != null ? t + " (zera em " + zera + ")" : t);
+        }
+        return new AvisoDeCredito(perigo ? Gravidade.PERIGO : Gravidade.ATENCAO, "alerta",
+            perigo ? "Crédito do Claude quase no fim" : "Crédito do Claude acima de 75%", partes);
+    }
+
+    private record Janela(String rotulo, double fracao, Instant zeraEm) { }
+
+    private static void acrescentar(List<Janela> janelas, String rotulo, LimitesConta.Janela j) {
+        if (j != null && j.usadoPct() != null && Double.isFinite(j.usadoPct())) {
+            janelas.add(new Janela(rotulo, j.usadoPct() / 100.0, j.zeraEm()));
+        }
+    }
+
+    /** A faixa das sessões pausadas ({@code pausados[]} de {@code /api/limites}); vale sempre, com ou sem leitura do plano. */
+    public static AvisoDePausas dePausas(LimitesConta l) {
+        if (l == null || l.pausados().isEmpty()) {
+            return null;
+        }
+        List<Pausada> itens = new ArrayList<>();
+        for (Pausado p : l.pausados().subList(0, Math.min(MAX_PAUSADAS, l.pausados().size()))) {
+            LimitesConta.LimiteProjeto info = l.porProjeto().get(p.projeto());
+            String motivo = "freio".equals(p.motivo())
+                ? "pausada pelo freio global"
+                : "pausada pelo limite" + (info != null && info.tetoPct() != null && info.usadoPp() != null
+                    ? " (" + Formato.fmtNum(info.usadoPp()) + "% de " + Formato.fmtNum(info.tetoPct()) + "%)" : "");
+            itens.add(new Pausada(p.projeto(), TextosDeLimite.nomeAmigavel(p.projeto()), motivo));
+        }
+        int total = l.pausados().size();
+        return new AvisoDePausas(Gravidade.ATENCAO, "pausa", total == 1 ? "Sessão pausada" : "Sessões pausadas",
+            itens, Math.max(0, total - MAX_PAUSADAS));
+    }
+}

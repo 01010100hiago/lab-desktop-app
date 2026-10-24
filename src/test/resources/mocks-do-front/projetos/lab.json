@@ -1,0 +1,19 @@
+{
+  "nome": "lab",
+  "raiz": true,
+  "titulo": "Sessão do lab",
+  "sessaoClaude": null,
+  "loginPendente": false,
+  "limite": {
+    "teto_pct": null,
+    "usado_pp": 21.9,
+    "estado": "pausado",
+    "liberado": false,
+    "pausa": {
+      "motivo": "freio",
+      "em": "@-12m"
+    },
+    "zera_em": "@+5d3h",
+    "desde": "@-1d21h"
+  }
+}
