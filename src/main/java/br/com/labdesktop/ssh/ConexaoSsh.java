@@ -32,6 +32,8 @@ import java.util.function.Consumer;
 import org.apache.sshd.client.SshClient;
 import org.apache.sshd.client.auth.pubkey.PublicKeyAuthenticationReporter;
 import org.apache.sshd.client.session.ClientSession;
+import org.apache.sshd.sftp.client.SftpClient;
+import org.apache.sshd.sftp.client.SftpClientFactory;
 import org.apache.sshd.common.AttributeRepository.AttributeKey;
 import org.apache.sshd.common.session.Session;
 import org.apache.sshd.common.session.SessionListener;
@@ -357,6 +359,28 @@ public final class ConexaoSsh implements AutoCloseable {
             throw new IOException("Não há conexão SSH aberta com o servidor.");
         }
         return new ExecRemoto(s, cfg.abrirCanal()).executar(comando, stdin, prazo);
+    }
+
+    /**
+     * Abre UM canal SFTP na sessão SSH atual (o gerenciador de arquivos abre um por tela e o fecha ao sair). Funciona nos
+     * mesmos estados que {@link #executar}: SSH de pé, com ou sem agente.
+     *
+     * @throws SftpIndisponivelException a sessão está de pé e o servidor não aceita SFTP
+     * @throws IOException               não há sessão SSH autenticada agora (ou ela caiu durante a abertura)
+     */
+    public SftpClient abrirSftp() throws IOException {
+        ClientSession s = sessaoViva;
+        if (s == null || !s.isOpen()) {
+            throw new IOException("Não há conexão SSH aberta com o servidor.");
+        }
+        try {
+            return SftpClientFactory.instance().createSftpClient(s);
+        } catch (IOException e) {
+            if (s.isOpen()) {
+                throw new SftpIndisponivelException(e); // a sessão vive: o servidor recusou o subsistema
+            }
+            throw e;
+        }
     }
 
     // =====================================================================================================

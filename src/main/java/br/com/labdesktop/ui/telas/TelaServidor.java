@@ -1,9 +1,13 @@
 package br.com.labdesktop.ui.telas;
 
+import br.com.labdesktop.arquivos.ServicosDeArquivos;
 import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.ui.componentes.Abas;
 import br.com.labdesktop.ui.componentes.CartoesAjustaveis;
 import br.com.labdesktop.ui.componentes.Painel;
+import br.com.labdesktop.ui.telas.arquivos.ContextoDeArquivos;
+import br.com.labdesktop.ui.telas.arquivos.EscolhedorLocal;
+import br.com.labdesktop.ui.telas.arquivos.GerenciadorDeArquivos;
 import br.com.labdesktop.ui.tema.Tokens;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
@@ -37,7 +41,8 @@ public final class TelaServidor extends Painel {
         CONTAINERS("containers", "Containers"),
         PROCESSOS("processos", "Processos"),
         MAQUINA("maquina", "Máquina"),
-        PROJETOS("projetos", "Projetos");
+        PROJETOS("projetos", "Projetos"),
+        ARQUIVOS("arquivos", "Arquivos");
 
         private final String id;
         private final String rotulo;
@@ -68,6 +73,9 @@ public final class TelaServidor extends Painel {
     private final PaginaContainers containers;
     private final PaginaProcessos processos;
     private final PaginaMaquina maquina;
+    private final GerenciadorDeArquivos arquivos;
+    private final ServicosDeArquivos servicosDeArquivos;
+    private final EscolhedorLocal escolhedor;
     private final Abas abas = new Abas();
     private final CardLayout cartoes = new CartoesAjustaveis();
     private final JPanel corpo = new Painel(cartoes);
@@ -79,6 +87,8 @@ public final class TelaServidor extends Painel {
     private final CardLayout niveis = new CartoesAjustaveis();
     private final Painel paginaDoServidor = new Painel(new BorderLayout());
     private TelaProjeto projetoAberto;
+    /** Páginas de projeto fechadas com alterações não salvas num editor: ficam escondidas, para voltar ao projeto as devolver. */
+    private final Map<String, TelaProjeto> projetosGuardados = new HashMap<>();
     private String nomeDoProjetoAberto;
     private String ultimoProjeto;
     private final Map<String, TelaProjeto.Aba> abasDosProjetos = new HashMap<>();
@@ -89,6 +99,15 @@ public final class TelaServidor extends Painel {
      * @param aoAtualizar o que o botão Atualizar do Resumo faz
      */
     public TelaServidor(ServidorLab servidor, TelaProjetos projetos, Runnable aoAtualizar) {
+        this(servidor, projetos, aoAtualizar, ServicosDeArquivos.descartaveis(), EscolhedorLocal.doSistema(() -> null));
+    }
+
+    /**
+     * @param servicos  a memória dos últimos caminhos e a pasta dos backups do gerenciador de arquivos (aba Arquivos e a dos projetos)
+     * @param escolhedor quem pergunta ao usuário o que enviar e onde guardar o que baixar
+     */
+    public TelaServidor(ServidorLab servidor, TelaProjetos projetos, Runnable aoAtualizar, ServicosDeArquivos servicos,
+                        EscolhedorLocal escolhedor) {
         super();
         setLayout(niveis);
         paginaDoServidor.fundo(Tokens.BG);
@@ -101,6 +120,10 @@ public final class TelaServidor extends Painel {
         this.containers = new PaginaContainers(servidor, aoAtualizar);
         this.processos = new PaginaProcessos(servidor, aoAtualizar);
         this.maquina = new PaginaMaquina(servidor, aoAtualizar);
+        this.servicosDeArquivos = servicos;
+        this.escolhedor = escolhedor;
+        this.arquivos = new GerenciadorDeArquivos(ContextoDeArquivos.de(servidor, null, servicos, projetos.fluxos().liberadas(),
+            projetos.fluxos().avisos(), projetos.fluxos().apresentador(), escolhedor));
 
         for (Aba a : Aba.values()) {
             abas.adicionar(a.id, a.rotulo);
@@ -113,6 +136,7 @@ public final class TelaServidor extends Painel {
         corpo.add(processos, Aba.PROCESSOS.id);
         corpo.add(maquina, Aba.MAQUINA.id);
         corpo.add(projetos, Aba.PROJETOS.id);
+        corpo.add(arquivos, Aba.ARQUIVOS.id);
         paginaDoServidor.add(abas, BorderLayout.NORTH);
         paginaDoServidor.add(corpo, BorderLayout.CENTER);
         add(paginaDoServidor, CARTAO_PAGINA);
@@ -150,6 +174,14 @@ public final class TelaServidor extends Painel {
         TelaProjeto.Aba aba = abasDosProjetos.getOrDefault(nome, TelaProjeto.Aba.VISAO_GERAL);
         nomeDoProjetoAberto = nome;
         ultimoProjeto = nome;
+        TelaProjeto guardada = projetosGuardados.remove(nome);
+        if (guardada != null) {
+            projetoAberto = guardada; // com os editores e as alterações de quando o usuário saiu
+            niveis.show(this, CARTAO_PROJETO + nome);
+            revalidate();
+            repaint();
+            return;
+        }
         projetoAberto = new TelaProjeto(servidor, nome, fluxos, projetos.navegador(), fluxos.avisos(), aba, new TelaProjeto.Saida() {
             @Override
             public void voltar() {
@@ -168,9 +200,9 @@ public final class TelaServidor extends Painel {
             public void abaMudou(TelaProjeto.Aba nova) {
                 abasDosProjetos.put(nome, nova);
             }
-        }, () -> projetos.urlDeLoginDe(nome), aoAtualizarProjeto);
-        add(projetoAberto, CARTAO_PROJETO);
-        niveis.show(this, CARTAO_PROJETO);
+        }, () -> projetos.urlDeLoginDe(nome), aoAtualizarProjeto, servicosDeArquivos, escolhedor);
+        add(projetoAberto, CARTAO_PROJETO + nome);
+        niveis.show(this, CARTAO_PROJETO + nome);
         revalidate();
         repaint();
     }
@@ -185,11 +217,19 @@ public final class TelaServidor extends Painel {
             return;
         }
         TelaProjeto fechando = projetoAberto;
+        String nome = nomeDoProjetoAberto;
         projetoAberto = null;
         nomeDoProjetoAberto = null;
         niveis.show(this, CARTAO_PAGINA);
         fechando.soltar();
-        remove(fechando);
+        if (nome != null && fechando.temAlteracoesNaoSalvas()) {
+            // Sair do projeto não pode jogar fora o que o usuário digitou: a página fica guardada, escondida, e voltar a mostra.
+            projetosGuardados.put(nome, fechando);
+            projetos.fluxos().avisos().atencao("Guardei as alterações não salvas em " + nome + ": ao voltar ao projeto, os editores continuam abertos.");
+        } else {
+            fechando.encerrar();
+            remove(fechando);
+        }
         revalidate();
         repaint();
     }
@@ -245,7 +285,7 @@ public final class TelaServidor extends Painel {
             case CONTAINERS -> containers;
             case PROCESSOS -> processos;
             case MAQUINA -> maquina;
-            case PROJETOS -> null;
+            case PROJETOS, ARQUIVOS -> null;
         };
     }
 
@@ -270,8 +310,19 @@ public final class TelaServidor extends Painel {
         processos.soltar();
         maquina.soltar();
         projetos.soltar();
+        arquivos.encerrar();
+        for (TelaProjeto guardada : projetosGuardados.values()) {
+            guardada.encerrar();
+        }
+        projetosGuardados.clear();
         if (projetoAberto != null) {
             projetoAberto.soltar();
+            projetoAberto.encerrar();
         }
+    }
+
+    /** O gerenciador de arquivos do servidor inteiro (a aba Arquivos). */
+    public GerenciadorDeArquivos arquivos() {
+        return arquivos;
     }
 }

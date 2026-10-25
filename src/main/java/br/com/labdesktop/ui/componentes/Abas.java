@@ -153,6 +153,26 @@ public final class Abas extends Painel {
         }
     }
 
+    /** Tira uma aba (o editor que fechou). Se era a escolhida, a escolha vai para {@code paraOnde} (e o ouvinte é avisado). */
+    public void remover(String id, String paraOnde) {
+        JToggleButton b = botoes.remove(id);
+        if (b == null) {
+            return;
+        }
+        grupo.remove(b);
+        remove(b);
+        if (id.equals(selecionada)) {
+            selecionada = null;
+            selecionar(paraOnde);
+        }
+        revalidate();
+        repaint();
+    }
+
+    public boolean tem(String id) {
+        return botoes.containsKey(id);
+    }
+
     public void aoSelecionar(Consumer<String> novo) {
         this.ouvinte = novo;
     }

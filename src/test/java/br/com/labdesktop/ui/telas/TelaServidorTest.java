@@ -118,18 +118,18 @@ class TelaServidorTest {
     // ---------------------------------------------------------------------------------------------
 
     @Test
-    void abreNoResumoTemSeisAbasEAlternaSemMudarATelaDeProjetos() {
+    void abreNoResumoTemSeteAbasEAlternaSemMudarATelaDeProjetos() {
         Visual.tema(Tema.CLARO);
         TelaServidor t = nova();
         assertEquals(Aba.RESUMO, t.abaAtual());
-        assertEquals(List.of("Resumo", "Segurança", "Containers", "Processos", "Máquina", "Projetos"),
+        assertEquals(List.of("Resumo", "Segurança", "Containers", "Processos", "Máquina", "Projetos", "Arquivos"),
             java.util.Arrays.stream(Aba.values()).map(a -> Visual.naEdt(() -> t.abas().botao(a.id()).getText())).toList());
         for (Aba a : Aba.values()) {
             Visual.naEdt(() -> t.abas().botao(a.id()).doClick());
             assertEquals(a, t.abaAtual());
             assertEquals(a, Visual.naEdt(t::abaMarcada), "rótulo e conteúdo andam juntos");
             for (Aba outra : Aba.values()) {
-                Component c = outra == Aba.PROJETOS ? t.projetos() : t.pagina(outra);
+                Component c = outra == Aba.PROJETOS ? t.projetos() : outra == Aba.ARQUIVOS ? t.arquivos() : t.pagina(outra);
                 assertEquals(outra == a, Visual.naEdt(c::isVisible), a + " na frente: " + outra);
             }
         }

@@ -126,6 +126,17 @@ public final class ServidorSshDeTeste implements AutoCloseable {
         this.manipulador = m;
     }
 
+    /**
+     * Liga o subsistema SFTP do MINA sobre uma pasta (o {@code VirtualFileSystemFactory} monta um {@code RootedFileSystem}: o
+     * cliente vê {@code /} como a pasta dada e não escapa dela, nem por {@code ..} nem por link simbólico). Sem esta chamada o
+     * servidor não aceita SFTP, que é justamente o caso "este servidor não aceita transferência de arquivos".
+     */
+    public ServidorSshDeTeste comSftp(java.nio.file.Path raiz) {
+        sshd.setSubsystemFactories(List.of(new org.apache.sshd.sftp.server.SftpSubsystemFactory()));
+        sshd.setFileSystemFactory(new org.apache.sshd.common.file.virtualfs.VirtualFileSystemFactory(raiz));
+        return this;
+    }
+
     /** Só aceita encaminhar para 127.0.0.1:{@code porta} (o que o {@code permitopen} do authorized_keys faz). */
     public void permitirEncaminhamentoSomentePara(int porta) {
         sshd.setForwardingFilter(new StaticDecisionForwardingFilter(true) {

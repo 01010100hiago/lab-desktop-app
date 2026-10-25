@@ -122,6 +122,7 @@ public final class MenuApp {
         ver.add(item("Servidores", KeyStroke.getKeyStroke(KeyEvent.VK_2, atalho()), painel::mostrarServidores));
         ver.add(item("Resumo do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_3, atalho()), painel::mostrarResumo));
         ver.add(item("Projetos do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_1, atalho()), painel::mostrarProjetos));
+        ver.add(item("Arquivos do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_5, atalho()), painel::mostrarArquivos));
         itemUltimoProjeto = item("Último projeto aberto", KeyStroke.getKeyStroke(KeyEvent.VK_4, atalho()), painel::mostrarUltimoProjeto);
         ver.add(itemUltimoProjeto);
         itemVoltarAosProjetos = item("Voltar à lista de projetos", KeyStroke.getKeyStroke(KeyEvent.VK_OPEN_BRACKET, atalho()),

@@ -2,6 +2,7 @@ package br.com.labdesktop.ui.telas;
 
 import br.com.labdesktop.api.ErroApi;
 import br.com.labdesktop.api.modelo.Detalhe;
+import br.com.labdesktop.arquivos.ServicosDeArquivos;
 import br.com.labdesktop.api.modelo.DetalheProjeto;
 import br.com.labdesktop.servidor.EstadoServidor;
 import br.com.labdesktop.servidor.Inscricao;
@@ -19,6 +20,9 @@ import br.com.labdesktop.ui.componentes.Notificacoes;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
 import br.com.labdesktop.ui.componentes.Selo;
+import br.com.labdesktop.ui.telas.arquivos.ContextoDeArquivos;
+import br.com.labdesktop.ui.telas.arquivos.EscolhedorLocal;
+import br.com.labdesktop.ui.telas.arquivos.GerenciadorDeArquivos;
 import br.com.labdesktop.ui.tema.Tokens;
 import br.com.labdesktop.util.Formato;
 import java.awt.BorderLayout;
@@ -111,6 +115,8 @@ public final class TelaProjeto extends Painel {
     private final CardLayout cartoes = new CartoesAjustaveis();
     private final JPanel corpo = new Painel(cartoes);
     private final Map<Aba, PaginaDoProjeto> paginas = new EnumMap<>(Aba.class);
+    /** A aba Arquivos é o gerenciador de arquivos (SFTP), o mesmo componente da aba do servidor, com a raiz travada neste projeto. */
+    private final GerenciadorDeArquivos arquivos;
     private Aba atual;
     private transient Inscricao inscricaoDoDetalhe;
     private transient Inscricao inscricaoDoEstado;
@@ -123,11 +129,27 @@ public final class TelaProjeto extends Painel {
      */
     public TelaProjeto(ServidorLab servidor, String projeto, FluxosDeProjeto fluxos, Navegador navegador, Notificacoes avisos,
                        Aba abaInicial, Saida saida, Supplier<String> urlDeLogin, Runnable aoAtualizar) {
-        this(servidor, projeto, fluxos, navegador, avisos, abaInicial, saida, urlDeLogin, aoAtualizar, CopiadorDeTexto.doSistema());
+        this(servidor, projeto, fluxos, navegador, avisos, abaInicial, saida, urlDeLogin, aoAtualizar, CopiadorDeTexto.doSistema(),
+            ServicosDeArquivos.descartaveis(), EscolhedorLocal.doSistema(() -> null));
+    }
+
+    /** Com a memória e os backups do gerenciador de arquivos, e quem escolhe o que enviar e onde baixar. */
+    public TelaProjeto(ServidorLab servidor, String projeto, FluxosDeProjeto fluxos, Navegador navegador, Notificacoes avisos,
+                       Aba abaInicial, Saida saida, Supplier<String> urlDeLogin, Runnable aoAtualizar, ServicosDeArquivos servicos,
+                       EscolhedorLocal escolhedor) {
+        this(servidor, projeto, fluxos, navegador, avisos, abaInicial, saida, urlDeLogin, aoAtualizar, CopiadorDeTexto.doSistema(), servicos,
+            escolhedor);
     }
 
     TelaProjeto(ServidorLab servidor, String projeto, FluxosDeProjeto fluxos, Navegador navegador, Notificacoes avisos,
                 Aba abaInicial, Saida saida, Supplier<String> urlDeLogin, Runnable aoAtualizar, CopiadorDeTexto copiador) {
+        this(servidor, projeto, fluxos, navegador, avisos, abaInicial, saida, urlDeLogin, aoAtualizar, copiador,
+            ServicosDeArquivos.descartaveis(), EscolhedorLocal.doSistema(() -> null));
+    }
+
+    TelaProjeto(ServidorLab servidor, String projeto, FluxosDeProjeto fluxos, Navegador navegador, Notificacoes avisos,
+                Aba abaInicial, Saida saida, Supplier<String> urlDeLogin, Runnable aoAtualizar, CopiadorDeTexto copiador,
+                ServicosDeArquivos servicos, EscolhedorLocal escolhedor) {
         super(new BorderLayout());
         fundo(Tokens.BG);
         this.servidor = servidor;
@@ -140,7 +162,8 @@ public final class TelaProjeto extends Painel {
         paginas.put(Aba.VISAO_GERAL, new PaginaVisaoGeral(ctx));
         paginas.put(Aba.LOGS, new PaginaLogs(ctx));
         paginas.put(Aba.SESSAO, new PaginaSessao(ctx));
-        paginas.put(Aba.ARQUIVOS, new PaginaArquivos(ctx));
+        this.arquivos = new GerenciadorDeArquivos(ContextoDeArquivos.de(servidor, projeto, servicos, fluxos != null && fluxos.liberadas(),
+            avisos, fluxos == null ? dialogo -> { } : fluxos.apresentador(), escolhedor).comCopiador(copiador));
         paginas.put(Aba.BACKUPS, new PaginaBackups(ctx));
         paginas.put(Aba.CONSUMO, new PaginaConsumo(ctx));
 
@@ -156,7 +179,7 @@ public final class TelaProjeto extends Painel {
         abas.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 12, 0, 12));
         for (Aba a : Aba.values()) {
             abas.adicionar(a.id, a.rotulo);
-            corpo.add(paginas.get(a), a.id);
+            corpo.add(a == Aba.ARQUIVOS ? arquivos : paginas.get(a), a.id);
         }
         abas.aoSelecionar(id -> mostrarAba(Aba.de(id)));
         JPanel topo = new Painel(new BorderLayout());
@@ -199,6 +222,12 @@ public final class TelaProjeto extends Painel {
      * @param foco quem tem o foco agora, ou {@code null}
      */
     void aoApertarEsc(Component foco) {
+        // o editor de arquivos cuida do próprio Esc (fecha a busca); aqui Esc nunca limpa o texto dele nem sai da página com alterações
+        for (Component c = foco; c != null; c = c.getParent()) {
+            if (c instanceof JComponent j && Boolean.TRUE.equals(j.getClientProperty(GerenciadorDeArquivos.PROPRIEDADE_ESC))) {
+                return;
+            }
+        }
         if (foco instanceof JTextComponent t && t.isEditable() && !t.getText().isEmpty()) {
             t.setText("");
             return;
@@ -289,6 +318,17 @@ public final class TelaProjeto extends Painel {
         return inscricaoDoEstado != null;
     }
 
+    /** Há alterações num editor da aba Arquivos que ainda não foram salvas. */
+    public boolean temAlteracoesNaoSalvas() {
+        return arquivos.temAlteracoesNaoSalvas();
+    }
+
+    /** A página saiu de vez: fecha o canal SFTP e os editores. */
+    public void encerrar() {
+        soltar();
+        arquivos.encerrar();
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Snapshots (na EDT). Públicos para os testes alimentarem a página com dados fixos.
     // ---------------------------------------------------------------------------------------------
@@ -375,8 +415,9 @@ public final class TelaProjeto extends Painel {
         return (PaginaSessao) paginas.get(Aba.SESSAO);
     }
 
-    PaginaArquivos arquivos() {
-        return (PaginaArquivos) paginas.get(Aba.ARQUIVOS);
+    /** O gerenciador de arquivos deste projeto. */
+    public GerenciadorDeArquivos arquivos() {
+        return arquivos;
     }
 
     PaginaBackups backups() {

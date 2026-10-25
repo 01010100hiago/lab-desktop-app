@@ -192,7 +192,8 @@ class TelaProjetoTest {
             assertEquals(a, c.tela.abaAtual());
             assertEquals(a, Visual.naEdt(c.tela::abaMarcada), "rótulo e conteúdo andam juntos");
             for (Aba outra : Aba.values()) {
-                assertEquals(outra == a, Visual.naEdt(() -> c.tela.pagina(outra).isVisible()), a + " na frente: " + outra);
+                java.awt.Component pagina = outra == Aba.ARQUIVOS ? c.tela.arquivos() : c.tela.pagina(outra);
+                assertEquals(outra == a, Visual.naEdt(pagina::isVisible), a + " na frente: " + outra);
             }
         }
     }
@@ -306,6 +307,9 @@ class TelaProjetoTest {
         Visual.tema(Tema.CLARO);
         Cena c = new Cena(true, Aba.VISAO_GERAL).com(EstadoConexao.CONECTADO, null);
         for (Aba a : Aba.values()) {
+            if (a == Aba.ARQUIVOS) {
+                continue; // o gerenciador de arquivos tem os próprios estados (GerenciadorDeArquivosTest)
+            }
             PaginaDoProjeto p = c.tela.pagina(a);
             assertEquals(SituacaoDaVisao.Modo.CARREGANDO, Visual.naEdt(() -> p.situacao().modo()), a.toString());
             assertTrue(Visual.naEdt(p::mostraEsqueleto), a + ": esqueleto");
@@ -319,6 +323,9 @@ class TelaProjetoTest {
         Cena c = new Cena(true, Aba.VISAO_GERAL).com(EstadoConexao.CONECTADO, FixturesDeApi.detalheDoProjetoSintetico());
         Visual.naEdt(() -> c.tela.aoMudarEstado(estado(EstadoConexao.RECONECTANDO)));
         for (Aba a : Aba.values()) {
+            if (a == Aba.ARQUIVOS) {
+                continue;
+            }
             PaginaDoProjeto p = c.tela.pagina(a);
             assertEquals(SituacaoDaVisao.Modo.SEM_CONEXAO_COM_DADOS, Visual.naEdt(() -> p.situacao().modo()), a.toString());
             assertTrue(Visual.naEdt(p::mostraCorpo), a + ": os últimos dados continuam");
@@ -421,7 +428,6 @@ class TelaProjetoTest {
         fotografar(Tema.CLARO, Aba.SESSAO, 1100, 700, "projeto-sessao-login", true, d, FixturesDeApi.telaSintetica("tela-login"));
         fotografar(Tema.CLARO, Aba.VISAO_GERAL, 1100, 700, "projeto-visao-geral-claro-1100", true, desatualizadaComTudo(), null);
         fotografar(Tema.CLARO, Aba.VISAO_GERAL, 1100, 700, "projeto-visao-geral-somente-leitura", false, d, null);
-        fotografar(Tema.CLARO, Aba.ARQUIVOS, 1100, 700, "projeto-arquivos", true, d, null);
         fotografar(Tema.CLARO, Aba.BACKUPS, 1100, 700, "projeto-backups", true, d, null);
     }
 }

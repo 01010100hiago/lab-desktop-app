@@ -394,18 +394,18 @@ public abstract class PaginaDoServidor extends Painel {
     // ---------------------------------------------------------------------------------------------
 
     /** O corpo que pode ser pintado apagado (dados antigos), sem mexer em nenhum componente filho. */
-    static final class Esmaecivel extends Painel {
+    public static final class Esmaecivel extends Painel {
         private static final long serialVersionUID = 1L;
         private boolean esmaecido;
 
-        void esmaecer(boolean sim) {
+        public void esmaecer(boolean sim) {
             if (sim != esmaecido) {
                 esmaecido = sim;
                 repaint();
             }
         }
 
-        boolean esmaecido() {
+        public boolean esmaecido() {
             return esmaecido;
         }
 
@@ -431,12 +431,12 @@ public abstract class PaginaDoServidor extends Painel {
     }
 
     /** O aviso sobre os dados: sem conexão, agente fora ou agente incompatível, em texto e ícone. */
-    static final class FaixaDeDados extends Painel {
+    public static final class FaixaDeDados extends Painel {
         private static final long serialVersionUID = 1L;
         private final Rotulo titulo = new Rotulo().negrito().tamanho(13f).truncavel();
         private final TextoCorrido texto = new TextoCorrido("", 600).tamanho(12.5f).corDoToken(Tokens.TEXTO2);
 
-        FaixaDeDados() {
+        public FaixaDeDados() {
             super(new BorderLayout(0, 4));
             setBorder(javax.swing.BorderFactory.createEmptyBorder(9, 14, 9, 14));
             add(titulo, BorderLayout.NORTH);
@@ -445,7 +445,7 @@ public abstract class PaginaDoServidor extends Painel {
             setName("faixa-de-dados");
         }
 
-        void mostrar(SituacaoDaVisao s) {
+        public void mostrar(SituacaoDaVisao s) {
             setVisible(s.temAviso());
             if (!s.temAviso()) {
                 return;
@@ -459,11 +459,11 @@ public abstract class PaginaDoServidor extends Painel {
             texto.setText(s.texto());
         }
 
-        String textoDoTitulo() {
+        public String textoDoTitulo() {
             return titulo.getText();
         }
 
-        String textoDaExplicacao() {
+        public String textoDaExplicacao() {
             return texto.getText();
         }
 

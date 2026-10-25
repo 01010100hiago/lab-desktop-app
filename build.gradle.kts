@@ -32,6 +32,10 @@ tasks.withType<JavaCompile> {
 dependencies {
     // SSH, túnel e SshServer embutido para os testes (NÃO usar sshd-mina nem sshd-netty).
     implementation("org.apache.sshd:sshd-core:2.20.0")
+    // SFTP do gerenciador de arquivos: cliente (SftpClient) e, nos testes, o subsistema do servidor embutido. Mesma versão do sshd-core.
+    implementation("org.apache.sshd:sshd-sftp:2.20.0")
+    // Editor de texto com números de linha e realce de sintaxe do gerenciador de arquivos (BSD-3, sem dependências).
+    implementation("com.fifesoft:rsyntaxtextarea:4.0.1")
     // Ed25519 do MINA e Argon2id do cofre. Declarados porque no sshd-common são opcionais.
     implementation("org.bouncycastle:bcprov-jdk18on:1.86")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.86")

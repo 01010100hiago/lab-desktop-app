@@ -46,3 +46,13 @@ terminal
 termometro
 texto
 voltar
+arquivo
+baixar
+enviar-arquivo
+editar
+pasta-mais
+arquivo-mais
+link
+mover
+desfazer
+salvar

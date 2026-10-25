@@ -142,7 +142,8 @@ public final class Aplicacao {
         Apresentador apresentadorTardio = dialogo -> dialogo.mostrar(janelaDeDialogos());
         gerenciador = new GerenciadorServidores(aberto, new PedidoDeCodigoPorDialogo(apresentadorTardio));
         AssistenteDeServidor assistente = new AssistenteDeServidor(aberto, gerenciador, ConfigSsh.padrao());
-        janela = new JanelaPrincipal(gerenciador, assistente, tema, preferencias, this::bloquearCofre);
+        janela = new JanelaPrincipal(gerenciador, assistente, tema, preferencias, this::bloquearCofre,
+            br.com.labdesktop.arquivos.ServicosDeArquivos.de(caminhos));
 
         monitorDeSono = new MonitorDeSono();
         desfazerSono = gerenciador.acompanhar(monitorDeSono);

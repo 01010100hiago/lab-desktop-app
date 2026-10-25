@@ -1,5 +1,6 @@
 package br.com.labdesktop.ui;
 
+import br.com.labdesktop.arquivos.ServicosDeArquivos;
 import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.GerenciadorServidores;
 import br.com.labdesktop.servidor.ServidorLab;
@@ -27,12 +28,18 @@ public final class PainelPrincipal extends Painel {
 
     public PainelPrincipal(GerenciadorServidores gerenciador, AssistenteDeServidor assistente, Notificacoes avisos,
                            Apresentador apresentador, Navegador navegador) {
+        this(gerenciador, assistente, avisos, apresentador, navegador, ServicosDeArquivos.descartaveis());
+    }
+
+    /** @param servicosDeArquivos o que o gerenciador de arquivos guarda no Mac (últimos caminhos, backups) */
+    public PainelPrincipal(GerenciadorServidores gerenciador, AssistenteDeServidor assistente, Notificacoes avisos,
+                           Apresentador apresentador, Navegador navegador, ServicosDeArquivos servicosDeArquivos) {
         super(new BorderLayout());
         this.gerenciador = gerenciador;
         this.navegador = navegador;
         Consumer<ServidorLab> aoSelecionar = this::mostrarServidor;
         this.acoes = new AcoesDaInterface(gerenciador, assistente, avisos, apresentador, aoSelecionar);
-        this.navegacao = new Navegacao(gerenciador, acoes, navegador, avisos, apresentador);
+        this.navegacao = new Navegacao(gerenciador, acoes, navegador, avisos, apresentador, servicosDeArquivos);
         this.barra = new BarraServidores(gerenciador, acoes, new BarraServidores.Ouvinte() {
             @Override
             public void aoEscolherServidor(ServidorLab lab) {
@@ -91,6 +98,14 @@ public final class PainelPrincipal extends Painel {
         }
         if (lab != null) {
             navegacao.mostrarServidor(lab, TelaServidor.Aba.PROJETOS);
+        }
+    }
+
+    /** A aba "Arquivos" do servidor em foco (ou do primeiro cadastrado). */
+    public void mostrarArquivos() {
+        ServidorLab lab = servidorOuPrimeiro();
+        if (lab != null) {
+            navegacao.mostrarServidor(lab, TelaServidor.Aba.ARQUIVOS);
         }
     }
 

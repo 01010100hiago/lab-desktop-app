@@ -1,5 +1,6 @@
 package br.com.labdesktop.ui;
 
+import br.com.labdesktop.arquivos.ServicosDeArquivos;
 import br.com.labdesktop.servidor.GerenciadorServidores;
 import br.com.labdesktop.servidor.Inscricao;
 import br.com.labdesktop.servidor.ServidorLab;
@@ -11,6 +12,7 @@ import br.com.labdesktop.ui.telas.TelaProjetos;
 import br.com.labdesktop.ui.telas.TelaServidor;
 import br.com.labdesktop.ui.telas.TelaServidor.Aba;
 import br.com.labdesktop.ui.telas.TelaServidores;
+import br.com.labdesktop.ui.telas.arquivos.EscolhedorLocal;
 import br.com.labdesktop.ui.tema.Tokens;
 import java.awt.CardLayout;
 import java.util.LinkedHashMap;
@@ -19,8 +21,8 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * A área de conteúdo da janela (ARQUITETURA 4.2): uma {@link TelaServidor} por servidor (com as abas Resumo, Segurança, Containers, Processos, Máquina e
- * "Projetos") e a {@link TelaServidores}, uma de cada vez. Cada aba assina o servidor ao ficar visível e solta ao
+ * A área de conteúdo da janela (ARQUITETURA 4.2): uma {@link TelaServidor} por servidor (com as abas Resumo, Segurança, Containers, Processos, Máquina,
+ * "Projetos" e "Arquivos") e a {@link TelaServidores}, uma de cada vez. Cada aba assina o servidor ao ficar visível e solta ao
  * esconder, então só a que está na tela consulta o agente. A tela de cada servidor é criada uma vez, e por isso a aba
  * escolhida fica lembrada enquanto o app estiver aberto. Sem nenhum servidor cadastrado, mostra a tela de servidores (com o convite para adicionar
  * o primeiro).
@@ -36,6 +38,8 @@ public final class Navegacao extends Painel {
     private final Navegador navegador;
     private final Notificacoes avisos;
     private final Apresentador apresentador;
+    private final ServicosDeArquivos servicosDeArquivos;
+    private final EscolhedorLocal escolhedor = EscolhedorLocal.doSistema(() -> javax.swing.SwingUtilities.getWindowAncestor(this));
     private final CardLayout cartoes = new CardLayout();
     private final Map<String, TelaServidor> telas = new LinkedHashMap<>();
     private final TelaServidores telaServidores;
@@ -45,6 +49,12 @@ public final class Navegacao extends Painel {
 
     public Navegacao(GerenciadorServidores gerenciador, AcoesDaInterface acoes, Navegador navegador, Notificacoes avisos,
                      Apresentador apresentador) {
+        this(gerenciador, acoes, navegador, avisos, apresentador, ServicosDeArquivos.descartaveis());
+    }
+
+    /** @param servicosDeArquivos a memória dos últimos caminhos e a pasta dos backups do gerenciador de arquivos */
+    public Navegacao(GerenciadorServidores gerenciador, AcoesDaInterface acoes, Navegador navegador, Notificacoes avisos,
+                     Apresentador apresentador, ServicosDeArquivos servicosDeArquivos) {
         super();
         setLayout(cartoes);
         fundo(Tokens.BG);
@@ -53,6 +63,7 @@ public final class Navegacao extends Painel {
         this.navegador = navegador;
         this.avisos = avisos;
         this.apresentador = apresentador;
+        this.servicosDeArquivos = servicosDeArquivos;
         this.telaServidores = new TelaServidores(gerenciador, acoes);
         add(telaServidores, SERVIDORES);
         cartoes.show(this, SERVIDORES);
@@ -63,7 +74,7 @@ public final class Navegacao extends Painel {
         return telas.computeIfAbsent(lab.id(), id -> {
             FluxosDeProjeto fluxos = new FluxosDeProjeto(lab, avisos, apresentador, FluxosDeProjeto.liberadasPorPropriedade());
             TelaProjetos projetos = new TelaProjetos(lab, fluxos, navegador, acoes);
-            TelaServidor t = new TelaServidor(lab, projetos, () -> acoes.atualizar(lab));
+            TelaServidor t = new TelaServidor(lab, projetos, () -> acoes.atualizar(lab), servicosDeArquivos, escolhedor);
             add(t, PREFIXO_DO_SERVIDOR + id);
             return t;
         });

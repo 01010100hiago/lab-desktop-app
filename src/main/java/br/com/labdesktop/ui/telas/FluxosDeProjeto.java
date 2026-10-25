@@ -99,6 +99,11 @@ public final class FluxosDeProjeto {
         return avisos;
     }
 
+    /** Quem mostra os diálogos (o gerenciador de arquivos usa o mesmo da lista). */
+    Apresentador apresentador() {
+        return apresentador;
+    }
+
     /** {@code true} se as ações de escrita funcionam; a tela esconde os botões quando for {@code false}. */
     public boolean liberadas() {
         return liberadas;

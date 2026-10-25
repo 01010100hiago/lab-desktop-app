@@ -10,7 +10,8 @@ import java.util.Objects;
  * <pre>
  * ~/Library/Application Support/LabDesktop/   (0700)
  *     cofre.labcofre  (0600)   cofre.labcofre.bak   cofre.labcofre.tmp   cofre.lock
- *     preferencias.json        estado-avisos.json
+ *     preferencias.json        estado-avisos.json       memoria-arquivos.json
+ *     backups-arquivos/<servidor>/<data-hora>/<caminho>   (cópias de segurança dos arquivos editados, 0700)
  * ~/Library/Logs/LabDesktop/lab-desktop.log
  * </pre>
  *
@@ -116,6 +117,16 @@ public final class CaminhosApp {
 
     public Path arquivoEstadoAvisos() {
         return pastaDados.resolve("estado-avisos.json");
+    }
+
+    /** Onde o gerenciador de arquivos lembra o último caminho por servidor e por projeto (sem segredo). */
+    public Path arquivoMemoriaDeArquivos() {
+        return pastaDados.resolve("memoria-arquivos.json");
+    }
+
+    /** As cópias de segurança locais dos arquivos editados no servidor ({@code <servidor>/<data-hora>/<caminho>}). */
+    public Path pastaBackupsDeArquivos() {
+        return pastaDados.resolve("backups-arquivos");
     }
 
     public Path arquivoLog() {

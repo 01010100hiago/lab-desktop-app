@@ -39,6 +39,9 @@ class DependenciasTest {
         carrega("org.apache.sshd.client.SshClient");            // sshd-core
         carrega("org.apache.sshd.server.SshServer");            // sshd-core (testes)
         carrega("org.apache.sshd.common.config.keys.KeyUtils"); // sshd-common
+        carrega("org.apache.sshd.sftp.client.SftpClient");      // sshd-sftp (gerenciador de arquivos)
+        carrega("org.apache.sshd.sftp.server.SftpSubsystemFactory"); // sshd-sftp: o SFTP do servidor embutido dos testes
+        carrega("org.fife.ui.rsyntaxtextarea.RSyntaxTextArea"); // rsyntaxtextarea (editor do gerenciador de arquivos)
         carrega("org.bouncycastle.crypto.generators.Argon2BytesGenerator"); // bcprov
         carrega("org.bouncycastle.openssl.PEMParser");          // bcpkix
         carrega("com.jediterm.terminal.TtyConnector");          // jediterm-core

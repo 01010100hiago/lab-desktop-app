@@ -17,74 +17,13 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-/** As abas de listas do projeto, Arquivos e Backups: tabelas paginadas, somente leitura, com os vazios em texto. */
+/** A aba de lista do projeto, Backups: tabela paginada, somente leitura, com os vazios em texto (a aba Arquivos é o gerenciador de arquivos). */
 @ExtendWith(VerificaEdt.class)
 class PaginasDeListasTest {
 
     private static Cena cena(Aba aba, DetalheProjeto d) {
         Visual.tema(Tema.CLARO);
         return new Cena(true, aba).com(EstadoConexao.CONECTADO, d);
-    }
-
-    // ---------------------------------------------------------------------------------------------
-    // Arquivos
-    // ---------------------------------------------------------------------------------------------
-
-    @Test
-    void arquivosListaARaizEmPaginasDe12ComPastasPrimeiro() {
-        PaginaArquivos p = cena(Aba.ARQUIVOS, FixturesDeApi.detalheDoProjetoSintetico()).tela.arquivos();
-        var t = Visual.naEdt(p::tabela);
-        assertEquals(12, Visual.naEdt(() -> t.linhasDaPagina().size()));
-        assertEquals("mostrando 1-12 de 21", Visual.naEdt(t::textoDoResumo));
-        assertEquals(List.of("app", "Pasta"), Visual.naEdt(() -> t.linhasDaPagina().get(0)), "sem tamanho: duas colunas");
-        assertEquals("Arquivo", Visual.naEdt(() -> t.linhasDaPagina().get(7).get(1)));
-        assertEquals("7 pastas, 14 arquivos", Visual.naEdt(p::textoDoApoio));
-        Visual.naEdt(() -> t.botaoProxima().doClick());
-        assertEquals(9, Visual.naEdt(() -> t.linhasDaPagina().size()));
-        assertEquals("mostrando 13-21 de 21", Visual.naEdt(t::textoDoResumo));
-    }
-
-    @Test
-    void arquivosAvisaQueNavegarEEnviarViraComOGerenciadorDeArquivos() {
-        PaginaArquivos p = cena(Aba.ARQUIVOS, FixturesDeApi.detalheDoProjetoSintetico()).tela.arquivos();
-        assertTrue(Visual.naEdt(p::textoDoAviso).contains("gerenciador de arquivos (SFTP)"));
-    }
-
-    @Test
-    void arquivosNaoTemNenhumBotaoQueMudeAlgo() {
-        Cena c = cena(Aba.ARQUIVOS, FixturesDeApi.detalheDoProjetoSintetico());
-        long botoes = Visual.naEdt(() -> c.tela.arquivos().componentes().stream()
-            .filter(x -> x instanceof javax.swing.AbstractButton b && c.tela.arquivos().aparece(b) && b.getText() != null && !b.getText().isEmpty()
-                && !List.of("Anterior", "Próxima", "NOME", "TAMANHO").contains(b.getText())).count());
-        assertEquals(0, botoes, "só a paginação e a ordem das colunas: é somente leitura ");
-    }
-
-    @Test
-    void arquivosComTamanhoMostramAColunaDeTamanho() {
-        DetalheProjeto d = TelaProjetoTest.detalheCom("\"nome\": \"app\", \"tipo\": \"pasta\"", "\"nome\": \"app\", \"tipo\": \"pasta\", \"tamanho\": 4096");
-        PaginaArquivos p = cena(Aba.ARQUIVOS, d).tela.arquivos();
-        assertTrue(Visual.naEdt(p::mostraTamanho));
-        assertEquals(List.of("app", "Pasta", "4 KB"), Visual.naEdt(() -> p.tabela().linhasDaPagina().get(0)));
-        assertEquals(List.of("banco", "Pasta", "—"), Visual.naEdt(() -> p.tabela().linhasDaPagina().get(1)), "o item sem tamanho ganha traço");
-    }
-
-    @Test
-    void arquivosVazioDizQueARaizEstaVazia() {
-        DetalheProjeto d = FixturesDeApi.de(TelaProjetoTest.detalheEmUmaLinha().replaceFirst("\"arquivos\": \\[.*?\\], \"limite\"", "\"arquivos\": [], \"limite\""),
-            DetalheProjeto.class);
-        PaginaArquivos p = cena(Aba.ARQUIVOS, d).tela.arquivos();
-        assertEquals(0, Visual.naEdt(() -> p.tabela().linhasDaPagina().size()));
-        assertTrue(Visual.naEdt(() -> TelaProjetoTest.textos(p.tabela())).contains("A raiz do projeto está vazia"));
-        assertEquals("", Visual.naEdt(p::textoDoApoio));
-    }
-
-    @Test
-    void nomesDeArquivoComHtmlSaoTexto() {
-        DetalheProjeto d = TelaProjetoTest.detalheCom("\"nome\": \"app\"", "\"nome\": \"<html><b>x</b>\"");
-        PaginaArquivos p = cena(Aba.ARQUIVOS, d).tela.arquivos();
-        String primeiro = Visual.naEdt(() -> p.tabela().linhasDaPagina().get(0).get(0));
-        assertFalse(primeiro.toLowerCase().startsWith("<html"), primeiro);
-        assertTrue(primeiro.contains("<b>x</b>"));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -130,8 +69,8 @@ class PaginasDeListasTest {
     }
 
     @Test
-    void asDuasAbasCabemEm1100x700() {
-        for (Aba aba : new Aba[] {Aba.ARQUIVOS, Aba.BACKUPS}) {
+    void abaDeBackupsCabeEm1100x700() {
+        for (Aba aba : new Aba[] {Aba.BACKUPS}) {
             Cena c = cena(aba, FixturesDeApi.detalheDoProjetoSintetico());
             int pedida = Visual.alturaPreferida(c.tela, 1100 - BarraServidores.LARGURA);
             assertTrue(pedida <= 672, aba + " pede " + pedida + " px");

@@ -49,6 +49,13 @@ public final class JanelaPrincipal extends JFrame {
 
     public JanelaPrincipal(GerenciadorServidores gerenciador, AssistenteDeServidor assistente, GerenciadorTema tema,
                            PreferenciasAtuais preferencias, Runnable bloquearCofre) {
+        this(gerenciador, assistente, tema, preferencias, bloquearCofre, br.com.labdesktop.arquivos.ServicosDeArquivos.descartaveis());
+    }
+
+    /** @param servicosDeArquivos o que o gerenciador de arquivos guarda no Mac (últimos caminhos, backups) */
+    public JanelaPrincipal(GerenciadorServidores gerenciador, AssistenteDeServidor assistente, GerenciadorTema tema,
+                           PreferenciasAtuais preferencias, Runnable bloquearCofre,
+                           br.com.labdesktop.arquivos.ServicosDeArquivos servicosDeArquivos) {
         super(Versao.NOME);
         this.gerenciador = gerenciador;
         this.preferencias = preferencias;
@@ -58,7 +65,7 @@ public final class JanelaPrincipal extends JFrame {
 
         this.avisos = Toasts.instalar(getRootPane());
         this.apresentador = dialogo -> dialogo.mostrar(this);
-        this.painel = new PainelPrincipal(gerenciador, assistente, avisos, apresentador, new Navegador(avisos));
+        this.painel = new PainelPrincipal(gerenciador, assistente, avisos, apresentador, new Navegador(avisos), servicosDeArquivos);
         setContentPane(painel);
         setJMenuBar(new MenuApp(this, painel, tema, preferencias, bloquearCofre,
             () -> apresentador.mostrar(new DialogoSobre())).barra());

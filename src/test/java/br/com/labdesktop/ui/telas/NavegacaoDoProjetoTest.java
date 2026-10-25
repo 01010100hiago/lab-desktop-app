@@ -448,17 +448,16 @@ class NavegacaoDoProjetoTest {
     }
 
     @Test
-    void arquivosEBackupsNaoConsultamNada() {
+    void backupsNaoConsultamNadaEOsArquivosVaoPeloSftpENaoPeloAgente() {
         TelaProjeto t = abrirPeloLab("orbita");
         esperarDetalhe(t);
         int antes = cenario.agente.leiturasDeProjeto.size();
-        for (Aba a : new Aba[] {Aba.ARQUIVOS, Aba.BACKUPS}) {
-            Visual.naEdt(() -> t.abas().botao(a.id()).doClick());
-            Visual.naEdt(() -> t.pagina(a).assinar());
-            assertEquals(java.util.Set.of(), Visual.naEdt(t.pagina(a)::topicosProprios));
-        }
-        assertEquals(12, Visual.naEdt(() -> t.arquivos().tabela().linhasDaPagina().size()));
+        Visual.naEdt(() -> t.abas().botao(Aba.BACKUPS.id()).doClick());
+        Visual.naEdt(() -> t.pagina(Aba.BACKUPS).assinar());
+        assertEquals(java.util.Set.of(), Visual.naEdt(t.pagina(Aba.BACKUPS)::topicosProprios));
         assertEquals(5, Visual.naEdt(() -> t.backups().tabela().linhasDaPagina().size()));
+        Visual.naEdt(() -> t.abas().botao(Aba.ARQUIVOS.id()).doClick());
+        assertNull(t.pagina(Aba.ARQUIVOS), "a aba Arquivos não é uma PaginaDoProjeto: é o gerenciador de arquivos");
         Espera.naoAcontece(Duration.ofMillis(800), "leitura fora o detalhe",
             () -> cenario.agente.leiturasDeProjeto.stream().skip(antes).anyMatch(l -> !l.equals("/api/projetos/orbita")));
     }
