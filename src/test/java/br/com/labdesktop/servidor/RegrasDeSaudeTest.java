@@ -78,7 +78,7 @@ class RegrasDeSaudeTest {
 
     private static Tentativas tentativas(int em24h, int fora) {
         Map<TipoDeTentativa, Integer> tipos = new EnumMap<>(TipoDeTentativa.class);
-        return new Tentativas(em24h, em24h, false, tipos, List.of(), 0, List.of(), fora);
+        return new Tentativas(em24h, em24h, false, tipos, List.of(), 0, List.of(), fora, List.of());
     }
 
     private static ResumoDeSeguranca seg(Tentativas t, Boolean senha) {

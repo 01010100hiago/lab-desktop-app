@@ -18,6 +18,8 @@ final class Textos {
     private static void juntar(Component c, StringBuilder sb) {
         if (c instanceof JLabel l && l.getText() != null && !l.getText().isEmpty()) {
             sb.append(l.getText()).append('\n');
+        } else if (c instanceof javax.swing.text.JTextComponent t && t.getText() != null && !t.getText().isEmpty()) {
+            sb.append(t.getText()).append('\n');
         } else if (c instanceof br.com.labdesktop.ui.componentes.Selo s && !s.texto().isEmpty()) {
             sb.append(s.texto()).append('\n');
         }

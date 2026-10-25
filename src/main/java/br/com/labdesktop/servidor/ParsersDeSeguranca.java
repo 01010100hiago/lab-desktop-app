@@ -3,6 +3,7 @@ package br.com.labdesktop.servidor;
 import br.com.labdesktop.seguranca.TextoSeguro;
 import br.com.labdesktop.servidor.ResumoDeSeguranca.ConfiguracaoDoSsh;
 import br.com.labdesktop.servidor.ResumoDeSeguranca.EstadoFail2ban;
+import br.com.labdesktop.servidor.ResumoDeSeguranca.EventoDeTentativa;
 import br.com.labdesktop.servidor.ResumoDeSeguranca.LoginAceito;
 import br.com.labdesktop.servidor.ResumoDeSeguranca.Origem;
 import br.com.labdesktop.servidor.ResumoDeSeguranca.PortaAberta;
@@ -38,8 +39,12 @@ public final class ParsersDeSeguranca {
     /** Janela de leitura do registro. */
     public static final Duration SETE_DIAS = Duration.ofDays(7);
     public static final Duration VINTE_E_QUATRO_HORAS = Duration.ofHours(24);
-    static final int MAX_ORIGENS = 5;
-    static final int MAX_LOGINS = 10;
+    /** Quantas origens a lista guarda. */
+    public static final int MAX_ORIGENS = 10;
+    /** Quantos eventos de tentativa a lista guarda (os mais recentes). */
+    public static final int MAX_EVENTOS = 500;
+    /** Quantos logins aceitos a lista guarda (os mais recentes). */
+    public static final int MAX_LOGINS = 200;
     private static final int MAX_REGRAS = 30;
 
     private static final DateTimeFormatter ISO_SEM_DOIS_PONTOS = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXX");
@@ -73,11 +78,13 @@ public final class ParsersDeSeguranca {
         final Instant quando;
         final String ip;
         TipoDeTentativa tipo;
+        String usuario;
 
-        Conexao(Instant quando, String ip, TipoDeTentativa tipo) {
+        Conexao(Instant quando, String ip, TipoDeTentativa tipo, String usuario) {
             this.quando = quando;
             this.ip = ip;
             this.tipo = tipo;
+            this.usuario = usuario;
         }
     }
 
@@ -123,24 +130,24 @@ public final class ParsersDeSeguranca {
                 logins.add(new LoginAceito(quando, curto(m.group(2)), ip, Integer.parseInt(m.group(4)), metodo,
                     m.group(5) == null ? "" : curto(m.group(5)), m.group(6) == null ? "" : curto(m.group(6)), !redeLocal(ip)));
             } else if ((m = USUARIO_INVALIDO.matcher(texto)).find()) {
-                registrar(conexoes, ipsPorSegundo, quando, m.group(2), m.group(3), TipoDeTentativa.USUARIO_INVENTADO);
+                registrar(conexoes, ipsPorSegundo, quando, m.group(2), m.group(3), TipoDeTentativa.USUARIO_INVENTADO, m.group(1));
             } else if ((m = FECHOU_USUARIO_INVALIDO.matcher(texto)).find()) {
-                registrar(conexoes, ipsPorSegundo, quando, m.group(2), m.group(3), TipoDeTentativa.USUARIO_INVENTADO);
+                registrar(conexoes, ipsPorSegundo, quando, m.group(2), m.group(3), TipoDeTentativa.USUARIO_INVENTADO, m.group(1));
             } else if ((m = FALHA_AUTENTICACAO.matcher(texto)).find()) {
                 registrar(conexoes, ipsPorSegundo, quando, m.group(3), m.group(4),
-                    m.group(1) != null ? TipoDeTentativa.USUARIO_INVENTADO : TipoDeTentativa.ADIVINHAR_SENHA);
+                    m.group(1) != null ? TipoDeTentativa.USUARIO_INVENTADO : TipoDeTentativa.ADIVINHAR_SENHA, m.group(2));
             } else if ((m = MAXIMO_DE_TENTATIVAS.matcher(texto)).find()) {
                 registrar(conexoes, ipsPorSegundo, quando, m.group(3), m.group(4),
-                    m.group(1) != null ? TipoDeTentativa.USUARIO_INVENTADO : TipoDeTentativa.ADIVINHAR_SENHA);
+                    m.group(1) != null ? TipoDeTentativa.USUARIO_INVENTADO : TipoDeTentativa.ADIVINHAR_SENHA, m.group(2));
             } else if ((m = FECHOU_AUTENTICANDO.matcher(texto)).find()) {
-                registrar(conexoes, ipsPorSegundo, quando, m.group(2), m.group(3), TipoDeTentativa.ADIVINHAR_SENHA);
+                registrar(conexoes, ipsPorSegundo, quando, m.group(2), m.group(3), TipoDeTentativa.ADIVINHAR_SENHA, m.group(1));
             } else if ((m = PROTOCOLO_ESTRANHO.matcher(texto)).find()) {
-                registrar(conexoes, ipsPorSegundo, quando, m.group(1), m.group(2), TipoDeTentativa.VARREDURA);
+                registrar(conexoes, ipsPorSegundo, quando, m.group(1), m.group(2), TipoDeTentativa.VARREDURA, null);
             } else if ((m = FECHOU_ANTES_DE_AUTENTICAR.matcher(texto)).find()) {
-                registrar(conexoes, ipsPorSegundo, quando, m.group(1), m.group(2), TipoDeTentativa.VARREDURA);
+                registrar(conexoes, ipsPorSegundo, quando, m.group(1), m.group(2), TipoDeTentativa.VARREDURA, null);
             } else if ((m = FALHA_PAM.matcher(texto)).find()) {
                 // Sem porta: acompanha um "Failed password" da mesma tentativa (mesmo IP, mesmo segundo). Conta só se sozinha.
-                semPorta.add(new Conexao(quando, m.group(1), TipoDeTentativa.ADIVINHAR_SENHA));
+                semPorta.add(new Conexao(quando, m.group(1), TipoDeTentativa.ADIVINHAR_SENHA, m.group(2)));
             }
         }
 
@@ -159,38 +166,64 @@ public final class ParsersDeSeguranca {
             porTipo.put(t, 0);
         }
         Map<String, Integer> porIp = new HashMap<>();
+        Map<String, Map<TipoDeTentativa, Integer>> tiposPorIp = new HashMap<>();
+        Map<String, Instant> ultimaPorIp = new HashMap<>();
         for (Conexao c : todas) {
             if (!c.quando.isBefore(corte24h)) {
                 em24h++;
             }
             porTipo.merge(c.tipo, 1, Integer::sum);
             porIp.merge(c.ip, 1, Integer::sum);
+            tiposPorIp.computeIfAbsent(c.ip, k -> new EnumMap<>(TipoDeTentativa.class)).merge(c.tipo, 1, Integer::sum);
+            ultimaPorIp.merge(c.ip, c.quando, (x, y) -> x.isAfter(y) ? x : y);
         }
         List<Origem> origens = porIp.entrySet().stream()
             .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
             .limit(MAX_ORIGENS)
-            .map(e -> new Origem(e.getKey(), e.getValue(), redeLocal(e.getKey())))
+            .map(e -> new Origem(e.getKey(), e.getValue(), redeLocal(e.getKey()), predominante(tiposPorIp.get(e.getKey())),
+                ultimaPorIp.get(e.getKey())))
+            .toList();
+        List<EventoDeTentativa> eventos = todas.stream()
+            .sorted(Comparator.comparing((Conexao c) -> c.quando).reversed())
+            .limit(MAX_EVENTOS)
+            .map(c -> new EventoDeTentativa(c.quando, c.tipo, c.ip, c.usuario))
             .toList();
         logins.sort(Comparator.comparing(LoginAceito::quando).reversed());
         int foraDaRede24h = (int) logins.stream().filter(l -> l.foraDaRedeLocal() && !l.quando().isBefore(corte24h)).count();
         List<LoginAceito> recentes = logins.size() > MAX_LOGINS ? List.copyOf(logins.subList(0, MAX_LOGINS)) : List.copyOf(logins);
         return new Tentativas(em24h, todas.size(), parcial, java.util.Collections.unmodifiableMap(porTipo), origens,
-            porIp.size(), recentes, foraDaRede24h);
+            porIp.size(), recentes, foraDaRede24h, eventos);
+    }
+
+    /** O tipo mais usado por um IP (em empate, o de maior prioridade). */
+    private static TipoDeTentativa predominante(Map<TipoDeTentativa, Integer> contagem) {
+        TipoDeTentativa melhor = TipoDeTentativa.OUTROS;
+        int max = -1;
+        for (Map.Entry<TipoDeTentativa, Integer> e : contagem.entrySet()) {
+            if (e.getValue() > max || (e.getValue() == max && prioridade(e.getKey()) > prioridade(melhor))) {
+                melhor = e.getKey();
+                max = e.getValue();
+            }
+        }
+        return melhor;
     }
 
     private static void registrar(Map<String, Conexao> conexoes, Set<String> ipsPorSegundo, Instant quando, String ip,
-                                  String porta, TipoDeTentativa tipo) {
+                                  String porta, TipoDeTentativa tipo, String usuario) {
         String chave = ip + ":" + porta;
         Conexao c = conexoes.get(chave);
+        String nome = usuario == null || usuario.isBlank() ? null : curto(usuario);
         if (c == null) {
-            conexoes.put(chave, new Conexao(quando, ip, tipo));
-            ipsPorSegundo.add(ip + "@" + quando.getEpochSecond());
+            conexoes.put(chave, new Conexao(quando, ip, tipo, nome));
         } else {
             if (prioridade(tipo) > prioridade(c.tipo)) {
                 c.tipo = tipo;
             }
-            ipsPorSegundo.add(ip + "@" + quando.getEpochSecond());
+            if (c.usuario == null) {
+                c.usuario = nome;
+            }
         }
+        ipsPorSegundo.add(ip + "@" + quando.getEpochSecond());
     }
 
     static Instant lerInstante(String texto) {

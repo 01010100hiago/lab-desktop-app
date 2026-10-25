@@ -59,16 +59,77 @@ class ParsersDeSegurancaTest {
     }
 
     @Test
-    void noMaximoCincoOrigens() {
+    void devolveAListaDeEventosDoMaisRecenteAoMaisAntigoComTipoIpEUsuario() {
+        Tentativas t = ataque();
+        assertEquals(8, t.eventos().size());
+        assertFalse(t.maisQueOLimite());
+        for (int i = 1; i < t.eventos().size(); i++) {
+            assertFalse(t.eventos().get(i).quando().isAfter(t.eventos().get(i - 1).quando()), "do mais recente ao mais antigo");
+        }
+        var maisRecente = t.eventos().get(0);
+        assertEquals("198.51.100.9", maisRecente.ip(), "a varredura de há 1 h é a mais recente");
+        assertEquals(TipoDeTentativa.VARREDURA, maisRecente.tipo());
+        assertNull(maisRecente.usuario(), "varredura não tem usuário");
+        var admin = t.eventos().stream().filter(e -> e.ip().equals("203.0.113.5") && "admin".equals(e.usuario())).toList();
+        assertEquals(2, admin.size(), "A (as três linhas viram um evento) e F");
+        assertTrue(t.eventos().stream().anyMatch(e -> "oracle".equals(e.usuario()) && e.tipo() == TipoDeTentativa.USUARIO_INVENTADO));
+        assertTrue(t.eventos().stream().anyMatch(e -> "labuser".equals(e.usuario()) && e.tipo() == TipoDeTentativa.ADIVINHAR_SENHA));
+        assertEquals(t.em7d(), t.eventos().size());
+    }
+
+    @Test
+    void guardaNoMaximo500EventosOsMaisRecentesEDizQueHaMais() {
+        Tentativas t = ParsersDeSeguranca.lerRegistroDoSsh(SaidasDeSeguranca.registroGrande(AGORA, 620, 0), AGORA, false);
+        assertEquals(620, t.em7d());
+        assertEquals(ParsersDeSeguranca.MAX_EVENTOS, t.eventos().size());
+        assertEquals(500, t.eventos().size());
+        assertTrue(t.maisQueOLimite());
+        Instant maisAntigoGuardado = t.eventos().get(499).quando();
+        Instant maisRecente = t.eventos().get(0).quando();
+        assertTrue(maisAntigoGuardado.isBefore(maisRecente));
+        assertEquals(AGORA.minusSeconds(60), maisRecente, "o mais recente é o de 1 minuto atrás");
+        assertEquals(AGORA.minusSeconds(60 + 499 * 600L), maisAntigoGuardado, "os 500 mais recentes, nenhum a menos");
+        ResumoDeSeguranca resumo = null;
+        assertNull(resumo);
+        Tentativas exato = ParsersDeSeguranca.lerRegistroDoSsh(SaidasDeSeguranca.registroGrande(AGORA, 500, 0), AGORA, false);
+        assertEquals(500, exato.eventos().size());
+        assertFalse(exato.maisQueOLimite(), "500 exatos cabem");
+    }
+
+    @Test
+    void asOrigensTrazemTipoPredominanteEUltimaTentativaEsaoAteDez() {
+        Tentativas t = ParsersDeSeguranca.lerRegistroDoSsh(SaidasDeSeguranca.registroGrande(AGORA, 120, 0), AGORA, false);
+        assertEquals(10, ParsersDeSeguranca.MAX_ORIGENS);
+        assertEquals(10, t.origens().size(), "18 endereços, só os 10 que mais tentaram");
+        assertEquals(18, t.totalDeOrigens());
+        var o = t.origens().get(0);
+        assertNotNull(o.tipoPredominante());
+        assertNotNull(o.ultima());
+        assertTrue(o.tentativas() >= t.origens().get(9).tentativas());
+        var ataque = ataque().origens().get(0);
+        assertEquals("203.0.113.5", ataque.ip());
+        assertEquals(TipoDeTentativa.USUARIO_INVENTADO, ataque.tipoPredominante(), "3 de 4 foram usuário inventado");
+        assertEquals(AGORA.minusSeconds(2 * 3600 - 5), ataque.ultima(), "a mais recente dele é a conexão B, 5 s depois da A");
+    }
+
+    @Test
+    void guardaOsLoginsAceitosAte200() {
+        Tentativas t = ParsersDeSeguranca.lerRegistroDoSsh(SaidasDeSeguranca.registroGrande(AGORA, 0, 230), AGORA, false);
+        assertEquals(ParsersDeSeguranca.MAX_LOGINS, t.logins().size());
+        assertTrue(t.logins().get(0).quando().isAfter(t.logins().get(199).quando()));
+    }
+
+    @Test
+    void noMaximoDezOrigens() {
         StringBuilder sb = new StringBuilder();
-        for (int i = 1; i <= 8; i++) {
+        for (int i = 1; i <= 14; i++) {
             sb.append(SaidasDeSeguranca.ts(AGORA.minusSeconds(60)))
                 .append(" h sshd[1]: Failed password for invalid user x from 203.0.113.").append(i).append(" port 4000 ssh2\n");
         }
         Tentativas t = ParsersDeSeguranca.lerRegistroDoSsh(sb.toString(), AGORA, false);
-        assertEquals(5, t.origens().size());
-        assertEquals(8, t.totalDeOrigens());
-        assertEquals(8, t.em24h());
+        assertEquals(10, t.origens().size());
+        assertEquals(14, t.totalDeOrigens());
+        assertEquals(14, t.em24h());
     }
 
     @Test

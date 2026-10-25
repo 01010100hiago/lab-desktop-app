@@ -24,9 +24,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
- * Clicar no servidor na barra lateral abre a PÁGINA do servidor (abas Visão geral e Projetos), com servidor VIVO: SSH
- * embutido, agente de teste e a fixture sintética do detalhe. Prova também a carga: o detalhe e a segurança só são
- * consultados enquanto a Visão geral está assinada.
+ * Clicar no servidor na barra lateral abre a PÁGINA do servidor (abas Resumo, Segurança, Containers, Processos, Máquina e
+ * Projetos), com servidor VIVO: SSH embutido, agente de teste e a fixture sintética do detalhe. Prova também a carga: cada
+ * aba só consulta o que usa, e só enquanto está assinada.
  */
 @ExtendWith(VerificaEdt.class)
 class NavegacaoDoServidorTest {
@@ -54,10 +54,10 @@ class NavegacaoDoServidorTest {
     }
 
     @Test
-    void aoAbrirOAppMostraAPaginaDoServidorNaVisaoGeral() {
+    void aoAbrirOAppMostraAPaginaDoServidorNoResumo() {
         assertEquals("servidor:" + CofreFalso.ID, Visual.naEdt(() -> painel.navegacao().atual()));
         assertNotNull(pagina());
-        assertEquals(Aba.VISAO_GERAL, Visual.naEdt(pagina()::abaAtual));
+        assertEquals(Aba.RESUMO, Visual.naEdt(pagina()::abaAtual));
         assertSame(pagina().projetos(), Visual.naEdt(() -> painel.navegacao().telaDe(CofreFalso.ID)), "a TelaProjetos é a mesma");
     }
 
@@ -69,63 +69,101 @@ class NavegacaoDoServidorTest {
         Visual.naEdt(() -> painel.barra().item(CofreFalso.ID).clicarComOBotaoEsquerdo());
         assertEquals("servidor:" + CofreFalso.ID, Visual.naEdt(() -> painel.navegacao().atual()));
         assertEquals(CofreFalso.ID, Visual.naEdt(() -> painel.barra().selecionado()));
-        assertEquals(Aba.VISAO_GERAL, Visual.naEdt(pagina()::abaAtual), "a primeira vez abre a visão geral");
+        assertEquals(Aba.RESUMO, Visual.naEdt(pagina()::abaAtual), "a primeira vez abre o Resumo");
 
-        Visual.naEdt(() -> pagina().abas().botao("projetos").doClick());
-        assertEquals(Aba.PROJETOS, Visual.naEdt(pagina()::abaAtual));
-
-        Visual.naEdt(() -> painel.barra().clicarEmGerenciar());
-        Visual.naEdt(() -> painel.barra().item(CofreFalso.ID).clicarComOBotaoEsquerdo());
-        assertEquals(Aba.PROJETOS, Visual.naEdt(pagina()::abaAtual), "voltou ao servidor: a aba escolhida ficou lembrada");
-        assertEquals(Aba.PROJETOS, Visual.naEdt(pagina()::abaMarcada));
+        for (Aba escolhida : new Aba[] {Aba.SEGURANCA, Aba.PROJETOS, Aba.MAQUINA}) {
+            Visual.naEdt(() -> pagina().abas().botao(escolhida.id()).doClick());
+            assertEquals(escolhida, Visual.naEdt(pagina()::abaAtual));
+            Visual.naEdt(() -> painel.barra().clicarEmGerenciar());
+            Visual.naEdt(() -> painel.barra().item(CofreFalso.ID).clicarComOBotaoEsquerdo());
+            assertEquals(escolhida, Visual.naEdt(pagina()::abaAtual), "voltou ao servidor: a aba escolhida ficou lembrada");
+            assertEquals(escolhida, Visual.naEdt(pagina()::abaMarcada));
+        }
     }
 
     @Test
     void osAtalhosDoMenuEscolhemAAba() {
         Visual.naEdt(painel::mostrarProjetos);
         assertEquals(Aba.PROJETOS, Visual.naEdt(pagina()::abaAtual));
-        Visual.naEdt(painel::mostrarVisaoGeral);
-        assertEquals(Aba.VISAO_GERAL, Visual.naEdt(pagina()::abaAtual));
+        Visual.naEdt(painel::mostrarResumo);
+        assertEquals(Aba.RESUMO, Visual.naEdt(pagina()::abaAtual));
         Visual.naEdt(painel::mostrarServidores);
         assertEquals("servidores", Visual.naEdt(() -> painel.navegacao().atual()));
-        Visual.naEdt(painel::mostrarVisaoGeral);
+        Visual.naEdt(painel::mostrarResumo);
         assertEquals("servidor:" + CofreFalso.ID, Visual.naEdt(() -> painel.navegacao().atual()));
     }
 
-    @Test
-    void aVisaoGeralRecebeOsDadosPeloTunelEAConsultaParaQuandoSolta() {
-        var visao = pagina().visaoGeral();
-        assertEquals(0, cenario.agente.consultasDeDetalhe.get(), "nada é consultado com a visão geral fora da tela");
-        Visual.naEdt(visao::assinar);
-        Espera.ate(Duration.ofSeconds(20), () -> "detalhe=" + cenario.agente.consultasDeDetalhe.get(),
-            () -> cenario.agente.consultasDeDetalhe.get() >= 1 && cenario.agente.consultasDeServidor.get() >= 1);
-        Espera.ate(Duration.ofSeconds(20), () -> "kpis", () -> Visual.naEdt(() -> visao.faixaDeKpis().cartoes().get(1).textoDoValor())
-            .contains("°C"));
-        Espera.ate(Duration.ofSeconds(20), () -> "detalhes da máquina", () -> !Visual.naEdt(() -> visao.detalhesDaMaquina().linhasDeSensores()).isEmpty());
-        Espera.ate(Duration.ofSeconds(20), () -> "segurança: " + cenario.agente.comandosDeSeguranca,
-            () -> Visual.naEdt(() -> visao.blocoDeSeguranca().textoCompleto()).contains("tentativas de entrada nas últimas 24 h"));
-        assertTrue(Visual.naEdt(() -> visao.blocoDeSeguranca().textoCompleto()).contains("Porta 2222 (SSH)"));
-        assertFalse(cenario.agente.comandosDeSeguranca.isEmpty());
-        for (String c : cenario.agente.comandosDeSeguranca) {
-            assertTrue(c.startsWith("sudo -n ") || c.startsWith("ss ") || c.startsWith("systemctl "), "só os comandos fixos: " + c);
-        }
-
-        Visual.naEdt(visao::soltar);
-        int detalhe = cenario.agente.consultasDeDetalhe.get();
+    private void esperarParar(Duration quanto) {
         int servidor = cenario.agente.consultasDeServidor.get();
+        int detalhe = cenario.agente.consultasDeDetalhe.get();
         int comandos = cenario.agente.comandosDeSeguranca.size();
-        Espera.naoAcontece(Duration.ofMillis(1500), "consulta depois de soltar", () -> cenario.agente.consultasDeDetalhe.get() > detalhe + 1
-            || cenario.agente.consultasDeServidor.get() > servidor + 1 || cenario.agente.comandosDeSeguranca.size() > comandos + 7);
+        Espera.naoAcontece(quanto, "consulta depois de soltar", () -> cenario.agente.consultasDeServidor.get() > servidor + 1
+            || cenario.agente.consultasDeDetalhe.get() > detalhe + 1 || cenario.agente.comandosDeSeguranca.size() > comandos + 7);
     }
 
     @Test
-    void semSudoABlocoDeSegurancaDizQueNaoConseguiuLer() {
+    void oResumoRecebeServidorDetalheESegurancaEParaDeConsultarQuandoSolto() {
+        var resumo = pagina().resumo();
+        assertEquals(0, cenario.agente.consultasDeDetalhe.get(), "nada é consultado com a aba fora da tela");
+        assertEquals(0, cenario.agente.comandosDeSeguranca.size());
+        Visual.naEdt(resumo::assinar);
+        Espera.ate(Duration.ofSeconds(20), () -> "contadores: servidor=" + cenario.agente.consultasDeServidor + " detalhe="
+            + cenario.agente.consultasDeDetalhe, () -> cenario.agente.consultasDeDetalhe.get() >= 1 && cenario.agente.consultasDeServidor.get() >= 1);
+        Espera.ate(Duration.ofSeconds(20), () -> "kpis", () -> Visual.naEdt(() -> resumo.faixaDeKpis().cartoes().get(1).textoDoValor()).contains("%"));
+        Espera.ate(Duration.ofSeconds(20), () -> "segurança: " + cenario.agente.comandosDeSeguranca,
+            () -> Visual.naEdt(() -> resumo.faixaDeKpis().cartoes().get(5).textoDoValor()).matches("\\d+\\+?"));
+        for (String c : cenario.agente.comandosDeSeguranca) {
+            assertTrue(c.startsWith("sudo -n ") || c.startsWith("ss ") || c.startsWith("systemctl "), "só os comandos fixos: " + c);
+        }
+        Visual.naEdt(resumo::soltar);
+        esperarParar(Duration.ofMillis(1500));
+    }
+
+    @Test
+    void containersSoConsultaOServidor() {
+        Visual.naEdt(pagina().containers()::assinar);
+        Espera.ate(Duration.ofSeconds(20), () -> "servidor", () -> cenario.agente.consultasDeServidor.get() >= 1);
+        Espera.ate(Duration.ofSeconds(20), () -> "resumo de containers", () -> !Visual.naEdt(() -> pagina().containers().bloco().textoDoResumo()).equals("—"));
+        Espera.naoAcontece(Duration.ofMillis(1500), "detalhe ou segurança na aba Containers",
+            () -> cenario.agente.consultasDeDetalhe.get() > 0 || !cenario.agente.comandosDeSeguranca.isEmpty());
+        Visual.naEdt(pagina().containers()::soltar);
+    }
+
+    @Test
+    void processosEMaquinaConsultamServidorEDetalheMasNuncaASeguranca() {
+        for (PaginaDoServidor p : new PaginaDoServidor[] {pagina().processos(), pagina().maquina()}) {
+            Visual.naEdt(p::assinar);
+        }
+        Espera.ate(Duration.ofSeconds(20), () -> "servidor e detalhe",
+            () -> cenario.agente.consultasDeDetalhe.get() >= 1 && cenario.agente.consultasDeServidor.get() >= 1);
+        Espera.ate(Duration.ofSeconds(20), () -> "sensores", () -> !Visual.naEdt(() -> pagina().maquina().detalhes().linhasDeSensores()).isEmpty());
+        Espera.naoAcontece(Duration.ofMillis(1500), "segurança fora do Resumo e da Segurança", () -> !cenario.agente.comandosDeSeguranca.isEmpty());
+        Visual.naEdt(pagina().processos()::soltar);
+        Visual.naEdt(pagina().maquina()::soltar);
+    }
+
+    @Test
+    void segurancaSoRodaOsComandosENuncaConsultaOServidor() {
+        var seguranca = pagina().seguranca();
+        Visual.naEdt(seguranca::assinar);
+        Espera.ate(Duration.ofSeconds(20), () -> "segurança: " + cenario.agente.comandosDeSeguranca,
+            () -> Visual.naEdt(() -> seguranca.textosDoResumo()).get(0).contains("tentativas de entrada"));
+        assertTrue(Visual.naEdt(() -> seguranca.textoDoPainel(PaginaSeguranca.SUB_FIREWALL)).contains("Porta 2222 (SSH)"));
+        assertFalse(cenario.agente.comandosDeSeguranca.isEmpty());
+        assertEquals(0, cenario.agente.consultasDeServidor.get(), "a aba Segurança não consulta /api/servidor");
+        assertEquals(0, cenario.agente.consultasDeDetalhe.get());
+        Visual.naEdt(seguranca::soltar);
+        esperarParar(Duration.ofMillis(1500));
+    }
+
+    @Test
+    void semSudoASegurancaDizQueNaoConseguiuLer() {
         cenario.agente.segurancaSemSudo = true;
-        var visao = pagina().visaoGeral();
-        Visual.naEdt(visao::assinar);
+        var seguranca = pagina().seguranca();
+        Visual.naEdt(seguranca::assinar);
         Espera.ate(Duration.ofSeconds(20), () -> "segurança sem sudo",
-            () -> Visual.naEdt(() -> visao.blocoDeSeguranca().textoCompleto())
+            () -> Visual.naEdt(() -> seguranca.textoDoPainel(PaginaSeguranca.SUB_TENTATIVAS))
                 .contains("precisa de sudo sem senha para o usuário"));
-        Visual.naEdt(visao::soltar);
+        Visual.naEdt(seguranca::soltar);
     }
 }

@@ -14,7 +14,6 @@ import br.com.labdesktop.ui.componentes.BarraSeveridade;
 import br.com.labdesktop.ui.componentes.Caixa;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
-import br.com.labdesktop.ui.componentes.SecaoRecolhivel;
 import br.com.labdesktop.ui.telas.CamposEmGrade.Campo;
 import br.com.labdesktop.ui.telas.TabelaDeLinhas.Coluna;
 import br.com.labdesktop.ui.tema.Tokens;
@@ -27,10 +26,10 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 
 /**
- * "Detalhes da máquina", recolhível e fechada de partida: o que quem opera o lab raramente precisa, mas não pode faltar.
- * Versões (painel, Claude Code da imagem das sessões, Node, Docker, Compose, pnpm), a máquina (fabricante, modelo, BIOS,
- * placa, processador), os sensores de temperatura, a energia (tomada e baterias), a CPU por núcleo e a carga, a rede e a
- * memória em detalhe. Sensores, energia e máquina vêm de {@code /api/servidor/detalhe}; o resto, de {@code /api/servidor}.
+ * A aba "Máquina": tudo sobre o servidor como máquina, em duas colunas e sem recolher. Versões (painel, Claude Code da imagem
+ * das sessões, Node, Docker, Compose, pnpm), a máquina (fabricante, modelo, BIOS, placa, processador), os discos por
+ * montagem, os sensores de temperatura, a energia (tomada e baterias), a CPU por núcleo e a carga, a rede e a memória em
+ * detalhe. Sensores, energia e máquina vêm de {@code /api/servidor/detalhe}; o resto, de {@code /api/servidor}.
  */
 final class DetalhesDaMaquina extends Painel {
 
@@ -38,34 +37,31 @@ final class DetalhesDaMaquina extends Painel {
 
     private final CamposEmGrade versoes = new CamposEmGrade();
     private final CamposEmGrade maquina = new CamposEmGrade();
+    private final TabelaDeLinhas discos = new TabelaDeLinhas(new Coluna("Montagem", 1.0, false, true), new Coluna("Usado", 0.7, true, false),
+        new Coluna("Total", 0.7, true, false), new Coluna("Livre", 0.7, true, false), new Coluna("Uso", 1.0, true, false));
     private final TabelaDeLinhas sensores = new TabelaDeLinhas(new Coluna("Sensor", 1.6, false, false),
-        new Coluna("Agora", 0.5, true, false), new Coluna("Limite do fabricante", 0.8, true, false), new Coluna("Crítico", 0.5, true, false));
+        new Coluna("Agora", 0.5, true, false), new Coluna("Limite", 0.5, true, false), new Coluna("Crítico", 0.5, true, false));
     private final JPanel energia = Caixa.coluna(4);
     private final JPanel nucleos = new Painel();
     private final CamposEmGrade carga = new CamposEmGrade();
     private final CamposEmGrade rede = new CamposEmGrade();
     private final CamposEmGrade memoria = new CamposEmGrade();
     private final Rotulo cabecalhoDoDetalhe = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f);
-    private final SecaoRecolhivel secao;
 
-    DetalhesDaMaquina(Runnable aoMudar) {
+    DetalhesDaMaquina() {
         super(new java.awt.BorderLayout());
         fundo(Tokens.SUPERFICIE).borda(Tokens.BORDA).raio(14);
-        setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 10, 8, 16));
-        JPanel esquerda = Caixa.coluna(18, secao("Versões", versoes), secao("Sensores de temperatura", sensores),
-            secao("CPU por núcleo e carga", Caixa.coluna(8, nucleos, carga)));
-        JPanel direita = Caixa.coluna(18, secao("Máquina", maquina), secao("Energia", energia),
-            secao("Rede e memória", Caixa.coluna(8, rede, memoria)));
-        JPanel miolo = new Painel(new GridLayout(1, 2, 28, 0));
-        miolo.setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 10, 6, 0));
+        setBorder(javax.swing.BorderFactory.createEmptyBorder(14, 16, 14, 16));
+        nucleos.setLayout(new java.awt.GridLayout(0, 2, 16, 4));
+        JPanel esquerda = Caixa.coluna(18, secao("Máquina", maquina), secao("Versões", versoes), secao("Discos", discos),
+            secao("Energia", energia));
+        JPanel direita = Caixa.coluna(18, secao("Sensores de temperatura", sensores), secao("CPU por núcleo e carga",
+            Caixa.coluna(8, nucleos, carga)), secao("Rede e memória", Caixa.coluna(8, rede, memoria)));
+        JPanel miolo = new Painel(new GridLayout(1, 2, 32, 0));
         miolo.add(esquerda);
         miolo.add(direita);
-        JPanel conteudo = new Painel(new java.awt.BorderLayout(0, 6));
-        conteudo.add(cabecalhoDoDetalhe, java.awt.BorderLayout.NORTH);
-        conteudo.add(miolo, java.awt.BorderLayout.CENTER);
-        secao = new SecaoRecolhivel("Mostrar os detalhes da máquina", "Esconder os detalhes da máquina", conteudo, aoMudar);
-        add(secao, java.awt.BorderLayout.CENTER);
-        nucleos.setLayout(new java.awt.GridLayout(0, 2, 16, 4));
+        add(cabecalhoDoDetalhe, java.awt.BorderLayout.NORTH);
+        add(miolo, java.awt.BorderLayout.CENTER);
         setName("detalhes-da-maquina");
         atualizar(null, null, false);
     }
@@ -80,10 +76,6 @@ final class DetalhesDaMaquina extends Painel {
     @Override
     public Dimension getMaximumSize() {
         return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
-    }
-
-    SecaoRecolhivel secao() {
-        return secao;
     }
 
     /**
@@ -119,6 +111,7 @@ final class DetalhesDaMaquina extends Painel {
                 : info == null || info.memoria() == null ? null : FormatosDoServidor.bytes(info.memoria().total())),
             new Campo("Arquitetura", m == null ? null : m.arquitetura())));
 
+        atualizarDiscos(info);
         atualizarSensores(detalhe);
         atualizarEnergia(detalhe);
         atualizarNucleos(cpu);
@@ -142,13 +135,29 @@ final class DetalhesDaMaquina extends Painel {
         return ok.isEmpty() ? null : String.join(sep, ok);
     }
 
+    private void atualizarDiscos(InfoServidor info) {
+        List<List<String>> linhas = new ArrayList<>();
+        for (InfoServidor.Disco d : info == null ? List.<InfoServidor.Disco>of() : info.discos()) {
+            Double pct = br.com.labdesktop.servidor.RegrasDeSaude.pctUsado(d);
+            String uso = FormatosDoServidor.porcentagem(pct == null ? null : pct / 100);
+            if (pct != null && pct >= 90) {
+                uso += " (crítico)";
+            } else if (pct != null && pct >= 75) {
+                uso += " (atenção)";
+            }
+            linhas.add(List.of(d.montagem() == null ? FormatosDoServidor.SEM_DADO : d.montagem(), FormatosDoServidor.bytes(d.usado()),
+                FormatosDoServidor.bytes(d.total()), FormatosDoServidor.bytes(d.livre()), uso));
+        }
+        discos.definir(linhas, FormatosDoServidor.SEM_DADO);
+    }
+
     private void atualizarSensores(DetalheServidor d) {
         List<List<String>> linhas = new ArrayList<>();
         for (Sensor s : d == null ? List.<Sensor>of() : d.sensores()) {
             String nome = "Package id 0".equals(s.rotulo()) ? "Processador (pacote)"
                 : s.rotulo() != null && s.rotulo().startsWith("Core ") ? "Núcleo " + s.rotulo().substring(5)
                 : "acpitz".equals(s.chip()) ? "Placa (ACPI)" : s.rotulo();
-            linhas.add(List.of(nome == null ? FormatosDoServidor.SEM_DADO : nome + (s.chip() == null ? "" : " · " + s.chip()),
+            linhas.add(List.of(nome == null ? FormatosDoServidor.SEM_DADO : nome,
                 FormatosDoServidor.temperatura(s.c()), FormatosDoServidor.temperatura(s.max()),
                 FormatosDoServidor.temperatura(s.crit())));
         }
@@ -170,9 +179,13 @@ final class DetalhesDaMaquina extends Painel {
                     + (b.saude() == null ? "" : " · saúde " + FormatosDoServidor.porcentagem(b.saude())), Tokens.TEXTO2));
             }
             if (e.baterias().isEmpty()) {
-                energia.add(rotulo("Sem bateria: se a energia cair, o servidor desliga na hora, sem tempo de salvar nada. "
-                    + "Um nobreak resolve.", Tokens.TEXTO3));
+                // texto longo: quebra em linhas em vez de ser cortado
+                energia.add(new br.com.labdesktop.ui.componentes.TextoCorrido("Sem bateria: se a energia cair, o servidor "
+                    + "desliga na hora, sem tempo de salvar nada. Um nobreak resolve.", 320).corDoToken(Tokens.TEXTO3).tamanho(12f));
             }
+        }
+        for (java.awt.Component c : energia.getComponents()) {
+            ((JComponent) c).setAlignmentX(LEFT_ALIGNMENT); // uma coluna de BoxLayout mistura os alinhamentos dos filhos
         }
         energia.revalidate();
     }
@@ -213,7 +226,7 @@ final class DetalhesDaMaquina extends Painel {
             String texto = FormatosDoServidor.carga(v);
             if (v != null && n != null && n > 0) {
                 Severidade sev = Severidade.doCredito(v / n);
-                texto += " (" + FormatosDoServidor.porcentagem(v / n) + " do que os " + n + " núcleos aguentam)";
+                texto += " (" + FormatosDoServidor.porcentagem(v / n) + " da capacidade)";
                 g = sev == Severidade.NORMAL ? null : sev == Severidade.ALTA ? Gravidade.ATENCAO : Gravidade.PERIGO;
             }
             campos.add(new Campo("Carga " + nomes[i].toLowerCase(Locale.ROOT), texto, g));
@@ -232,7 +245,7 @@ final class DetalhesDaMaquina extends Painel {
         memoria.definir(List.of(
             new Campo("Em uso", m == null ? null : FormatosDoServidor.bytes(m.usada()) + " de " + FormatosDoServidor.bytes(m.total())),
             new Campo("Disponível", m == null ? null : FormatosDoServidor.bytes(m.disponivel())),
-            new Campo("Cache (arquivos guardados para abrir mais rápido)", m == null ? null : FormatosDoServidor.bytes(m.cache())),
+            new Campo("Cache (arquivos recentes)", m == null ? null : FormatosDoServidor.bytes(m.cache())),
             new Campo("Swap (reserva no disco)", s == null ? null : FormatosDoServidor.bytes(s.usada()) + " de " + FormatosDoServidor.bytes(s.total()))));
     }
 
@@ -244,6 +257,10 @@ final class DetalhesDaMaquina extends Painel {
 
     List<Campo> camposDaMaquina() {
         return maquina.campos();
+    }
+
+    List<List<String>> linhasDeDiscos() {
+        return discos.linhas();
     }
 
     List<List<String>> linhasDeSensores() {

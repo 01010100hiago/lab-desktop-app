@@ -109,7 +109,7 @@ public final class MenuApp {
         // --- Visualizar ---
         JMenu ver = new JMenu("Visualizar");
         ver.add(item("Servidores", KeyStroke.getKeyStroke(KeyEvent.VK_2, atalho()), painel::mostrarServidores));
-        ver.add(item("Visão geral do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_3, atalho()), painel::mostrarVisaoGeral));
+        ver.add(item("Resumo do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_3, atalho()), painel::mostrarResumo));
         ver.add(item("Projetos do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_1, atalho()), painel::mostrarProjetos));
         ver.addSeparator();
         JMenu aparencia = new JMenu("Aparência");

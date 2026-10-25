@@ -4,8 +4,10 @@ import br.com.labdesktop.api.modelo.DetalheServidor;
 import br.com.labdesktop.api.modelo.InfoServidor;
 import br.com.labdesktop.api.modelo.InfoServidor.Processo;
 import br.com.labdesktop.ui.componentes.Rotulo;
-import br.com.labdesktop.ui.telas.TabelaDeLinhas.Coluna;
+import br.com.labdesktop.ui.componentes.TabelaPaginada;
+import br.com.labdesktop.ui.componentes.TabelaPaginada.Coluna;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,13 +23,22 @@ final class BlocoDeProcessos extends CaixaDoServidor {
     private static final long serialVersionUID = 1L;
     private static final String PREFIXO_DA_SESSAO = "lab-claude-";
 
-    private final TabelaDeLinhas tabela = new TabelaDeLinhas(new Coluna("Programa", 1.0, false, true),
-        new Coluna("Usuário", 0.7, false, false), new Coluna("CPU", 0.4, true, false), new Coluna("Memória", 0.5, true, false),
-        new Coluna("Projeto / container", 1.6, false, false));
+    /** Uma linha, com os números crus (a ordenação usa eles, não o texto). */
+    record Linha(String nome, String usuario, Double cpu, Long mem, String origem) { }
+
+    private static final Comparator<Double> CPU = Comparator.nullsFirst(Comparator.<Double>naturalOrder());
+    private static final Comparator<Long> MEM = Comparator.nullsFirst(Comparator.<Long>naturalOrder());
+
+    private final TabelaPaginada<Linha> tabela = new TabelaPaginada<>(20, List.of(
+        new Coluna<>("Programa", 1.0, false, true, l -> l.nome(), null),
+        new Coluna<>("Usuário", 0.7, false, false, l -> l.usuario(), null),
+        new Coluna<>("CPU", 0.4, true, false, l -> FormatosDoServidor.percentual(l.cpu()), Comparator.comparing(Linha::cpu, CPU)),
+        new Coluna<>("Memória", 0.5, true, false, l -> FormatosDoServidor.bytes(l.mem()), Comparator.comparing(Linha::mem, MEM)),
+        new Coluna<>("Projeto / container", 1.6, false, false, l -> l.origem(), null)));
 
     BlocoDeProcessos() {
         super("Processos que mais gastam", "processo");
-        apoio(Rotulo.dica("os 20 que mais usam o processador"));
+        apoio(Rotulo.dica("os 20 que mais usam o processador · clique em CPU ou Memória para ordenar"));
         linha(tabela, 0);
         atualizar(null, null);
     }
@@ -41,11 +52,11 @@ final class BlocoDeProcessos extends CaixaDoServidor {
                 }
             }
         }
-        List<List<String>> linhas = new ArrayList<>();
+        List<Linha> linhas = new ArrayList<>();
         for (Processo p : info == null ? List.<Processo>of() : info.processos()) {
-            linhas.add(List.of(p.nome() == null ? FormatosDoServidor.SEM_DADO : p.nome(),
-                p.usuario() == null ? FormatosDoServidor.SEM_DADO : p.usuario(), FormatosDoServidor.percentual(p.cpu()),
-                FormatosDoServidor.bytes(p.mem()), origem(p, projetoPorPid.get(p.pid()))));
+            linhas.add(new Linha(p.nome() == null ? FormatosDoServidor.SEM_DADO : p.nome(),
+                p.usuario() == null ? FormatosDoServidor.SEM_DADO : p.usuario(), p.cpu(), p.mem(),
+                origem(p, projetoPorPid.get(p.pid()))));
         }
         tabela.definir(linhas, "Sem dados de processos ainda.");
         terminar();
@@ -70,7 +81,12 @@ final class BlocoDeProcessos extends CaixaDoServidor {
         return projeto == null ? container : projeto + " · " + container;
     }
 
+    /** O texto das linhas da tela, na ordem. */
     List<List<String>> linhas() {
-        return tabela.linhas();
+        return tabela.linhasDaPagina();
+    }
+
+    TabelaPaginada<Linha> tabela() {
+        return tabela;
     }
 }

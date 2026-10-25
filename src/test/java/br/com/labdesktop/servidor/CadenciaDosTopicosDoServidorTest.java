@@ -7,7 +7,10 @@ import java.time.Duration;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
-/** A carga da página do servidor: o detalhe e a segurança são lentos e NUNCA rodam com a janela escondida. */
+/**
+ * A carga da página do servidor: o detalhe e a segurança são lentos e NUNCA rodam com a janela escondida. Quais abas assinam
+ * cada tópico está em {@code TelaServidorTest.cadaAbaSoUsaOsSeusTopicos}.
+ */
 class CadenciaDosTopicosDoServidorTest {
 
     @Test

@@ -94,14 +94,14 @@ public final class PainelPrincipal extends Painel {
         }
     }
 
-    /** A visão geral do servidor em foco (ou do primeiro cadastrado). */
-    public void mostrarVisaoGeral() {
+    /** O resumo do servidor em foco (ou do primeiro cadastrado). */
+    public void mostrarResumo() {
         ServidorLab lab = servidorEmFoco();
         if (lab == null && !gerenciador.servidores().isEmpty()) {
             lab = gerenciador.servidores().get(0);
         }
         if (lab != null) {
-            navegacao.mostrarServidor(lab, TelaServidor.Aba.VISAO_GERAL);
+            navegacao.mostrarServidor(lab, TelaServidor.Aba.RESUMO);
         }
     }
 

@@ -12,6 +12,8 @@ import java.awt.Graphics;
 import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 import javax.swing.BoxLayout;
 import javax.swing.JPanel;
 
@@ -26,6 +28,8 @@ final class FaixaDeKpis extends Painel {
     private static final long serialVersionUID = 1L;
 
     private final List<Cartao> cartoes = new ArrayList<>();
+    private Map<String, String> destinos = Map.of();
+    private Consumer<String> aoEscolher = chave -> { };
 
     FaixaDeKpis() {
         super(new GridLayout(1, ModeloDeKpis.MAXIMO));
@@ -44,6 +48,7 @@ final class FaixaDeKpis extends Painel {
             cartoes.clear();
             for (int i = 0; i < kpis.size(); i++) {
                 Cartao c = new Cartao();
+                c.pai = this;
                 cartoes.add(c);
                 add(c);
             }
@@ -51,6 +56,7 @@ final class FaixaDeKpis extends Painel {
         }
         for (int i = 0; i < kpis.size(); i++) {
             cartoes.get(i).mostrar(kpis.get(i));
+            cartoes.get(i).atualizarDestino();
         }
         revalidate();
         repaint();
@@ -59,6 +65,16 @@ final class FaixaDeKpis extends Painel {
     @Override
     public Dimension getMaximumSize() {
         return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+    }
+
+    /**
+     * Torna os indicadores clicáveis: {@code destinos} diz, por chave (cpu, disco...), o nome da aba para onde o clique leva
+     * (a Saúde não leva a lugar nenhum); {@code aoEscolher} recebe a chave. Funciona também pelo teclado (Tab, Enter, espaço).
+     */
+    void ligar(Map<String, String> destinos, Consumer<String> aoEscolher) {
+        this.destinos = Map.copyOf(destinos);
+        this.aoEscolher = aoEscolher;
+        cartoes.forEach(Cartao::atualizarDestino);
     }
 
     /** Os indicadores na tela, da esquerda para a direita (para os testes). */
@@ -84,12 +100,14 @@ final class FaixaDeKpis extends Painel {
         private final Rotulo legenda = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(11.5f).truncavel();
         private final Selo selo = new Selo("", br.com.labdesktop.ui.Gravidade.NEUTRO, "info");
         private Kpi atual;
+        private FaixaDeKpis pai;
+        private boolean sobMouse;
 
         @SuppressWarnings("this-escape")
         Cartao() {
             setOpaque(false);
             setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-            setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 14, 12, 12));
+            setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 14, 12, 8));
             valor.mono(18f).negrito();
             for (Component c : new Component[] {rotulo, valor, legenda}) {
                 ((javax.swing.JComponent) c).setAlignmentX(LEFT_ALIGNMENT);
@@ -102,6 +120,89 @@ final class FaixaDeKpis extends Painel {
             AEsquerda s = new AEsquerda(selo);
             s.setAlignmentX(LEFT_ALIGNMENT);
             add(s);
+            addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override
+                public void mouseEntered(java.awt.event.MouseEvent e) {
+                    sobMouse = true;
+                    repaint();
+                }
+
+                @Override
+                public void mouseExited(java.awt.event.MouseEvent e) {
+                    sobMouse = false;
+                    repaint();
+                }
+
+                @Override
+                public void mouseClicked(java.awt.event.MouseEvent e) {
+                    if (e.getButton() == java.awt.event.MouseEvent.BUTTON1) {
+                        clicar();
+                    }
+                }
+            });
+            addFocusListener(new java.awt.event.FocusAdapter() {
+                @Override
+                public void focusGained(java.awt.event.FocusEvent e) {
+                    repaint();
+                }
+
+                @Override
+                public void focusLost(java.awt.event.FocusEvent e) {
+                    repaint();
+                }
+            });
+            getInputMap(WHEN_FOCUSED).put(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ENTER, 0), "abrir");
+            getInputMap(WHEN_FOCUSED).put(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_SPACE, 0), "abrir");
+            getActionMap().put("abrir", new javax.swing.AbstractAction() {
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                public void actionPerformed(java.awt.event.ActionEvent e) {
+                    clicar();
+                }
+            });
+        }
+
+        String destino() {
+            return pai == null || atual == null ? null : pai.destinos.get(atual.chave());
+        }
+
+        /** O mesmo que o clique do mouse: abre a aba do indicador (a Saúde não abre nada). */
+        void clicar() {
+            if (destino() != null) {
+                pai.aoEscolher.accept(atual.chave());
+            }
+        }
+
+        void atualizarDestino() {
+            boolean clicavel = destino() != null;
+            setFocusable(clicavel);
+            setCursor(java.awt.Cursor.getPredefinedCursor(clicavel ? java.awt.Cursor.HAND_CURSOR : java.awt.Cursor.DEFAULT_CURSOR));
+            if (atual != null) {
+                String dica = atual.dica() + (clicavel ? " Clique para abrir a aba " + destino() + "." : "");
+                setToolTipText(dica);
+                getAccessibleContext().setAccessibleDescription(dica);
+            }
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            if (destino() != null && (sobMouse || isFocusOwner())) {
+                java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                try {
+                    g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(Tokens.cor(Tokens.SUPERFICIE3));
+                    g2.fillRoundRect(4, 4, getWidth() - 8, getHeight() - 8, 10, 10);
+                    if (isFocusOwner()) {
+                        g2.setColor(Tokens.cor(Tokens.FOCO));
+                        g2.setStroke(new java.awt.BasicStroke(2f));
+                        g2.drawRoundRect(4, 4, getWidth() - 9, getHeight() - 9, 10, 10);
+                    }
+                } finally {
+                    g2.dispose();
+                }
+            }
+            super.paintComponent(g);
         }
 
         void mostrar(Kpi k) {
@@ -113,12 +214,12 @@ final class FaixaDeKpis extends Painel {
             legenda.setText(k.legenda());
             selo.atualizar(ApresentacaoDeSaude.texto(k.nivel()), ApresentacaoDeSaude.gravidade(k.nivel()),
                 ApresentacaoDeSaude.icone(k.nivel()));
-            setToolTipText(k.dica());
             valor.setToolTipText(k.dica());
             legenda.setToolTipText(k.dica());
             getAccessibleContext().setAccessibleName(k.rotulo() + ": " + k.valor() + ", " + ApresentacaoDeSaude.texto(k.nivel()));
             getAccessibleContext().setAccessibleDescription(k.dica());
             setName("kpi-" + k.chave());
+            atualizarDestino();
         }
 
         Kpi kpi() {

@@ -22,6 +22,9 @@ import javax.swing.JToggleButton;
  */
 public final class Abas extends Painel {
 
+    /** As abas da página (14 pt, 38 px) ou as sub-abas de dentro de uma página (13 pt, 32 px). */
+    private final boolean compacta;
+
     private static final long serialVersionUID = 1L;
 
     private final Map<String, JToggleButton> botoes = new LinkedHashMap<>();
@@ -30,7 +33,13 @@ public final class Abas extends Painel {
     private String selecionada;
 
     public Abas() {
+        this(false);
+    }
+
+    /** {@code compacta}: sub-abas, menores, para o que fica dentro de uma página (Segurança). */
+    public Abas(boolean compacta) {
         super(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        this.compacta = compacta;
         setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
     }
 
@@ -55,9 +64,15 @@ public final class Abas extends Painel {
                     int x = (getWidth() - fm.stringWidth(getText())) / 2;
                     int y = (getHeight() - 3 - fm.getHeight()) / 2 + fm.getAscent();
                     g2.drawString(getText(), x, y);
+                    if (isFocusOwner()) { // foco visível para quem navega pelo teclado
+                        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                        g2.setColor(Tokens.cor(Tokens.FOCO));
+                        g2.setStroke(new java.awt.BasicStroke(2f));
+                        g2.drawRoundRect(3, 3, getWidth() - 7, getHeight() - 8, 8, 8);
+                    }
                     if (isSelected()) {
                         g2.setColor(Tokens.cor(Tokens.ACENTO));
-                        g2.fillRect(8, getHeight() - 3, getWidth() - 16, 3);
+                        g2.fillRect(compacta ? 6 : 8, getHeight() - 3, getWidth() - (compacta ? 12 : 16), 3);
                     }
                 } finally {
                     g2.dispose();
@@ -67,6 +82,36 @@ public final class Abas extends Painel {
         b.putClientProperty("html.disable", Boolean.TRUE);
         b.setText(rotulo);
         b.setFocusPainted(false);
+        b.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusGained(java.awt.event.FocusEvent e) {
+                b.repaint();
+            }
+
+            @Override
+            public void focusLost(java.awt.event.FocusEvent e) {
+                b.repaint();
+            }
+        });
+        // setas esquerda e direita trocam de aba (o espaço e o enter já ativam o botão focado)
+        b.getInputMap(WHEN_FOCUSED).put(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_RIGHT, 0), "proxima-aba");
+        b.getInputMap(WHEN_FOCUSED).put(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_LEFT, 0), "aba-anterior");
+        b.getActionMap().put("proxima-aba", new javax.swing.AbstractAction() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                vizinha(id, 1);
+            }
+        });
+        b.getActionMap().put("aba-anterior", new javax.swing.AbstractAction() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                vizinha(id, -1);
+            }
+        });
         b.setBorderPainted(false);
         b.setContentAreaFilled(false);
         b.setOpaque(false);
@@ -87,10 +132,21 @@ public final class Abas extends Painel {
 
     private void atualizarFontes() {
         botoes.values().forEach(b -> {
-            Font base = b.getFont().deriveFont(Font.BOLD, 14f);
+            Font base = b.getFont().deriveFont(Font.BOLD, compacta ? 13f : 14f);
             b.setFont(base);
-            b.setPreferredSize(new Dimension(b.getFontMetrics(base).stringWidth(b.getText()) + 40, 38));
+            b.setPreferredSize(new Dimension(b.getFontMetrics(base).stringWidth(b.getText()) + (compacta ? 28 : 40),
+                compacta ? 32 : 38));
         });
+    }
+
+    /** Move a escolha para a aba ao lado (sem dar a volta) e leva o foco junto. */
+    private void vizinha(String id, int passo) {
+        java.util.List<String> ids = new java.util.ArrayList<>(botoes.keySet());
+        int i = ids.indexOf(id) + passo;
+        if (i >= 0 && i < ids.size()) {
+            selecionar(ids.get(i), true);
+            botoes.get(ids.get(i)).requestFocusInWindow();
+        }
     }
 
     public void aoSelecionar(Consumer<String> novo) {

@@ -60,6 +60,35 @@ public final class SaidasDeSeguranca {
         return sb.toString();
     }
 
+    /**
+     * Uma semana de força bruta com {@code n} conexões que falharam, de 9 IPs de documentação, nos quatro tipos, uma a cada 10
+     * minutos para trás, mais {@code logins} logins aceitos (um de fora da rede local por senha a cada 4, o resto da LAN).
+     */
+    public static String registroGrande(Instant agora, int n, int logins) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            Instant t = agora.minus(java.time.Duration.ofMinutes(10L * i + 1));
+            String ip = (i % 2 == 0 ? "203.0.113." : "198.51.100.") + (i % 9 + 1);
+            int porta = 30000 + i;
+            switch (i % 4) {
+                case 0 -> sb.append(l(t, "Failed password for invalid user admin from " + ip + " port " + porta + " ssh2"));
+                case 1 -> sb.append(l(t, "Failed password for labuser from " + ip + " port " + porta + " ssh2"));
+                case 2 -> sb.append(l(t, "Connection closed by " + ip + " port " + porta + " [preauth]"));
+                default -> sb.append(l(t, "Invalid user oracle from " + ip + " port " + porta));
+            }
+        }
+        for (int i = 0; i < logins; i++) {
+            Instant t = agora.minus(java.time.Duration.ofMinutes(30L * i + 20));
+            if (i % 4 == 0) {
+                sb.append(l(t, "Accepted password for deploy from 203.0.113.77 port " + (50000 + i) + " ssh2"));
+            } else {
+                sb.append(l(t, "Accepted publickey for labuser from 10.0.0." + (10 + i % 5) + " port " + (50000 + i)
+                    + " ssh2: ED25519 SHA256:AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcdefg"));
+            }
+        }
+        return sb.toString();
+    }
+
     /** Só o login legítimo da rede local (zero tentativas). */
     public static String registroCalmo(Instant agora) {
         return l(agora.minus(H), "Accepted publickey for labuser from 10.0.0.10 port 54321 ssh2: ED25519 SHA256:AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcdefg");

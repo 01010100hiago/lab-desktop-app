@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * A área de conteúdo da janela (ARQUITETURA 4.2): uma {@link TelaServidor} por servidor (com as abas "Visão geral" e
+ * A área de conteúdo da janela (ARQUITETURA 4.2): uma {@link TelaServidor} por servidor (com as abas Resumo, Segurança, Containers, Processos, Máquina e
  * "Projetos") e a {@link TelaServidores}, uma de cada vez. Cada aba assina o servidor ao ficar visível e solta ao
  * esconder, então só a que está na tela consulta o agente. A tela de cada servidor é criada uma vez, e por isso a aba
  * escolhida fica lembrada enquanto o app estiver aberto. Sem nenhum servidor cadastrado, mostra a tela de servidores (com o convite para adicionar
@@ -90,7 +90,7 @@ public final class Navegacao extends Painel {
         repaint();
     }
 
-    /** Mostra a página de um servidor, na aba em que ele estava (a "Visão geral", na primeira vez). */
+    /** Mostra a página de um servidor, na aba em que ele estava (o Resumo, na primeira vez). */
     public void mostrarServidor(ServidorLab lab) {
         garantirTela(lab);
         mostrarCartao(lab);

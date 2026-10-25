@@ -11,21 +11,26 @@ import java.util.Arrays;
 import javax.swing.JPanel;
 
 /**
- * A página de UM servidor (ARQUITETURA 8.1): duas abas no topo, "Visão geral" (a aberta de partida) e "Projetos" (a
- * {@link TelaProjetos}, sem mudar em nada). Clicar no servidor na barra lateral abre esta página. A aba escolhida fica
- * lembrada enquanto o app estiver aberto: a tela de cada servidor é criada uma vez e só escondida quando o usuário vai para
- * outro lugar, então voltar ao servidor mostra a aba em que ele estava.
+ * A página de UM servidor (ARQUITETURA 8.1): abas no topo, Resumo (a aberta de partida), Segurança, Containers, Processos,
+ * Máquina e Projetos (a {@link TelaProjetos}, sem mudar em nada). Clicar no servidor na barra lateral abre esta página; a aba
+ * escolhida fica lembrada enquanto o app estiver aberto: a tela de cada servidor é criada uma vez e só escondida quando o
+ * usuário vai para outro lugar, então voltar ao servidor mostra a aba em que ele estava.
  *
- * <p>Quem consulta o servidor é cada aba, ao ficar visível ({@code HierarchyListener}): a aba que não está na tela não
- * consulta nada. Uma aba escondida dentro de um {@code CardLayout} não está {@code showing}, então a regra vale sozinha.
+ * <p>Quem consulta o servidor é cada aba, ao ficar visível ({@code HierarchyListener}), e só os dados que ela usa: a aba que
+ * não está na tela não consulta nada. Uma aba escondida dentro de um {@code CardLayout} não está {@code showing}, então a
+ * regra vale sozinha.
  */
 public final class TelaServidor extends Painel {
 
     private static final long serialVersionUID = 1L;
 
-    /** As abas. */
+    /** As abas, na ordem da tela. */
     public enum Aba {
-        VISAO_GERAL("visao-geral", "Visão geral"),
+        RESUMO("resumo", "Resumo"),
+        SEGURANCA("seguranca", "Segurança"),
+        CONTAINERS("containers", "Containers"),
+        PROCESSOS("processos", "Processos"),
+        MAQUINA("maquina", "Máquina"),
         PROJETOS("projetos", "Projetos");
 
         private final String id;
@@ -40,41 +45,57 @@ public final class TelaServidor extends Painel {
             return rotulo;
         }
 
+        public String id() {
+            return id;
+        }
+
         static Aba de(String id) {
-            return Arrays.stream(values()).filter(a -> a.id.equals(id)).findFirst().orElse(VISAO_GERAL);
+            return Arrays.stream(values()).filter(a -> a.id.equals(id)).findFirst().orElse(RESUMO);
         }
     }
 
     private final ServidorLab servidor;
     private final TelaProjetos projetos;
-    private final VisaoGeralDoServidor visaoGeral;
+    private final PaginaResumo resumo;
+    private final PaginaSeguranca seguranca;
+    private final PaginaContainers containers;
+    private final PaginaProcessos processos;
+    private final PaginaMaquina maquina;
     private final Abas abas = new Abas();
     private final CardLayout cartoes = new CartoesAjustaveis();
     private final JPanel corpo = new Painel(cartoes);
-    private Aba atual = Aba.VISAO_GERAL;
+    private Aba atual = Aba.RESUMO;
 
     /**
      * @param servidor    o servidor vivo ({@code null} nos testes com dados fixos)
      * @param projetos    a lista de projetos do servidor (a aba "Projetos")
-     * @param aoAtualizar o que o botão Atualizar da visão geral faz
+     * @param aoAtualizar o que o botão Atualizar do Resumo faz
      */
     public TelaServidor(ServidorLab servidor, TelaProjetos projetos, Runnable aoAtualizar) {
         super(new BorderLayout());
         fundo(Tokens.BG);
         this.servidor = servidor;
         this.projetos = projetos;
-        this.visaoGeral = new VisaoGeralDoServidor(servidor, aoAtualizar);
+        this.resumo = new PaginaResumo(servidor, aoAtualizar, this::mostrarAba);
+        this.seguranca = new PaginaSeguranca(servidor, aoAtualizar);
+        this.containers = new PaginaContainers(servidor, aoAtualizar);
+        this.processos = new PaginaProcessos(servidor, aoAtualizar);
+        this.maquina = new PaginaMaquina(servidor, aoAtualizar);
 
         for (Aba a : Aba.values()) {
             abas.adicionar(a.id, a.rotulo);
         }
         abas.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 12, 0, 12));
         abas.aoSelecionar(id -> mostrarAba(Aba.de(id)));
-        corpo.add(visaoGeral, Aba.VISAO_GERAL.id);
+        corpo.add(resumo, Aba.RESUMO.id);
+        corpo.add(seguranca, Aba.SEGURANCA.id);
+        corpo.add(containers, Aba.CONTAINERS.id);
+        corpo.add(processos, Aba.PROCESSOS.id);
+        corpo.add(maquina, Aba.MAQUINA.id);
         corpo.add(projetos, Aba.PROJETOS.id);
         add(abas, BorderLayout.NORTH);
         add(corpo, BorderLayout.CENTER);
-        cartoes.show(corpo, Aba.VISAO_GERAL.id);
+        cartoes.show(corpo, Aba.RESUMO.id);
         getAccessibleContext().setAccessibleName("Servidor");
     }
 
@@ -95,8 +116,36 @@ public final class TelaServidor extends Painel {
         return projetos;
     }
 
-    public VisaoGeralDoServidor visaoGeral() {
-        return visaoGeral;
+    public PaginaResumo resumo() {
+        return resumo;
+    }
+
+    public PaginaSeguranca seguranca() {
+        return seguranca;
+    }
+
+    public PaginaContainers containers() {
+        return containers;
+    }
+
+    public PaginaProcessos processos() {
+        return processos;
+    }
+
+    public PaginaMaquina maquina() {
+        return maquina;
+    }
+
+    /** A página de dados de uma aba ({@code null} para Projetos). */
+    public PaginaDoServidor pagina(Aba aba) {
+        return switch (aba) {
+            case RESUMO -> resumo;
+            case SEGURANCA -> seguranca;
+            case CONTAINERS -> containers;
+            case PROCESSOS -> processos;
+            case MAQUINA -> maquina;
+            case PROJETOS -> null;
+        };
     }
 
     public ServidorLab servidor() {
@@ -112,9 +161,13 @@ public final class TelaServidor extends Painel {
         return abas;
     }
 
-    /** Solta as assinaturas das duas abas (o servidor saiu da lista ou o cofre foi bloqueado). */
+    /** Solta as assinaturas de todas as abas (o servidor saiu da lista ou o cofre foi bloqueado). */
     public void soltar() {
-        visaoGeral.soltar();
+        resumo.soltar();
+        seguranca.soltar();
+        containers.soltar();
+        processos.soltar();
+        maquina.soltar();
         projetos.soltar();
     }
 }

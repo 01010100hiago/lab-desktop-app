@@ -63,9 +63,11 @@ public final class ModeloDeKpis {
         Double temp = c == null ? null : c.temperatura();
         NivelDeSaude nivel = RegrasDeSaude.temperatura(temp);
         String uso = c == null ? FormatosDoServidor.SEM_DADO : FormatosDoServidor.porcentagem(c.uso());
-        String valor = temp == null ? uso : uso + " · " + FormatosDoServidor.temperatura(temp);
-        String legenda = temp == null && c != null ? "sem sensor de calor"
-            : c == null || c.nucleos() == null ? FormatosDoServidor.SEM_DADO : c.nucleos() + " núcleos";
+        String nucleos = c == null || c.nucleos() == null ? null : c.nucleos() + " núcleos";
+        // o uso é o número grande; a temperatura vem junto, na legenda (cabe em uma linha em qualquer largura)
+        String valor = uso;
+        String legenda = temp == null ? (c == null ? FormatosDoServidor.SEM_DADO : "sem sensor de calor")
+            : FormatosDoServidor.temperatura(temp) + (nucleos == null ? "" : " · " + nucleos);
         String dica = "Uso da CPU: " + uso + ". Temperatura: " + FormatosDoServidor.temperatura(temp)
             + " (atenção a partir de 85 °C, crítico a partir de 90 °C).";
         return new Kpi("cpu", "CPU", "cpu", valor, legenda, dica, nivel, "CPU a " + FormatosDoServidor.temperatura(temp));
@@ -141,7 +143,7 @@ public final class ModeloDeKpis {
             legenda = legendaDaSeguranca(r);
             dica = a.causa() + ". " + legenda + ".";
         }
-        return new Kpi("seguranca", "SEGURANÇA · 24 H", "chave", valor, legenda, dica, a.nivel(), a.causa());
+        return new Kpi("seguranca", "SEGURANÇA 24 H", "chave", valor, legenda, dica, a.nivel(), a.causa());
     }
 
     private static String legendaDaSeguranca(ResumoDeSeguranca r) {

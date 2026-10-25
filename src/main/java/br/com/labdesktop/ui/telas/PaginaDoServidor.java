@@ -31,6 +31,8 @@ import java.awt.RenderingHints;
 import java.awt.event.HierarchyEvent;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.function.Supplier;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -38,78 +40,105 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 
 /**
- * A "Visão geral" da página do servidor, para quem não é técnico. De cima para baixo: o cabeçalho (nome, estado,
- * máquina e sistema, tempo ligado), a primeira linha com no máximo seis indicadores (Saúde, CPU, Memória, Disco,
- * Containers, Segurança), e os blocos de monitoramento (Segurança, Containers e sessões do Claude, Tendências, Processos
- * e, recolhidos, os Detalhes da máquina).
+ * A base de cada aba de dados da página do servidor (Resumo, Segurança, Containers, Processos, Máquina). Cuida do que é
+ * igual em todas: assinar SÓ os tópicos que a aba usa e SÓ enquanto ela está visível ({@code HierarchyListener}), guardar
+ * o último retrato de cada dado, e os estados da página (carregando com esqueleto, sem conexão com os últimos dados
+ * esmaecidos e a hora, agente fora, sem dado ainda). Cada aba só diz quais dados usa, monta o seu conteúdo e o atualiza.
  *
- * <p>Só desenha snapshots imutáveis. Assina {@code SERVIDOR}, {@code DETALHE_SERVIDOR} e a leitura de segurança ao ficar
- * visível ({@code HierarchyListener}) e solta ao esconder: sem esta aba na tela, nenhuma dessas consultas (o detalhe é o
- * mais pesado; a segurança roda comandos por SSH) acontece. Estados: carregando (esqueleto), sem conexão ou agente fora
- * (os últimos dados esmaecidos, com a hora e a explicação em texto), sem dado ainda e dado ausente por campo (traço).
+ * <p>Só desenha snapshots imutáveis e tudo acontece na EDT; a rede fica no {@code Sondador}. Aba escondida (outra aba na
+ * frente, ou outra tela) não consulta nada.
  */
-public final class VisaoGeralDoServidor extends Painel {
+public abstract class PaginaDoServidor extends Painel {
 
     private static final long serialVersionUID = 1L;
 
-    private final ServidorLab servidor;
-    private final CabecalhoDoServidor cabecalho;
+    private final transient ServidorLab servidor;
+    private final transient Runnable aoAtualizar;
     private final FaixaDeDados faixaDeDados = new FaixaDeDados();
     private final Esqueleto esqueleto = new Esqueleto();
     private final SemDados semDados;
-    private final FaixaDeKpis kpis = new FaixaDeKpis();
-    private final BlocoDeSeguranca seguranca = new BlocoDeSeguranca();
-    private final BlocoDeContainers containers = new BlocoDeContainers();
-    private final BlocoDeTendencias tendencias = new BlocoDeTendencias();
-    private final BlocoDeProcessos processos = new BlocoDeProcessos();
-    private final DetalhesDaMaquina detalhes;
     private final Esmaecivel corpo = new Esmaecivel();
-    private final JPanel conteudo = new Painel();
-    private final MioloRolavel rolagem;
+    private final JPanel pilha = new Painel();
+    private MioloRolavel rolagem;
 
-    private Supplier<Instant> relogio = Instant::now;
+    private transient Supplier<Instant> relogio = Instant::now;
     private ZoneId fuso = ZoneId.systemDefault();
-    private EstadoServidor estado;
-    private InfoServidor info;
-    private DetalheServidor detalhe;
-    private ResumoDeSeguranca resumoDeSeguranca;
-    private Instant ultimaLeitura;
-    private boolean detalheFalhou;
+    EstadoServidor estado;
+    InfoServidor info;
+    DetalheServidor detalhe;
+    ResumoDeSeguranca seguranca;
+    Instant ultimaLeitura;
+    boolean detalheFalhou;
     private ErroApi erroSemDados;
     private SituacaoDaVisao situacao = SituacaoDaVisao.de(null, false, null, Instant.now(), ZoneId.systemDefault());
-    private Inscricao inscricaoDoServidor;
-    private Inscricao inscricaoDoDetalhe;
-    private Inscricao inscricaoDaSeguranca;
-    private Inscricao inscricaoDoEstado;
+    private transient Inscricao inscricaoDoServidor;
+    private transient Inscricao inscricaoDoDetalhe;
+    private transient Inscricao inscricaoDaSeguranca;
+    private transient Inscricao inscricaoDoEstado;
 
     /**
-     * @param servidor    o servidor vivo ({@code null} nos testes que alimentam a tela com dados fixos)
-     * @param aoAtualizar o que o botão Atualizar faz (consulta já tudo o que está assinado)
+     * @param servidor    o servidor vivo ({@code null} nos testes que alimentam a aba com dados fixos)
+     * @param aoAtualizar o que o botão "Tentar de novo" faz (consulta já tudo o que está assinado)
      */
-    public VisaoGeralDoServidor(ServidorLab servidor, Runnable aoAtualizar) {
+    protected PaginaDoServidor(ServidorLab servidor, Runnable aoAtualizar) {
         super(new BorderLayout());
         this.servidor = servidor;
-        this.cabecalho = new CabecalhoDoServidor(aoAtualizar == null ? () -> { } : aoAtualizar);
-        this.semDados = new SemDados(aoAtualizar == null ? () -> { } : aoAtualizar);
-        this.detalhes = new DetalhesDaMaquina(this::refazerLayout);
+        this.aoAtualizar = aoAtualizar == null ? () -> { } : aoAtualizar;
+        this.semDados = new SemDados(this.aoAtualizar);
+    }
 
+    // ---------------------------------------------------------------------------------------------
+    // O que cada aba define
+    // ---------------------------------------------------------------------------------------------
+
+    /** Usa {@code /api/servidor}. */
+    abstract boolean usaServidor();
+
+    /** Usa {@code /api/servidor/detalhe}. */
+    abstract boolean usaDetalhe();
+
+    /** Usa a leitura de segurança (SSH exec). */
+    abstract boolean usaSeguranca();
+
+    /** O conteúdo da aba (montado UMA vez); é o que fica esmaecido com dados antigos. */
+    abstract JComponent montarConteudo();
+
+    /** Algo que fica sempre à vista acima do aviso e do conteúdo (o cabeçalho do Resumo), ou {@code null}. */
+    JComponent montarTopo() {
+        return null;
+    }
+
+    /** Refaz o conteúdo com os dados de agora (só quando a aba já tem dados). */
+    abstract void atualizarConteudo();
+
+    /** Refaz o topo (sempre, com ou sem dados). */
+    void atualizarTopo() { }
+
+    /** A aba é rolável; o Resumo não pede rolagem (cabe numa tela), mas a mantém por segurança em janelas pequenas. */
+    boolean rolavel() {
+        return true;
+    }
+
+    /** Termina a montagem: chamado pela aba no fim do SEU construtor (os campos dela já existem). */
+    final void iniciar() {
         corpo.setLayout(new BoxLayout(corpo, BoxLayout.Y_AXIS));
-        JComponent[] blocos = {kpis, seguranca, containers, tendencias, processos, detalhes};
-        for (int i = 0; i < blocos.length; i++) {
-            empilhar(corpo, blocos[i], i > 0);
-        }
+        JComponent conteudo = montarConteudo();
+        conteudo.setAlignmentX(LEFT_ALIGNMENT);
+        corpo.add(conteudo);
 
-        conteudo.setLayout(new BoxLayout(conteudo, BoxLayout.Y_AXIS));
-        conteudo.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 20, 20, 20));
-        JComponent[] pilha = {faixaDeDados, cabecalho, esqueleto, semDados, corpo};
-        for (int i = 0; i < pilha.length; i++) {
-            empilhar(conteudo, pilha[i], i > 0);
+        pilha.setLayout(new BoxLayout(pilha, BoxLayout.Y_AXIS));
+        pilha.setBorder(javax.swing.BorderFactory.createEmptyBorder(14, 20, 16, 20));
+        JComponent topo = montarTopo();
+        boolean primeiro = true;
+        for (JComponent c : new JComponent[] {topo, faixaDeDados, esqueleto, semDados, corpo}) {
+            if (c != null) {
+                empilhar(c, !primeiro);
+                primeiro = false;
+            }
         }
-        rolagem = new MioloRolavel(conteudo, () -> Integer.MAX_VALUE);
+        rolagem = new MioloRolavel(pilha, () -> Integer.MAX_VALUE);
         rolagem.getVerticalScrollBar().setUnitIncrement(18);
         add(rolagem, BorderLayout.CENTER);
-        getAccessibleContext().setAccessibleName("Visão geral do servidor");
-
         redesenhar();
         addHierarchyListener(e -> {
             if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0) {
@@ -122,75 +151,93 @@ public final class VisaoGeralDoServidor extends Painel {
         });
     }
 
-    /**
-     * Põe o componente numa coluna com 14 px de espaço em cima, e o espaço some junto com o componente (uma peça escondida
-     * não deixa um buraco na página).
-     */
-    private static void empilhar(JPanel coluna, JComponent c, boolean comEspaco) {
+    /** Põe o componente na coluna com 12 px em cima; o espaço some junto com o componente escondido. */
+    private void empilhar(JComponent c, boolean comEspaco) {
         c.setAlignmentX(LEFT_ALIGNMENT);
         if (comEspaco) {
-            Component folga = Box.createRigidArea(new Dimension(0, 14));
-            coluna.add(folga);
+            Component folga = Box.createRigidArea(new Dimension(0, 12));
+            pilha.add(folga);
             folga.setVisible(c.isVisible());
             c.addComponentListener(new java.awt.event.ComponentAdapter() {
                 @Override
                 public void componentShown(java.awt.event.ComponentEvent e) {
                     folga.setVisible(true);
-                    coluna.revalidate();
+                    pilha.revalidate();
                 }
 
                 @Override
                 public void componentHidden(java.awt.event.ComponentEvent e) {
                     folga.setVisible(false);
-                    coluna.revalidate();
+                    pilha.revalidate();
                 }
             });
         }
-        coluna.add(c);
+        pilha.add(c);
     }
 
     // ---------------------------------------------------------------------------------------------
     // Assinatura: só consulta o servidor enquanto esta aba está na tela
     // ---------------------------------------------------------------------------------------------
 
+    /** Os tópicos que esta aba assina: {@code servidor}, {@code detalhe} e/ou {@code seguranca}. */
+    public final Set<String> topicos() {
+        Set<String> s = new LinkedHashSet<>();
+        if (usaServidor()) {
+            s.add("servidor");
+        }
+        if (usaDetalhe()) {
+            s.add("detalhe");
+        }
+        if (usaSeguranca()) {
+            s.add("seguranca");
+        }
+        return s;
+    }
+
     /** Passa a receber os dados (e a consultar o servidor). Chamado ao ficar visível; idempotente. */
-    public void assinar() {
-        if (servidor == null || inscricaoDoServidor != null) {
+    public final void assinar() {
+        if (servidor == null || inscricaoDoEstado != null) {
             return;
         }
-        inscricaoDoServidor = servidor.assinar(Topico.SERVIDOR, new OuvinteDeTopico<InfoServidor>() {
-            @Override
-            public void aoAtualizar(InfoServidor valor) {
-                aoReceberServidor(valor);
-            }
+        if (usaServidor()) {
+            inscricaoDoServidor = servidor.assinar(Topico.SERVIDOR, new OuvinteDeTopico<InfoServidor>() {
+                @Override
+                public void aoAtualizar(InfoServidor valor) {
+                    aoReceberServidor(valor);
+                }
 
-            @Override
-            public void aoFalhar(ErroApi erro) {
-                aoFalharServidor(erro);
-            }
-        });
-        inscricaoDoDetalhe = servidor.assinar(Topico.DETALHE_SERVIDOR, new OuvinteDeTopico<DetalheServidor>() {
-            @Override
-            public void aoAtualizar(DetalheServidor valor) {
-                aoReceberDetalhe(valor);
-            }
+                @Override
+                public void aoFalhar(ErroApi erro) {
+                    aoFalharServidor(erro);
+                }
+            });
+        }
+        if (usaDetalhe()) {
+            inscricaoDoDetalhe = servidor.assinar(Topico.DETALHE_SERVIDOR, new OuvinteDeTopico<DetalheServidor>() {
+                @Override
+                public void aoAtualizar(DetalheServidor valor) {
+                    aoReceberDetalhe(valor);
+                }
 
-            @Override
-            public void aoFalhar(ErroApi erro) {
-                aoFalharDetalhe(erro);
-            }
-        });
-        inscricaoDaSeguranca = servidor.assinarSeguranca(new OuvinteDeTopico<ResumoDeSeguranca>() {
-            @Override
-            public void aoAtualizar(ResumoDeSeguranca valor) {
-                aoReceberSeguranca(valor);
-            }
-        });
+                @Override
+                public void aoFalhar(ErroApi erro) {
+                    aoFalharDetalhe();
+                }
+            });
+        }
+        if (usaSeguranca()) {
+            inscricaoDaSeguranca = servidor.assinarSeguranca(new OuvinteDeTopico<ResumoDeSeguranca>() {
+                @Override
+                public void aoAtualizar(ResumoDeSeguranca valor) {
+                    aoReceberSeguranca(valor);
+                }
+            });
+        }
         inscricaoDoEstado = servidor.observarEstado(this::aoMudarEstado);
     }
 
     /** Para de consultar. Chamado ao esconder; idempotente. */
-    public void soltar() {
+    public final void soltar() {
         for (Inscricao i : new Inscricao[] {inscricaoDoServidor, inscricaoDoDetalhe, inscricaoDaSeguranca, inscricaoDoEstado}) {
             if (i != null) {
                 i.close();
@@ -202,151 +249,143 @@ public final class VisaoGeralDoServidor extends Painel {
         inscricaoDoEstado = null;
     }
 
-    boolean assinada() {
-        return inscricaoDoServidor != null;
+    public final boolean assinada() {
+        return inscricaoDoEstado != null;
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Snapshots (na EDT)
+    // Snapshots (na EDT). Públicos para os testes alimentarem a aba com dados fixos.
     // ---------------------------------------------------------------------------------------------
 
-    /** Chegou {@code /api/servidor}. Público para os testes alimentarem a tela com dados fixos. */
-    public void aoReceberServidor(InfoServidor novo) {
+    public final void aoReceberServidor(InfoServidor novo) {
         this.info = novo;
         this.erroSemDados = null;
         this.ultimaLeitura = novo.quando() != null ? novo.quando() : relogio.get();
         redesenhar();
     }
 
-    /** Chegou {@code /api/servidor/detalhe}. */
-    public void aoReceberDetalhe(DetalheServidor novo) {
+    public final void aoReceberDetalhe(DetalheServidor novo) {
         this.detalhe = novo;
         this.detalheFalhou = false;
         redesenhar();
     }
 
-    /** Chegou a leitura de segurança. */
-    public void aoReceberSeguranca(ResumoDeSeguranca novo) {
-        this.resumoDeSeguranca = novo;
+    public final void aoReceberSeguranca(ResumoDeSeguranca novo) {
+        this.seguranca = novo;
         redesenhar();
     }
 
-    /** O estado da conexão mudou. */
-    public void aoMudarEstado(EstadoServidor novo) {
+    public final void aoMudarEstado(EstadoServidor novo) {
         this.estado = novo;
         redesenhar();
     }
 
     private void aoFalharServidor(ErroApi erro) {
         if (info != null || erro instanceof ErroApi.ErroRede) {
-            return; // a faixa de conexão explica; a tela mantém a última leitura
+            return; // a faixa de conexão explica; a aba mantém a última leitura
         }
         this.erroSemDados = erro;
         redesenhar();
     }
 
-    private void aoFalharDetalhe(ErroApi erro) {
+    private void aoFalharDetalhe() {
         if (detalhe == null) {
             detalheFalhou = true;
             redesenhar();
         }
     }
 
-    /** Troca o relógio (os testes fixam a hora para o "há 4 d" não variar). */
-    void relogio(Supplier<Instant> novo, ZoneId novoFuso) {
+    /** Troca o relógio e o fuso (os testes fixam a hora para o "há 4 d" não variar). */
+    final void relogio(Supplier<Instant> novo, ZoneId novoFuso) {
         this.relogio = novo;
         this.fuso = novoFuso;
         redesenhar();
+    }
+
+    final Instant agora() {
+        return relogio.get();
+    }
+
+    final ZoneId fuso() {
+        return fuso;
     }
 
     // ---------------------------------------------------------------------------------------------
     // Desenho
     // ---------------------------------------------------------------------------------------------
 
-    private void redesenhar() {
-        Instant agora = relogio.get();
-        situacao = SituacaoDaVisao.de(estado, info != null, ultimaLeitura, agora, fuso);
-        cabecalho.atualizar(estado, info, ultimaLeitura, fuso);
+    private boolean temDados() {
+        if (usaServidor()) {
+            return info != null;
+        }
+        return usaSeguranca() ? seguranca != null : detalhe != null;
+    }
+
+    private Instant leitura() {
+        return usaServidor() ? ultimaLeitura : seguranca == null ? null : seguranca.lidoEm();
+    }
+
+    final void redesenhar() {
+        if (rolagem == null) {
+            return; // ainda montando
+        }
+        boolean tem = temDados();
+        situacao = SituacaoDaVisao.de(estado, tem, leitura(), relogio.get(), fuso);
+        atualizarTopo();
         faixaDeDados.mostrar(situacao);
-
-        boolean temDados = info != null;
-        boolean erro = erroSemDados != null && !temDados;
-        esqueleto.setVisible(!temDados && !erro && situacao.modo() == SituacaoDaVisao.Modo.CARREGANDO);
-        semDados.setVisible(!temDados && (erro || situacao.modo() != SituacaoDaVisao.Modo.CARREGANDO));
+        boolean erro = erroSemDados != null && !tem;
+        esqueleto.setVisible(!tem && !erro && situacao.modo() == SituacaoDaVisao.Modo.CARREGANDO);
+        semDados.setVisible(!tem && (erro || situacao.modo() != SituacaoDaVisao.Modo.CARREGANDO));
         semDados.mostrar(erro ? MensagensDeErro.daApi(erroSemDados) : null, estado == null ? null : situacao);
-        corpo.setVisible(temDados);
+        corpo.setVisible(tem);
         corpo.esmaecer(situacao.esmaecer());
-
-        if (temDados) {
-            kpis.atualizar(ModeloDeKpis.de(info, resumoDeSeguranca));
-            seguranca.atualizar(resumoDeSeguranca, fuso);
-            containers.atualizar(info, agora, fuso);
-            tendencias.atualizar(info);
-            processos.atualizar(info, detalhe);
-            detalhes.atualizar(info, detalhe, detalheFalhou);
+        if (tem) {
+            atualizarConteudo();
         }
         refazerLayout();
     }
 
-    private void refazerLayout() {
-        conteudo.revalidate();
-        conteudo.repaint();
+    final void refazerLayout() {
+        pilha.revalidate();
+        pilha.repaint();
         rolagem.revalidate();
+    }
+
+    /** A área rolável (para os testes conferirem se pede rolagem). */
+    final MioloRolavel rolagem() {
+        return rolagem;
+    }
+
+    /** A coluna de conteúdo desta aba (a altura que ela pede é o que o teste do Resumo mede). */
+    final JPanel pilha() {
+        return pilha;
     }
 
     // ---------------------------------------------------------------------------------------------
     // Para os testes
     // ---------------------------------------------------------------------------------------------
 
-    public SituacaoDaVisao situacao() {
+    public final SituacaoDaVisao situacao() {
         return situacao;
     }
 
-    FaixaDeKpis faixaDeKpis() {
-        return kpis;
-    }
-
-    BlocoDeSeguranca blocoDeSeguranca() {
-        return seguranca;
-    }
-
-    BlocoDeContainers blocoDeContainers() {
-        return containers;
-    }
-
-    BlocoDeTendencias blocoDeTendencias() {
-        return tendencias;
-    }
-
-    BlocoDeProcessos blocoDeProcessos() {
-        return processos;
-    }
-
-    DetalhesDaMaquina detalhesDaMaquina() {
-        return detalhes;
-    }
-
-    CabecalhoDoServidor cabecalho() {
-        return cabecalho;
-    }
-
-    FaixaDeDados faixaDeDados() {
+    final FaixaDeDados faixaDeDados() {
         return faixaDeDados;
     }
 
-    boolean mostraEsqueleto() {
+    final boolean mostraEsqueleto() {
         return esqueleto.isVisible();
     }
 
-    boolean mostraCorpo() {
+    final boolean mostraCorpo() {
         return corpo.isVisible();
     }
 
-    boolean corpoEsmaecido() {
+    final boolean corpoEsmaecido() {
         return corpo.esmaecido();
     }
 
-    SemDados semDados() {
+    final SemDados semDados() {
         return semDados;
     }
 
@@ -399,7 +438,7 @@ public final class VisaoGeralDoServidor extends Painel {
 
         FaixaDeDados() {
             super(new BorderLayout(0, 4));
-            setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 14, 10, 14));
+            setBorder(javax.swing.BorderFactory.createEmptyBorder(9, 14, 9, 14));
             add(titulo, BorderLayout.NORTH);
             add(texto, BorderLayout.CENTER);
             setVisible(false);
@@ -465,7 +504,7 @@ public final class VisaoGeralDoServidor extends Painel {
                 texto.setText(situacao.texto());
             } else {
                 titulo.setText("Ainda não há informações deste servidor");
-                texto.setText("Assim que a conexão estiver de pé, a visão geral aparece aqui.");
+                texto.setText("Assim que a conexão estiver de pé, esta aba aparece aqui.");
             }
         }
 
@@ -483,7 +522,7 @@ public final class VisaoGeralDoServidor extends Painel {
         }
     }
 
-    /** Barras cinzas no lugar da página, até a primeira resposta. */
+    /** Barras cinzas no lugar da aba, até a primeira resposta. */
     private static final class Esqueleto extends ComponenteSimples {
         private static final long serialVersionUID = 1L;
 
@@ -494,12 +533,12 @@ public final class VisaoGeralDoServidor extends Painel {
 
         @Override
         public Dimension getPreferredSize() {
-            return new Dimension(400, 330);
+            return new Dimension(400, 300);
         }
 
         @Override
         public Dimension getMaximumSize() {
-            return new Dimension(Integer.MAX_VALUE, 330);
+            return new Dimension(Integer.MAX_VALUE, 300);
         }
 
         @Override
@@ -509,18 +548,12 @@ public final class VisaoGeralDoServidor extends Painel {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(Tokens.cor(Tokens.ESQUELETO_A));
                 int w = getWidth();
-                int celula = Math.max(60, w / 6);
-                for (int i = 0; i < 6; i++) { // a linha de indicadores
-                    int x = i * celula;
-                    g2.fillRoundRect(x + 14, 8, 60, 10, 6, 6);
-                    g2.fillRoundRect(x + 14, 28, Math.min(90, celula - 40), 20, 6, 6);
-                    g2.fillRoundRect(x + 14, 58, Math.min(110, celula - 30), 10, 6, 6);
-                }
-                for (int b = 0; b < 3; b++) { // os blocos de baixo
-                    int y = 100 + b * 76;
+                for (int b = 0; b < 3; b++) {
+                    int y = b * 96;
                     g2.fillRoundRect(0, y, 160, 12, 6, 6);
-                    g2.fillRoundRect(0, y + 24, Math.max(80, w - 40), 10, 6, 6);
-                    g2.fillRoundRect(0, y + 44, Math.max(80, (w - 40) * 2 / 3), 10, 6, 6);
+                    g2.fillRoundRect(0, y + 28, Math.max(80, w - 40), 10, 6, 6);
+                    g2.fillRoundRect(0, y + 48, Math.max(80, (w - 40) * 2 / 3), 10, 6, 6);
+                    g2.fillRoundRect(0, y + 68, Math.max(80, (w - 40) / 2), 10, 6, 6);
                 }
             } finally {
                 g2.dispose();
