@@ -146,13 +146,13 @@ public final class TelaProjeto extends Painel {
 
         voltar.setToolTipText("Volta para a lista de projetos (Esc)");
         voltar.getAccessibleContext().setAccessibleName("Voltar para a lista de projetos");
-        voltar.setFont(voltar.getFont().deriveFont(13f));
+        br.com.labdesktop.ui.tema.Fontes.aplicar(voltar, br.com.labdesktop.ui.tema.Fontes.TEXTO, java.awt.Font.PLAIN, 13f);
         voltar.addActionListener(e -> saida.voltar());
         atualizar.setToolTipText("Consulta o servidor agora");
         atualizar.addActionListener(e -> ctx.aoAtualizar.run());
         nome.setToolTipText(projeto);
         JPanel linha = Caixa.linha(12, voltar, nome, new AEsquerda(estado), Caixa.mola(), leitura, atualizar);
-        linha.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 10, 6, 18));
+        linha.setBorder(javax.swing.BorderFactory.createEmptyBorder(6, 10, 4, 18));
         abas.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 12, 0, 12));
         for (Aba a : Aba.values()) {
             abas.adicionar(a.id, a.rotulo);

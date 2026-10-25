@@ -111,6 +111,19 @@ class ModeloDoProjetoTest {
     }
 
     @Test
+    void oCodigoEmPalavrasSimplesNuncaComHashCru() {
+        String sujo = padrao().textoDoCodigo();
+        assertEquals("Branch main, com mudanças que ainda não foram salvas no git", sujo);
+        assertFalse(sujo.contains("a1b2c3d"), "o hash fica nos detalhes técnicos, não na frase");
+        String limpo = ModeloDoProjeto.de(FixturesDeApi.de(TelaProjetoTest.detalheEmUmaLinha().replaceFirst("\"sujo\": true", "\"sujo\": false"),
+            DetalheProjeto.class)).textoDoCodigo();
+        assertEquals("Branch main, tudo salvo", limpo);
+        String semGit = ModeloDoProjeto.de(FixturesDeApi.de(TelaProjetoTest.detalheEmUmaLinha()
+            .replaceFirst("\"git\": \\{.*?\\}, \"backups\"", "\"git\": null, \"backups\""), DetalheProjeto.class)).textoDoCodigo();
+        assertEquals("Sem git", semGit);
+    }
+
+    @Test
     void semGitEmexidoAusenteNaoQuebram() {
         String json = TelaProjetoTest.detalheEmUmaLinha()
             .replaceFirst("\"git\": \\{.*?\\}, \"backups\"", "\"git\": null, \"backups\"").replaceFirst("\"mexido\": [0-9.]+", "\"mexido\": null");
@@ -168,8 +181,9 @@ class ModeloDoProjetoTest {
     @Test
     void consumoDentroDoLimite() {
         Kpi c = kpi(padrao().indicadores(), "consumo");
-        assertEquals("2,0% de 20%", c.valor());
-        assertEquals("da semana do plano", c.legenda());
+        assertEquals("2,0%", c.valor(), "o valor grande é só o número; o teto vem na legenda (cabe nos cartões em 1100)");
+        assertEquals("de 20% da semana", c.legenda());
+        assertEquals("CONSUMO", c.rotulo());
         assertEquals(NivelDeSaude.OK, c.nivel());
         assertNull(c.seloTexto(), "o selo diz a palavra do nível: OK");
     }
@@ -177,7 +191,8 @@ class ModeloDoProjetoTest {
     @Test
     void consumoPausadoViraCriticoComAPalavraPausado() {
         Kpi c = kpi(ModeloDoProjeto.de(TelaProjetoTest.detalhePausado()).indicadores(), "consumo");
-        assertEquals("22% de 20%", c.valor());
+        assertEquals("22%", c.valor());
+        assertEquals("de 20% da semana", c.legenda());
         assertEquals(NivelDeSaude.CRITICO, c.nivel());
         assertEquals("Pausado", c.seloTexto());
     }
@@ -187,7 +202,7 @@ class ModeloDoProjetoTest {
         DetalheProjeto d = TelaProjetoTest.detalheCom("\"usado_pp\": 1.96, \"estado\": \"ok\"", "\"usado_pp\": 16.5, \"estado\": \"atencao\"");
         Kpi c = kpi(ModeloDoProjeto.de(d).indicadores(), "consumo");
         assertEquals(NivelDeSaude.ATENCAO, c.nivel());
-        assertEquals("17% de 20%", c.valor(), "a regra do app: uma casa só abaixo de 10");
+        assertEquals("17%", c.valor(), "a regra do app: uma casa só abaixo de 10");
     }
 
     @Test
@@ -195,7 +210,7 @@ class ModeloDoProjetoTest {
         DetalheProjeto d = TelaProjetoTest.detalheCom("\"liberado\": false", "\"liberado\": true");
         Kpi c = kpi(ModeloDoProjeto.de(d).indicadores(), "consumo");
         assertEquals("Liberado", c.seloTexto());
-        assertEquals("liberado até a semana virar", c.legenda());
+        assertEquals("liberado na semana", c.legenda());
     }
 
     @Test
@@ -203,7 +218,7 @@ class ModeloDoProjetoTest {
         Kpi c = kpi(ModeloDoProjeto.de(TelaProjetoTest.detalheSemTeto()).indicadores(), "consumo");
         assertTrue(c.semSelo());
         assertTrue(c.valor().endsWith("%"), c.valor());
-        assertEquals("da semana · sem limite", c.legenda());
+        assertEquals("da semana, sem limite", c.legenda());
     }
 
     @Test

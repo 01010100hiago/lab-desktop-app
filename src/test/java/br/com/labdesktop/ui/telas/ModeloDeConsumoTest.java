@@ -81,7 +81,7 @@ class ModeloDeConsumoTest {
         long zeros = b.stream().filter(x -> x.valor() == 0).count();
         assertEquals(13, zeros, "os dias da fixture sem uso");
         assertEquals(3.2, b.get(2).valor(), 1e-9);
-        assertTrue(b.get(2).dica().startsWith("27 de set: US$ 3,20 · "), b.get(2).dica());
+        assertTrue(b.get(2).dica().startsWith("27 de set: US$ 3,20, "), b.get(2).dica());
         assertTrue(b.get(2).dica().contains("respostas"));
     }
 
@@ -101,7 +101,8 @@ class ModeloDeConsumoTest {
         TokensDoProjeto t = FixturesDeApi.consumoSintetico();
         assertEquals("Consumo dos últimos 30 dias: US$ 68,20 no total; o dia mais caro foi 16 de out, com US$ 8,40.",
             ModeloDeConsumo.resumoDoGrafico(t));
-        assertEquals("US$ 68,20 em 30 dias · maior dia: 16 de out (US$ 8,40)", ModeloDeConsumo.legendaDoGrafico(t));
+        assertEquals("US$ 68,20", ModeloDeConsumo.totalDoGrafico(t));
+        assertEquals("16 de out (US$ 8,40)", ModeloDeConsumo.diaMaisCaro(t));
         assertEquals("US$ 8,40", ModeloDeConsumo.valorDoAlto(8.4));
     }
 
@@ -109,7 +110,7 @@ class ModeloDeConsumoTest {
     void semDadoAindaNaoQuebra() {
         assertTrue(ModeloDeConsumo.barras(null).isEmpty());
         assertEquals("Consumo dos últimos 30 dias: sem dados.", ModeloDeConsumo.resumoDoGrafico(null));
-        assertNull(ModeloDeConsumo.harness(null));
+        assertEquals(List.of(), ModeloDeConsumo.harness(null));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -135,10 +136,11 @@ class ModeloDeConsumoTest {
     }
 
     @Test
-    void harnessEmUmaLinha() {
-        assertEquals("Harness: 12 entregas · 14 iniciados · 143,2 mil tokens", ModeloDeConsumo.harness(FixturesDeApi.consumoSintetico()));
-        assertNull(ModeloDeConsumo.harness(FixturesDeApi.de("{\"harness\":{\"entregas\":[]}}", TokensDoProjeto.class)),
-            "sem nada de Harness, a linha some");
+    void harnessEmItensSeparados() {
+        assertEquals(List.of(List.of("Entregas", "12"), List.of("Iniciados", "14"), List.of("Tokens", "143,2 mil")),
+            ModeloDeConsumo.harness(FixturesDeApi.consumoSintetico()));
+        assertEquals(List.of(), ModeloDeConsumo.harness(FixturesDeApi.de("{\"harness\":{\"entregas\":[]}}", TokensDoProjeto.class)),
+            "sem nada de Harness, os itens somem");
     }
 
     @Test

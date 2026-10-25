@@ -101,7 +101,7 @@ final class FaixaDeKpis extends Painel {
     static final class Cartao extends JPanel {
         private static final long serialVersionUID = 1L;
         private final Rotulo rotulo = new Rotulo().corDoToken(Tokens.TEXTO3).negrito().tamanho(10.5f).truncavel();
-        private final Rotulo valor = new Rotulo().tamanho(18f).negrito().truncavel();
+        private final Rotulo valor = new Rotulo().tamanho(br.com.labdesktop.ui.tema.Fontes.NOMINAL_DO_VALOR_GRANDE).negrito().truncavel();
         private final Rotulo legenda = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(11.5f).truncavel();
         private final Selo selo = new Selo("", br.com.labdesktop.ui.Gravidade.NEUTRO, "info");
         private final AEsquerda caixaDoSelo = new AEsquerda(selo);
@@ -113,16 +113,16 @@ final class FaixaDeKpis extends Painel {
         Cartao() {
             setOpaque(false);
             setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-            setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 14, 12, 8));
-            valor.mono(18f).negrito();
+            setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 14, 8, 8));
+            valor.mono(br.com.labdesktop.ui.tema.Fontes.NOMINAL_DO_VALOR_GRANDE).negrito();
             for (Component c : new Component[] {rotulo, valor, legenda}) {
                 ((javax.swing.JComponent) c).setAlignmentX(LEFT_ALIGNMENT);
             }
             add(rotulo);
-            add(javax.swing.Box.createRigidArea(new Dimension(0, 4)));
+            add(javax.swing.Box.createRigidArea(new Dimension(0, 2)));
             add(valor);
             add(legenda);
-            add(javax.swing.Box.createRigidArea(new Dimension(0, 8)));
+            add(javax.swing.Box.createRigidArea(new Dimension(0, 6)));
             caixaDoSelo.setAlignmentX(LEFT_ALIGNMENT);
             add(caixaDoSelo);
             addMouseListener(new java.awt.event.MouseAdapter() {

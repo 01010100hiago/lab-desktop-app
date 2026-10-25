@@ -26,10 +26,10 @@ import java.util.function.DoubleFunction;
 public final class GraficoDeBarras extends ComponenteSimples {
 
     private static final long serialVersionUID = 1L;
-    private static final int ALTURA_PREFERIDA = 124;
+    private static final int ALTURA_PREFERIDA = 100;
     private static final int FOLGA_ENTRE_BARRAS = 3;
-    private static final int ALTURA_DO_EIXO = 18;
-    private static final int MARGEM_DO_TOPO = 14;
+    private static final int ALTURA_DO_EIXO = 20;
+    private static final int MARGEM_DO_TOPO = 16;
 
     /**
      * Uma barra.
@@ -148,7 +148,7 @@ public final class GraficoDeBarras extends ComponenteSimples {
         try {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            Font fonte = getFont().deriveFont(10.5f);
+            Font fonte = br.com.labdesktop.ui.tema.Fontes.fonte(br.com.labdesktop.ui.tema.Fontes.TEXTO, Font.PLAIN, 10.5f);
             g2.setFont(fonte);
             FontMetrics fm = g2.getFontMetrics();
             int chao = h - ALTURA_DO_EIXO;

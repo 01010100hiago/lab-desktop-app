@@ -3,6 +3,7 @@ package br.com.labdesktop.ui.telas;
 import br.com.labdesktop.api.modelo.InfoServidor;
 import br.com.labdesktop.api.modelo.InfoServidor.DockerInfo;
 import br.com.labdesktop.api.modelo.InfoServidor.SessaoServidor;
+import br.com.labdesktop.ui.componentes.FichaRotulada;
 import br.com.labdesktop.ui.componentes.Rotulo;
 import br.com.labdesktop.ui.telas.TabelaDeLinhas.Coluna;
 import br.com.labdesktop.ui.tema.Tokens;
@@ -21,7 +22,8 @@ final class BlocoDeContainers extends CaixaDoServidor {
 
     private static final long serialVersionUID = 1L;
 
-    private final Rotulo resumo = new Rotulo().negrito().tamanho(13f);
+    private final FichaRotulada ficha = new FichaRotulada(3, 24);
+    private String textoDoResumo = FormatosDoServidor.SEM_DADO;
     private final Rotulo espaco = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f).truncavel();
     private final Rotulo apoio = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f);
     private final TabelaDeLinhas sessoes = new TabelaDeLinhas(new Coluna("Projeto", 1.0, false, false),
@@ -31,7 +33,7 @@ final class BlocoDeContainers extends CaixaDoServidor {
     BlocoDeContainers() {
         super("Containers e sessões do Claude", "docker");
         apoio(apoio);
-        linha(resumo, 0);
+        linha(ficha, 0);
         linha(espaco, 4);
         linha(new Rotulo("SESSÕES DO CLAUDE ABERTAS").corDoToken(Tokens.TEXTO3).negrito().tamanho(10.5f), 14);
         linha(sessoes, 6);
@@ -41,13 +43,17 @@ final class BlocoDeContainers extends CaixaDoServidor {
     void atualizar(InfoServidor info, Instant agora, ZoneId fuso) {
         DockerInfo d = info == null ? null : info.docker();
         if (d == null || d.rodando() == null) {
-            resumo.setText(FormatosDoServidor.SEM_DADO);
+            textoDoResumo = FormatosDoServidor.SEM_DADO;
+            ficha.definir(List.of(FichaRotulada.Item.de("Rodando", FormatosDoServidor.SEM_DADO)));
             apoio.setText("");
             espaco.setText("O Docker não informou os containers.");
         } else {
             int parados = d.parados() == null ? 0 : d.parados();
             int pausados = d.pausados() == null ? 0 : d.pausados();
-            resumo.setText(d.rodando() + " rodando · " + parados + (parados == 1 ? " parado" : " parados") + " · " + pausados + " em pausa");
+            textoDoResumo = d.rodando() + " rodando, " + parados + (parados == 1 ? " parado" : " parados") + ", " + pausados + " em pausa";
+            ficha.definir(List.of(FichaRotulada.Item.de("Rodando", String.valueOf(d.rodando())),
+                FichaRotulada.Item.de(parados == 1 ? "Parado" : "Parados", String.valueOf(parados)),
+                FichaRotulada.Item.de("Em pausa", String.valueOf(pausados))));
             apoio.setText(d.containers() == null ? "" : "no total, " + d.containers() + " containers");
             espaco.setText(textoDoEspaco(d));
         }
@@ -86,6 +92,10 @@ final class BlocoDeContainers extends CaixaDoServidor {
     }
 
     String textoDoResumo() {
-        return resumo.getText();
+        return textoDoResumo;
+    }
+
+    FichaRotulada ficha() {
+        return ficha;
     }
 }

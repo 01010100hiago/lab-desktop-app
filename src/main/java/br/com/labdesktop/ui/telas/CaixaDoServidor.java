@@ -26,9 +26,9 @@ class CaixaDoServidor extends Painel {
     private final JPanel direita = new Painel(new BorderLayout());
 
     CaixaDoServidor(String texto, String icone) {
-        super(new BorderLayout(0, 10));
+        super(new BorderLayout(0, 8));
         fundo(Tokens.SUPERFICIE).borda(Tokens.BORDA).raio(14);
-        setBorder(javax.swing.BorderFactory.createEmptyBorder(14, 16, 14, 16));
+        setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 16, 12, 16));
         titulo = new Rotulo(texto).negrito().tamanho(14f);
         if (icone != null) {
             titulo.setIcon(Icones.colorido(icone, 16, Tokens.TEXTO2));

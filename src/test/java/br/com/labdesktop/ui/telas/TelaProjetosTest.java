@@ -141,7 +141,7 @@ class TelaProjetosTest {
                 p.estado() != br.com.labdesktop.api.modelo.EstadoProjeto.NO_AR).thenComparing(p -> p.nome()))
             .map(br.com.labdesktop.api.modelo.Projeto::nome).toList();
         assertEquals(esperados, nomes);
-        assertTrue(Visual.naEdt(tela::textoDoResumo).startsWith("5 projetos · "), Visual.naEdt(tela::textoDoResumo));
+        assertTrue(Visual.naEdt(tela::textoDoResumo).startsWith("5 projetos, "), Visual.naEdt(tela::textoDoResumo));
         assertTrue(Visual.naEdt(tela::textoDoResumo).contains("2 pausados"), Visual.naEdt(tela::textoDoResumo));
     }
 
@@ -197,5 +197,74 @@ class TelaProjetosTest {
         Visual.naEdt(() -> tela.aoReceberProjetos(new VisaoProjetos(outra, null)));
         assertTrue(antes == Visual.naEdt(() -> tela.linha("vendas")), "atualiza por nome, sem recriar a linha");
         assertFalse(Visual.naEdt(() -> tela.linha("vendas")) == null);
+    }
+
+    /** A tela do servidor tem a barra lateral à esquerda e as margens da lista: a lista ganha o que sobra da janela. */
+    private static int larguraDaListaNaJanela(int larguraDaJanela) {
+        return larguraDaJanela - br.com.labdesktop.ui.BarraServidores.LARGURA;
+    }
+
+    @Test
+    void asColunasCabemEm1100E1440SemRolarParaOLadoENemCortarTexto() {
+        for (int janela : new int[] {1100, 1440}) {
+            Visual.tema(Tema.CLARO);
+            TelaProjetos tela = nova(new AvisosGravados(), new DialogosGravados(), true);
+            Visual.naEdt(() -> {
+                tela.aoMudarEstado(estado(EstadoConexao.CONECTADO));
+                tela.aoReceberProjetos(visaoDoMock());
+            });
+            Visual.renderizar(tela, larguraDaListaNaJanela(janela), 700 - 28);
+            Visual.naEdt(() -> {
+                assertFalse(tela.rolagemDaLista().getHorizontalScrollBar().isVisible(), "sem rolagem para o lado em " + janela);
+                assertTrue(ColunasDaLista.larguraMinima() <= larguraDaListaNaJanela(1100) - 40 - 16,
+                    "a soma dos pisos (" + ColunasDaLista.larguraMinima() + ") cabe na lista de 1100, mesmo com a barra vertical");
+                for (String nome : tela.nomesExibidos()) {
+                    LinhaProjetoVisual l = tela.linha(nome);
+                    for (java.awt.Component x : TelaServidorTest.todos(l)) {
+                        if (x instanceof javax.swing.JLabel r && r.isShowing() == false && r.isVisible() && r.getText() != null
+                            && !r.getText().isEmpty() && r.getWidth() > 0 && x != l.rotuloDaDescricao()) { // a descrição é livre e comprida: termina em reticências, com a dica inteira
+                            assertTrue(r.getWidth() >= r.getPreferredSize().width - 1, janela + ": '" + r.getText() + "' de " + nome
+                                + " cortado (" + r.getWidth() + " de " + r.getPreferredSize().width + ")");
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    @Test
+    void aColunaDeConsumoTemNoMinimo150ABarraDoLimite8PxETextoDe13() {
+        assertTrue(ColunasDaLista.Coluna.CONSUMO.minimo >= 150, "piso do consumo: " + ColunasDaLista.Coluna.CONSUMO.minimo);
+        Visual.tema(Tema.CLARO);
+        TelaProjetos tela = nova(new AvisosGravados(), new DialogosGravados());
+        Visual.naEdt(() -> {
+            tela.aoMudarEstado(estado(EstadoConexao.CONECTADO));
+            tela.aoReceberProjetos(visaoDoMock());
+        });
+        Visual.renderizar(tela, larguraDaListaNaJanela(1100), 700 - 28);
+        LinhaProjetoVisual l = tela.linha("app-loja");
+        assertTrue(Visual.naEdt(() -> l.barraDoLimite().getHeight()) >= 8, "barra do limite com 8 px ou mais");
+        assertTrue(Visual.naEdt(() -> l.barraDoLimite().getWidth()) >= 140, "e larga o bastante para ler");
+        assertEquals(13f, Visual.naEdt(() -> l.rotuloDoLimite().getFont().getSize2D()), "o texto do limite tem 13 px");
+        assertTrue(Visual.naEdt(() -> l.rotuloDoLimite().getText()).endsWith("da semana"), Visual.naEdt(() -> l.rotuloDoLimite().getText()));
+    }
+
+    @Test
+    void geraOsPngsDaLista() {
+        for (Tema tema : new Tema[] {Tema.ESCURO, Tema.CLARO}) {
+            for (int janela : new int[] {1440, 1100}) {
+                Visual.tema(tema);
+                TelaProjetos tela = nova(new AvisosGravados(), new DialogosGravados(), true);
+                Visual.naEdt(() -> {
+                    tela.aoMudarEstado(estado(EstadoConexao.CONECTADO));
+                    tela.aoReceberProjetos(visaoDoMock());
+                });
+                BufferedImage img = Visual.renderizar(tela, larguraDaListaNaJanela(janela), 900);
+                Visual.salvar(img, "projetos-lista-" + tema.name().toLowerCase() + (janela == 1100 ? "-1100" : ""));
+                if (janela == 1440) {
+                    Visual.salvar(img, "projetos-lista-" + tema.name().toLowerCase() + "-1440");
+                }
+            }
+        }
     }
 }

@@ -89,14 +89,14 @@ public record LinhaDeProjeto(
         Consumo consumo = null;
         if (p.tokens() != null) {
             consumo = new Consumo(Formato.fmtUsd(p.tokens().semanaCustoUsd()),
-                " · " + Formato.fmtCompacto(p.tokens().semanaSaida()));
+                Formato.fmtCompacto(p.tokens().semanaSaida()));
         }
 
         LimiteDaLinha limite = null;
         Limite l = p.limite();
         if (l != null) {
-            String texto = TextosDeLimite.texto(l) + (Boolean.TRUE.equals(l.liberado()) ? " · liberado" : "");
-            String descricao = "Limite de " + p.nome() + ": " + texto + (l.pausado() ? " — sessão pausada" : "");
+            String texto = TextosDeLimite.texto(l);
+            String descricao = "Limite de " + p.nome() + ": " + texto + (Boolean.TRUE.equals(l.liberado()) ? ", liberado" : "") + (l.pausado() ? " — sessão pausada" : "");
             limite = new LimiteDaLinha(texto, descricao, TextosDeLimite.severidade(l), TextosDeLimite.temBarra(l),
                 Math.min(1.0, TextosDeLimite.fracaoDoTeto(l)), l.pausado(), Boolean.TRUE.equals(l.liberado()));
         }

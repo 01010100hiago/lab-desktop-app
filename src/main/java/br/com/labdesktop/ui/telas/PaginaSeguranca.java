@@ -188,6 +188,7 @@ public final class PaginaSeguranca extends PaginaDoServidor {
             botaoDeTipo(t.name(), rotuloDoTipo(t), t, filtros);
         }
         filtros.add(Caixa.mola());
+        filtros.add(tabelaDeTentativas.paginacaoExterna()); // "mostrando 1-15 de N" e Anterior e Próxima na linha dos filtros
         tabelaDeTentativas.mensagemDoFiltroVazio("Nenhuma tentativa com este período e este tipo.");
         JPanel p = new Painel(new BorderLayout(0, 10));
         p.add(filtros, BorderLayout.NORTH);
@@ -257,7 +258,7 @@ public final class PaginaSeguranca extends PaginaDoServidor {
             if (t.parcial()) {
                 notas.add("o registro passou do tamanho lido: são pelo menos estes");
             }
-            tabelaDeTentativas.nota(String.join(" · ", notas));
+            tabelaDeTentativas.nota(String.join("; ", notas));
             atualizarOrigens(t);
             List<LoginAceito> ordem = new ArrayList<>(t.logins());
             ordem.sort(Comparator.comparing((LoginAceito l) -> !l.pedeAtencao()).thenComparing(Comparator.comparing(LoginAceito::quando).reversed()));

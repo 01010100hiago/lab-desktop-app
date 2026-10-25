@@ -38,7 +38,7 @@ class PaginasDeListasTest {
         assertEquals("mostrando 1-12 de 21", Visual.naEdt(t::textoDoResumo));
         assertEquals(List.of("app", "Pasta"), Visual.naEdt(() -> t.linhasDaPagina().get(0)), "sem tamanho: duas colunas");
         assertEquals("Arquivo", Visual.naEdt(() -> t.linhasDaPagina().get(7).get(1)));
-        assertEquals("7 pastas · 14 arquivos", Visual.naEdt(p::textoDoApoio));
+        assertEquals("7 pastas, 14 arquivos", Visual.naEdt(p::textoDoApoio));
         Visual.naEdt(() -> t.botaoProxima().doClick());
         assertEquals(9, Visual.naEdt(() -> t.linhasDaPagina().size()));
         assertEquals("mostrando 13-21 de 21", Visual.naEdt(t::textoDoResumo));

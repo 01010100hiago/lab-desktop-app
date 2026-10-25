@@ -95,7 +95,7 @@ final class PecasDeSeguranca {
         CamposEmGrade g = new CamposEmGrade();
         List<Campo> campos = new ArrayList<>();
         for (PortaAberta p : lista.subList(0, Math.min(MAX_PORTAS, lista.size()))) {
-            campos.add(new Campo("Porta " + p.porta(), (p.processo().isEmpty() ? "" : p.processo() + " · ") + p.escopo()));
+            campos.add(new Campo("Porta " + p.porta(), (p.processo().isEmpty() ? "" : p.processo() + ", ") + p.escopo()));
         }
         if (lista.size() > MAX_PORTAS) {
             campos.add(new Campo("e mais " + (lista.size() - MAX_PORTAS) + " portas", ""));

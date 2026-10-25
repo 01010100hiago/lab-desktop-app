@@ -104,6 +104,8 @@ public final class Principal {
         }
         final Path arquivoDaSenhaDeTesteFinal = arquivoDaSenhaDeTeste;
         SwingUtilities.invokeLater(() -> {
+            // o tamanho do texto que o usuário deixou da última vez, antes de qualquer componente existir
+            br.com.labdesktop.ui.tema.Fontes.definirPercentual(preferencias.get().escalaTexto());
             GerenciadorTema tema = new GerenciadorTema(preferencias.get().tema(), sistemaEscuro, true);
             Aplicacao app = new Aplicacao(caminhos, preferencias, tema, cofreExiste, () -> {
                 trava.close();

@@ -7,15 +7,18 @@ import br.com.labdesktop.ui.Gravidade;
 import br.com.labdesktop.ui.componentes.Botao;
 import br.com.labdesktop.ui.componentes.Botoes;
 import br.com.labdesktop.ui.componentes.Caixa;
+import br.com.labdesktop.ui.componentes.FichaRotulada;
 import br.com.labdesktop.ui.componentes.Icones;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
+import br.com.labdesktop.ui.componentes.SecaoRecolhivel;
 import br.com.labdesktop.ui.componentes.TabelaPaginada;
 import br.com.labdesktop.ui.componentes.TabelaPaginada.Coluna;
 import br.com.labdesktop.ui.telas.TelaProjeto.Aba;
 import br.com.labdesktop.ui.tema.Tokens;
 import br.com.labdesktop.util.Formato;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +30,7 @@ import javax.swing.JPanel;
 
 /**
  * A aba "Visão geral": UMA tela, sem rolagem (regra dura, com teste: cabe em 1100 x 700 e em 1440 x 860). De cima para baixo:
- * o cabeçalho do projeto (descrição, git, tamanho, "mexido há", endereços públicos, composes e redes em uma linha discreta) com
+ * o cabeçalho do projeto (a descrição e uma FICHA rotulada: endereços públicos, código, tamanho e última alteração; compose e redes ficam em "Detalhes técnicos", fechado) com
  * os botões de ação; o alerta de sessão desatualizada, quando houver; a linha de cinco indicadores; e a caixa com a tabela de
  * containers (paginada, com Reiniciar por container). Só usa o detalhe do projeto, que a {@link TelaProjeto} assina.
  */
@@ -35,22 +38,24 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
 
     private static final long serialVersionUID = 1L;
     /** Linhas de containers por página: o que cabe junto com o resto em 1100 x 700, com o alerta de sessão desatualizada à vista e sem rolagem. */
-    static final int CONTAINERS_POR_PAGINA = 5;
+    static final int CONTAINERS_POR_PAGINA = 4;
 
     private final Rotulo descricao = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(13f).truncavel();
-    private final Rotulo git = new Rotulo().mono(12f).corDoToken(Tokens.TEXTO2);
-    private final Rotulo gitSujo = new Rotulo("não commitado").corDoToken(Tokens.ATENCAO).negrito().tamanho(11.5f);
-    private final Rotulo meta = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f).truncavel();
     private final JPanel urls = new Painel();
-    private final Rotulo discreta = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(11.5f).truncavel();
+    /** A ficha do cabeçalho: endereços, código, tamanho e última alteração (só o que existe). */
+    private final FichaRotulada ficha = new FichaRotulada(2, 32);
+    /** Compose e redes: o que só quem mexe na infraestrutura quer, numa seção FECHADA por padrão. */
+    private final FichaRotulada fichaTecnica = new FichaRotulada(2, 32);
+    private final SecaoRecolhivel secaoTecnica = new SecaoRecolhivel("Detalhes técnicos", "Esconder os detalhes técnicos", fichaTecnica,
+        () -> { });
     private final Rotulo somenteLeitura = new Rotulo("Somente leitura nesta versão: use o painel web para iniciar e parar.")
-        .corDoToken(Tokens.TEXTO3).tamanho(11.5f).truncavel();
+        .corDoToken(Tokens.TEXTO3).tamanho(12f).truncavel();
 
-    private final Botao compose = Botoes.mini("Iniciar", "play");
-    private final Botao reiniciar = Botoes.mini("Reiniciar", "atualizar");
+    private final Botao compose = Botoes.mini("Iniciar projeto", "play");
+    private final Botao reiniciar = Botoes.mini("Reiniciar projeto", "atualizar");
     private final Botao abrirClaude = Botoes.miniPrimario("Abrir Claude", "terminal");
-    private final Botao retomar = Botoes.mini("Retomar", "play");
-    private final Botao verSessao = Botoes.mini("Ver sessão", "terminal");
+    private final Botao retomar = Botoes.mini("Retomar sessão", "play");
+    private final Botao verSessao = Botoes.mini("Ver sessão do Claude", "terminal");
 
     private final AlertaDaPagina alerta = new AlertaDaPagina();
     private final Botao reabrir = Botoes.mini("Reabrir", "atualizar");
@@ -100,27 +105,23 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         retomar.addActionListener(e -> ctx.fluxos.retomar(ctx.projeto, ctx.detalhe == null ? null : ctx.detalhe.limite()));
         retomar.setToolTipText("Tira a pausa e reabre o Claude continuando a conversa");
         verSessao.addActionListener(e -> ctx.navegar.accept(Aba.SESSAO));
-        verSessao.setToolTipText("Abre a aba Sessão do Claude");
+        verSessao.setToolTipText("Abre a aba Sessão do Claude, com a tela e a caixa de mensagem");
         reabrir.addActionListener(e -> ctx.fluxos.pedirReabrir(ctx.projeto));
         reabrir.setToolTipText("Reabre a sessão continuando a conversa. A tarefa em andamento é interrompida.");
         kpis.nomeAcessivel("Indicadores do projeto");
         kpis.ligar(Map.of("consumo", Aba.CONSUMO.rotulo()), chave -> ctx.navegar.accept(Aba.CONSUMO));
 
-        // linha 1: descrição à esquerda, botões à direita
-        JPanel acoes = Caixa.fluxo(java.awt.FlowLayout.RIGHT, 8, compose, reiniciar, abrirClaude, retomar, verSessao);
-        JPanel linha1 = new Painel(new BorderLayout(16, 0));
-        linha1.add(descricao, BorderLayout.CENTER);
-        linha1.add(acoes, BorderLayout.EAST);
-        // linha 2: git, tamanho e mexido há, e os endereços públicos
-        JPanel linha2 = Caixa.linha(10, git, gitSujo, meta, Caixa.espaco(8), urls, Caixa.mola());
-        // linha 3: composes e redes à esquerda; sem as ações ligadas, o aviso de somente leitura à direita
+        // linha 1: a descrição; linha 2: a ficha; linha 3: os detalhes técnicos (fechados) à esquerda e os botões à direita
+        // (sem as ações ligadas, no lugar dos botões vai o aviso de somente leitura)
+        JPanel acoes = Caixa.fluxo(java.awt.FlowLayout.RIGHT, 8, compose, reiniciar, abrirClaude, retomar, verSessao, somenteLeitura);
         JPanel linha3 = new Painel(new BorderLayout(16, 0));
-        linha3.add(discreta, BorderLayout.CENTER);
-        linha3.add(somenteLeitura, BorderLayout.EAST);
-        JPanel cabecalho = Caixa.coluna(6, linha1, linha2, linha3);
+        linha3.add(new AEsquerda(secaoTecnica), BorderLayout.CENTER);
+        linha3.add(acoes, BorderLayout.EAST);
+        urls.setName("enderecos");
+        JPanel cabecalho = Caixa.coluna(6, descricao, ficha, linha3);
         cabecalho.setName("cabecalho-do-projeto");
 
-        caixa.apoio(apoio);
+        caixa.apoio(Caixa.fluxo(java.awt.FlowLayout.RIGHT, 16, apoio, tabela.paginacaoExterna()));
         caixa.linha(tabela, 0);
         if (ctx.acoesLiberadas()) {
             tabela.acaoPorLinha("", this::botaoDoContainer);
@@ -145,7 +146,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
 
     /** O botão "Reiniciar" de uma linha da tabela: ocupado enquanto o {@code docker restart} roda. */
     private JComponent botaoDoContainer(Container c) {
-        Botao b = Botoes.mini("Reiniciar", "atualizar");
+        Botao b = Botoes.miniBaixo("Reiniciar", "atualizar");
         b.setToolTipText("Reinicia o container " + c.nome() + " (docker restart)");
         b.getAccessibleContext().setAccessibleName("Reiniciar o container " + c.nome());
         b.definirOcupado(ctx.fluxos.ocupado(ctx.projeto, FluxosDeProjeto.chaveDoContainer(c.nome())));
@@ -195,24 +196,27 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         descricao.setText(desc.isEmpty() ? "Sem descrição" : desc);
         descricao.setToolTipText(desc);
 
-        git.setText(m.git() == null ? "sem git" : m.git());
-        git.setIcon(Icones.colorido("terminal", 12, Tokens.TEXTO3));
-        git.setIconTextGap(5);
-        gitSujo.setVisible(m.gitSujo());
-        List<String> partes = new ArrayList<>();
-        partes.add(d.tamanho() == null ? "tamanho ainda não medido" : Formato.fmtBytes(d.tamanho()));
-        partes.add(m.mexido() == null ? "sem registro de alteração" : "mexido " + Formato.fmtHa(m.mexido(), ctx.agora()));
-        meta.setText("·  " + String.join("  ·  ", partes));
-
         mostrarEnderecos(d.urls());
-        discreta.setText(linhaDiscreta(d));
-        discreta.setToolTipText(linhaDiscreta(d));
+        List<FichaRotulada.Item> dados = new ArrayList<>();
+        if (!d.urls().isEmpty()) {
+            dados.add(new FichaRotulada.Item("Endereços", urls));
+        }
+        dados.add(FichaRotulada.Item.de("Código", m.textoDoCodigo()));
+        if (d.tamanho() != null) {
+            dados.add(FichaRotulada.Item.de("Tamanho", Formato.fmtBytes(d.tamanho())));
+        }
+        if (m.mexido() != null) {
+            dados.add(FichaRotulada.Item.de("Última alteração", FormatosDoProjeto.haQuanto(m.mexido(), ctx.agora())));
+        }
+        ficha.definir(dados);
+        fichaTecnica.definir(dadosTecnicos(d));
+        secaoTecnica.setVisible(!fichaTecnica.pares().isEmpty());
 
         boolean acoes = ctx.acoesLiberadas();
         compose.setVisible(acoes && (m.mostrarParar() || m.mostrarIniciar()));
-        compose.setText(m.mostrarParar() ? "Parar" : "Iniciar");
+        compose.setText(m.mostrarParar() ? "Parar projeto" : "Iniciar projeto");
         compose.setIcon(Icones.de(m.mostrarParar() ? "parar" : "play", 14));
-        compose.setToolTipText((m.mostrarParar() ? "Para" : "Inicia") + " os containers do projeto");
+        compose.setToolTipText((m.mostrarParar() ? "Para" : "Inicia") + " todos os containers do projeto");
         reiniciar.setVisible(acoes && m.temCompose());
         abrirClaude.setVisible(acoes && m.oferecerAbrirClaude());
         abrirClaude.setToolTipText("Abre a sessão do Claude neste projeto");
@@ -245,9 +249,6 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         }
         urlsMostradas = List.copyOf(lista);
         urls.removeAll();
-        if (lista.isEmpty()) {
-            urls.add(new Rotulo("sem endereço público").corDoToken(Tokens.TEXTO3).tamanho(12f));
-        }
         for (int i = 0; i < Math.min(3, lista.size()); i++) {
             String host = lista.get(i);
             Botao link = Botoes.link(host);
@@ -271,21 +272,25 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         urls.repaint();
     }
 
-    /** "Compose: a.yml, b.yml · Redes: x_default": discreta, para quem precisa e invisível para quem não. */
-    static String linhaDiscreta(DetalheProjeto d) {
-        List<String> partes = new ArrayList<>();
+    /** Arquivos de configuração (compose), redes e o acesso ao Docker: cada um com o seu rótulo, só os que existem. */
+    private static List<FichaRotulada.Item> dadosTecnicos(DetalheProjeto d) {
+        List<FichaRotulada.Item> l = new ArrayList<>();
         if (d.composes().isEmpty()) {
-            partes.add("sem arquivo compose");
+            l.add(FichaRotulada.Item.de("Arquivos de configuração", "Nenhum arquivo compose"));
         } else {
-            partes.add("Compose: " + String.join(", ", d.composes().stream().map(DetalheProjeto.Compose::arquivo).toList()));
+            List<Component> linhas = new ArrayList<>();
+            for (DetalheProjeto.Compose c : d.composes()) {
+                linhas.add(new Rotulo(c.arquivo()).mono(12f).truncavel());
+            }
+            l.add(new FichaRotulada.Item("Arquivos de configuração", Caixa.coluna(2, linhas.toArray(Component[]::new))));
         }
         if (!d.redes().isEmpty()) {
-            partes.add("Redes: " + String.join(", ", d.redes()));
+            l.add(FichaRotulada.Item.de("Redes", String.join(", ", d.redes())));
         }
         if (Boolean.FALSE.equals(d.acessoDocker())) {
-            partes.add("a sessão do Claude não tem acesso ao Docker deste projeto");
+            l.add(FichaRotulada.Item.de("Docker na sessão do Claude", "Sem acesso a este projeto"));
         }
-        return String.join("  ·  ", partes);
+        return l;
     }
 
     // ---- para os testes ----
@@ -330,16 +335,16 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         return urls;
     }
 
-    String textoDaLinhaDiscreta() {
-        return discreta.getText();
+    FichaRotulada ficha() {
+        return ficha;
     }
 
-    String textoDaMeta() {
-        return meta.getText();
+    FichaRotulada fichaTecnica() {
+        return fichaTecnica;
     }
 
-    String textoDoGit() {
-        return git.getText();
+    SecaoRecolhivel secaoTecnica() {
+        return secaoTecnica;
     }
 
     String textoDaDescricao() {

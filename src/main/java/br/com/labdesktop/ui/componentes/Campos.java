@@ -5,7 +5,6 @@ import java.awt.Font;
 import java.awt.Insets;
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
-import javax.swing.UIManager;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DocumentFilter;
@@ -31,10 +30,7 @@ public final class Campos {
     /** Campo em fonte monoespaçada (host, impressão, nome de projeto). */
     public static JTextField mono(int colunas, String dica) {
         JTextField c = texto(colunas, dica);
-        Font m = UIManager.getFont("monospaced.font");
-        if (m != null) {
-            c.setFont(m.deriveFont(13f));
-        }
+        br.com.labdesktop.ui.tema.Fontes.aplicar(c, br.com.labdesktop.ui.tema.Fontes.MONO, Font.PLAIN, 12.5f);
         return c;
     }
 
@@ -61,8 +57,7 @@ public final class Campos {
         c.putClientProperty(FlatClientProperties.STYLE, "arc: 10; margin: 8,12,8,12");
         c.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "000 000");
         c.setHorizontalAlignment(JTextField.CENTER);
-        Font m = UIManager.getFont("monospaced.font");
-        c.setFont((m != null ? m : c.getFont()).deriveFont(Font.BOLD, 24f));
+        br.com.labdesktop.ui.tema.Fontes.aplicar(c, br.com.labdesktop.ui.tema.Fontes.MONO, Font.BOLD, br.com.labdesktop.ui.tema.Fontes.NOMINAL_DO_VALOR_GRANDE);
         ((PlainDocument) c.getDocument()).setDocumentFilter(new FiltroDeCodigo());
         c.getAccessibleContext().setAccessibleName("Código de 6 dígitos do autenticador");
         c.setMaximumSize(new java.awt.Dimension(260, c.getPreferredSize().height));

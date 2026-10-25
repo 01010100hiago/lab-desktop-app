@@ -69,24 +69,27 @@ final class LinhaProjetoVisual extends Painel {
     private final Rotulo semDocker = new Rotulo();
     private final Rotulo descricao = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f).truncavel();
     // métricas
-    private final Rotulo containers = Rotulo.secundario("").tamanho(12.5f).aDireita();
+    private final Rotulo containers = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f).truncavel();
     private final Rotulo cpu = Rotulo.secundario("").tamanho(12.5f).aDireita();
     private final Rotulo memoria = Rotulo.secundario("").tamanho(12.5f).aDireita();
     // consumo
     private final Rotulo custo = new Rotulo().negrito().tamanho(12.5f).aDireita().truncavel();
-    private final Rotulo tokens = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(11.5f);
+    private final Rotulo tokens = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f);
     private final Rotulo semConsumo = Rotulo.dica("—");
-    private final Rotulo limiteTexto = new Rotulo().tamanho(11f).aDireita().truncavel();
-    private final BarraSeveridade limiteBarra = new BarraSeveridade(BarraSeveridade.Tamanho.FINA);
+    private final Rotulo limiteTexto = new Rotulo().tamanho(12f).aDireita().truncavel();
+    private final Rotulo limiteLiberado = new Rotulo("liberado na semana").corDoToken(Tokens.OK).tamanho(12f).aDireita().truncavel();
+    private final BarraSeveridade limiteBarra = new BarraSeveridade(BarraSeveridade.Tamanho.MEDIA);
     // git
     private final Rotulo git = new Rotulo().mono(12f).corDoToken(Tokens.TEXTO2).truncavel();
-    private final Rotulo gitSujo = new Rotulo("não commitado").corDoToken(Tokens.TEXTO3).tamanho(10.5f);
+    private final Rotulo gitSujo = new Rotulo("não salvo no git").corDoToken(Tokens.ATENCAO).tamanho(12f);
     // url
     private final Botao url = Botoes.link("");
     private final Rotulo urlMais = Rotulo.dica("");
     private final Rotulo semUrl = Rotulo.dica("—");
     // claude
     private final Selo seloClaude = new Selo("", Gravidade.NEUTRO);
+    /** "pelo limite" ou "pelo freio": o selo diz só "pausada" (cabe na coluna) e esta linha completa a frase. */
+    private final Rotulo motivoDaPausa = new Rotulo().tamanho(12f).truncavel();
     private final Selo seloDesatualizada = new Selo("desatualizada", Gravidade.ATENCAO);
     private final Botao reabrir = Botoes.mini("Reabrir", "atualizar");
     private final Botao retomar = Botoes.mini("Retomar", "play");
@@ -131,22 +134,21 @@ final class LinhaProjetoVisual extends Painel {
         url.setMinimumSize(new Dimension(0, 22));
         url.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
 
-        celulaDoConsumo = colunaADireita(2, linhaADireita(custo, tokens, semConsumo), limiteTexto, limiteBarra);
+        tokens.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 8, 0, 0)); // o respiro no lugar do " · "
+        celulaDoConsumo = colunaADireita(3, linhaADireita(custo, tokens, semConsumo), limiteTexto, limiteLiberado, limiteBarra);
         celulaDaUrl = Caixa.linha(6, url, urlMais, semUrl);
-        celulaDoClaude = Caixa.coluna(5, seloClaude, seloDesatualizada, reabrir, retomar, semClaude);
+        celulaDoClaude = Caixa.coluna(5, seloClaude, motivoDaPausa, seloDesatualizada, reabrir, retomar, semClaude);
 
         grade.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, ColunasDaLista.RECUO, 10, ColunasDaLista.RECUO));
-        grade.add(ColunasDaLista.celula(Coluna.ESTADO, Caixa.linha(7, ponto, estadoTexto)), ColunasDaLista.restricoes(Coluna.ESTADO));
+        grade.add(ColunasDaLista.celula(Coluna.ESTADO, Caixa.coluna(3, Caixa.linha(7, ponto, estadoTexto), containers)),
+            ColunasDaLista.restricoes(Coluna.ESTADO));
         grade.add(ColunasDaLista.celula(Coluna.PROJETO, Caixa.coluna(2, Caixa.linha(6, nome, semDocker), descricao)),
             ColunasDaLista.restricoes(Coluna.PROJETO));
-        grade.add(ColunasDaLista.celula(Coluna.CONTAINERS, containers), ColunasDaLista.restricoes(Coluna.CONTAINERS));
-        grade.add(ColunasDaLista.celula(Coluna.CPU, cpu), ColunasDaLista.restricoes(Coluna.CPU));
-        grade.add(ColunasDaLista.celula(Coluna.MEMORIA, memoria), ColunasDaLista.restricoes(Coluna.MEMORIA));
+        grade.add(ColunasDaLista.celula(Coluna.RECURSOS, colunaADireita(3, cpu, memoria)), ColunasDaLista.restricoes(Coluna.RECURSOS));
         grade.add(ColunasDaLista.celula(Coluna.CONSUMO, celulaDoConsumo), ColunasDaLista.restricoes(Coluna.CONSUMO));
-        grade.add(ColunasDaLista.celula(Coluna.GIT, Caixa.coluna(3, git, gitSujo)), ColunasDaLista.restricoes(Coluna.GIT));
-        grade.add(ColunasDaLista.celula(Coluna.URL, celulaDaUrl), ColunasDaLista.restricoes(Coluna.URL));
+        grade.add(ColunasDaLista.celula(Coluna.CODIGO, Caixa.coluna(3, git, gitSujo, celulaDaUrl)), ColunasDaLista.restricoes(Coluna.CODIGO));
         grade.add(ColunasDaLista.celula(Coluna.CLAUDE, celulaDoClaude), ColunasDaLista.restricoes(Coluna.CLAUDE));
-        grade.add(ColunasDaLista.celula(Coluna.ACOES, Caixa.linha(6, botaoCompose, botaoAbrirClaude, botaoMenu)),
+        grade.add(ColunasDaLista.celula(Coluna.ACOES, Caixa.linha(4, botaoCompose, botaoAbrirClaude, botaoMenu)),
             ColunasDaLista.restricoes(Coluna.ACOES));
         add(grade, BorderLayout.CENTER);
 
@@ -376,7 +378,8 @@ final class LinhaProjetoVisual extends Painel {
         descricao.setToolTipText(m.descricao());
         descricao.setVisible(!m.descricao().isEmpty());
 
-        containers.setText(m.containers() == null ? Formato.SEM_DADO : m.containers());
+        containers.setText(m.containers() == null ? "sem containers" : m.containers() + " containers");
+        containers.setToolTipText(m.containers() == null ? "O projeto não tem containers" : "Containers rodando e total");
         cpu.setText(m.cpu() == null ? Formato.SEM_DADO : m.cpu());
         memoria.setText(m.memoria() == null ? Formato.SEM_DADO : m.memoria());
 
@@ -425,6 +428,8 @@ final class LinhaProjetoVisual extends Painel {
         LinhaDeProjeto.LimiteDaLinha l = m.limite();
         limiteTexto.setVisible(l != null);
         limiteBarra.setVisible(l != null && l.temBarra());
+        limiteLiberado.setVisible(l != null && l.liberado());
+        limiteLiberado.setToolTipText("Liberado: sem limite e sem freio até a semana do plano virar");
         if (l != null) {
             limiteTexto.setText(l.texto());
             limiteTexto.setToolTipText(l.texto() + ". Fatia estimada da semana do plano contra o limite do projeto."
@@ -446,6 +451,7 @@ final class LinhaProjetoVisual extends Painel {
         LinhaDeProjeto.Claude c = m.claude();
         seloClaude.setVisible(false);
         seloDesatualizada.setVisible(false);
+        motivoDaPausa.setVisible(false);
         reabrir.setVisible(false);
         retomar.setVisible(false);
         semClaude.setVisible(false);
@@ -455,9 +461,10 @@ final class LinhaProjetoVisual extends Painel {
                 seloClaude.setVisible(true);
             }
             case SESSAO_ABERTA -> {
-                seloClaude.atualizar("sessão aberta", Gravidade.ACENTO, null);
+                // "aberta" e não "sessão aberta": a coluna já se chama Claude e a frase inteira quebrava o selo em duas linhas em 1100
+                seloClaude.atualizar("aberta", Gravidade.ACENTO, null);
                 seloClaude.setVisible(true);
-                seloClaude.setToolTipText(null);
+                seloClaude.setToolTipText("Sessão do Claude aberta");
                 if (c.desatualizada()) {
                     seloDesatualizada.setToolTipText("Falta: " + c.motivoDesatualizada());
                     seloDesatualizada.setVisible(true);
@@ -466,8 +473,12 @@ final class LinhaProjetoVisual extends Painel {
                 }
             }
             case PAUSADA -> {
-                seloClaude.atualizar(c.rotuloDaPausa(), c.pausadaPorFreio() ? Gravidade.ATENCAO : Gravidade.PERIGO, "pausa");
+                seloClaude.atualizar("pausada", c.pausadaPorFreio() ? Gravidade.ATENCAO : Gravidade.PERIGO, "pausa");
                 seloClaude.setToolTipText(dicaDaPausa(c));
+                motivoDaPausa.setText(c.pausadaPorFreio() ? "pelo freio" : "pelo limite");
+                motivoDaPausa.corDoToken(c.pausadaPorFreio() ? Tokens.ATENCAO : Tokens.PERIGO);
+                motivoDaPausa.setToolTipText(dicaDaPausa(c));
+                motivoDaPausa.setVisible(true);
                 seloClaude.setVisible(true);
                 retomar.setToolTipText("Tira a pausa e reabre o Claude continuando a conversa");
                 retomar.setVisible(fluxos.liberadas());
@@ -623,6 +634,10 @@ final class LinhaProjetoVisual extends Painel {
 
     Selo seloClaude() {
         return seloClaude;
+    }
+
+    Rotulo motivoDaPausa() {
+        return motivoDaPausa;
     }
 
     Selo seloDesatualizada() {

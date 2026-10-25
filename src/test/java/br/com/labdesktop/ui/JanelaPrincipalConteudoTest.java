@@ -110,7 +110,7 @@ class JanelaPrincipalConteudoTest {
         assertNotNull(cartao);
         Espera.ate(Duration.ofSeconds(15), () -> "conectado", () -> "Conectado".equals(Visual.naEdt(cartao::textoDoEstado)));
         assertEquals("lab", Visual.naEdt(cartao::textoDoNome));
-        assertEquals("labuser@127.0.0.1:" + cenario.ssh.porta() + "  ·  agente em 127.0.0.1:" + cenario.agente.porta(),
+        assertEquals("labuser@127.0.0.1:" + cenario.ssh.porta() + ", painel na porta " + cenario.agente.porta(),
             Visual.naEdt(cartao::textoDoEndereco));
         assertEquals("mac-de-teste", Visual.naEdt(cartao::textoDoToken));
         assertEquals("2FA DESLIGADO", Visual.naEdt(cartao::textoDoSelo2fa));

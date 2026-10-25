@@ -38,7 +38,7 @@ final class BlocoDeProcessos extends CaixaDoServidor {
 
     BlocoDeProcessos() {
         super("Processos que mais gastam", "processo");
-        apoio(Rotulo.dica("os 20 que mais usam o processador · clique em CPU ou Memória para ordenar"));
+        apoio(Rotulo.dica("Os 20 que mais usam o processador. Clique em CPU ou Memória para ordenar."));
         linha(tabela, 0);
         atualizar(null, null);
     }
@@ -78,7 +78,7 @@ final class BlocoDeProcessos extends CaixaDoServidor {
         if (container == null) {
             return projeto == null ? "o próprio servidor (fora de container)" : projeto;
         }
-        return projeto == null ? container : projeto + " · " + container;
+        return projeto == null ? container : projeto + " (" + container + ")";
     }
 
     /** O texto das linhas da tela, na ordem. */

@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
  * @param copiarAoSelecionar copia ao selecionar no terminal (desligado: sobrescreve a área de transferência)
  * @param avisosAtivos       quais avisos disparam notificação (todos ligados por padrão)
  * @param autoBloqueioMinutos minutos sem uso até bloquear o cofre; 0 = nunca (padrão, decisão 5 de ARQUITETURA 14)
+ * @param escalaTexto        fator do tamanho do texto da interface em porcentagem (100, 115 ou 130; Visualizar, "Aumentar texto")
  */
 public record Preferencias(
     Tema tema,
@@ -34,7 +35,18 @@ public record Preferencias(
     boolean opcaoComoMeta,
     boolean copiarAoSelecionar,
     Set<Aviso> avisosAtivos,
-    int autoBloqueioMinutos) {
+    int autoBloqueioMinutos,
+    int escalaTexto) {
+
+    /** Os fatores que o menu oferece (iguais aos de {@code ui.tema.Fontes}: este pacote não importa a interface). */
+    public static final int[] ESCALAS_DO_TEXTO = {100, 115, 130};
+    public static final int ESCALA_PADRAO = 100;
+
+    /** Sem o fator do texto: vale 100 %. */
+    public Preferencias(Tema tema, Janela janela, int tamanhoFonteTerminal, boolean opcaoComoMeta, boolean copiarAoSelecionar,
+                        Set<Aviso> avisosAtivos, int autoBloqueioMinutos) {
+        this(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos, autoBloqueioMinutos, ESCALA_PADRAO);
+    }
 
     private static final Logger LOG = LoggerFactory.getLogger(Preferencias.class);
 
@@ -91,6 +103,7 @@ public record Preferencias(
         tema = tema == null ? Tema.SISTEMA : tema;
         tamanhoFonteTerminal = Math.max(FONTE_MIN, Math.min(FONTE_MAX, tamanhoFonteTerminal));
         autoBloqueioMinutos = Math.max(0, Math.min(AUTO_BLOQUEIO_MAX_MINUTOS, autoBloqueioMinutos));
+        escalaTexto = escalaValida(escalaTexto);
         avisosAtivos = avisosAtivos == null || avisosAtivos.isEmpty()
             ? Set.of() : Set.copyOf(EnumSet.copyOf(avisosAtivos));
     }
@@ -101,33 +114,49 @@ public record Preferencias(
             EnumSet.allOf(Aviso.class), 0);
     }
 
+    /** O fator válido mais perto do pedido (valor estranho no arquivo vira o mais próximo, nunca derruba a leitura). */
+    static int escalaValida(int pedido) {
+        int melhor = ESCALAS_DO_TEXTO[0];
+        for (int e : ESCALAS_DO_TEXTO) {
+            if (Math.abs(e - pedido) < Math.abs(melhor - pedido)) {
+                melhor = e;
+            }
+        }
+        return melhor;
+    }
+
+    public Preferencias comEscalaTexto(int porcento) {
+        return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos,
+            autoBloqueioMinutos, porcento);
+    }
+
     public boolean avisoAtivo(Aviso aviso) {
         return avisosAtivos.contains(aviso);
     }
 
     public Preferencias comTema(Tema novo) {
         return new Preferencias(novo, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto);
     }
 
     public Preferencias comJanela(Janela nova) {
         return new Preferencias(tema, nova, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto);
     }
 
     public Preferencias comTamanhoFonteTerminal(int pontos) {
         return new Preferencias(tema, janela, pontos, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto);
     }
 
     public Preferencias comOpcaoComoMeta(boolean ligada) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, ligada, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto);
     }
 
     public Preferencias comCopiarAoSelecionar(boolean ligada) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, ligada,
-            avisosAtivos, autoBloqueioMinutos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto);
     }
 
     public Preferencias comAviso(Aviso aviso, boolean ativo) {
@@ -138,12 +167,12 @@ public record Preferencias(
             novos.remove(aviso);
         }
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            novos, autoBloqueioMinutos);
+            novos, autoBloqueioMinutos, escalaTexto);
     }
 
     public Preferencias comAutoBloqueioMinutos(int minutos) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, minutos);
+            avisosAtivos, minutos, escalaTexto);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -190,6 +219,7 @@ public record Preferencias(
         public Boolean copiarAoSelecionar;
         public List<String> avisos;
         public Integer autoBloqueioMinutos;
+        public Integer escalaTexto;
 
         @JsonIgnoreProperties(ignoreUnknown = true)
         static final class JanelaDados {
@@ -217,6 +247,7 @@ public record Preferencias(
             d.copiarAoSelecionar = p.copiarAoSelecionar;
             d.avisos = p.avisosAtivos.stream().map(Aviso::rotulo).sorted().toList();
             d.autoBloqueioMinutos = p.autoBloqueioMinutos;
+            d.escalaTexto = p.escalaTexto;
             return d;
         }
 
@@ -249,7 +280,8 @@ public record Preferencias(
                 opcaoComoMeta == null ? base.opcaoComoMeta : opcaoComoMeta,
                 copiarAoSelecionar == null ? base.copiarAoSelecionar : copiarAoSelecionar,
                 ativos,
-                autoBloqueioMinutos == null ? base.autoBloqueioMinutos : autoBloqueioMinutos);
+                autoBloqueioMinutos == null ? base.autoBloqueioMinutos : autoBloqueioMinutos,
+                escalaTexto == null ? base.escalaTexto : escalaTexto);
         }
     }
 }

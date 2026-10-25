@@ -1,5 +1,6 @@
 package br.com.labdesktop.ui.componentes;
 
+import br.com.labdesktop.ui.tema.Fontes;
 import br.com.labdesktop.ui.tema.Tokens;
 import java.awt.Color;
 import java.awt.Cursor;
@@ -51,6 +52,14 @@ public final class Abas extends Painel {
             @Override
             public Color getForeground() {
                 return Tokens.cor(isSelected() ? Tokens.TEXTO : Tokens.TEXTO2);
+            }
+
+            /** A largura acompanha o texto e o fator do usuário; a altura de 38 (ou 32) cresce se a fonte crescer. */
+            @Override
+            public Dimension getPreferredSize() {
+                var fm = getFontMetrics(getFont());
+                int altura = Math.max(compacta ? 32 : 38, fm.getHeight() + 14);
+                return new Dimension(fm.stringWidth(getText()) + (compacta ? 28 : 40), altura);
             }
 
             @Override
@@ -131,12 +140,7 @@ public final class Abas extends Painel {
     }
 
     private void atualizarFontes() {
-        botoes.values().forEach(b -> {
-            Font base = b.getFont().deriveFont(Font.BOLD, compacta ? 13f : 14f);
-            b.setFont(base);
-            b.setPreferredSize(new Dimension(b.getFontMetrics(base).stringWidth(b.getText()) + (compacta ? 28 : 40),
-                compacta ? 32 : 38));
-        });
+        botoes.values().forEach(b -> Fontes.aplicar(b, Fontes.TEXTO, Font.BOLD, compacta ? 13f : 14f));
     }
 
     /** Move a escolha para a aba ao lado (sem dar a volta) e leva o foco junto. */

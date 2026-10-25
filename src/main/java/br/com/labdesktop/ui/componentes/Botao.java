@@ -58,7 +58,8 @@ public final class Botao extends JButton {
         setFocusable(true);
         putClientProperty(FlatClientProperties.STYLE, variante.estilo);
         if (variante.negrito) {
-            setFont(getFont().deriveFont(Font.BOLD));
+            br.com.labdesktop.ui.tema.Fontes.aplicar(this, br.com.labdesktop.ui.tema.Fontes.TEXTO, Font.BOLD,
+                br.com.labdesktop.ui.tema.Fontes.NOMINAL_PADRAO);
         }
     }
 

@@ -228,7 +228,7 @@ public final class TelaServidores extends Painel {
             ConfigServidor cfg = lab.config();
             Apresentacao a = ApresentacaoDoEstado.de(e);
             nome.setText(e.nome());
-            endereco.setText(cfg.usuario() + "@" + cfg.host() + ":" + cfg.porta() + "  ·  agente em 127.0.0.1:" + cfg.portaAgente());
+            endereco.setText(cfg.usuario() + "@" + cfg.host() + ":" + cfg.porta() + ", painel na porta " + cfg.portaAgente());
             estadoDaConexao.setIcon(Icones.colorido(a.icone(), 16, a.gravidade().tokenDoTexto()));
             estadoDaConexao.setIconTextGap(7);
             estadoDaConexao.setText(a.texto());

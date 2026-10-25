@@ -1,6 +1,7 @@
 package br.com.labdesktop.ui.componentes;
 
 import br.com.labdesktop.ui.componentes.Botao.Variante;
+import br.com.labdesktop.ui.tema.Fontes;
 import br.com.labdesktop.ui.tema.Tokens;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.Dimension;
@@ -12,6 +13,9 @@ import javax.swing.UIManager;
 public final class Botoes {
 
     private Botoes() { }
+
+    /** A altura dos botões baixos e dos de ícone: 32 px, o que cabe um dedo e o texto de 14. */
+    public static final int ALTURA = 32;
 
     private static Botao criar(String texto, String icone, Variante variante, int tamanhoDoIcone) {
         Botao b = new Botao(texto, variante);
@@ -42,9 +46,16 @@ public final class Botoes {
         return criar(texto, icone, Variante.FANTASMA, 16);
     }
 
-    /** Botão baixo (30 px) para dentro de linhas e faixas. */
+    /** Botão baixo (32 px) para dentro de linhas e faixas. */
     public static Botao mini(String texto, String icone) {
         return miniDe(texto, icone, Variante.SECUNDARIO);
+    }
+
+    /** Botão mini ainda mais baixo (28 px), para dentro de LINHAS de tabela: 32 px em cada linha deixaria a tabela comprida. */
+    public static Botao miniBaixo(String texto, String icone) {
+        Botao b = miniDe(texto, icone, Variante.SECUNDARIO);
+        b.putClientProperty(FlatClientProperties.STYLE, "arc: 8; minimumHeight: 28; margin: 1,10,1,10");
+        return b;
     }
 
     public static Botao miniPrimario(String texto, String icone) {
@@ -58,7 +69,7 @@ public final class Botoes {
     private static Botao miniDe(String texto, String icone, Variante variante) {
         Botao b = criar(texto, icone, variante, 14);
         b.putClientProperty(FlatClientProperties.STYLE, estiloMini(variante));
-        b.setFont(b.getFont().deriveFont(variante == Variante.PRIMARIO ? Font.BOLD : Font.PLAIN, 12.5f));
+        Fontes.aplicar(b, Fontes.TEXTO, variante == Variante.PRIMARIO ? Font.BOLD : Font.PLAIN, 13f);
         b.setIconTextGap(6);
         return b;
     }
@@ -71,10 +82,10 @@ public final class Botoes {
             case PERIGO -> "foreground: $Lab.perigo; hoverBackground: $Lab.perigoSuave; hoverBorderColor: $Lab.perigo";
             default -> "";
         };
-        return "arc: 8; minimumHeight: 28; margin: 2,10,2,10; " + base;
+        return "arc: 8; minimumHeight: " + ALTURA + "; margin: 2,12,2,12; " + base;
     }
 
-    /** Botão quadrado só com ícone (30 px), com a dica como tooltip e nome acessível. */
+    /** Botão quadrado só com ícone (32 px), com a dica como tooltip e nome acessível. */
     public static Botao icone(String icone, String dica) {
         return iconeDe(icone, dica, Variante.SECUNDARIO);
     }
@@ -94,10 +105,10 @@ public final class Botoes {
         b.getAccessibleContext().setAccessibleName(dica);
         String estilo = variante == Variante.PRIMARIO ? estiloMini(variante) : "arc: 8; margin: 0,0,0,0; "
             + (variante == Variante.FANTASMA ? "buttonType: borderless; hoverBackground: $Lab.superficie3" : "");
-        b.putClientProperty(FlatClientProperties.STYLE, estilo + "; minimumWidth: 30; minimumHeight: 30; margin: 0,0,0,0");
-        b.setPreferredSize(new Dimension(30, 30));
-        b.setMinimumSize(new Dimension(30, 30));
-        b.setMaximumSize(new Dimension(30, 30));
+        b.putClientProperty(FlatClientProperties.STYLE, estilo + "; minimumWidth: " + ALTURA + "; minimumHeight: " + ALTURA + "; margin: 0,0,0,0");
+        b.setPreferredSize(new Dimension(ALTURA, ALTURA));
+        b.setMinimumSize(new Dimension(ALTURA, ALTURA));
+        b.setMaximumSize(new Dimension(ALTURA, ALTURA));
         return b;
     }
 
@@ -116,15 +127,14 @@ public final class Botoes {
         if (dica != null) {
             b.setToolTipText(dica);
         }
-        b.setFont(b.getFont().deriveFont(12.5f));
-        b.putClientProperty(FlatClientProperties.STYLE, "arc: 8; minimumHeight: 28; margin: 2,10,2,10; "
+        Fontes.aplicar(b, Fontes.TEXTO, Font.PLAIN, 13f);
+        b.putClientProperty(FlatClientProperties.STYLE, "arc: 8; minimumHeight: " + ALTURA + "; margin: 2,12,2,12; "
             + "selectedBackground: $Lab.acentoSuave; selectedForeground: $Lab.acento; "
             + "pressedBackground: $Lab.acentoSuave");
         b.addChangeListener(e -> {
-            Font f = b.getFont();
-            Font esperado = f.deriveFont(b.isSelected() ? Font.BOLD : Font.PLAIN);
-            if (f.getStyle() != esperado.getStyle()) {
-                b.setFont(esperado);
+            int estilo = b.isSelected() ? Font.BOLD : Font.PLAIN;
+            if (b.getFont().getStyle() != estilo) {
+                Fontes.aplicar(b, Fontes.TEXTO, estilo, 13f);
             }
         });
         return b;
@@ -138,7 +148,7 @@ public final class Botoes {
     /** Um botão que parece link (texto bronze), para o endereço público do projeto, "Ver detalhes". */
     public static Botao link(String texto) {
         Botao b = new Botao(texto, Variante.LINK);
-        b.setFont(b.getFont().deriveFont(12.5f));
+        Fontes.aplicar(b, Fontes.TEXTO, Font.PLAIN, 13f);
         b.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
         return b;
     }

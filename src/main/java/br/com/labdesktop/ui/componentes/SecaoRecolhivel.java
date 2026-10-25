@@ -15,7 +15,8 @@ public final class SecaoRecolhivel extends Painel {
     private final String rotuloFechada;
     private final String rotuloAberta;
     private final Botao alternar;
-    private final JComponent conteudo;
+    /** Quem some e aparece é este envoltório, não o conteúdo: o conteúdo pode ligar a própria visibilidade (a ficha some sem dados e volta com eles). */
+    private final Painel gaveta = new Painel(new BorderLayout());
     private final Runnable aoMudar;
     private boolean aberta;
 
@@ -29,14 +30,14 @@ public final class SecaoRecolhivel extends Painel {
         super(new BorderLayout(0, 6));
         this.rotuloFechada = rotuloFechada;
         this.rotuloAberta = rotuloAberta;
-        this.conteudo = conteudo;
         this.aoMudar = aoMudar;
         this.alternar = Botoes.fantasma(rotuloFechada, "avancar");
         alternar.setIconTextGap(6);
         alternar.getAccessibleContext().setAccessibleName(rotuloFechada);
         add(Caixa.linha(0, alternar, Caixa.mola()), BorderLayout.NORTH);
-        add(conteudo, BorderLayout.CENTER);
-        conteudo.setVisible(false);
+        gaveta.add(conteudo, BorderLayout.CENTER);
+        gaveta.setVisible(false);
+        add(gaveta, BorderLayout.CENTER);
         alternar.addActionListener(e -> definirAberta(!aberta));
     }
 
@@ -46,7 +47,7 @@ public final class SecaoRecolhivel extends Painel {
             return;
         }
         aberta = abrir;
-        conteudo.setVisible(abrir);
+        gaveta.setVisible(abrir);
         alternar.setText(abrir ? rotuloAberta : rotuloFechada);
         alternar.setIcon(Icones.de(abrir ? "seta-baixo" : "avancar", 16));
         alternar.getAccessibleContext().setAccessibleName(abrir ? rotuloAberta : rotuloFechada);

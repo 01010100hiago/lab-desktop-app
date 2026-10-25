@@ -43,14 +43,14 @@ public final class TextosDeLimite {
         return n == null ? Formato.SEM_DADO : Formato.fmtNum(n) + "%";
     }
 
-    /** {@code 14% de 20% da semana} ou {@code sem limite · 3% da semana}. */
+    /** {@code 14% de 20% da semana} ou {@code sem limite, 3% da semana}. */
     public static String texto(Limite l) {
         if (l == null) {
             return "";
         }
         return l.tetoPct() != null
             ? fmtUsado(l) + " de " + Formato.fmtNum(l.tetoPct()) + "% da semana"
-            : "sem limite · " + fmtUsado(l) + " da semana";
+            : "sem limite, " + fmtUsado(l) + " da semana";
     }
 
     /** Só o par, sem "da semana": {@code 14% de 20%}. */
@@ -60,7 +60,7 @@ public final class TextosDeLimite {
         }
         return l.tetoPct() != null
             ? fmtUsado(l) + " de " + Formato.fmtNum(l.tetoPct()) + "%"
-            : "sem limite · " + fmtUsado(l);
+            : "sem limite, " + fmtUsado(l);
     }
 
     /** A severidade que vem do ESTADO do servidor (atenção começa em 75 % do teto, não acima): pausado crítico, atenção alta. */

@@ -54,12 +54,12 @@ class ModeloDeKpisTest {
     void valoresELegendasComOsDadosSinteticos() {
         List<Kpi> k = ModeloDeKpis.de(FixturesDeApi.servidorSintetico(), calmo());
         assertEquals("8,3%", kpi(k, "cpu").valor());
-        assertEquals("62 °C · 4 núcleos", kpi(k, "cpu").legenda(), "a temperatura vem junto, na legenda");
+        assertEquals("62 °C, 4 núcleos", kpi(k, "cpu").legenda(), "a temperatura vem junto, na legenda");
         assertEquals(NivelDeSaude.OK, kpi(k, "cpu").nivel());
         assertEquals("34%", kpi(k, "memoria").valor(), "em uso real: total menos disponível");
         assertEquals("swap 36%", kpi(k, "memoria").legenda());
         assertEquals("60%", kpi(k, "disco").valor());
-        assertEquals("/ · 35,0 GB livres", kpi(k, "disco").legenda());
+        assertEquals("35,0 GB livres em /", kpi(k, "disco").legenda());
         assertEquals("8/10", kpi(k, "containers").valor());
         assertEquals("2 parados", kpi(k, "containers").legenda());
         assertEquals(NivelDeSaude.OK, kpi(k, "containers").nivel(), "parados são normais");

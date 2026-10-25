@@ -135,7 +135,7 @@ final class PainelDeCredito extends Painel {
             situacao.setText("sem leitura");
             semLeitura.setText("Nenhuma sessão do Claude gravou uma leitura do plano ainda. Abra ou reabra uma sessão e o painel passa a mostrar.");
         } else if (Boolean.TRUE.equals(l.antiga())) {
-            situacao.setText("leitura antiga" + (l.lidoEm() == null ? "" : " · " + Formato.fmtHa(l.lidoEm(), agora)));
+            situacao.setText("leitura antiga" + (l.lidoEm() == null ? "" : ", " + Formato.fmtHa(l.lidoEm(), agora)));
             semLeitura.setText("A leitura do plano tem mais de 30 minutos: os números abaixo não são mostrados até uma sessão ler de novo.");
         } else {
             situacao.setText(l.lidoEm() == null ? "" : "leitura " + Formato.fmtHa(l.lidoEm(), agora));

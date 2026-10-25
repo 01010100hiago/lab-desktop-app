@@ -81,7 +81,7 @@ public final class ModeloDeKpis {
         // o uso é o número grande; a temperatura vem junto, na legenda (cabe em uma linha em qualquer largura)
         String valor = uso;
         String legenda = temp == null ? (c == null ? FormatosDoServidor.SEM_DADO : "sem sensor de calor")
-            : FormatosDoServidor.temperatura(temp) + (nucleos == null ? "" : " · " + nucleos);
+            : FormatosDoServidor.temperatura(temp) + (nucleos == null ? "" : ", " + nucleos);
         String dica = "Uso da CPU: " + uso + ". Temperatura: " + FormatosDoServidor.temperatura(temp)
             + " (atenção a partir de 85 °C, crítico a partir de 90 °C).";
         return new Kpi("cpu", "CPU", "cpu", valor, legenda, dica, nivel, "CPU a " + FormatosDoServidor.temperatura(temp));
@@ -117,7 +117,7 @@ public final class ModeloDeKpis {
         }
         Long livre = d.livre() != null ? d.livre() : d.total() - d.usado();
         String valor = FormatosDoServidor.porcentagem(pct / 100);
-        String legenda = d.montagem() + " · " + FormatosDoServidor.bytes(livre) + " livres";
+        String legenda = FormatosDoServidor.bytes(livre) + " livres em " + d.montagem();
         String dica = "O disco mais cheio: " + d.montagem() + ", " + FormatosDoServidor.bytes(d.usado()) + " de "
             + FormatosDoServidor.bytes(d.total()) + " (" + valor + "). Atenção a partir de 75%, crítico a partir de 90%.";
         return new Kpi("disco", "DISCO", "disco", valor, legenda, dica, nivel,
@@ -136,7 +136,7 @@ public final class ModeloDeKpis {
         int total = d.containers() != null ? d.containers() : d.rodando() + parados + pausados;
         String valor = d.rodando() + "/" + total;
         String legenda = parados == 0 && pausados == 0 ? "nenhum parado"
-            : parados + (parados == 1 ? " parado" : " parados") + (pausados > 0 ? " · " + pausados + " em pausa" : "");
+            : parados + (parados == 1 ? " parado" : " parados") + (pausados > 0 ? ", " + pausados + " em pausa" : "");
         String dica = d.rodando() + " de " + total + " containers rodando; " + parados + " parados e " + pausados
             + " pausados. Parado é normal: é um projeto desligado.";
         return new Kpi("containers", "CONTAINERS", "docker", valor, legenda, dica, nivel, "Containers");
@@ -157,7 +157,7 @@ public final class ModeloDeKpis {
             legenda = legendaDaSeguranca(r);
             dica = a.causa() + ". " + legenda + ".";
         }
-        return new Kpi("seguranca", "SEGURANÇA 24 H", "chave", valor, legenda, dica, a.nivel(), a.causa());
+        return new Kpi("seguranca", "SEGURANÇA", "chave", valor, legenda, dica, a.nivel(), a.causa());
     }
 
     private static String legendaDaSeguranca(ResumoDeSeguranca r) {

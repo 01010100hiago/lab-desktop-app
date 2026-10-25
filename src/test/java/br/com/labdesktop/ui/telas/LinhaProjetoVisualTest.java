@@ -94,7 +94,8 @@ class LinhaProjetoVisualTest {
         String pausada = ",\"limite\":{\"teto_pct\":20,\"usado_pp\":22,\"estado\":\"pausado\",\"pausa\":{\"motivo\":\"teto\",\"em\":\"2026-10-24T13:00:00Z\"}}";
         Visual.naEdt(() -> l.atualizar(modelo(pausada), limiteDe(pausada)));
         assertTrue(Visual.naEdt(() -> l.seloClaude().isVisible()), "a pausa continua informada");
-        assertEquals("PAUSADA PELO LIMITE", Visual.naEdt(() -> l.seloClaude().texto()));
+        assertEquals("PAUSADA", Visual.naEdt(() -> l.seloClaude().texto()), "o selo diz só 'pausada': cabe na coluna");
+        assertEquals("pelo limite", Visual.naEdt(() -> l.motivoDaPausa().getText()), "e o motivo vem numa linha própria");
         assertFalse(Visual.naEdt(() -> l.botaoRetomar().isVisible()), "Retomar é ação de escrita");
 
         String velha = ",\"sessaoInfo\":{\"atualizada\":false,\"faltando\":[\"imagem antiga (Claude desatualizado)\"]}";
@@ -156,13 +157,15 @@ class LinhaProjetoVisualTest {
         String pausada = ",\"limite\":{\"teto_pct\":20,\"usado_pp\":22,\"estado\":\"pausado\",\"pausa\":{\"motivo\":\"teto\",\"em\":\"2026-10-24T13:00:00Z\"}}";
         Visual.naEdt(() -> l.atualizar(modelo(pausada), limiteDe(pausada)));
         assertTrue(Visual.naEdt(() -> l.seloClaude().isVisible()));
-        assertEquals("PAUSADA PELO LIMITE", Visual.naEdt(() -> l.seloClaude().texto()));
+        assertEquals("PAUSADA", Visual.naEdt(() -> l.seloClaude().texto()));
+        assertEquals("pelo limite", Visual.naEdt(() -> l.motivoDaPausa().getText()));
         assertEquals(Gravidade.PERIGO, Visual.naEdt(() -> l.seloClaude().gravidade()));
         assertTrue(Visual.naEdt(() -> l.botaoRetomar().isVisible()));
         assertFalse(Visual.naEdt(() -> l.botaoAbrirClaude().isVisible()), "o servidor recusaria abrir (409)");
         String freio = ",\"limite\":{\"teto_pct\":null,\"usado_pp\":2,\"estado\":\"pausado\",\"pausa\":{\"motivo\":\"freio\"}}";
         Visual.naEdt(() -> l.atualizar(modelo(freio), limiteDe(freio)));
         assertEquals(Gravidade.ATENCAO, Visual.naEdt(() -> l.seloClaude().gravidade()), "freio global é âmbar, teto é terracota");
+        assertEquals("pelo freio", Visual.naEdt(() -> l.motivoDaPausa().getText()));
         BufferedImage img = Visual.renderizar(l, 1200, Visual.alturaPreferida(l, 1200));
         Visual.salvar(img, "linha-pausada");
     }
@@ -174,7 +177,7 @@ class LinhaProjetoVisualTest {
         String velha = ",\"sessaoInfo\":{\"atualizada\":false,\"faltando\":[\"imagem antiga (Claude desatualizado)\"]}";
         Visual.naEdt(() -> l.atualizar(LinhaDeProjeto.de(FixturesDeApi.de(json(velha).replace("\"sessaoClaude\":false", "\"sessaoClaude\":true"),
             Projeto.class)), null));
-        assertEquals("SESSÃO ABERTA", Visual.naEdt(() -> l.seloClaude().texto()));
+        assertEquals("ABERTA", Visual.naEdt(() -> l.seloClaude().texto()));
         assertTrue(Visual.naEdt(() -> l.seloDesatualizada().isVisible()));
         assertEquals("Falta: imagem antiga (Claude desatualizado)", Visual.naEdt(() -> l.seloDesatualizada().getToolTipText()));
         assertTrue(Visual.naEdt(() -> l.botaoReabrir().isVisible()));

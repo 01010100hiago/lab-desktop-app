@@ -60,7 +60,7 @@ class LinhaDeProjetoTest {
         LinhaDeProjeto l = LinhaDeProjeto.de(projeto(base(",\"tokens\":{\"semana_custo_usd\":0.39,\"semana_saida\":11200,\"hoje_custo_usd\":0.1},"
             + "\"limite\":{\"teto_pct\":20,\"usado_pp\":16.2,\"estado\":\"atencao\",\"liberado\":false}")));
         assertEquals("US$ 0,39", l.consumo().custo());
-        assertEquals(" · 11,2 mil", l.consumo().tokens());
+        assertEquals("11,2 mil", l.consumo().tokens());
         assertEquals("16% de 20% da semana", l.limite().texto());
         assertEquals(Severidade.ALTA, l.limite().severidade());
         assertTrue(l.limite().temBarra());
@@ -76,15 +76,16 @@ class LinhaDeProjetoTest {
         assertNull(vazio.limite());
         assertFalse(vazio.oferecerDefinirLimite());
         LinhaDeProjeto semTeto = LinhaDeProjeto.de(projeto(base(",\"limite\":{\"teto_pct\":null,\"usado_pp\":3.1,\"estado\":\"ok\"}")));
-        assertEquals("sem limite · 3,1% da semana", semTeto.limite().texto());
+        assertEquals("sem limite, 3,1% da semana", semTeto.limite().texto());
         assertFalse(semTeto.limite().temBarra());
     }
 
     @Test
-    void limiteLiberadoDizLiberadoNoTexto() {
+    void limiteLiberadoVaiNumaLinhaPropriaESoNoTooltipDoTexto() {
         LinhaDeProjeto l = LinhaDeProjeto.de(projeto(base(",\"limite\":{\"teto_pct\":20,\"usado_pp\":25,\"estado\":\"ok\",\"liberado\":true}")));
-        assertTrue(l.limite().texto().endsWith(" · liberado"), l.limite().texto());
+        assertEquals("25% de 20% da semana", l.limite().texto(), "o texto cabe na coluna: 'liberado' tem a sua linha");
         assertTrue(l.limite().liberado());
+        assertTrue(l.limite().descricao().contains("liberado"), l.limite().descricao());
     }
 
     @Test

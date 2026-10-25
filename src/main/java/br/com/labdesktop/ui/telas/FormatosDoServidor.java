@@ -72,6 +72,31 @@ public final class FormatosDoServidor {
         return m > 0 ? m + " min" : "menos de 1 min";
     }
 
+    /**
+     * Tempo ligado por extenso, para a ficha da máquina: {@code 5 dias e 7 horas}, {@code 3 horas e 57 minutos},
+     * {@code 12 minutos} ou {@code menos de 1 minuto}.
+     */
+    public static String tempoLigadoPorExtenso(Number segundos) {
+        if (semDado(segundos) || segundos.doubleValue() < 0) {
+            return SEM_DADO;
+        }
+        long total = (long) Math.floor(segundos.doubleValue());
+        long d = total / 86_400;
+        long h = total % 86_400 / 3_600;
+        long m = total % 3_600 / 60;
+        if (d > 0) {
+            return plural(d, "dia", "dias") + (h > 0 ? " e " + plural(h, "hora", "horas") : "");
+        }
+        if (h > 0) {
+            return plural(h, "hora", "horas") + (m > 0 ? " e " + plural(m, "minuto", "minutos") : "");
+        }
+        return m > 0 ? plural(m, "minuto", "minutos") : "menos de 1 minuto";
+    }
+
+    private static String plural(long n, String singular, String plural) {
+        return n + " " + (n == 1 ? singular : plural);
+    }
+
     /** Fração de 0 a 1 em porcentagem: uma casa abaixo de 10 % ({@code 8,3%}), nenhuma acima ({@code 42%}). */
     public static String porcentagem(Number fracao) {
         return semDado(fracao) ? SEM_DADO : Formato.fmtNum(umaCasa(fracao.doubleValue() * 100)) + "%";

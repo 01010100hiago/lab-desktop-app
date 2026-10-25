@@ -57,6 +57,7 @@ public final class TabelaPaginada<T> extends Painel {
     private final JPanel grade = new Painel(new GridBagLayout());
     private final JPanel rodape = new Painel(new BorderLayout());
     private final Rotulo resumo = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f);
+    private final Rotulo notaRotulo = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f).truncavel();
     private final Rotulo posicao = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f);
     private final Botao anterior = Botoes.mini("Anterior", "voltar");
     private final Botao proxima = Botoes.mini("Próxima", "avancar");
@@ -73,6 +74,10 @@ public final class TabelaPaginada<T> extends Painel {
     private int colunaOrdenada = -1;
     private boolean crescente = true;
     private List<List<String>> linhasDaPagina = List.of();
+    private boolean paginacaoExterna;
+    private final Rotulo resumoExterno = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f);
+    private final JPanel controlesExternos = new Painel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 0));
+    private final JPanel botoesDoRodape;
     private String tituloDaAcao = "";
     private Function<T, JComponent> acaoPorLinha;
 
@@ -88,9 +93,9 @@ public final class TabelaPaginada<T> extends Painel {
         anterior.getAccessibleContext().setAccessibleName("Página anterior");
         proxima.getAccessibleContext().setAccessibleName("Próxima página");
         proxima.setHorizontalTextPosition(SwingConstants.LEADING);
-        JPanel botoes = Caixa.linha(8, anterior, posicao, proxima);
-        rodape.add(Caixa.linha(0, resumo, Caixa.mola()), BorderLayout.CENTER);
-        rodape.add(botoes, BorderLayout.EAST);
+        botoesDoRodape = Caixa.linha(8, anterior, posicao, proxima);
+        rodape.add(Caixa.fluxo(java.awt.FlowLayout.LEFT, 16, resumo, notaRotulo), BorderLayout.CENTER);
+        rodape.add(botoesDoRodape, BorderLayout.EAST);
         add(grade, BorderLayout.CENTER);
         add(rodape, BorderLayout.SOUTH);
         desenhar();
@@ -99,6 +104,26 @@ public final class TabelaPaginada<T> extends Painel {
     // ---------------------------------------------------------------------------------------------
     // Dados, filtro, ordem
     // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Tira a paginação ("mostrando 1-4 de 8", Anterior, Página 1 de 2, Próxima) do rodapé e a entrega para quem a põe onde
+     * quiser (a linha do título da caixa): a tabela não gasta uma linha inteira só para os botões. O rodapé fica só com a nota,
+     * se houver. Chame uma vez, antes de usar a tabela.
+     *
+     * @return o componente com os controles, que some sozinho quando há uma página só
+     */
+    public JComponent paginacaoExterna() {
+        if (!paginacaoExterna) {
+            paginacaoExterna = true;
+            botoesDoRodape.removeAll();
+            controlesExternos.add(resumoExterno);
+            controlesExternos.add(anterior);
+            controlesExternos.add(posicao);
+            controlesExternos.add(proxima);
+            desenhar();
+        }
+        return controlesExternos;
+    }
 
     /** Troca os itens (mantém a página, se ainda existir) e a frase de "vazio" de quando não há nenhum. */
     public void definir(List<T> itens, String mensagemQuandoVazio) {
@@ -337,14 +362,19 @@ public final class TabelaPaginada<T> extends Painel {
         this.linhasDaPagina = List.copyOf(textos);
 
         int paginas = totalDePaginas();
-        resumo.setText((textoDoResumo() + (nota.isEmpty() ? "" : (visiveis.isEmpty() ? "" : " · ") + nota)));
+        resumo.setText(textoDoResumo());
+        resumo.setVisible(!textoDoResumo().isEmpty() && !paginacaoExterna);
+        resumoExterno.setText(textoDoResumo());
+        notaRotulo.setText(nota);
+        notaRotulo.setVisible(!nota.isEmpty()); // a nota é outro dado: vai ao lado, não colada com " · "
         posicao.setText("Página " + pagina + " de " + paginas);
         anterior.setEnabled(pagina > 1);
         proxima.setEnabled(pagina < paginas);
         anterior.setVisible(paginas > 1);
         proxima.setVisible(paginas > 1);
         posicao.setVisible(paginas > 1);
-        rodape.setVisible(paginas > 1 || !nota.isEmpty());
+        controlesExternos.setVisible(paginacaoExterna && paginas > 1);
+        rodape.setVisible(paginacaoExterna ? !nota.isEmpty() : (paginas > 1 || !nota.isEmpty()));
         grade.revalidate();
         grade.repaint();
         revalidate();
@@ -390,7 +420,7 @@ public final class TabelaPaginada<T> extends Painel {
             }
         };
         b.putClientProperty("html.disable", Boolean.TRUE);
-        b.setFont(b.getFont().deriveFont(java.awt.Font.BOLD, 10.5f));
+        br.com.labdesktop.ui.tema.Fontes.aplicar(b, br.com.labdesktop.ui.tema.Fontes.TEXTO, java.awt.Font.BOLD, 10.5f);
         b.setBorderPainted(false);
         b.setContentAreaFilled(false);
         b.setFocusPainted(false);

@@ -104,7 +104,7 @@ final class DetalhesDaMaquina extends Painel {
         maquina.definir(List.of(
             new Campo("Fabricante e modelo", modelo),
             new Campo("Placa", m == null ? null : m.placa()),
-            new Campo("BIOS", m == null ? null : juntar(" · ", m.bios(), m.biosData())),
+            new Campo("BIOS", m == null ? null : juntar(", ", m.bios(), m.biosData())),
             new Campo("Processador", m != null && m.cpuModelo() != null ? m.cpuModelo() : cpu == null ? null : cpu.modelo()),
             new Campo("Núcleos", numero(m != null && m.nucleos() != null ? m.nucleos() : cpu == null ? null : cpu.nucleos())),
             new Campo("Memória", m != null && m.memoriaTotal() != null ? FormatosDoServidor.bytes(m.memoriaTotal())
@@ -175,8 +175,8 @@ final class DetalhesDaMaquina extends Painel {
             energia.add(rotulo(linha, e.tomada() != null && !e.tomada() ? Tokens.PERIGO : Tokens.TEXTO));
             for (Bateria b : e.baterias()) {
                 energia.add(rotulo(b.nome() + ": " + (b.carga() == null ? "?" : FormatosDoServidor.percentual(b.carga()))
-                    + (b.estado() == null ? "" : " · " + b.estado())
-                    + (b.saude() == null ? "" : " · saúde " + FormatosDoServidor.porcentagem(b.saude())), Tokens.TEXTO2));
+                    + (b.estado() == null ? "" : ", " + b.estado())
+                    + (b.saude() == null ? "" : ", saúde " + FormatosDoServidor.porcentagem(b.saude())), Tokens.TEXTO2));
             }
             if (e.baterias().isEmpty()) {
                 // texto longo: quebra em linhas em vez de ser cortado

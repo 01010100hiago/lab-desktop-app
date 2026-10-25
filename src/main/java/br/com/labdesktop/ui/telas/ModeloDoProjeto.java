@@ -130,6 +130,18 @@ public record ModeloDoProjeto(DetalheProjeto detalhe) {
         return detalhe.git() == null ? null : detalhe.git().branch() + "@" + detalhe.git().commit();
     }
 
+    /**
+     * O estado do código em palavras simples: {@code Branch main, com mudanças que ainda não foram salvas no git},
+     * {@code Branch main, tudo salvo} ou {@code Sem git}. Nunca o hash cru.
+     */
+    public String textoDoCodigo() {
+        if (detalhe.git() == null) {
+            return "Sem git";
+        }
+        String branch = detalhe.git().branch() == null || detalhe.git().branch().isBlank() ? "sem nome" : detalhe.git().branch();
+        return "Branch " + branch + (gitSujo() ? ", com mudanças que ainda não foram salvas no git" : ", tudo salvo");
+    }
+
     public boolean gitSujo() {
         return detalhe.git() != null && Boolean.TRUE.equals(detalhe.git().sujo());
     }
@@ -164,9 +176,9 @@ public record ModeloDoProjeto(DetalheProjeto detalhe) {
             case SEM_COMPOSE -> "Sem compose";
         };
         String legenda = switch (e) {
-            case NO_AR -> "todos os containers rodando";
-            case PARCIAL -> "alguns containers parados";
-            case PARADO -> "nenhum container rodando";
+            case NO_AR -> "todos rodando";
+            case PARCIAL -> "alguns parados";
+            case PARADO -> "nenhum rodando";
             case NUNCA_SUBIU -> "ainda não foi iniciado";
             case SEM_COMPOSE -> "sem arquivo compose";
         };
@@ -209,20 +221,20 @@ public record ModeloDoProjeto(DetalheProjeto detalhe) {
     private Kpi indicadorDeConsumo() {
         Limite l = limite();
         if (l == null) {
-            return new Kpi("consumo", "CONSUMO DA SEMANA", "moeda", Formato.SEM_DADO, "sem leitura",
+            return new Kpi("consumo", "CONSUMO", "moeda", Formato.SEM_DADO, "sem leitura",
                 "O agente ainda não informou o consumo da semana.", NivelDeSaude.SEM_DADO, "", "");
         }
         String dicaBase = "Fatia estimada da semana do plano usada por este projeto. ";
         if (l.tetoPct() == null) {
-            return new Kpi("consumo", "CONSUMO DA SEMANA", "moeda", TextosDeLimite.fmtUsado(l), "da semana · sem limite",
+            return new Kpi("consumo", "CONSUMO", "moeda", TextosDeLimite.fmtUsado(l), "da semana, sem limite",
                 dicaBase + "Nenhum limite definido: abra a aba Consumo e limite para definir um.", NivelDeSaude.SEM_DADO, "", "");
         }
         boolean liberado = Boolean.TRUE.equals(l.liberado());
         NivelDeSaude nivel = l.pausado() ? NivelDeSaude.CRITICO
             : "atencao".equals(l.estado()) ? NivelDeSaude.ATENCAO : NivelDeSaude.OK;
         String selo = l.pausado() ? "Pausado" : liberado ? "Liberado" : null;
-        String legenda = liberado ? "liberado até a semana virar" : "da semana do plano";
+        String legenda = liberado ? "liberado na semana" : "de " + br.com.labdesktop.util.Formato.fmtNum(l.tetoPct()) + "% da semana";
         String dica = dicaBase + TextosDeLimite.texto(l) + (l.pausado() ? ". A sessão do Claude está pausada." : ".");
-        return new Kpi("consumo", "CONSUMO DA SEMANA", "moeda", TextosDeLimite.textoCurto(l), legenda, dica, nivel, "", selo);
+        return new Kpi("consumo", "CONSUMO", "moeda", TextosDeLimite.fmtUsado(l), legenda, dica, nivel, "", selo);
     }
 }

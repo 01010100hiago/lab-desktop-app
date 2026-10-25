@@ -7,6 +7,7 @@ import br.com.labdesktop.ui.ApresentacaoDoEstado.Apresentacao;
 import br.com.labdesktop.ui.componentes.Botao;
 import br.com.labdesktop.ui.componentes.Botoes;
 import br.com.labdesktop.ui.componentes.Caixa;
+import br.com.labdesktop.ui.componentes.FichaRotulada;
 import br.com.labdesktop.ui.componentes.Icones;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
@@ -17,7 +18,6 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -31,16 +31,18 @@ final class CabecalhoDoServidor extends Painel {
 
     private final Rotulo nome = Rotulo.titulo("Servidor");
     private final Selo estado = new Selo("", br.com.labdesktop.ui.Gravidade.NEUTRO, "info");
+    /** Só a frase de "esperando a primeira leitura"; com a leitura, quem fala é a ficha. */
     private final Rotulo linhaDeBaixo = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12.5f).truncavel();
+    private final FichaRotulada ficha = new FichaRotulada(4, 24);
     private final Rotulo leitura = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f);
     private final Botao atualizar = Botoes.mini("Atualizar", "atualizar");
 
     CabecalhoDoServidor(Runnable aoAtualizar) {
-        super(new BorderLayout(0, 4));
+        super(new BorderLayout(0, 6));
         nome.setIcon(Icones.colorido("servidor", 22, Tokens.ACENTO));
         nome.setIconTextGap(10);
         add(Caixa.linha(12, nome, new AEsquerda(estado), Caixa.mola(), leitura, atualizar), BorderLayout.NORTH);
-        add(linhaDeBaixo, BorderLayout.CENTER);
+        add(Caixa.coluna(0, linhaDeBaixo, ficha), BorderLayout.CENTER);
         atualizar.addActionListener(e -> aoAtualizar.run());
         atualizar.setToolTipText("Consulta o servidor agora");
         getAccessibleContext().setAccessibleName("Cabeçalho do servidor");
@@ -58,15 +60,17 @@ final class CabecalhoDoServidor extends Painel {
         }
         if (info == null) {
             linhaDeBaixo.setText("Esperando a primeira leitura do servidor…");
+            linhaDeBaixo.setVisible(true);
+            ficha.definir(List.of());
             leitura.setText("");
         } else {
-            List<String> partes = new ArrayList<>();
-            partes.add("Máquina " + (info.hostname() == null ? FormatosDoServidor.SEM_DADO : info.hostname()));
-            partes.add("Sistema " + (info.sistema() == null ? FormatosDoServidor.SEM_DADO : info.sistema()));
-            partes.add("Kernel " + (info.kernel() == null ? FormatosDoServidor.SEM_DADO : info.kernel()));
-            partes.add("Ligada há " + FormatosDoServidor.tempoLigado(info.uptime()));
-            linhaDeBaixo.setText(String.join("  ·  ", partes));
-            linhaDeBaixo.setToolTipText(String.join("\n", partes));
+            linhaDeBaixo.setText("");
+            linhaDeBaixo.setVisible(false);
+            ficha.definir(List.of(
+                FichaRotulada.Item.de("Máquina", info.hostname() == null ? FormatosDoServidor.SEM_DADO : info.hostname()),
+                FichaRotulada.Item.de("Sistema", info.sistema() == null ? FormatosDoServidor.SEM_DADO : info.sistema()),
+                FichaRotulada.Item.de("Kernel", info.kernel() == null ? FormatosDoServidor.SEM_DADO : info.kernel()),
+                FichaRotulada.Item.de("Ligada há", FormatosDoServidor.tempoLigadoPorExtenso(info.uptime()))));
             leitura.setText(ultimaLeitura == null ? "" : "Leitura das " + Formato.fmtHora(ultimaLeitura, fuso));
         }
         revalidate();
@@ -87,6 +91,11 @@ final class CabecalhoDoServidor extends Painel {
 
     String textoDaLinhaDeBaixo() {
         return linhaDeBaixo.getText();
+    }
+
+    /** Os pares (rótulo, valor) da ficha da máquina. */
+    java.util.List<java.util.List<String>> paresDaFicha() {
+        return ficha.pares();
     }
 
     @Override

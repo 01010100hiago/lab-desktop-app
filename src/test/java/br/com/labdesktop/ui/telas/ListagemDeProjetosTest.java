@@ -51,8 +51,11 @@ class ListagemDeProjetosTest {
     void resumoNoSingularEPlural() {
         ListaProjetos um = FixturesDeApi.de("{\"projetos\":[{\"nome\":\"a\",\"rodando\":true,\"sessaoClaude\":true,"
             + "\"limite\":{\"teto_pct\":1,\"usado_pp\":2,\"estado\":\"pausado\"}}],\"servidor\":{}}", ListaProjetos.class);
-        assertEquals("1 projeto · 1 no ar · 1 com Claude aberto · 1 pausado", ListagemDeProjetos.resumo(um.projetos()));
+        assertEquals("1 projeto, 1 no ar, 1 com Claude aberto, 1 pausado", ListagemDeProjetos.resumo(um.projetos()));
         ListaProjetos zero = FixturesDeApi.de("{\"projetos\":[],\"servidor\":{}}", ListaProjetos.class);
-        assertEquals("0 projetos · 0 no ar · 0 com Claude aberto", ListagemDeProjetos.resumo(zero.projetos()));
+        assertEquals("0 projetos, 0 no ar, 0 com Claude aberto", ListagemDeProjetos.resumo(zero.projetos()));
+        assertEquals(List.of("0 projetos", "0 no ar", "0 com Claude aberto"), ListagemDeProjetos.partesDoResumo(zero.projetos()),
+            "cada dado é um item separado, sem pontinho colando frases; o pausado só aparece quando existe");
+        assertEquals(List.of("1 projeto", "1 no ar", "1 com Claude aberto", "1 pausado"), ListagemDeProjetos.partesDoResumo(um.projetos()));
     }
 }

@@ -22,7 +22,7 @@ public final class BarraSeveridade extends JComponent {
 
     /** As três alturas do painel. */
     public enum Tamanho {
-        FINA(4), PADRAO(6), GROSSA(10);
+        FINA(4), PADRAO(6), MEDIA(8), GROSSA(10);
 
         private final int altura;
 

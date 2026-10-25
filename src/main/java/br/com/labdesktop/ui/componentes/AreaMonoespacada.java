@@ -4,7 +4,6 @@ import br.com.labdesktop.ui.tema.Tokens;
 import java.awt.Color;
 import java.awt.Font;
 import javax.swing.JTextArea;
-import javax.swing.UIManager;
 
 /**
  * Uma área de texto SOMENTE LEITURA, monoespaçada, com as cores de "console" do tema (os tokens {@code Lab.logs*}): é onde o
@@ -21,8 +20,7 @@ public final class AreaMonoespacada extends JTextArea {
         setEditable(false);
         setLineWrap(quebrarLinhas);
         setWrapStyleWord(false);
-        Font base = UIManager.getFont("monospaced.font");
-        setFont((base != null ? base : new Font(Font.MONOSPACED, Font.PLAIN, 12)).deriveFont(12f));
+        br.com.labdesktop.ui.tema.Fontes.aplicar(this, br.com.labdesktop.ui.tema.Fontes.MONO, Font.PLAIN, 12f);
         putClientProperty("html.disable", Boolean.TRUE);
         // A rolagem é de quem usa (seguir o fim ou ficar onde o usuário parou): trocar o texto não pode mexer nela sozinho.
         ((javax.swing.text.DefaultCaret) getCaret()).setUpdatePolicy(javax.swing.text.DefaultCaret.NEVER_UPDATE);

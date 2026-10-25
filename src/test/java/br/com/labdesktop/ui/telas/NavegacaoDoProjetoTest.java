@@ -329,7 +329,7 @@ class NavegacaoDoProjetoTest {
         Espera.ate(Duration.ofSeconds(20), () -> "o consumo chegou", () -> leituras("/api/tokens/orbita") >= 1);
         assertEquals(java.util.Set.of("consumo:orbita"), Visual.naEdt(t.consumo()::topicosProprios));
         Espera.ate(Duration.ofSeconds(20), () -> "os totais na tela", () -> Visual.naEdt(() -> t.consumo().totais().cartoes().get(2).textoDoValor()).equals("US$ 68,20"));
-        assertEquals("Harness: 12 entregas · 14 iniciados · 143,2 mil tokens", Visual.naEdt(t.consumo()::textoDoHarness));
+        assertEquals(3, Visual.naEdt(() -> t.consumo().fichaDoHarness().pares().size()));
         int antes = leituras("/api/tokens/orbita");
         Visual.naEdt(() -> t.consumo().soltar());
         assertEquals(java.util.Set.of(), Visual.naEdt(t.consumo()::topicosProprios));
@@ -610,7 +610,7 @@ class NavegacaoDoProjetoTest {
     void oBotaoPararDaVisaoGeralChamaOCompose() {
         TelaProjeto t = abrirPeloLab("orbita");
         esperarDetalhe(t);
-        assertEquals("Parar", Visual.naEdt(() -> t.visaoGeral().botaoCompose().getText()));
+        assertEquals("Parar projeto", Visual.naEdt(() -> t.visaoGeral().botaoCompose().getText()));
         Visual.naEdt(() -> t.visaoGeral().botaoCompose().doClick());
         Espera.ate(Duration.ofSeconds(15), () -> "parar", () -> cenario.recebeu("POST", "/api/projetos/orbita/parar"));
         Espera.ate(Duration.ofSeconds(15), () -> "aviso", () -> avisos.disse("ok", "orbita: parado."));

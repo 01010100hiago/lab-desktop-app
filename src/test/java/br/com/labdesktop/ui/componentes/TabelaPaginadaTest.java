@@ -210,4 +210,20 @@ class TabelaPaginadaTest {
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
             () -> Visual.naEdt(() -> new TabelaPaginada<Item>(0, List.of())));
     }
+
+    @Test
+    void paginacaoExternaTiraOsControlesDoRodapeEOsEntregaParaOCaller() {
+        Visual.tema(Tema.CLARO);
+        TabelaPaginada<Item> t = tabela(4);
+        javax.swing.JComponent controles = Visual.naEdt(t::paginacaoExterna);
+        Visual.naEdt(() -> t.definir(itens(10), "vazio"));
+        assertTrue(Visual.naEdt(controles::isVisible), "10 itens em páginas de 4: tem para onde ir");
+        assertTrue(Visual.naEdt(() -> controles.isAncestorOf(t.botaoProxima())), "os botões moram no componente externo");
+        assertFalse(Visual.naEdt(() -> t.isAncestorOf(t.botaoProxima())), "e não mais no rodapé da tabela");
+        Visual.naEdt(() -> t.botaoProxima().doClick());
+        assertEquals(2, t.pagina());
+        assertEquals("mostrando 5-8 de 10", t.textoDoResumo());
+        Visual.naEdt(() -> t.definir(itens(3), "vazio"));
+        assertFalse(Visual.naEdt(controles::isVisible), "uma página só: o controle some");
+    }
 }

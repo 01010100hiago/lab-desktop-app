@@ -76,7 +76,7 @@ final class PaginaArquivos extends PaginaDoProjeto {
     void atualizarConteudo() {
         List<Arquivo> itens = ctx.detalhe.arquivos();
         long pastas = itens.stream().filter(a -> "pasta".equals(a.tipo())).count();
-        apoio.setText(itens.isEmpty() ? "" : pastas + (pastas == 1 ? " pasta" : " pastas") + " · " + (itens.size() - pastas)
+        apoio.setText(itens.isEmpty() ? "" : pastas + (pastas == 1 ? " pasta" : " pastas") + ", " + (itens.size() - pastas)
             + ((itens.size() - pastas) == 1 ? " arquivo" : " arquivos"));
         comTamanho = itens.stream().anyMatch(a -> a.tamanho() != null);
         String vazio = "A raiz do projeto está vazia (ou o agente não listou nada).";

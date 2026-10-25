@@ -1,6 +1,7 @@
 package br.com.labdesktop.ui.componentes;
 
 import br.com.labdesktop.seguranca.TextoSeguro;
+import br.com.labdesktop.ui.tema.Fontes;
 import br.com.labdesktop.ui.tema.Tokens;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -8,7 +9,6 @@ import java.awt.Font;
 import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.SwingConstants;
-import javax.swing.UIManager;
 
 /**
  * O rótulo do app. Três garantias que um {@code JLabel} puro não dá:
@@ -27,6 +27,9 @@ public class Rotulo extends JLabel {
 
     private String tokenDaCor;
     private boolean truncavel;
+    private boolean negrito;
+    private String familia = Fontes.TEXTO;
+    private float nominal = Fontes.NOMINAL_PADRAO;
 
     @SuppressWarnings("this-escape") // configurar o componente no construtor é o jeito do Swing
     public Rotulo() {
@@ -76,20 +79,28 @@ public class Rotulo extends JLabel {
     }
 
     public Rotulo negrito() {
-        setFont(getFont().deriveFont(Font.BOLD));
+        this.negrito = true;
+        refazerAFonte();
         return this;
     }
 
+    /** O tamanho NOMINAL (o número de sempre); quem decide os pontos de verdade é {@link Fontes}, com o fator do usuário. */
     public Rotulo tamanho(float pontos) {
-        setFont(getFont().deriveFont(pontos));
+        this.nominal = pontos;
+        refazerAFonte();
         return this;
     }
 
-    /** A fonte monoespaçada do app (JetBrains Mono), no tamanho dado. */
+    /** A fonte monoespaçada do app (JetBrains Mono), no tamanho nominal dado. */
     public Rotulo mono(float pontos) {
-        Font base = UIManager.getFont("monospaced.font");
-        setFont((base != null ? base : new Font(Font.MONOSPACED, Font.PLAIN, 12)).deriveFont(pontos));
+        this.familia = Fontes.MONO;
+        this.nominal = pontos;
+        refazerAFonte();
         return this;
+    }
+
+    private void refazerAFonte() {
+        Fontes.aplicar(this, familia, negrito ? Font.BOLD : Font.PLAIN, nominal);
     }
 
     public Rotulo icone(Icon icone) {
@@ -126,9 +137,11 @@ public class Rotulo extends JLabel {
 
     /** Título de seção, 17 pt semibold ({@code h2} do painel). */
     public static Rotulo titulo(String texto) {
-        Font h = UIManager.getFont("h3.font");
         Rotulo r = new Rotulo(texto);
-        r.setFont((h != null ? h : r.getFont()).deriveFont(Font.BOLD, 17f));
+        r.familia = Fontes.TITULO;
+        r.negrito = true;
+        r.nominal = 17f;
+        r.refazerAFonte();
         return r;
     }
 

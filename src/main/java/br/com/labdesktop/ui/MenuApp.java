@@ -2,6 +2,7 @@ package br.com.labdesktop.ui;
 
 import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.ui.MenuDoServidor.Item;
+import br.com.labdesktop.ui.tema.Fontes;
 import br.com.labdesktop.util.Preferencias.Tema;
 import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
@@ -37,6 +38,9 @@ public final class MenuApp {
     private final Runnable mostrarSobre;
     private final Map<Item, JMenuItem> itensDoServidor = new EnumMap<>(Item.class);
     private final JMenu menuServidor = new JMenu("Servidor");
+    private JMenuItem itemAumentar;
+    private JMenuItem itemDiminuir;
+    private JMenuItem itemNormal;
     private JMenuItem itemUltimoProjeto;
     private JMenuItem itemVoltarAosProjetos;
     private final JMenuBar barra = new JMenuBar();
@@ -124,6 +128,15 @@ public final class MenuApp {
             painel::mostrarProjetos);
         ver.add(itemVoltarAosProjetos);
         ver.addSeparator();
+        itemAumentar = item("Aumentar texto", KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, atalho()), () -> mudarTexto(Fontes.maior(Fontes.percentual())));
+        itemDiminuir = item("Diminuir texto", KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, atalho()), () -> mudarTexto(Fontes.menor(Fontes.percentual())));
+        itemNormal = item("Tamanho normal", KeyStroke.getKeyStroke(KeyEvent.VK_0, atalho()), () -> mudarTexto(Fontes.ESCALAS[0]));
+        ver.add(itemAumentar);
+        ver.add(itemDiminuir);
+        ver.add(itemNormal);
+        instalarAtalhoDoMais();
+        atualizarItensDoTexto();
+        ver.addSeparator();
         JMenu aparencia = new JMenu("Aparência");
         ButtonGroup grupo = new ButtonGroup();
         for (Object[] par : new Object[][] {{Tema.SISTEMA, "Seguir o sistema"}, {Tema.CLARO, "Claro"}, {Tema.ESCURO, "Escuro"}}) {
@@ -180,6 +193,47 @@ public final class MenuApp {
         itensDoServidor.forEach((i, mi) -> mi.setEnabled(validos.contains(i)));
     }
 
+    /**
+     * Muda o tamanho do texto de toda a interface (100, 115 ou 130 %): refaz as fontes na hora, lembra nas preferências e
+     * ajusta o que o menu oferece.
+     */
+    void mudarTexto(int porcento) {
+        Fontes.definirPercentual(porcento);
+        tema.reaplicarFontes();
+        int atual = Fontes.percentual();
+        preferencias.atualizar(p -> p.comEscalaTexto(atual));
+        atualizarItensDoTexto();
+    }
+
+    private void atualizarItensDoTexto() {
+        int p = Fontes.percentual();
+        itemAumentar.setEnabled(p < Fontes.ESCALAS[Fontes.ESCALAS.length - 1]);
+        itemDiminuir.setEnabled(p > Fontes.ESCALAS[0]);
+        itemNormal.setEnabled(p != Fontes.ESCALAS[0]);
+    }
+
+    /**
+     * Cmd e o sinal de mais: o item do menu usa Cmd+= (a mesma tecla, sem o Shift), e aqui o "+" de verdade (Cmd+Shift+=, ou o
+     * "+" do teclado numérico) faz o mesmo, como nos outros apps do Mac.
+     */
+    private void instalarAtalhoDoMais() {
+        if (janela == null) {
+            return;
+        }
+        var mapa = janela.getRootPane().getInputMap(javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW);
+        mapa.put(KeyStroke.getKeyStroke(KeyEvent.VK_PLUS, atalho()), "aumentar-texto");
+        mapa.put(KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, atalho() | java.awt.event.InputEvent.SHIFT_DOWN_MASK), "aumentar-texto");
+        mapa.put(KeyStroke.getKeyStroke(KeyEvent.VK_ADD, atalho()), "aumentar-texto");
+        janela.getRootPane().getActionMap().put("aumentar-texto", new javax.swing.AbstractAction() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                mudarTexto(Fontes.maior(Fontes.percentual()));
+            }
+        });
+    }
+
     /** "Último projeto aberto" só com um projeto para reabrir; "Voltar à lista" só com uma página de projeto aberta. */
     public void atualizarHabilitacaoDoProjeto() {
         itemUltimoProjeto.setEnabled(painel.temUltimoProjeto());
@@ -187,6 +241,18 @@ public final class MenuApp {
     }
 
     // ---- para os testes ----
+
+    public JMenuItem itemAumentarTexto() {
+        return itemAumentar;
+    }
+
+    public JMenuItem itemDiminuirTexto() {
+        return itemDiminuir;
+    }
+
+    public JMenuItem itemTamanhoNormal() {
+        return itemNormal;
+    }
 
     public JMenuItem itemUltimoProjeto() {
         return itemUltimoProjeto;

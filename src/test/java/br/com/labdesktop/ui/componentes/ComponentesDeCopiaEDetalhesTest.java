@@ -65,19 +65,19 @@ class ComponentesDeCopiaEDetalhesTest {
         Rotulo conteudo = Visual.naEdt(() -> new Rotulo("detalhes"));
         SecaoRecolhivel s = Visual.naEdt(() -> new SecaoRecolhivel("Ver comando", "Esconder o comando", conteudo, mudancas::incrementAndGet));
         assertFalse(Visual.naEdt(s::aberta));
-        assertFalse(Visual.naEdt(conteudo::isVisible), "o conteúdo começa escondido");
+        assertFalse(Visual.naEdt(() -> conteudo.getParent().isVisible()), "o conteúdo começa escondido");
         assertEquals("Ver comando", Visual.naEdt(() -> s.botao().getText()));
 
         Visual.naEdt(() -> s.botao().doClick());
         assertTrue(Visual.naEdt(s::aberta));
-        assertTrue(Visual.naEdt(conteudo::isVisible));
+        assertTrue(Visual.naEdt(() -> conteudo.getParent().isVisible()));
         assertEquals("Esconder o comando", Visual.naEdt(() -> s.botao().getText()));
         assertEquals(1, mudancas.get());
 
         Visual.naEdt(() -> s.definirAberta(true));
         assertEquals(1, mudancas.get(), "pedir o estado que já está não avisa de novo");
         Visual.naEdt(() -> s.botao().doClick());
-        assertFalse(Visual.naEdt(conteudo::isVisible));
+        assertFalse(Visual.naEdt(() -> conteudo.getParent().isVisible()));
         assertEquals(2, mudancas.get());
     }
 }

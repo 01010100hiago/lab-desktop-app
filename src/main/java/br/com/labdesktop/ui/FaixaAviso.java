@@ -187,8 +187,13 @@ public final class FaixaAviso extends Painel {
         Painel p = moldura(a.gravidade());
         p.add(marca(a.icone(), a.gravidade()), BorderLayout.WEST);
         Rotulo titulo = new Rotulo(a.titulo()).negrito();
-        TextoCorrido texto = new TextoCorrido(String.join(" · ", a.partes()) + ".", 760).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
-        p.add(Caixa.coluna(2, titulo, texto), BorderLayout.CENTER);
+        // cada dado na sua linha (antes eram juntados com " · " num parágrafo que quebrava no meio)
+        List<java.awt.Component> linhas = new ArrayList<>();
+        linhas.add(titulo);
+        for (String parte : a.partes()) {
+            linhas.add(new Rotulo(parte).corDoToken(Tokens.TEXTO2).tamanho(12.5f).truncavel());
+        }
+        p.add(Caixa.coluna(2, linhas.toArray(java.awt.Component[]::new)), BorderLayout.CENTER);
         p.getAccessibleContext().setAccessibleName(a.titulo());
         return p;
     }

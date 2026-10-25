@@ -56,7 +56,7 @@ class FormatosDoProjetoTest {
 
     @Test
     void volumeEmUmaLinha() {
-        assertEquals("135,1 mil de saída · 251 respostas", FormatosDoProjeto.volume(135098L, 251L));
-        assertEquals("0 de saída · 1 resposta", FormatosDoProjeto.volume(null, 1L));
+        assertEquals("135,1 mil de saída, 251 respostas", FormatosDoProjeto.volume(135098L, 251L));
+        assertEquals("0 de saída, 1 resposta", FormatosDoProjeto.volume(null, 1L));
     }
 }

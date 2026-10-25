@@ -89,7 +89,7 @@ abstract class PaginaDoProjeto extends Painel {
         }
 
         pilha.setLayout(preenche ? new BorderLayout() : new BoxLayout(pilha, BoxLayout.Y_AXIS));
-        pilha.setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 20, 14, 20));
+        pilha.setBorder(javax.swing.BorderFactory.createEmptyBorder(6, 20, 8, 20));
         if (preenche) {
             // avisos e esqueleto em cima; o conteúdo (que cresce com a janela) ocupa o resto
             JPanel avisos = new Painel() {

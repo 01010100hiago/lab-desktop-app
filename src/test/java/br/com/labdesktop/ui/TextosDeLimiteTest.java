@@ -32,7 +32,7 @@ class TextosDeLimiteTest {
     @Test
     void textoComESemTeto() {
         assertEquals("14% de 20% da semana", TextosDeLimite.texto(limite(20, 14.2, "ok")));
-        assertEquals("sem limite · 3,1% da semana", TextosDeLimite.texto(limite(null, 3.14, "ok")));
+        assertEquals("sem limite, 3,1% da semana", TextosDeLimite.texto(limite(null, 3.14, "ok")));
         assertEquals("14% de 20%", TextosDeLimite.textoCurto(limite(20, 14.2, "ok")));
         assertEquals("", TextosDeLimite.texto(null));
     }

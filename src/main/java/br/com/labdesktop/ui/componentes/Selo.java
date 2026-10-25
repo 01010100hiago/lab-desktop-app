@@ -2,6 +2,7 @@ package br.com.labdesktop.ui.componentes;
 
 import br.com.labdesktop.seguranca.TextoSeguro;
 import br.com.labdesktop.ui.Gravidade;
+import br.com.labdesktop.ui.tema.Fontes;
 import br.com.labdesktop.ui.tema.Tokens;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -30,10 +31,10 @@ public final class Selo extends JComponent {
 
     private static final long serialVersionUID = 1L;
     private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
-    private static final int ALTURA = 22;
+    private static final int ALTURA_MINIMA = 24;
     private static final int PADDING = 9;
     private static final int TAMANHO_DO_PONTO = 6;
-    private static final int TAMANHO_DO_ICONE = 11;
+    private static final int TAMANHO_DO_ICONE = 12;
     private static final int ESPACO = 6;
 
     private String texto;
@@ -78,10 +79,19 @@ public final class Selo extends JComponent {
         return gravidade;
     }
 
+    /** A fonte do texto do selo (o teste das fontes mínimas confere que nunca passa de 12 para baixo). */
+    public Font fonteDoTexto() {
+        return fonteDoSelo();
+    }
+
     private Font fonteDoSelo() {
-        Font base = UIManager.getFont("Label.font");
-        Font f = (base != null ? base : getFont()).deriveFont(Font.BOLD, 11f);
-        return f.deriveFont(Map.of(TextAttribute.TRACKING, 0.04f));
+        // 11 é o nominal; Fontes o leva ao mínimo de 12 e aplica o fator do usuário
+        return Fontes.fonte(Fontes.TEXTO, Font.BOLD, 11f).deriveFont(Map.of(TextAttribute.TRACKING, 0.04f));
+    }
+
+    /** A altura de uma linha só: a pílula acompanha a fonte (com o texto em 130 % a de 24 px não caberia). */
+    private int alturaDeUmaLinha() {
+        return Math.max(ALTURA_MINIMA, getFontMetrics(fonteDoSelo()).getHeight() + 8);
     }
 
     @Override
@@ -152,7 +162,7 @@ public final class Selo extends JComponent {
         for (String l : linhas) {
             maisLarga = Math.max(maisLarga, fm.stringWidth(l));
         }
-        int altura = linhas.size() <= 1 ? ALTURA : 8 + linhas.size() * (fm.getHeight());
+        int altura = linhas.size() <= 1 ? alturaDeUmaLinha() : 8 + linhas.size() * (fm.getHeight());
         return new Dimension(largurasDaMarca() + maisLarga + PADDING, altura);
     }
 
@@ -164,7 +174,7 @@ public final class Selo extends JComponent {
         for (String p : texto.split(" ")) {
             palavra = Math.max(palavra, fm.stringWidth(p));
         }
-        return new Dimension(largurasDaMarca() + palavra + PADDING, ALTURA);
+        return new Dimension(largurasDaMarca() + palavra + PADDING, alturaDeUmaLinha());
     }
 
     @Override

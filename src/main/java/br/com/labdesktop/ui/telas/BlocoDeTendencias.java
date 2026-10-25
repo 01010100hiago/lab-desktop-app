@@ -78,7 +78,7 @@ final class BlocoDeTendencias extends CaixaDoServidor {
         if (a > 0 && b > 0 && menor.substring(a).equals(maior.substring(b))) {
             menor = menor.substring(0, a);
         }
-        return "agora " + formato.apply(v.get(v.size() - 1)) + " · mín " + menor + " · máx " + maior;
+        return "agora " + formato.apply(v.get(v.size() - 1)) + " · mín " + menor + ", máx " + maior;
     }
 
     /** Uma célula: título e valor de agora na mesma linha, o gráfico e "mín · máx" embaixo. */

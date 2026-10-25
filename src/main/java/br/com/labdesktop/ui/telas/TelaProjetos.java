@@ -86,7 +86,9 @@ public final class TelaProjetos extends Painel {
 
     private final FaixaAviso faixa;
     private final PainelDeCredito credito = new PainelDeCredito();
-    private final Rotulo resumo = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12.5f);
+    /** Os números do topo (7 projetos, 4 no ar...) em itens SEPARADOS, não numa frase com " · " que quebra. */
+    private final JPanel resumo = Caixa.fluxo(java.awt.FlowLayout.LEFT, 18);
+    private String resumoEmTexto = "";
     private final JTextField busca = Campos.busca(16, "Buscar por nome…");
     private final Map<Filtro, JToggleButton> botoesDeFiltro = new EnumMap<>(Filtro.class);
     private final Botao atualizar = Botoes.mini("Atualizar", "atualizar");
@@ -96,6 +98,7 @@ public final class TelaProjetos extends Painel {
     private JComponent cabecalhoDeColunas;
     private final Rotulo mensagemDeErro = new Rotulo().corDoToken(Tokens.TEXTO2);
     private final Timer relogioDaTela;
+    private JScrollPane rolagemDaLista;
     private JPanel topo;
 
     private final Map<String, LinhaProjetoVisual> linhas = new LinkedHashMap<>();
@@ -163,11 +166,14 @@ public final class TelaProjetos extends Painel {
             botoesDeFiltro.put(f, b);
             botoesDoGrupo.add(b);
         }
-        busca.setPreferredSize(new Dimension(210, 30));
-        busca.setMaximumSize(new Dimension(210, 30));
+        busca.setPreferredSize(new Dimension(240, 32));
+        busca.setMaximumSize(new Dimension(240, 32));
 
-        JComponent cabecalho = Caixa.linha(10, Rotulo.titulo("Projetos"), resumo, Caixa.mola(), busca,
-            Caixa.linha(6, botoesDoGrupo.toArray(Component[]::new)), atualizar);
+        // duas linhas: o título com os números e o Atualizar; embaixo a busca e os filtros. Numa linha só, com o texto de 14,
+        // a busca encolhia para um ponto e o último filtro saía da janela de 1100.
+        JComponent cabecalho = Caixa.coluna(8,
+            Caixa.linha(14, Rotulo.titulo("Projetos"), resumo, Caixa.mola(), atualizar),
+            Caixa.linha(8, busca, Caixa.linha(6, botoesDoGrupo.toArray(Component[]::new)), Caixa.mola()));
 
         topo = Caixa.coluna(12, faixa, credito, cabecalho);
         faixa.setAlignmentX(LEFT_ALIGNMENT);
@@ -190,7 +196,7 @@ public final class TelaProjetos extends Painel {
         ListaRolavel vista = new ListaRolavel(new BorderLayout());
         vista.setBorder(javax.swing.BorderFactory.createEmptyBorder(14, 0, 4, 0));
         vista.add(cartao, BorderLayout.NORTH);
-        JScrollPane rolagem = new JScrollPane(vista, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+        JScrollPane rolagem = rolagemDaLista = new JScrollPane(vista, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
             JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         rolagem.setBorder(null);
         rolagem.setOpaque(false);
@@ -319,7 +325,13 @@ public final class TelaProjetos extends Painel {
             limites.put("lab", raiz.limite());
         }
         this.modelos = novos;
-        resumo.setText(ListagemDeProjetos.resumo(projetos));
+        resumo.removeAll();
+        for (String parte : ListagemDeProjetos.partesDoResumo(projetos)) {
+            resumo.add(new Rotulo(parte).corDoToken(Tokens.TEXTO2).tamanho(12.5f));
+        }
+        resumoEmTexto = ListagemDeProjetos.resumo(projetos);
+        resumo.revalidate();
+        resumo.repaint();
         redesenhar();
     }
 
@@ -439,6 +451,11 @@ public final class TelaProjetos extends Painel {
     // Para os testes
     // ---------------------------------------------------------------------------------------------
 
+    /** A rolagem da lista (para o teste conferir que não há rolagem para o lado). */
+    JScrollPane rolagemDaLista() {
+        return rolagemDaLista;
+    }
+
     public FaixaAviso faixa() {
         return faixa;
     }
@@ -452,7 +469,7 @@ public final class TelaProjetos extends Painel {
     }
 
     public String textoDoResumo() {
-        return resumo.getText();
+        return resumoEmTexto;
     }
 
     public JTextField campoDeBusca() {
@@ -507,6 +524,12 @@ public final class TelaProjetos extends Painel {
                 Rotulo r = new Rotulo(titulo.toUpperCase(Locale.forLanguageTag("pt-BR")))
                     .corDoToken(Tokens.TEXTO3).negrito().tamanho(10.5f).truncavel();
                 r.setHorizontalAlignment(c.numerica ? SwingConstants.RIGHT : SwingConstants.LEFT);
+                if (c == Coluna.RECURSOS) {
+                    r.setToolTipText("Em cima, a CPU; embaixo, a memória (dos containers que rodam)");
+                }
+                if (c == Coluna.CODIGO) {
+                    r.setToolTipText("O branch do git e o endereço público do projeto");
+                }
                 if (c == Coluna.CONSUMO) {
                     r.setToolTipText("US$ equivalente de API dos últimos 7 dias. Embaixo: a fatia estimada da semana do plano "
                         + "contra o limite do projeto.");

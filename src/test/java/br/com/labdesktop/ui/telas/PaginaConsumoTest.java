@@ -68,7 +68,7 @@ class PaginaConsumoTest {
         assertEquals(0, Visual.naEdt(() -> g.alturaDaBarra(0)), "dia sem uso: só o traço no chão");
         assertEquals("25 de set: sem consumo", Visual.naEdt(() -> g.dicaDa(0)));
         assertTrue(Visual.naEdt(() -> g.alturaDaBarra(21)) > Visual.naEdt(() -> g.alturaDaBarra(2)), "16 de out (US$ 8,40) é mais alto que 27 de set (US$ 3,20)");
-        assertEquals(Visual.naEdt(() -> g.alturaDaBarra(21)), Visual.naEdt(() -> g.getHeight()) - 18 - 14, "o maior dia usa a altura toda");
+        assertEquals(Visual.naEdt(() -> g.alturaDaBarra(21)), Visual.naEdt(() -> g.getHeight()) - 20 - 16, "o maior dia usa a altura toda");
         assertTrue(Visual.naEdt(() -> g.dicaDa(21)).startsWith("16 de out: US$ 8,40"));
     }
 
@@ -104,7 +104,7 @@ class PaginaConsumoTest {
         PaginaConsumo p = padrao().tela.consumo();
         String nome = Visual.naEdt(() -> p.grafico().getAccessibleContext().getAccessibleName());
         assertTrue(nome.startsWith("Consumo dos últimos 30 dias: US$ 68,20 no total"), nome);
-        assertEquals("US$ 68,20 em 30 dias · maior dia: 16 de out (US$ 8,40)", Visual.naEdt(p::textoDoAvisoDoGrafico));
+        assertFalse(Visual.naEdt(() -> p.textoDoAvisoDoGrafico().contains(" · ")));
     }
 
     @Test
@@ -118,11 +118,20 @@ class PaginaConsumoTest {
     }
 
     @Test
-    void harnessEmUmaLinhaEOnlySeVier() {
+    void harnessEmItensRotuladosESoSeVier() {
         PaginaConsumo p = padrao().tela.consumo();
-        assertEquals("Harness: 12 entregas · 14 iniciados · 143,2 mil tokens", Visual.naEdt(p::textoDoHarness));
+        assertEquals(List.of(List.of("Entregas do Harness", "12"), List.of("Iniciados do Harness", "14"), List.of("Tokens do Harness", "143,2 mil")),
+            Visual.naEdt(() -> p.fichaDoHarness().pares()));
         Cena sem = cena(true, FixturesDeApi.detalheDoProjetoSintetico(), FixturesDeApi.de("{\"nome\":\"orbita\"}", TokensDoProjeto.class));
-        assertEquals(null, Visual.naEdt(sem.tela.consumo()::textoDoHarness));
+        assertEquals(List.of(), Visual.naEdt(() -> sem.tela.consumo().fichaDoHarness().pares()));
+        assertFalse(Visual.naEdt(sem.tela.consumo().fichaDoHarness()::isVisible));
+    }
+
+    @Test
+    void totalEDiaMaisCaroDoGraficoSaoDadosRotulados() {
+        PaginaConsumo p = padrao().tela.consumo();
+        assertEquals(List.of(List.of("Total em 30 dias", "US$ 68,20"), List.of("Dia mais caro", "16 de out (US$ 8,40)")),
+            Visual.naEdt(() -> p.fichaDoGrafico().pares()));
     }
 
     // ---------------------------------------------------------------------------------------------

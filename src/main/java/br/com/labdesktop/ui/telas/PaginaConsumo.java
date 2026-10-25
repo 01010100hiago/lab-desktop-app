@@ -14,6 +14,7 @@ import br.com.labdesktop.ui.componentes.Botao;
 import br.com.labdesktop.ui.componentes.Botoes;
 import br.com.labdesktop.ui.componentes.Caixa;
 import br.com.labdesktop.ui.componentes.ColunasProporcionais;
+import br.com.labdesktop.ui.componentes.FichaRotulada;
 import br.com.labdesktop.ui.componentes.GraficoDeBarras;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
@@ -27,6 +28,7 @@ import br.com.labdesktop.util.Formato;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Dimension;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -63,7 +65,10 @@ final class PaginaConsumo extends PaginaDoProjeto {
     // gráfico
     private final CaixaDoServidor caixaDoGrafico = new CaixaDoServidor("Últimos 30 dias", "moeda");
     private final GraficoDeBarras grafico = new GraficoDeBarras();
-    private final Rotulo harness = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f).truncavel();
+    /** Total dos 30 dias e dia mais caro: dois dados, cada um com o seu rótulo. */
+    private final FichaRotulada fichaDoGrafico = new FichaRotulada(2, 24);
+    /** O Harness em itens separados (entregas, iniciados, tokens), só se o agente mandou. */
+    private final FichaRotulada fichaDoHarness = new FichaRotulada(3, 24);
     private final Rotulo avisoDoGrafico = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f).truncavel();
 
     // tabelas
@@ -131,7 +136,8 @@ final class PaginaConsumo extends PaginaDoProjeto {
         grafico.definir(List.of(), ModeloDeConsumo::valorDoAlto, "Consumo dos últimos 30 dias: ainda calculando.");
         caixaDoGrafico.linha(grafico, 0);
         caixaDoGrafico.linha(avisoDoGrafico, 4);
-        caixaDoGrafico.linha(harness, 4);
+        caixaDoGrafico.linha(fichaDoGrafico, 8);
+        caixaDoGrafico.linha(fichaDoHarness, 8);
 
         // --- tabelas
         subAbas.adicionar(SUB_MODELOS, "Por modelo");
@@ -246,20 +252,33 @@ final class PaginaConsumo extends PaginaDoProjeto {
         totais.atualizar(ModeloDeConsumo.totais(tokens));
         if (tokens == null) {
             avisoDoGrafico.setText(erro != null ? "Não consegui ler o consumo: " + erro : "Calculando o consumo…");
-            harness.setText("");
-            harness.setVisible(false);
+            avisoDoGrafico.setVisible(true);
+            fichaDoGrafico.definir(List.of());
+            fichaDoHarness.definir(List.of());
             tabelaDeModelos.definir(List.of(), "Ainda calculando.");
-            tabelaDeSessoes.definir(List.of(), "Ainda calculando.");
+            tabelaDeSessoes.definir(List.of(), "Nenhuma sessão ainda.");
             caixaDoGrafico.terminar();
             return;
         }
         grafico.definir(ModeloDeConsumo.barras(tokens), ModeloDeConsumo::valorDoAlto, ModeloDeConsumo.resumoDoGrafico(tokens));
-        avisoDoGrafico.setText(tokens.temConsumo() ? ModeloDeConsumo.legendaDoGrafico(tokens)
-            : "Nenhum consumo registrado nos últimos 30 dias.");
-        avisoDoGrafico.setToolTipText(ModeloDeConsumo.resumoDoGrafico(tokens));
-        String h = ModeloDeConsumo.harness(tokens);
-        harness.setVisible(h != null);
-        harness.setText(h == null ? "" : h);
+        grafico.setToolTipText(null);
+        boolean temConsumo = tokens.temConsumo();
+        avisoDoGrafico.setText("Nenhum consumo registrado nos últimos 30 dias.");
+        avisoDoGrafico.setVisible(!temConsumo);
+        List<FichaRotulada.Item> dados = new ArrayList<>();
+        if (temConsumo) {
+            dados.add(FichaRotulada.Item.de("Total em " + tokens.porDia().size() + " dias", ModeloDeConsumo.totalDoGrafico(tokens)));
+            String maior = ModeloDeConsumo.diaMaisCaro(tokens);
+            if (maior != null) {
+                dados.add(FichaRotulada.Item.de("Dia mais caro", maior));
+            }
+        }
+        fichaDoGrafico.definir(dados);
+        List<FichaRotulada.Item> harness = new ArrayList<>();
+        for (List<String> par : ModeloDeConsumo.harness(tokens)) {
+            harness.add(FichaRotulada.Item.de(par.get(0) + " do Harness", par.get(1)));
+        }
+        fichaDoHarness.definir(harness);
         tabelaDeModelos.definir(tokens.modelos(), "Nenhum modelo usado ainda neste projeto.");
         tabelaDeSessoes.definir(tokens.sessoes(), "Nenhuma sessão do Claude registrada neste projeto.");
         caixaDoGrafico.terminar();
@@ -305,8 +324,12 @@ final class PaginaConsumo extends PaginaDoProjeto {
         return liberar;
     }
 
-    String textoDoHarness() {
-        return harness.isVisible() ? harness.getText() : null;
+    FichaRotulada fichaDoGrafico() {
+        return fichaDoGrafico;
+    }
+
+    FichaRotulada fichaDoHarness() {
+        return fichaDoHarness;
     }
 
     String textoDoAvisoDoGrafico() {

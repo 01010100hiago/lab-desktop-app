@@ -1,6 +1,7 @@
 package br.com.labdesktop.ui.componentes;
 
 import br.com.labdesktop.seguranca.TextoSeguro;
+import br.com.labdesktop.ui.tema.Fontes;
 import br.com.labdesktop.ui.tema.Tokens;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -8,7 +9,6 @@ import java.awt.Font;
 import java.awt.Insets;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 import javax.swing.text.View;
 
 /**
@@ -26,6 +26,9 @@ public final class TextoCorrido extends JTextArea {
 
     private int larguraPreferida;
     private String tokenDaCor;
+    private boolean negrito;
+    private String familia = Fontes.TEXTO;
+    private float nominal = Fontes.NOMINAL_PADRAO;
 
     public TextoCorrido(String texto, int larguraPreferida) {
         super();
@@ -36,10 +39,7 @@ public final class TextoCorrido extends JTextArea {
         setWrapStyleWord(true);
         setBorder(null);
         setMargin(new Insets(0, 0, 0, 0));
-        Font base = UIManager.getFont("Label.font");
-        if (base != null) {
-            setFont(base);
-        }
+        refazerAFonte();
         putClientProperty("html.disable", Boolean.TRUE);
         setText(texto);
     }
@@ -56,20 +56,28 @@ public final class TextoCorrido extends JTextArea {
         return this;
     }
 
+    /** O tamanho NOMINAL; os pontos de verdade saem de {@link Fontes}. */
     public TextoCorrido tamanho(float pontos) {
-        setFont(getFont().deriveFont(pontos));
+        this.nominal = pontos;
+        refazerAFonte();
         return this;
     }
 
     public TextoCorrido negrito() {
-        setFont(getFont().deriveFont(Font.BOLD));
+        this.negrito = true;
+        refazerAFonte();
         return this;
     }
 
     public TextoCorrido mono(float pontos) {
-        Font m = UIManager.getFont("monospaced.font");
-        setFont((m != null ? m : getFont()).deriveFont(pontos));
+        this.familia = Fontes.MONO;
+        this.nominal = pontos;
+        refazerAFonte();
         return this;
+    }
+
+    private void refazerAFonte() {
+        Fontes.aplicar(this, familia, negrito ? Font.BOLD : Font.PLAIN, nominal);
     }
 
     @Override

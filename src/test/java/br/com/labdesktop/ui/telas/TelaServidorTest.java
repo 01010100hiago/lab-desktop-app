@@ -343,10 +343,13 @@ class TelaServidorTest {
         var c = Visual.naEdt(() -> t.resumo().cabecalho());
         assertEquals("lab", Visual.naEdt(c::textoDoNome));
         assertEquals("CONECTADO", Visual.naEdt(c::textoDoEstado));
-        String linha = Visual.naEdt(c::textoDaLinhaDeBaixo);
-        assertTrue(linha.contains("Máquina servidor-exemplo"), linha);
-        assertTrue(linha.contains("Debian GNU/Linux 13 (trixie)"), linha);
-        assertTrue(linha.contains("Ligada há 3 h 57 min"), linha);
+        var ficha = Visual.naEdt(c::paresDaFicha);
+        assertEquals("Máquina", ficha.get(0).get(0));
+        assertEquals("servidor-exemplo", ficha.get(0).get(1));
+        assertEquals("Sistema", ficha.get(1).get(0));
+        assertEquals("Debian GNU/Linux 13 (trixie)", ficha.get(1).get(1));
+        assertEquals(List.of("Ligada há", "3 horas e 57 minutos"), ficha.get(3), "por extenso, sem abreviação");
+        assertEquals("", Visual.naEdt(c::textoDaLinhaDeBaixo), "com a leitura, só a ficha fala");
         assertTrue(texto(c).contains("Leitura das 17:59:57"), texto(c));
     }
 
@@ -378,7 +381,7 @@ class TelaServidorTest {
         TelaServidor t = nova();
         alimentar(t, EstadoConexao.CONECTADO, null, false);
         var b = Visual.naEdt(() -> t.containers().bloco());
-        assertEquals("8 rodando · 2 parados · 0 em pausa", Visual.naEdt(b::textoDoResumo));
+        assertEquals("8 rodando, 2 parados, 0 em pausa", Visual.naEdt(b::textoDoResumo));
         var sessoes = Visual.naEdt(b::linhasDeSessoes);
         assertEquals(2, sessoes.size());
         assertEquals("alfa", sessoes.get(0).get(0));
@@ -398,12 +401,12 @@ class TelaServidorTest {
         alimentar(t, EstadoConexao.CONECTADO, FixturesDeApi.servidorSintetico(), null, null);
         var antes = Visual.naEdt(() -> t.processos().bloco().linhas());
         assertEquals(4, antes.size());
-        assertEquals(List.of("claude", "labuser", "—", "403 MB", "alfa · lab-claude-alfa"), antes.get(0), "sem detalhe: deduz da sessão");
+        assertEquals(List.of("claude", "labuser", "—", "403 MB", "alfa (lab-claude-alfa)"), antes.get(0), "sem detalhe: deduz da sessão");
         assertEquals("gama-db", antes.get(2).get(4));
         assertEquals("o próprio servidor (fora de container)", antes.get(3).get(4));
         Visual.naEdt(() -> t.processos().aoReceberDetalhe(FixturesDeApi.detalheSintetico()));
         var depois = Visual.naEdt(() -> t.processos().bloco().linhas());
-        assertEquals("gama · gama-db", depois.get(2).get(4), "com o detalhe, o projeto vem do agente");
+        assertEquals("gama (gama-db)", depois.get(2).get(4), "com o detalhe, o projeto vem do agente");
         assertEquals("12%", depois.get(1).get(2));
     }
 
@@ -452,7 +455,7 @@ class TelaServidorTest {
         assertTrue(Visual.naEdt(d::textoDeEnergia).contains("Sem bateria"));
         var maquina = Visual.naEdt(d::camposDaMaquina);
         assertEquals("Fabricante Exemplo Modelo X1", maquina.get(0).valor());
-        assertEquals("B123 · 05/17/2012", maquina.get(2).valor());
+        assertEquals("B123, 05/17/2012", maquina.get(2).valor());
         String tudo = Visual.naEdt(d::textoCompleto);
         assertTrue(tudo.contains("Carga em 1 minuto"), tudo);
         assertTrue(tudo.contains("Núcleo 1"), "a CPU por núcleo");

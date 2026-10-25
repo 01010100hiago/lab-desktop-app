@@ -1,6 +1,7 @@
 package br.com.labdesktop.ui;
 
 import br.com.labdesktop.util.AparenciaDoSistema;
+import br.com.labdesktop.ui.tema.Fontes;
 import br.com.labdesktop.util.Fundo;
 import br.com.labdesktop.util.Preferencias.Tema;
 import com.formdev.flatlaf.FlatLaf;
@@ -132,6 +133,19 @@ public final class GerenciadorTema {
             .thenAccept(escuro -> Fundo.naEdt(() -> definirSistemaEscuro(escuro)));
     }
 
+    /**
+     * O usuário mudou o tamanho do texto (Visualizar, "Aumentar texto"): refaz as fontes dos componentes padrão e avisa quem
+     * guarda imagem ou medida. As fontes dos componentes do app já foram refeitas por {@code Fontes.definirPercentual}. Na EDT.
+     */
+    public void reaplicarFontes() {
+        if (!aplicado) {
+            return;
+        }
+        Fontes.instalarBase();
+        FlatLaf.updateUI();
+        ouvintes.forEach(Runnable::run);
+    }
+
     /** Pede para ser avisado depois de cada troca de tema (por exemplo, para gráficos que guardam imagem). */
     public void aoMudar(Runnable ouvinte) {
         ouvintes.add(ouvinte);
@@ -158,6 +172,7 @@ public final class GerenciadorTema {
         } else {
             FlatMacLightLaf.setup();
         }
+        Fontes.instalarBase(); // o texto base (14, com o fator do usuário) vale para todo componente padrão
         FlatLaf.updateUI();
         if (trocando) {
             FlatAnimatedLafChange.hideSnapshotWithAnimation();

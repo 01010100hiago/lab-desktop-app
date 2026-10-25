@@ -6,7 +6,6 @@ import br.com.labdesktop.ui.componentes.Caixa;
 import br.com.labdesktop.ui.componentes.Icones;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
-import br.com.labdesktop.ui.componentes.TextoCorrido;
 import br.com.labdesktop.ui.tema.Tokens;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
@@ -22,14 +21,17 @@ final class AlertaDaPagina extends Painel {
 
     private static final long serialVersionUID = 1L;
 
-    private final Rotulo titulo = new Rotulo().negrito().tamanho(13f).truncavel();
-    private final TextoCorrido texto = new TextoCorrido("", 520).tamanho(12.5f).corDoToken(Tokens.TEXTO2);
+    private final Rotulo titulo = new Rotulo().negrito().tamanho(13f);
+    private final Rotulo texto = new Rotulo().tamanho(12.5f).corDoToken(Tokens.TEXTO2).truncavel();
     private final JPanel botoes = new Painel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 0));
 
     AlertaDaPagina() {
         super(new BorderLayout(12, 0));
-        setBorder(javax.swing.BorderFactory.createEmptyBorder(9, 14, 9, 12));
-        JPanel meio = Caixa.coluna(3, titulo, texto);
+        setBorder(javax.swing.BorderFactory.createEmptyBorder(6, 14, 6, 12));
+        // uma linha só (título e frase lado a lado): o aviso não rouba duas linhas da página; a frase inteira vai na dica
+        JPanel meio = new Painel(new BorderLayout(10, 0));
+        meio.add(titulo, BorderLayout.WEST);
+        meio.add(texto, BorderLayout.CENTER);
         add(meio, BorderLayout.CENTER);
         add(botoes, BorderLayout.EAST);
         setVisible(false);
@@ -43,6 +45,7 @@ final class AlertaDaPagina extends Painel {
         titulo.setIcon(Icones.colorido(icone, 16, g.tokenDoTexto()));
         titulo.setIconTextGap(8);
         texto.setText(frase);
+        texto.setToolTipText(frase);
         botoes.removeAll();
         for (JComponent b : acoes) {
             botoes.add(b);

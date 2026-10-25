@@ -60,7 +60,7 @@ public final class ModeloDeConsumo {
         }
         String volume = FormatosDoProjeto.volume(a.saida(), a.respostas());
         String dica = periodo + ": " + Formato.fmtUsd(a.custoUsd() == null ? 0 : a.custoUsd()) + " (equivalente de API, a conta é "
-            + "assinatura) · " + volume + ".";
+            + "assinatura). " + volume + ".";
         return new Kpi(chave, rotulo, "moeda", Formato.fmtUsd(a.custoUsd() == null ? 0 : a.custoUsd()), volume, dica,
             NivelDeSaude.SEM_DADO, "", "");
     }
@@ -80,7 +80,7 @@ public final class ModeloDeConsumo {
             String dia = Formato.fmtDiaCurto(d.dia());
             boolean usou = custo > 0 || (d.respostas() != null && d.respostas() > 0);
             String dica = usou
-                ? dia + ": " + Formato.fmtUsd(custo) + " · " + FormatosDoProjeto.volume(d.saida(), d.respostas())
+                ? dia + ": " + Formato.fmtUsd(custo) + ", " + FormatosDoProjeto.volume(d.saida(), d.respostas())
                 : dia + ": sem consumo";
             l.add(new Barra(dia, custo, dica));
         }
@@ -108,22 +108,29 @@ public final class ModeloDeConsumo {
             + ".";
     }
 
-    /** A legenda curta embaixo do gráfico: {@code US$ 68,20 nos 30 dias · maior dia: 16 de out (US$ 8,40)}. */
-    public static String legendaDoGrafico(TokensDoProjeto tokens) {
+    /** O total dos dias do gráfico, só o valor: {@code US$ 68,20} (o rótulo "Total em 30 dias" é da ficha). */
+    public static String totalDoGrafico(TokensDoProjeto tokens) {
         List<Dia> dias = tokens == null ? List.of() : tokens.porDia();
         double soma = 0;
+        for (Dia d : dias) {
+            soma += d.custoUsd() == null ? 0 : d.custoUsd();
+        }
+        return Formato.fmtUsd(soma);
+    }
+
+    /** O dia mais caro, só o valor: {@code 16 de out (US$ 8,40)}, ou {@code null} sem consumo. */
+    public static String diaMaisCaro(TokensDoProjeto tokens) {
+        List<Dia> dias = tokens == null ? List.of() : tokens.porDia();
         Dia maior = null;
         double cMaior = 0;
         for (Dia d : dias) {
             double c = d.custoUsd() == null ? 0 : d.custoUsd();
-            soma += c;
             if (c > cMaior) {
                 cMaior = c;
                 maior = d;
             }
         }
-        String base = Formato.fmtUsd(soma) + " em " + dias.size() + " dias";
-        return maior == null ? base : base + " · maior dia: " + Formato.fmtDiaCurto(maior.dia()) + " (" + Formato.fmtUsd(cMaior) + ")";
+        return maior == null ? null : Formato.fmtDiaCurto(maior.dia()) + " (" + Formato.fmtUsd(cMaior) + ")";
     }
 
     /** O que o gráfico escreve no alto: o maior valor. */
@@ -157,23 +164,26 @@ public final class ModeloDeConsumo {
         };
     }
 
-    /** A linha do Harness ({@code 19 entregas · 21 iniciados · 206,6 mil tokens}), ou {@code null} se o agente não mandou. */
-    public static String harness(TokensDoProjeto tokens) {
+    /**
+     * Os dados do Harness como itens SEPARADOS (rótulo, valor): Entregas, Iniciados e Tokens, ou lista vazia se o agente não
+     * mandou nada.
+     */
+    public static List<List<String>> harness(TokensDoProjeto tokens) {
         var h = tokens == null ? null : tokens.harness();
         if (h == null || (h.entregas().isEmpty() && (h.iniciados() == null || h.iniciados() == 0)
             && (h.tokensTotal() == null || h.tokensTotal() == 0))) {
-            return null;
+            return List.of();
         }
-        List<String> partes = new ArrayList<>();
+        List<List<String>> itens = new ArrayList<>();
         int n = h.entregas().size();
-        partes.add(n + (n == 1 ? " entrega" : " entregas"));
+        itens.add(List.of(n == 1 ? "Entrega" : "Entregas", String.valueOf(n)));
         if (h.iniciados() != null) {
-            partes.add(Formato.fmtNum(h.iniciados(), 0) + (h.iniciados() == 1 ? " iniciado" : " iniciados"));
+            itens.add(List.of(h.iniciados() == 1 ? "Iniciado" : "Iniciados", Formato.fmtNum(h.iniciados(), 0)));
         }
         if (h.tokensTotal() != null) {
-            partes.add(Formato.fmtCompacto(h.tokensTotal()) + " tokens");
+            itens.add(List.of("Tokens", Formato.fmtCompacto(h.tokensTotal())));
         }
-        return "Harness: " + String.join(" · ", partes);
+        return itens;
     }
 
     // ---------------------------------------------------------------------------------------------

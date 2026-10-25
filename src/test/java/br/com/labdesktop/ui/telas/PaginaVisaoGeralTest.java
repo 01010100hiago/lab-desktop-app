@@ -38,20 +38,47 @@ class PaginaVisaoGeralTest {
     // ---------------------------------------------------------------------------------------------
 
     @Test
-    void cabecalhoMostraDescricaoGitTamanhoMexidoEComposes() {
+    void cabecalhoTemADescricaoEUmaFichaRotuladaSoComOQueExiste() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
         PaginaVisaoGeral p = pagina(c);
         assertEquals("Painel de relatórios de exemplo (dados inventados para os testes do app).", Visual.naEdt(p::textoDaDescricao));
-        assertEquals("main@a1b2c3d", Visual.naEdt(p::textoDoGit));
-        assertTrue(textoDaPagina(p).contains("não commitado"));
-        assertEquals("·  tamanho ainda não medido  ·  mexido há 3 d", Visual.naEdt(p::textoDaMeta));
-        assertEquals("Compose: docker-compose.yml, docker-compose.dev.yml  ·  Redes: orbita_default", Visual.naEdt(p::textoDaLinhaDiscreta));
+        assertEquals(List.of(
+            List.of("Endereços", "orbita-lab.example.com"),
+            List.of("Código", "Branch main, com mudanças que ainda não foram salvas no git"),
+            List.of("Última alteração", "há 3 dias")), Visual.naEdt(() -> p.ficha().pares()),
+            "tamanho desconhecido NÃO aparece (nada de 'ainda não medido'); sem hash cru nem abreviação");
+        String tudo = textoDaPagina(p);
+        assertFalse(tudo.contains("a1b2c3d"), "o hash do commit não vai para o cabeçalho");
+        assertFalse(tudo.contains("não commitado") || tudo.contains("ainda não medido") || tudo.contains(" · "), tudo);
     }
 
     @Test
-    void tamanhoMedidoApareceEmPortugues() {
+    void codigoTudoSalvoEBranchDiferente() {
+        Cena c = cena(true, TelaProjetoTest.detalheCom("\"sujo\": true", "\"sujo\": false"));
+        assertEquals("Branch main, tudo salvo", Visual.naEdt(() -> pagina(c).ficha().pares().get(1).get(1)));
+    }
+
+    @Test
+    void tamanhoMedidoApareceComRotuloEPortugues() {
         Cena c = cena(true, TelaProjetoTest.detalheCom("\"tamanho\": null", "\"tamanho\": 1284193456"));
-        assertTrue(Visual.naEdt(pagina(c)::textoDaMeta).contains("1,2 GB"), Visual.naEdt(pagina(c)::textoDaMeta));
+        assertTrue(Visual.naEdt(() -> pagina(c).ficha().pares()).contains(List.of("Tamanho", "1,2 GB")));
+    }
+
+    @Test
+    void detalhesTecnicosFicamFechadosComComposeERedesRotulados() {
+        Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
+        PaginaVisaoGeral p = pagina(c);
+        assertFalse(Visual.naEdt(p.secaoTecnica()::aberta), "fechada por padrão");
+        assertEquals("Detalhes técnicos", Visual.naEdt(() -> p.secaoTecnica().botao().getText()));
+        assertEquals(List.of(List.of("Arquivos de configuração", "docker-compose.yml docker-compose.dev.yml"), List.of("Redes", "orbita_default")),
+            Visual.naEdt(() -> p.fichaTecnica().pares()));
+        assertFalse(textoDaPagina(p).contains("Compose:"), "compose e redes saíram do cabeçalho");
+        assertFalse(Visual.naEdt(() -> aparece(p.fichaTecnica())), "fechada de verdade: a ficha tem dados, mas não pode aparecer");
+        Visual.naEdt(() -> p.secaoTecnica().botao().doClick());
+        assertTrue(Visual.naEdt(p.secaoTecnica()::aberta));
+        assertTrue(Visual.naEdt(() -> aparece(p.fichaTecnica())));
+        Visual.naEdt(() -> p.secaoTecnica().botao().doClick());
+        assertFalse(Visual.naEdt(() -> aparece(p.fichaTecnica())), "e fecha de novo");
     }
 
     @Test
@@ -64,11 +91,20 @@ class PaginaVisaoGeralTest {
         Cena c = cena(true, FixturesDeApi.de(json, DetalheProjeto.class));
         PaginaVisaoGeral p = pagina(c);
         assertEquals("Sem descrição", Visual.naEdt(p::textoDaDescricao));
-        assertEquals("sem git", Visual.naEdt(p::textoDoGit));
-        assertFalse(textoDaPagina(p).contains("não commitado"));
-        String discreta = Visual.naEdt(p::textoDaLinhaDiscreta);
-        assertTrue(discreta.contains("a sessão do Claude não tem acesso ao Docker deste projeto"), discreta);
-        assertFalse(discreta.contains("Redes"), discreta);
+        assertTrue(Visual.naEdt(() -> p.ficha().pares()).contains(List.of("Código", "Sem git")));
+        List<List<String>> tecnicos = Visual.naEdt(() -> p.fichaTecnica().pares());
+        assertTrue(tecnicos.contains(List.of("Docker na sessão do Claude", "Sem acesso a este projeto")), tecnicos.toString());
+        assertTrue(tecnicos.stream().noneMatch(par -> par.get(0).equals("Redes")), tecnicos.toString());
+    }
+
+    /** Visível de verdade: ela e todos os pais ligados (a ficha liga a própria visibilidade, o que não pode abrir a seção). */
+    private static boolean aparece(java.awt.Component c) {
+        for (java.awt.Component x = c; x != null && !(x instanceof PaginaVisaoGeral); x = x.getParent()) {
+            if (!x.isVisible()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String textoDaPagina(PaginaVisaoGeral p) {
@@ -115,9 +151,10 @@ class PaginaVisaoGeralTest {
     }
 
     @Test
-    void semEnderecoDizSemEnderecoPublico() {
+    void semEnderecoOItemSomeDaFicha() {
         Cena c = cena(true, TelaProjetoTest.detalheCom("[ \"orbita-lab.example.com\" ]", "[]"));
-        assertTrue(Visual.naEdt(() -> br.com.labdesktop.ui.TextosDeTela.de(pagina(c).enderecos())).contains("sem endereço público"));
+        assertTrue(Visual.naEdt(() -> pagina(c).ficha().pares()).stream().noneMatch(par -> par.get(0).equals("Endereços")),
+            "sem endereço, o item some da ficha em vez de dizer 'sem endereço público'");
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -142,7 +179,7 @@ class PaginaVisaoGeralTest {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
         PaginaVisaoGeral p = pagina(c);
         assertTrue(Visual.naEdt(p.botaoCompose()::isVisible));
-        assertEquals("Parar", Visual.naEdt(() -> p.botaoCompose().getText()));
+        assertEquals("Parar projeto", Visual.naEdt(() -> p.botaoCompose().getText()));
         assertTrue(Visual.naEdt(p.botaoReiniciar()::isVisible));
         assertFalse(Visual.naEdt(p.botaoAbrirClaude()::isVisible), "já tem sessão aberta");
         assertTrue(Visual.naEdt(p.botaoVerSessao()::isVisible));
@@ -156,7 +193,7 @@ class PaginaVisaoGeralTest {
         Cena c = cena(true, FixturesDeApi.de(TelaProjetoTest.detalheEmUmaLinha().replace("\"aberta\": true", "\"aberta\": false")
             .replace("\"estado\": \"running\"", "\"estado\": \"exited\""), DetalheProjeto.class));
         PaginaVisaoGeral p = pagina(c);
-        assertEquals("Iniciar", Visual.naEdt(() -> p.botaoCompose().getText()));
+        assertEquals("Iniciar projeto", Visual.naEdt(() -> p.botaoCompose().getText()));
         assertTrue(Visual.naEdt(p.botaoAbrirClaude()::isVisible));
         assertFalse(Visual.naEdt(p.botaoVerSessao()::isVisible));
         assertNotNull(d);
@@ -175,7 +212,7 @@ class PaginaVisaoGeralTest {
         String json = TelaProjetoTest.detalheEmUmaLinha().replaceFirst("\"composes\": \\[.*?\\], \"containers\"", "\"composes\": [], \"containers\"");
         Cena c = cena(true, FixturesDeApi.de(json, DetalheProjeto.class));
         assertFalse(Visual.naEdt(pagina(c).botaoReiniciar()::isVisible));
-        assertEquals("sem arquivo compose", Visual.naEdt(pagina(c)::textoDaLinhaDiscreta).split("  ·  ")[0]);
+        assertEquals(List.of("Arquivos de configuração", "Nenhum arquivo compose"), Visual.naEdt(() -> pagina(c).fichaTecnica().pares().get(0)));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -228,7 +265,7 @@ class PaginaVisaoGeralTest {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
         var cartoes = Visual.naEdt(() -> pagina(c).faixaDeKpis().cartoes());
         assertEquals(5, cartoes.size());
-        assertEquals(List.of("Parcial", "3 de 4", "2,5%", "403 MB", "2,0% de 20%"),
+        assertEquals(List.of("Parcial", "3 de 4", "2,5%", "403 MB", "2,0%"),
             cartoes.stream().map(k -> Visual.naEdt(k::textoDoValor)).toList());
         assertEquals("ATENÇÃO", Visual.naEdt(cartoes.get(0)::textoDoSelo));
         assertEquals("OK", Visual.naEdt(cartoes.get(4)::textoDoSelo));
@@ -253,7 +290,7 @@ class PaginaVisaoGeralTest {
         Cena c = cena(true, TelaProjetoTest.detalhePausado());
         var consumo = Visual.naEdt(() -> pagina(c).faixaDeKpis().cartoes().get(4));
         assertEquals("PAUSADO", Visual.naEdt(consumo::textoDoSelo));
-        assertEquals("22% de 20%", Visual.naEdt(consumo::textoDoValor));
+        assertEquals("22%", Visual.naEdt(consumo::textoDoValor));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -277,7 +314,7 @@ class PaginaVisaoGeralTest {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
         long botoes = Visual.naEdt(() -> pagina(c).componentes().stream()
             .filter(x -> x instanceof javax.swing.AbstractButton b && b.isVisible() && "Reiniciar".equals(b.getText())).count());
-        assertEquals(1 + 4, botoes, "o do projeto inteiro e um por container");
+        assertEquals(4, botoes, "um por container (o do projeto inteiro se chama Reiniciar projeto)");
         var primeiro = Visual.naEdt(() -> pagina(c).componentes().stream().filter(x -> x instanceof javax.swing.AbstractButton b
             && b.getAccessibleContext().getAccessibleName() != null
             && b.getAccessibleContext().getAccessibleName().startsWith("Reiniciar o container ")).findFirst().orElseThrow());
@@ -289,11 +326,11 @@ class PaginaVisaoGeralTest {
         Cena c = cena(true, TelaProjetoTest.detalheComContainers(14));
         var tabela = Visual.naEdt(() -> pagina(c).tabelaDeContainers());
         assertEquals(PaginaVisaoGeral.CONTAINERS_POR_PAGINA, Visual.naEdt(() -> tabela.linhasDaPagina().size()));
-        assertEquals("mostrando 1-5 de 14", Visual.naEdt(tabela::textoDoResumo));
-        assertEquals(3, Visual.naEdt(tabela::totalDePaginas));
+        assertEquals("mostrando 1-4 de 14", Visual.naEdt(tabela::textoDoResumo));
+        assertEquals(4, Visual.naEdt(tabela::totalDePaginas));
         Visual.naEdt(() -> tabela.botaoProxima().doClick());
-        assertEquals("mostrando 6-10 de 14", Visual.naEdt(tabela::textoDoResumo));
-        assertEquals("orbita-servico6-1", Visual.naEdt(() -> tabela.linhasDaPagina().get(0).get(0)));
+        assertEquals("mostrando 5-8 de 14", Visual.naEdt(tabela::textoDoResumo));
+        assertEquals("orbita-servico5-1", Visual.naEdt(() -> tabela.linhasDaPagina().get(0).get(0)));
     }
 
     @Test

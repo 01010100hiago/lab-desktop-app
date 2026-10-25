@@ -68,6 +68,31 @@ public final class FormatosDoProjeto {
         return criado == null ? SEM_DADO : Formato.fmtHa(criado, agora);
     }
 
+    /**
+     * Há quanto tempo, por extenso e sem abreviação: {@code há 3 dias}, {@code há 1 hora}, {@code há 12 minutos}, e
+     * {@code agora há pouco} (menos de 90 s). O instante no futuro (relógios diferentes) também é "agora há pouco".
+     */
+    public static String haQuanto(Instant instante, Instant agora) {
+        if (instante == null) {
+            return SEM_DADO;
+        }
+        long s = java.time.Duration.between(instante, agora).getSeconds();
+        if (s < 90) {
+            return "agora há pouco";
+        }
+        if (s < 3600) {
+            return unidade(Math.round(s / 60.0), "minuto", "minutos");
+        }
+        if (s < 86400) {
+            return unidade(Math.round(s / 3600.0), "hora", "horas");
+        }
+        return unidade(Math.round(s / 86400.0), "dia", "dias");
+    }
+
+    private static String unidade(long n, String singular, String plural) {
+        return "há " + n + " " + (n == 1 ? singular : plural);
+    }
+
     /** Tamanho de arquivo ou pasta, ou traço (o agente de hoje não manda o tamanho dos itens da raiz). */
     public static String tamanho(Long bytes) {
         return bytes == null ? SEM_DADO : Formato.fmtBytes(bytes);
@@ -85,11 +110,11 @@ public final class FormatosDoProjeto {
         };
     }
 
-    /** Tokens de saída e respostas em uma linha: {@code 135 mil de saída · 251 respostas}. */
+    /** Tokens de saída e respostas em uma linha curta: {@code 135 mil de saída, 251 respostas}. */
     public static String volume(Long saida, Long respostas) {
         List<String> partes = new ArrayList<>();
         partes.add(Formato.fmtCompacto(saida == null ? 0 : saida) + " de saída");
         partes.add(Formato.fmtNum(respostas == null ? 0 : respostas, 0) + (respostas != null && respostas == 1 ? " resposta" : " respostas"));
-        return String.join(" · ", partes);
+        return String.join(", ", partes);
     }
 }

@@ -151,4 +151,43 @@ class PreferenciasTest {
             Preferencias.padrao().comAutoBloqueioMinutos(999_999).autoBloqueioMinutos());
         assertEquals(Tema.SISTEMA, Preferencias.padrao().comTema(null).tema());
     }
+
+    @Test
+    void tamanhoDoTextoComecaEm100EViajaPeloArquivo(@TempDir Path tmp) throws Exception {
+        assertEquals(100, Preferencias.padrao().escalaTexto());
+        CaminhosApp c = caminhos(tmp);
+        Preferencias.padrao().comEscalaTexto(130).salvar(c);
+        assertEquals(130, Preferencias.carregar(c).escalaTexto());
+        assertTrue(Files.readString(c.arquivoPreferencias()).contains("\"escalaTexto\" : 130"));
+    }
+
+    @Test
+    void tamanhoDoTextoEstranhoVaiParaOFatorMaisPerto(@TempDir Path tmp) throws Exception {
+        assertEquals(100, Preferencias.padrao().comEscalaTexto(5).escalaTexto());
+        assertEquals(130, Preferencias.padrao().comEscalaTexto(999).escalaTexto());
+        assertEquals(115, Preferencias.padrao().comEscalaTexto(112).escalaTexto());
+        CaminhosApp c = caminhos(tmp);
+        Files.createDirectories(c.pastaDados());
+        Files.writeString(c.arquivoPreferencias(), "{\"escalaTexto\": 200}");
+        assertEquals(130, Preferencias.carregar(c).escalaTexto(), "valor fora da escala nunca derruba a leitura");
+        Files.writeString(c.arquivoPreferencias(), "{\"escalaTexto\": \"grande\"}");
+        assertEquals(100, Preferencias.carregar(c).escalaTexto(), "texto no lugar do número volta ao padrão");
+    }
+
+    @Test
+    void arquivoDeAntesDoTamanhoDoTextoContinuaValendo(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Files.createDirectories(c.pastaDados());
+        Files.writeString(c.arquivoPreferencias(), "{\"versao\": 1, \"tema\": \"escuro\"}");
+        Preferencias p = Preferencias.carregar(c);
+        assertEquals(Tema.ESCURO, p.tema());
+        assertEquals(100, p.escalaTexto());
+    }
+
+    @Test
+    void mudarOutraPreferenciaNaoPerdeOTamanhoDoTexto() {
+        Preferencias p = Preferencias.padrao().comEscalaTexto(115).comTema(Tema.ESCURO).comAutoBloqueioMinutos(5).comOpcaoComoMeta(true);
+        assertEquals(115, p.escalaTexto());
+        assertEquals(115, p.comJanela(new Janela(0, 0, 1000, 700, false)).escalaTexto());
+    }
 }
