@@ -113,6 +113,7 @@ public final class TelaProjetos extends Painel {
     private Inscricao inscricaoDoTopico;
     private Inscricao inscricaoDoEstado;
     private Inscricao inscricaoDeOcupacao;
+    private java.util.function.Consumer<String> aoAbrirProjeto = nome -> { };
 
     public TelaProjetos(ServidorLab servidor, FluxosDeProjeto fluxos, Navegador navegador, AcoesDaInterface acoesUi) {
         super(new BorderLayout());
@@ -362,6 +363,36 @@ public final class TelaProjetos extends Painel {
     }
 
     // ---------------------------------------------------------------------------------------------
+    // Abrir a página de um projeto
+    // ---------------------------------------------------------------------------------------------
+
+    /** Quem recebe o nome do projeto quando o usuário abre a linha dele (a {@link TelaServidor} abre a {@link TelaProjeto}). */
+    public void aoAbrirProjeto(java.util.function.Consumer<String> novo) {
+        this.aoAbrirProjeto = novo == null ? nome -> { } : novo;
+    }
+
+    private void abrirProjeto(String nome) {
+        aoAbrirProjeto.accept(nome);
+    }
+
+    /**
+     * O endereço de login do Claude que a ÚLTIMA lista viu para o projeto, ou {@code null}. Só a lista traz o login (o detalhe do
+     * projeto não); a página do projeto o pede aqui para a aba Sessão mostrar "Abrir página de login".
+     */
+    String urlDeLoginDe(String projeto) {
+        return projetos.stream().filter(p -> p.nome().equals(projeto) && p.temLoginPendente()).map(p -> p.login().url())
+            .findFirst().orElse(null);
+    }
+
+    FluxosDeProjeto fluxos() {
+        return fluxos;
+    }
+
+    Navegador navegador() {
+        return navegador;
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // Desenho
     // ---------------------------------------------------------------------------------------------
 
@@ -377,7 +408,7 @@ public final class TelaProjetos extends Painel {
         List<LinhaProjetoVisual> ordem = new ArrayList<>(visiveis.size());
         for (LinhaDeProjeto m : visiveis) {
             LinhaProjetoVisual l = linhas.computeIfAbsent(m.nome(),
-                n -> new LinhaProjetoVisual(fluxos, navegador, fluxos::enviarCodigoDeLogin));
+                n -> new LinhaProjetoVisual(fluxos, navegador, fluxos::enviarCodigoDeLogin, this::abrirProjeto));
             l.atualizar(m, limiteDe(m.nome()));
             ordem.add(l);
         }

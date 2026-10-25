@@ -15,6 +15,12 @@ public interface OuvinteDeTopico<T> {
     void aoAtualizar(T valor);
 
     /**
+     * A consulta deu certo e o valor é IGUAL ao anterior (por isso não houve {@link #aoAtualizar}). A tela que mostra "lido às"
+     * usa isto para a hora não ficar velha quando nada muda. Por padrão não faz nada.
+     */
+    default void aoConfirmar() { }
+
+    /**
      * A consulta falhou. {@code ErroRede} não é erro de tela: a tela mantém o último snapshot e mostra "sem
      * conexão desde HH:MM" (o estado vem de {@link EstadoServidor}). Por padrão não faz nada.
      */

@@ -1,0 +1,221 @@
+{
+  "nome": "orbita",
+  "descricao": "Painel de relatórios de exemplo (dados inventados para os testes do app).",
+  "readme": "# Órbita\n\nPainel de relatórios de exemplo, usado só para testar o app. Tudo aqui é inventado.\n\n## Serviços\n- `web` — interface e API de relatórios\n- `fila` — processa os relatórios em segundo plano\n- `banco` — Postgres com os dados de exemplo\n- `cache` — Redis para respostas rápidas\n\n## Como subir\nUse o botão Iniciar do painel. O projeto tem dois arquivos compose: o principal e o de desenvolvimento.\n",
+  "status": "# STATUS — orbita\n\n- Etapa 1: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 2: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 3: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 4: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 5: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 6: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 7: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 8: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 9: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 10: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 11: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 12: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 13: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 14: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 15: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 16: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 17: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 18: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 19: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 20: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 21: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 22: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 23: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 24: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 25: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 26: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 27: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 28: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 29: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 30: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 31: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 32: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 33: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 34: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 35: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 36: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 37: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 38: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 39: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 40: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 41: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 42: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 43: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 44: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 45: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 46: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 47: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 48: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 49: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 50: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 51: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 52: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 53: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 54: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 55: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 56: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 57: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 58: texto de exemplo para preencher o campo de status do projeto.\n- Etapa 59: texto de exemplo para preencher o campo de status do projeto.",
+  "composes": [
+    {
+      "arquivo": "docker-compose.yml",
+      "projetoCompose": "orbita"
+    },
+    {
+      "arquivo": "docker-compose.dev.yml",
+      "projetoCompose": "orbita-dev"
+    }
+  ],
+  "containers": [
+    {
+      "nome": "orbita-web-1",
+      "estado": "running",
+      "status": "Up 3 hours",
+      "portas": "127.0.0.1:3040->3000/tcp",
+      "imagem": "orbita-web:latest",
+      "criado": "2026-10-21T14:05:00.000Z",
+      "cpu": 1.4,
+      "mem": 182452224,
+      "memLimite": 8228083597,
+      "net": "12MB / 9MB",
+      "bloco": "4MB / 0B",
+      "pids": 23
+    },
+    {
+      "nome": "orbita-fila-1",
+      "estado": "running",
+      "status": "Up 3 hours",
+      "portas": "",
+      "imagem": "orbita-fila:latest",
+      "criado": "2026-10-21T14:05:00.000Z",
+      "cpu": 0.3,
+      "mem": 96468992,
+      "memLimite": 8228083597,
+      "net": "3MB / 2MB",
+      "bloco": "0B / 0B",
+      "pids": 11
+    },
+    {
+      "nome": "orbita-banco-1",
+      "estado": "running",
+      "status": "Up 3 hours",
+      "portas": "127.0.0.1:5440->5432/tcp",
+      "imagem": "postgres:16-alpine",
+      "criado": "2026-10-21T14:05:00.000Z",
+      "cpu": 0.8,
+      "mem": 143654912,
+      "memLimite": 8228083597,
+      "net": "8MB / 11MB",
+      "bloco": "30MB / 22MB",
+      "pids": 9
+    },
+    {
+      "nome": "orbita-cache-1",
+      "estado": "exited",
+      "status": "Exited (0) 2 days ago",
+      "portas": "",
+      "imagem": "redis:7-alpine",
+      "criado": "2026-10-19T09:30:00.000Z",
+      "cpu": null,
+      "mem": null,
+      "memLimite": null,
+      "net": "—",
+      "bloco": "—",
+      "pids": null
+    }
+  ],
+  "urls": [
+    "orbita-lab.example.com"
+  ],
+  "sessao": {
+    "aberta": true,
+    "container": "lab-claude-orbita",
+    "desde": "2026-10-24T17:10:00.000Z",
+    "url": "/sessao/orbita",
+    "info": {
+      "atualizada": true,
+      "faltando": []
+    }
+  },
+  "git": {
+    "branch": "main",
+    "commit": "a1b2c3d",
+    "quando": "2026-10-23T22:40:00Z",
+    "sujo": true
+  },
+  "backups": [
+    {
+      "arquivo": "orbita-2026-10-24T03-00-01.sql.gz",
+      "tamanho": 43200,
+      "quando": "2026-10-24T03:00:01.000Z"
+    },
+    {
+      "arquivo": "orbita-2026-10-23T03-00-01.sql.gz",
+      "tamanho": 41900,
+      "quando": "2026-10-23T03:00:01.000Z"
+    },
+    {
+      "arquivo": "orbita-2026-10-22T03-00-01.sql.gz",
+      "tamanho": 40600,
+      "quando": "2026-10-22T03:00:01.000Z"
+    },
+    {
+      "arquivo": "orbita-2026-10-21T03-00-01.sql.gz",
+      "tamanho": 39300,
+      "quando": "2026-10-21T03:00:01.000Z"
+    },
+    {
+      "arquivo": "orbita-2026-10-20T03-00-01.sql.gz",
+      "tamanho": 38000,
+      "quando": "2026-10-20T03:00:01.000Z"
+    }
+  ],
+  "tamanho": null,
+  "mexido": 1792605600000.4568,
+  "acessoDocker": true,
+  "redes": [
+    "orbita_default"
+  ],
+  "arquivos": [
+    {
+      "nome": "app",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "banco",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "docs",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "fila",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "scripts",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "testes",
+      "tipo": "pasta"
+    },
+    {
+      "nome": "web",
+      "tipo": "pasta"
+    },
+    {
+      "nome": ".env.example",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "CLAUDE.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "README.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "STATUS.md",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "docker-compose.dev.yml",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "docker-compose.yml",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "Dockerfile",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "LICENSE",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "Makefile",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "package.json",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "package-lock.json",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "tsconfig.json",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": ".gitignore",
+      "tipo": "arquivo"
+    },
+    {
+      "nome": "notas.txt",
+      "tipo": "arquivo"
+    }
+  ],
+  "limite": {
+    "teto_pct": 20,
+    "usado_pp": 1.96,
+    "estado": "ok",
+    "liberado": false,
+    "pausa": null,
+    "zera_em": "2026-10-29T18:00:00.000Z",
+    "desde": "2026-10-22T18:00:00.000Z"
+  }
+}

@@ -7,6 +7,8 @@ import br.com.labdesktop.api.modelo.RespostaLimite;
 import br.com.labdesktop.api.modelo.RespostaRetomar;
 import br.com.labdesktop.api.modelo.ResultadoAcao;
 import br.com.labdesktop.api.modelo.SessaoAberta;
+import br.com.labdesktop.api.modelo.TelaClaude;
+import br.com.labdesktop.api.modelo.TokensDoProjeto;
 import java.util.function.Supplier;
 
 /**
@@ -88,5 +90,70 @@ public final class AcoesDoServidor {
     /** Tira a pausa e reabre a sessão. 409 com números = "ainda acima do limite". */
     public RespostaRetomar retomar(String projeto, boolean liberar, boolean reabrir) throws ErroApi {
         return rodar(projeto, a -> a.retomar(projeto, liberar, reabrir));
+    }
+
+    /**
+     * {@code docker restart} de UM container do projeto. Ao terminar (com sucesso ou não), consulta de novo o detalhe do projeto
+     * e a lista, para a tabela mostrar o estado de verdade.
+     */
+    public void reiniciarContainer(String projeto, String container) throws ErroApi {
+        rodar(projeto, a -> {
+            a.reiniciarContainer(projeto, container);
+            return null;
+        });
+    }
+
+    /** Escreve uma mensagem na sessão do Claude e dá Enter; em seguida pede a tela de novo (o usuário quer ver o efeito). */
+    public void enviarMensagem(String projeto, String texto) throws ErroApi {
+        enviarParaATela(projeto, a -> a.enviarMensagem(projeto, texto));
+    }
+
+    /** Envia uma tecla (Enter, Escape...) à sessão do Claude e pede a tela de novo. */
+    public void enviarTecla(String projeto, String tecla) throws ErroApi {
+        enviarParaATela(projeto, a -> a.enviarTecla(projeto, tecla));
+    }
+
+    private void enviarParaATela(String projeto, ChamadaSemResultado chamada) throws ErroApi {
+        ClienteApi a = api.get();
+        if (a == null) {
+            throw new ErroRede("Sem conexão com o servidor.", null);
+        }
+        try {
+            chamada.executar(a);
+        } finally {
+            sondador.atualizarAgora(Topico.tela(projeto));
+        }
+    }
+
+    @FunctionalInterface
+    private interface ChamadaSemResultado {
+        void executar(ClienteApi api) throws ErroApi;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Leituras avulsas (sob demanda, sem tópico): bloqueiam, chame de thread de fundo
+    // ---------------------------------------------------------------------------------------------
+
+    /** Os logs de um container, uma vez (abrir a aba, Atualizar, trocar de container). */
+    public String logs(String projeto, String container, int linhas) throws ErroApi {
+        return ler(a -> a.logs(projeto, container, linhas));
+    }
+
+    /** A tela do Claude, uma vez. */
+    public TelaClaude tela(String projeto) throws ErroApi {
+        return ler(a -> a.telaDoClaude(projeto));
+    }
+
+    /** O consumo do projeto, uma vez. */
+    public TokensDoProjeto consumo(String projeto) throws ErroApi {
+        return ler(a -> a.tokensDoProjeto(projeto));
+    }
+
+    private <T> T ler(Chamada<T> chamada) throws ErroApi {
+        ClienteApi a = api.get();
+        if (a == null) {
+            throw new ErroRede("Sem conexão com o servidor.", null);
+        }
+        return chamada.executar(a);
     }
 }

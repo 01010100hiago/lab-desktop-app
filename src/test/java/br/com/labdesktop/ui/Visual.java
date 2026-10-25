@@ -111,9 +111,28 @@ public final class Visual {
      * mais; aqui o teste espera a EDT esvaziar entre as passadas para pintar o que o usuário veria.
      */
     public static void layoutar(Component c) {
-        for (int i = 0; i < 4; i++) {
+        // Mínimo de 4 passadas (o que as telas antigas sempre tiveram) e, depois, até as medidas pararem de mudar: uma tela
+        // com colunas de peso (a página do projeto) leva mais passadas para estabilizar do que o revalidate leva na janela.
+        long anterior = medidas(c);
+        for (int i = 0; i < 16; i++) {
             layoutarUmaVez(c); // cada passada invalida antes, como o revalidate faria: os layouts guardam os tamanhos
+            long agora = medidas(c);
+            if (i >= 3 && agora == anterior) {
+                return;
+            }
+            anterior = agora;
         }
+    }
+
+    /** Uma impressão digital das posições e tamanhos de tudo, para saber se o layout parou de mexer. */
+    private static long medidas(Component c) {
+        long h = c.getX() * 31L + c.getY() * 17L + c.getWidth() * 13L + c.getHeight() * 7L;
+        if (c instanceof Container k) {
+            for (Component filho : k.getComponents()) {
+                h = h * 1_000_003L + medidas(filho);
+            }
+        }
+        return h;
     }
 
     private static void layoutarUmaVez(Component c) {

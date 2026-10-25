@@ -42,6 +42,24 @@ public final class AgenteDoLab implements AutoCloseable {
     public final List<String> comandosCli = new java.util.concurrent.CopyOnWriteArrayList<>();
     public final List<String> entradasCli = new java.util.concurrent.CopyOnWriteArrayList<>();
 
+    /**
+     * O que o agente sabe de cada projeto (a página do projeto): o detalhe ({@code GET /api/projetos/:p}), o consumo
+     * ({@code /api/tokens/:p}) e os logs por container. Os testes trocam o conteúdo e conferem o que chegou. Por padrão só existe
+     * o projeto sintético {@code orbita} (nada aqui vem de um servidor real).
+     */
+    public final Map<String, String> detalhes = new ConcurrentHashMap<>();
+    public final Map<String, String> consumos = new ConcurrentHashMap<>();
+    /** Chave {@code projeto/container}; o container que não está aqui responde 400 como o agente real. */
+    public final Map<String, String> logs = new ConcurrentHashMap<>();
+    /** O JSON de {@code claude/tela} do projeto; ausente, o agente diz "Sessão não está aberta." (404). */
+    public final Map<String, String> telas = new ConcurrentHashMap<>();
+    /** Os corpos que chegaram em {@code claude/teclas}, na ordem. */
+    public final List<String> teclasRecebidas = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** Os containers que o app mandou reiniciar ({@code projeto/container}), na ordem. */
+    public final List<String> containersReiniciados = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** Os caminhos de projeto consultados ({@code GET}), com a query, para os testes de "só com a aba visível". */
+    public final List<String> leiturasDeProjeto = new java.util.concurrent.CopyOnWriteArrayList<>();
+
     public volatile boolean fora;
     public volatile boolean exigeToken;
     public volatile boolean totpPendente;
@@ -61,6 +79,13 @@ public final class AgenteDoLab implements AutoCloseable {
     public AgenteDoLab() throws IOException {
         http = new AgenteFalso();
         http.responder(this::atender);
+        detalhes.put("orbita", br.com.labdesktop.api.FixturesDeApi.lerRecursoDoProjeto("detalhe-sintetico.json"));
+        consumos.put("orbita", br.com.labdesktop.api.FixturesDeApi.lerRecursoDoProjeto("consumo-sintetico.json"));
+        String registro = br.com.labdesktop.api.FixturesDeApi.lerRecursoDoProjeto("logs-sintetico.txt");
+        for (String c : List.of("orbita-web-1", "orbita-fila-1", "orbita-banco-1")) {
+            logs.put("orbita/" + c, registro);
+        }
+        logs.put("orbita/orbita-cache-1", ""); // container que nunca escreveu nada
     }
 
     public int porta() {
@@ -138,6 +163,10 @@ public final class AgenteDoLab implements AutoCloseable {
             consultasDeDetalhe.incrementAndGet();
             return Resposta.json(200, br.com.labdesktop.api.FixturesDeApi.lerRecurso("servidor-detalhe-sintetico.json"));
         }
+        Resposta deProjeto = rotasDoProjeto(p, caminho);
+        if (deProjeto != null) {
+            return deProjeto;
+        }
         if (caminho.endsWith("/limite/retomar")) {
             return Resposta.json(409, MocksDoFront.ler("projetos/app-loja-retomar.POST.json"));
         }
@@ -145,6 +174,76 @@ public final class AgenteDoLab implements AutoCloseable {
             return Resposta.json(200, "{\"ok\":true,\"saida\":\"[docker-compose.yml] feito\",\"url\":\"/sessao/x\"}");
         }
         return Resposta.json(404, "{\"erro\":\"Projeto não existe.\"}");
+    }
+
+    private static final java.util.regex.Pattern ROTA_DE_PROJETO = java.util.regex.Pattern.compile(
+        "^/api/projetos/([a-z0-9-]+)(/logs|/claude/tela|/claude/teclas|/containers/([A-Za-z0-9_.-]+)/reiniciar)?$");
+    private static final java.util.regex.Pattern ROTA_DE_CONSUMO = java.util.regex.Pattern.compile("^/api/tokens/([a-z0-9-]+)$");
+
+    /** As rotas da página do projeto (detalhe, consumo, logs, tela, teclas, reiniciar container); {@code null} se não é uma. */
+    private Resposta rotasDoProjeto(Pedido p, String caminho) {
+        var c = ROTA_DE_CONSUMO.matcher(caminho);
+        if (c.matches() && "GET".equals(p.metodo())) {
+            leiturasDeProjeto.add(p.caminhoComQuery());
+            String corpo = consumos.get(c.group(1));
+            return corpo == null ? Resposta.json(404, "{\"erro\":\"Projeto não existe.\"}") : Resposta.json(200, corpo);
+        }
+        var m = ROTA_DE_PROJETO.matcher(caminho);
+        if (!m.matches() || !detalhes.containsKey(m.group(1))) {
+            return null;
+        }
+        String projeto = m.group(1);
+        String sufixo = m.group(2);
+        if (sufixo == null) {
+            if (!"GET".equals(p.metodo())) {
+                return null;
+            }
+            leiturasDeProjeto.add(p.caminhoComQuery());
+            return Resposta.json(200, detalhes.get(projeto));
+        }
+        switch (sufixo) {
+            case "/logs" -> {
+                leiturasDeProjeto.add(p.caminhoComQuery());
+                String container = parametro(p.caminhoComQuery(), "container");
+                String texto = logs.get(projeto + "/" + container);
+                return texto == null ? Resposta.json(400, "{\"erro\":\"Container não pertence a este projeto.\"}")
+                    : Resposta.texto(200, texto);
+            }
+            case "/claude/tela" -> {
+                leiturasDeProjeto.add(p.caminhoComQuery());
+                String tela = telas.get(projeto);
+                return tela == null ? Resposta.json(404, "{\"erro\":\"Sessão não está aberta.\"}") : Resposta.json(200, tela);
+            }
+            case "/claude/teclas" -> {
+                if (!telas.containsKey(projeto)) {
+                    return Resposta.json(404, "{\"erro\":\"Sessão não está aberta.\"}");
+                }
+                teclasRecebidas.add(p.corpo());
+                return Resposta.json(200, "{\"ok\":true}");
+            }
+            default -> {
+                String container = m.group(3);
+                if (!logs.containsKey(projeto + "/" + container)) {
+                    return Resposta.json(400, "{\"erro\":\"Container não pertence a este projeto.\"}");
+                }
+                containersReiniciados.add(projeto + "/" + container);
+                return Resposta.json(200, "{\"ok\":true}");
+            }
+        }
+    }
+
+    private static String parametro(String caminhoComQuery, String nome) {
+        int q = caminhoComQuery.indexOf('?');
+        if (q < 0) {
+            return null;
+        }
+        for (String par : caminhoComQuery.substring(q + 1).split("&")) {
+            int i = par.indexOf('=');
+            if (i > 0 && par.substring(0, i).equals(nome)) {
+                return par.substring(i + 1);
+            }
+        }
+        return null;
     }
 
     private Resposta confirmar2fa(Pedido p, String dispositivo) {

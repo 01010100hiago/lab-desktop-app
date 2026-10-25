@@ -51,6 +51,11 @@ public final class FluxosDeProjeto {
     public static final String RETOMAR = "retomar";
     public static final String LIMITE = "limite";
     public static final String CODIGO = "codigo";
+    public static final String MENSAGEM = "mensagem";
+    /** Prefixo da ação de reiniciar UM container: a chave é {@code container:<nome>}, uma por container. */
+    public static final String PREFIXO_DE_CONTAINER = "container:";
+    /** Prefixo de uma tecla enviada à sessão: a chave é {@code tecla:<Enter|Escape...>}. */
+    public static final String PREFIXO_DE_TECLA = "tecla:";
 
     /** A propriedade de sistema que liga ou desliga as ações de escrita. */
     public static final String PROPRIEDADE_ACOES = "labdesktop.acoes";
@@ -87,6 +92,11 @@ public final class FluxosDeProjeto {
     /** O que a aplicação passa ao construtor: as ações só ligam com {@code -Dlabdesktop.acoes=true}. */
     public static boolean liberadasPorPropriedade() {
         return Boolean.getBoolean(PROPRIEDADE_ACOES);
+    }
+
+    /** Quem mostra os avisos (a página do projeto usa os mesmos da lista). */
+    Notificacoes avisos() {
+        return avisos;
     }
 
     /** {@code true} se as ações de escrita funcionam; a tela esconde os botões quando for {@code false}. */
@@ -207,7 +217,7 @@ public final class FluxosDeProjeto {
         }
         rodar(projeto, ABRIR, () -> acoes().abrirSessao(projeto),
             r -> avisos.ok(TextosDeLimite.nomeAmigavel(projeto) + ": sessão do Claude aberta. O terminal nativo ainda não "
-                + "existe no app: converse pelo painel web por enquanto."),
+                + "existe no app: na aba Sessão do Claude do projeto dá para ler a tela e escrever mensagens; o resto, pelo painel web."),
             f -> falhou(projeto, f));
     }
 
@@ -313,5 +323,73 @@ public final class FluxosDeProjeto {
                 depois.run();
             }
         }));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Ações da página do projeto
+    // ---------------------------------------------------------------------------------------------
+
+    /** A chave de ocupação do botão Reiniciar de um container. */
+    public static String chaveDoContainer(String container) {
+        return PREFIXO_DE_CONTAINER + container;
+    }
+
+    /** {@code docker restart} de um container do projeto (o botão da tabela de containers). */
+    public void reiniciarContainer(String projeto, String container) {
+        if (somenteLeitura()) {
+            return;
+        }
+        rodar(projeto, chaveDoContainer(container), () -> {
+            acoes().reiniciarContainer(projeto, container);
+            return Boolean.TRUE;
+        }, r -> avisos.ok(projeto + ": " + container + " reiniciado."), f -> falhou(projeto, f));
+    }
+
+    /**
+     * Escreve uma mensagem na sessão do Claude (e dá Enter). {@code aoConcluir} roda na EDT só quando o agente aceitou: é
+     * quando a caixa de texto pode ser limpa (se falhar, o que o usuário escreveu fica lá).
+     */
+    public void enviarMensagem(String projeto, String texto, Runnable aoConcluir) {
+        if (somenteLeitura()) {
+            return;
+        }
+        rodar(projeto, MENSAGEM, () -> {
+            acoes().enviarMensagem(projeto, texto);
+            return Boolean.TRUE;
+        }, r -> {
+            if (aoConcluir != null) {
+                aoConcluir.run();
+            }
+        }, f -> falhou(projeto, f));
+    }
+
+    /** Envia uma tecla (Enter, Escape) à sessão do Claude. */
+    public void enviarTecla(String projeto, String tecla) {
+        if (somenteLeitura()) {
+            return;
+        }
+        rodar(projeto, PREFIXO_DE_TECLA + tecla, () -> {
+            acoes().enviarTecla(projeto, tecla);
+            return Boolean.TRUE;
+        }, r -> { }, f -> falhou(projeto, f));
+    }
+
+    /**
+     * "Liberar até a semana virar": o projeto fica sem teto e sem freio até a semana do plano virar, e a sessão volta. É uma
+     * decisão que gasta crédito da conta, por isso pergunta antes (o diálogo do 409 já oferece o mesmo caminho, mas aqui o
+     * usuário chega sem ter passado por ele).
+     */
+    public void liberar(String projeto, Limite limiteAtual) {
+        if (somenteLeitura()) {
+            return;
+        }
+        apresentador.mostrar(new DialogoConfirmar("Liberar até a semana virar", "play",
+            "O projeto fica sem limite e sem freio até a semana do plano virar, e a sessão do Claude volta a abrir. O "
+                + "consumo continua sendo contado na conta.", "Liberar", false, sim -> {
+                    if (sim) {
+                        avisos.info("Liberando e retomando " + TextosDeLimite.nomeAmigavel(projeto) + "…");
+                        retomar(projeto, limiteAtual, true);
+                    }
+                }));
     }
 }

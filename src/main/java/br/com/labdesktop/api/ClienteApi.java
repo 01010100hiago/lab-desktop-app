@@ -19,6 +19,8 @@ import br.com.labdesktop.api.modelo.RespostaLimite;
 import br.com.labdesktop.api.modelo.RespostaRetomar;
 import br.com.labdesktop.api.modelo.ResultadoAcao;
 import br.com.labdesktop.api.modelo.SessaoAberta;
+import br.com.labdesktop.api.modelo.TelaClaude;
+import br.com.labdesktop.api.modelo.TokensDoProjeto;
 import br.com.labdesktop.api.modelo.VersaoAgente;
 import br.com.labdesktop.cofre.TokenAgente;
 import br.com.labdesktop.seguranca.Redator;
@@ -82,6 +84,10 @@ public final class ClienteApi implements AutoCloseable {
 
     /** O formato do código de login que o agente aceita (CONTRATO-API 4.8). */
     private static final java.util.regex.Pattern CODIGO_DE_LOGIN = java.util.regex.Pattern.compile("^[A-Za-z0-9_#.-]{4,600}$");
+
+    /** O agente limita {@code linhas} dos logs a 50..2000 (CONTRATO-API 3.9). */
+    private static final int LINHAS_MINIMAS_DE_LOG = 50;
+    private static final int LINHAS_MAXIMAS_DE_LOG = 2000;
 
     private static final Logger LOG = LoggerFactory.getLogger(ClienteApi.class);
     private static final String CODIGO_TOTP_INCORRETO = "totp_incorreto";
@@ -207,6 +213,36 @@ public final class ClienteApi implements AutoCloseable {
         throw new RespostaInvalida(200, "O agente devolveu um projeto comum onde se esperava a sessão raiz.", null);
     }
 
+    /** {@code GET /api/tokens/:p}: o consumo de um projeto (nunca 503: sem cache o agente devolve zeros). */
+    public TokensDoProjeto tokensDoProjeto(String projeto) throws ErroApi {
+        String p = ValidadorDeNomes.exigirProjeto(projeto);
+        return get("/api/tokens/" + p, Rota.TOKENS_DO_PROJETO, TokensDoProjeto.class);
+    }
+
+    /**
+     * {@code GET /api/projetos/:p/logs?container=&linhas=}: texto puro (até 8 MiB). O agente limita {@code linhas} a 50..2000; o
+     * app limita igual antes de pedir. Se o Docker falhar o agente ainda responde 200 e o corpo é o texto do erro: o app o
+     * mostra como veio (o texto passa por {@code TextoSeguro} na tela).
+     */
+    public String logs(String projeto, String container, int linhas) throws ErroApi {
+        String p = ValidadorDeNomes.exigirProjeto(projeto);
+        String c = ValidadorDeNomes.exigirContainer(container);
+        int n = Math.max(LINHAS_MINIMAS_DE_LOG, Math.min(LINHAS_MAXIMAS_DE_LOG, linhas));
+        Resposta r = executar("GET", "/api/projetos/" + p + "/logs?container=" + c + "&linhas=" + n, null, Rota.LOGS,
+            LeituraLimitada.TETO_TEXTO);
+        exigirSucesso(r);
+        return new String(r.corpo, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * {@code GET /api/projetos/:p/claude/tela}: a tela do Claude já analisada. {@code NaoEncontrado} ("Sessão não está aberta.")
+     * é fluxo normal: quem consulta decide o que mostrar.
+     */
+    public TelaClaude telaDoClaude(String projeto) throws ErroApi {
+        String p = ValidadorDeNomes.exigirProjeto(projeto);
+        return get("/api/projetos/" + p + "/claude/tela", Rota.TELA, TelaClaude.class);
+    }
+
     // =====================================================================================================
     // Ações (POST e PUT: nunca reenviadas sozinhas)
     // =====================================================================================================
@@ -287,6 +323,45 @@ public final class ClienteApi implements AutoCloseable {
         acaoDeProjeto("POST", projeto, "/claude/codigo", Rota.CODIGO_DE_LOGIN, corpo, JsonNode.class);
     }
 
+    /** {@code POST /api/projetos/:p/containers/:c/reiniciar}: {@code docker restart} (prazo de 120 s no agente). */
+    public void reiniciarContainer(String projeto, String container) throws ErroApi {
+        String c = ValidadorDeNomes.exigirContainer(container);
+        acaoDeProjeto("POST", projeto, "/containers/" + c + "/reiniciar", Rota.REINICIAR_CONTAINER, JsonNode.class);
+    }
+
+    /** As teclas que o agente aceita em {@code claude/teclas} (CONTRATO-API 4.7). */
+    public static final java.util.Set<String> TECLAS_PERMITIDAS = java.util.Set.of("Enter", "Escape", "Up", "Down", "Left",
+        "Right", "Tab", "BTab", "C-c", "Space", "BSpace");
+
+    /** O maior texto que o agente aceita em uma mensagem para o Claude. */
+    public static final int TEXTO_MAXIMO_DA_MENSAGEM = 4000;
+
+    /** {@code POST /api/projetos/:p/claude/teclas} com {@code {"tecla": ...}}: Enter, Escape... 404 = sessão fechada. */
+    public void enviarTecla(String projeto, String tecla) throws ErroApi {
+        if (tecla == null || !TECLAS_PERMITIDAS.contains(tecla)) {
+            throw new IllegalArgumentException("Tecla não permitida.");
+        }
+        ObjectNode corpo = json.createObjectNode();
+        corpo.put("tecla", tecla);
+        acaoDeProjeto("POST", projeto, "/claude/teclas", Rota.TECLAS, corpo, JsonNode.class);
+    }
+
+    /**
+     * {@code POST /api/projetos/:p/claude/teclas} com {@code {"texto": ..., "enter": true}}: escreve a mensagem na sessão e dá
+     * Enter. O agente troca quebras de linha por espaço e recusa texto vazio ou acima de 4000 caracteres; o app confere antes.
+     * O texto da mensagem NUNCA vai para log.
+     */
+    public void enviarMensagem(String projeto, String texto) throws ErroApi {
+        String t = texto == null ? "" : texto.strip();
+        if (t.isEmpty() || t.length() > TEXTO_MAXIMO_DA_MENSAGEM) {
+            throw new IllegalArgumentException("Escreva uma mensagem de até " + TEXTO_MAXIMO_DA_MENSAGEM + " caracteres.");
+        }
+        ObjectNode corpo = json.createObjectNode();
+        corpo.put("texto", t);
+        corpo.put("enter", true);
+        acaoDeProjeto("POST", projeto, "/claude/teclas", Rota.TECLAS, corpo, JsonNode.class);
+    }
+
     /**
      * A confirmação do código: UMA tentativa, sem diálogo e sem repetir. Quem usa o
      * fluxo normal não chama isto: o {@code ClienteApi} o faz sozinho quando o agente pede o código.
@@ -333,20 +408,29 @@ public final class ClienteApi implements AutoCloseable {
      * chamada UMA vez.
      */
     private Resposta executar(String metodo, String caminho, String corpo, Rota rota) throws ErroApi {
+        return executar(metodo, caminho, corpo, rota, LeituraLimitada.TETO_JSON);
+    }
+
+    private Resposta executar(String metodo, String caminho, String corpo, Rota rota, int teto) throws ErroApi {
         long confirmacoesAntes = confirmacoes.get();
-        Resposta r = enviar(metodo, caminho, corpo, rota);
+        Resposta r = enviar(metodo, caminho, corpo, rota, teto);
         if (ehTotpRequerido(r)) {
             garantirConfirmacao(confirmacoesAntes);
-            r = enviar(metodo, caminho, corpo, rota); // a ÚNICA repetição; uma segunda 401 vira erro comum
+            r = enviar(metodo, caminho, corpo, rota, teto); // a ÚNICA repetição; uma segunda 401 vira erro comum
         }
         return r;
     }
 
     private Resposta enviar(String metodo, String caminho, String corpo, Rota rota) throws ErroApi {
+        return enviar(metodo, caminho, corpo, rota, LeituraLimitada.TETO_JSON);
+    }
+
+    /** O {@code teto} é do corpo: JSON até 2 MiB, texto (logs) até 8 MiB, o {@code maxBuffer} do agente. */
+    private Resposta enviar(String metodo, String caminho, String corpo, Rota rota, int teto) throws ErroApi {
         Duration prazo = timeouts.de(rota);
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(base + caminho))
             .timeout(prazo)
-            .header("Accept", "application/json")
+            .header("Accept", teto == LeituraLimitada.TETO_TEXTO ? "text/plain, application/json" : "application/json")
             .header("User-Agent", Versao.userAgent());
         if (autorizacao != null) {
             b.header("Authorization", autorizacao);
@@ -366,7 +450,7 @@ public final class ClienteApi implements AutoCloseable {
             Agendador.Cancelavel vigia = agendador.agendar(restante, () -> fecharQuieto(resposta.body()));
             try (InputStream corpoDaResposta = resposta.body()) {
                 desfecho = String.valueOf(resposta.statusCode());
-                return new Resposta(resposta.statusCode(), LeituraLimitada.ler(corpoDaResposta, LeituraLimitada.TETO_JSON));
+                return new Resposta(resposta.statusCode(), LeituraLimitada.ler(corpoDaResposta, teto));
             } finally {
                 vigia.cancelar();
             }

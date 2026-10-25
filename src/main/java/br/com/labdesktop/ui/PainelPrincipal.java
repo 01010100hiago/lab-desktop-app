@@ -94,6 +94,35 @@ public final class PainelPrincipal extends Painel {
         }
     }
 
+    /** O servidor em foco (ou o primeiro cadastrado, se está na tela de servidores). */
+    private ServidorLab servidorOuPrimeiro() {
+        ServidorLab lab = servidorEmFoco();
+        return lab == null && !gerenciador.servidores().isEmpty() ? gerenciador.servidores().get(0) : lab;
+    }
+
+    /** Reabre a página do último projeto aberto no servidor em foco, se houver. */
+    public void mostrarUltimoProjeto() {
+        ServidorLab lab = servidorOuPrimeiro();
+        TelaServidor t = lab == null ? null : navegacao.telaServidorDe(lab.id());
+        if (t != null && t.ultimoProjeto() != null) {
+            navegacao.abrirProjeto(lab, t.ultimoProjeto());
+        }
+    }
+
+    /** Há um projeto aberto no servidor em foco (o menu só habilita "Voltar à lista de projetos" assim). */
+    public boolean temProjetoAberto() {
+        ServidorLab lab = servidorEmFoco();
+        TelaServidor t = lab == null ? null : navegacao.telaServidorDe(lab.id());
+        return t != null && t.projetoAberto() != null;
+    }
+
+    /** Há um último projeto para reabrir no servidor em foco. */
+    public boolean temUltimoProjeto() {
+        ServidorLab lab = servidorOuPrimeiro();
+        TelaServidor t = lab == null ? null : navegacao.telaServidorDe(lab.id());
+        return t != null && t.ultimoProjeto() != null;
+    }
+
     /** O resumo do servidor em foco (ou do primeiro cadastrado). */
     public void mostrarResumo() {
         ServidorLab lab = servidorEmFoco();

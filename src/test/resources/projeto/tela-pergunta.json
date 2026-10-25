@@ -1,0 +1,32 @@
+{
+  "pergunta": {
+    "titulo": "Quer continuar?",
+    "contexto": "O Claude quer editar app/rotas.ts",
+    "opcoes": [
+      {
+        "numero": 1,
+        "texto": "Sim",
+        "descricao": "",
+        "selecionada": true
+      },
+      {
+        "numero": 2,
+        "texto": "Sim, e não perguntar de novo",
+        "descricao": "",
+        "selecionada": false
+      },
+      {
+        "numero": 3,
+        "texto": "Não",
+        "descricao": "",
+        "selecionada": false
+      }
+    ]
+  },
+  "executando": null,
+  "ultimaFerramenta": "Edit(app/rotas.ts)",
+  "esperandoVoce": false,
+  "tarefas": [],
+  "atividade": [],
+  "tela": "● Edit(app/rotas.ts)\n\n Quer continuar?\n ❯ 1. Sim\n   2. Sim, e não perguntar de novo\n   3. Não\n\n Enter para confirmar · Esc para cancelar"
+}

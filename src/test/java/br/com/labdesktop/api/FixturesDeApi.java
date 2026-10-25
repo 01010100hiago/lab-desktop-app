@@ -49,6 +49,33 @@ public final class FixturesDeApi {
         return de(lerRecurso("servidor-detalhe-sintetico.json"), br.com.labdesktop.api.modelo.DetalheServidor.class);
     }
 
+    /** O detalhe do projeto SINTÉTICO {@code orbita} (nada vem de um servidor real). */
+    public static br.com.labdesktop.api.modelo.DetalheProjeto detalheDoProjetoSintetico() {
+        return de(lerRecursoDoProjeto("detalhe-sintetico.json"), br.com.labdesktop.api.modelo.DetalheProjeto.class);
+    }
+
+    /** O consumo do projeto sintético ({@code /api/tokens/orbita}): 30 dias com zeros, 4 modelos, 6 sessões e o Harness. */
+    public static br.com.labdesktop.api.modelo.TokensDoProjeto consumoSintetico() {
+        return de(lerRecursoDoProjeto("consumo-sintetico.json"), br.com.labdesktop.api.modelo.TokensDoProjeto.class);
+    }
+
+    /** A tela do Claude sintética: {@code tela-executando}, {@code tela-pergunta}, {@code tela-esperando} ou {@code tela-login}. */
+    public static br.com.labdesktop.api.modelo.TelaClaude telaSintetica(String nome) {
+        return de(lerRecursoDoProjeto(nome + ".json"), br.com.labdesktop.api.modelo.TelaClaude.class);
+    }
+
+    /** O texto de um arquivo de {@code src/test/resources/projeto}. */
+    public static String lerRecursoDoProjeto(String nome) {
+        try (java.io.InputStream in = FixturesDeApi.class.getResourceAsStream("/projeto/" + nome)) {
+            if (in == null) {
+                throw new IllegalStateException("fixture ausente: " + nome);
+            }
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     /** O texto de um arquivo de {@code src/test/resources/servidor}. */
     public static String lerRecurso(String nome) {
         try (java.io.InputStream in = FixturesDeApi.class.getResourceAsStream("/servidor/" + nome)) {

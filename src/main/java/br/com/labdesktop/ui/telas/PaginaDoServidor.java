@@ -394,7 +394,7 @@ public abstract class PaginaDoServidor extends Painel {
     // ---------------------------------------------------------------------------------------------
 
     /** O corpo que pode ser pintado apagado (dados antigos), sem mexer em nenhum componente filho. */
-    private static final class Esmaecivel extends Painel {
+    static final class Esmaecivel extends Painel {
         private static final long serialVersionUID = 1L;
         private boolean esmaecido;
 
@@ -479,9 +479,16 @@ public abstract class PaginaDoServidor extends Painel {
         private final Rotulo titulo = new Rotulo().negrito().tamanho(15f);
         private final TextoCorrido texto = new TextoCorrido("", 520).corDoToken(Tokens.TEXTO2);
         private final Botao tentar;
+        private final String assunto;
 
         SemDados(Runnable aoTentar) {
+            this(aoTentar, "do servidor");
+        }
+
+        /** @param assunto "do servidor", "do projeto": de quem são as informações que não vieram */
+        SemDados(Runnable aoTentar, String assunto) {
             super(new BorderLayout(0, 8));
+            this.assunto = assunto;
             fundo(Tokens.SUPERFICIE).borda(Tokens.BORDA).raio(14);
             setBorder(javax.swing.BorderFactory.createEmptyBorder(24, 24, 24, 24));
             tentar = Botoes.secundario("Tentar de novo", "atualizar");
@@ -497,13 +504,13 @@ public abstract class PaginaDoServidor extends Painel {
             titulo.setIcon(Icones.colorido("rede", 20, Tokens.TEXTO3));
             titulo.setIconTextGap(8);
             if (erro != null) {
-                titulo.setText("Não consegui carregar as informações do servidor");
+                titulo.setText("Não consegui carregar as informações " + assunto);
                 texto.setText(erro);
             } else if (situacao != null && situacao.temAviso()) {
                 titulo.setText(situacao.titulo());
                 texto.setText(situacao.texto());
             } else {
-                titulo.setText("Ainda não há informações deste servidor");
+                titulo.setText("Ainda não há informações " + assunto.replaceFirst("^do ", "deste "));
                 texto.setText("Assim que a conexão estiver de pé, esta aba aparece aqui.");
             }
         }
@@ -523,11 +530,16 @@ public abstract class PaginaDoServidor extends Painel {
     }
 
     /** Barras cinzas no lugar da aba, até a primeira resposta. */
-    private static final class Esqueleto extends ComponenteSimples {
+    static final class Esqueleto extends ComponenteSimples {
         private static final long serialVersionUID = 1L;
 
         Esqueleto() {
-            getAccessibleContext().setAccessibleName("Carregando as informações do servidor");
+            this("do servidor");
+        }
+
+        /** @param assunto "do servidor", "do projeto": de quem são as informações que estão chegando */
+        Esqueleto(String assunto) {
+            getAccessibleContext().setAccessibleName("Carregando as informações " + assunto);
             setName("esqueleto");
         }
 

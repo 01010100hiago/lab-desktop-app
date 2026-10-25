@@ -237,7 +237,7 @@ class EdicaoERemocaoPelaInterfaceTest {
         Espera.ate(PRAZO, "nome novo no cartão", () -> "lab da sala".equals(Visual.naEdt(cartao::textoDoNome)));
         assertEquals("lab da sala", Visual.naEdt(() -> painel.barra().item(lab.id()).textoDoNome()));
         assertEquals(1, cofre.servidor(lab.id()).orElseThrow().pins().size());
-        assertTrue(avisos.disse("ok", "Servidor lab da sala salvo"));
+        Espera.ate(PRAZO, "aviso " + "Servidor lab da sala salvo", () -> avisos.disse("ok", "Servidor lab da sala salvo"));
         assertFalse(avisos.disse("atencao", "impressão"), "nenhum aviso de impressão: ela continua valendo");
         Espera.ate(PRAZO, "reconectou", () -> lab.estado().conexao() == EstadoConexao.CONECTADO);
     }
@@ -260,7 +260,7 @@ class EdicaoERemocaoPelaInterfaceTest {
 
         Espera.ate(PRAZO, "pin apagado no cofre", () -> cofre.servidor(lab.id()).orElseThrow().pins().isEmpty());
         assertEquals("localhost", cofre.servidor(lab.id()).orElseThrow().host());
-        assertTrue(avisos.disse("atencao", "confirme a impressão digital do servidor quando o app pedir"));
+        Espera.ate(PRAZO, "aviso " + "confirme a impressão digital do servidor quando o app pedir", () -> avisos.disse("atencao", "confirme a impressão digital do servidor quando o app pedir"));
         Espera.ate(PRAZO, () -> "pede para confirmar, estado=" + lab.estado(), () -> lab.estado().conexao() == EstadoConexao.ERRO_CHAVE_HOST);
         Espera.ate(PRAZO, "cartão pede a conferência", () -> Visual.naEdt(cartao::acoesMostradas).contains(Item.CONFERIR_IMPRESSAO));
         assertTrue(Visual.naEdt(cartao::textoDaImpressao).startsWith("ainda não confirmado"), Visual.naEdt(cartao::textoDaImpressao));

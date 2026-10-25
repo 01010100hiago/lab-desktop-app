@@ -1,0 +1,21 @@
+{
+  "pergunta": null,
+  "executando": "Pensando… (12s · esc para interromper)",
+  "ultimaFerramenta": "Bash(npm test)",
+  "esperandoVoce": false,
+  "tarefas": [
+    {
+      "feito": true,
+      "texto": "Ler o código"
+    },
+    {
+      "feito": false,
+      "texto": "Escrever os testes"
+    }
+  ],
+  "atividade": [
+    "● Li o arquivo de rotas",
+    "● Rodei os testes de exemplo"
+  ],
+  "tela": "● Vou rodar os testes de exemplo.\n\n● Bash(npm test)\n  ⎿  12 passaram, 0 falharam\n\n● Agora escrevo o teste que falta.\n\n✻ Pensando… (12s · esc para interromper)\n\n> \n  ? para atalhos"
+}

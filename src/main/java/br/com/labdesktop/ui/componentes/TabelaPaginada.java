@@ -73,6 +73,8 @@ public final class TabelaPaginada<T> extends Painel {
     private int colunaOrdenada = -1;
     private boolean crescente = true;
     private List<List<String>> linhasDaPagina = List.of();
+    private String tituloDaAcao = "";
+    private Function<T, JComponent> acaoPorLinha;
 
     public TabelaPaginada(int porPagina, List<Coluna<T>> colunas) {
         super(new BorderLayout(0, 8));
@@ -118,6 +120,22 @@ public final class TabelaPaginada<T> extends Painel {
     public void filtrar(Predicate<T> novo) {
         this.filtro = novo == null ? t -> true : novo;
         recalcular(true);
+    }
+
+    /**
+     * Uma última coluna sem ordenação com um componente por linha (o botão "Reiniciar" de cada container). A fábrica roda a
+     * cada desenho da tabela, então o estado do componente (ocupado, habilitado) acompanha o dado; quem muda o estado sem
+     * mudar o dado chama {@link #redesenhar()}.
+     */
+    public void acaoPorLinha(String titulo, Function<T, JComponent> fabrica) {
+        this.tituloDaAcao = titulo == null ? "" : titulo;
+        this.acaoPorLinha = fabrica;
+        desenhar();
+    }
+
+    /** Refaz a tabela com os mesmos dados (o estado de um botão da coluna de ação mudou). */
+    public void redesenhar() {
+        desenhar();
     }
 
     /** As linhas que casam saem em negrito e na cor de atenção. */
@@ -255,9 +273,10 @@ public final class TabelaPaginada<T> extends Painel {
         List<T> pag = visiveis.subList(Math.min((pagina - 1) * porPagina, visiveis.size()), Math.min(pagina * porPagina, visiveis.size()));
         List<List<String>> textos = new ArrayList<>();
         int y = 0;
+        int largura = colunas.size() + (acaoPorLinha == null ? 0 : 1);
         if (pag.isEmpty()) {
             vazio.setText(todos.isEmpty() ? mensagemVazia : mensagemFiltroVazio);
-            GridBagConstraints g = restricoes(0, y, colunas.size(), 0);
+            GridBagConstraints g = restricoes(0, y, largura, 0);
             grade.add(vazio, g);
         } else {
             for (int i = 0; i < colunas.size(); i++) {
@@ -267,9 +286,18 @@ public final class TabelaPaginada<T> extends Painel {
                 g.insets = new Insets(0, i == 0 ? 0 : 12, 6, 0);
                 grade.add(cab, g);
             }
+            if (acaoPorLinha != null) {
+                Rotulo titulo = new Rotulo(tituloDaAcao.toUpperCase(Locale.forLanguageTag("pt-BR"))).corDoToken(Tokens.TEXTO3)
+                    .negrito().tamanho(10.5f);
+                GridBagConstraints g = restricoes(colunas.size(), y, 1, 0);
+                g.fill = GridBagConstraints.NONE;
+                g.anchor = GridBagConstraints.EAST;
+                g.insets = new Insets(0, 12, 6, 0);
+                grade.add(titulo, g);
+            }
             y++;
             for (T item : pag) {
-                grade.add(new Traco(), restricoes(0, y++, colunas.size(), 0));
+                grade.add(new Traco(), restricoes(0, y++, largura, 0));
                 boolean marca = destaque.test(item);
                 List<String> linha = new ArrayList<>();
                 for (int i = 0; i < colunas.size(); i++) {
@@ -293,6 +321,14 @@ public final class TabelaPaginada<T> extends Painel {
                     GridBagConstraints g = restricoes(i, y, 1, c.peso());
                     g.insets = new Insets(3, i == 0 ? 0 : 12, 3, 0);
                     grade.add(r, g);
+                }
+                if (acaoPorLinha != null) {
+                    JComponent acao = acaoPorLinha.apply(item);
+                    GridBagConstraints g = restricoes(colunas.size(), y, 1, 0);
+                    g.fill = GridBagConstraints.NONE;
+                    g.anchor = GridBagConstraints.EAST;
+                    g.insets = new Insets(1, 12, 1, 0);
+                    grade.add(acao, g);
                 }
                 textos.add(List.copyOf(linha));
                 y++;

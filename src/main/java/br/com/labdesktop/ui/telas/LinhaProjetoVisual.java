@@ -29,6 +29,7 @@ import java.awt.event.MouseEvent;
 import java.time.Instant;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
 import javax.swing.JMenuItem;
@@ -53,10 +54,12 @@ final class LinhaProjetoVisual extends Painel {
     private final FluxosDeProjeto fluxos;
     private final Navegador navegador;
     private final BiConsumer<String, String> enviarCodigoDeLogin;
+    private final Consumer<String> aoAbrir;
 
     private LinhaDeProjeto modelo;
     private Limite limite;
     private boolean sobMouse;
+    private boolean focoSimulado;
 
     // estado
     private final PontoDeEstado ponto = new PontoDeEstado();
@@ -107,10 +110,20 @@ final class LinhaProjetoVisual extends Painel {
     private final JPanel grade = new Painel(new GridBagLayout());
 
     LinhaProjetoVisual(FluxosDeProjeto fluxos, Navegador navegador, BiConsumer<String, String> enviarCodigoDeLogin) {
+        this(fluxos, navegador, enviarCodigoDeLogin, nome -> { });
+    }
+
+    /**
+     * @param aoAbrir recebe o nome do projeto quando o usuário clica em qualquer ponto da linha (menos nos botões de ação e no
+     *                campo do código de login) ou aperta Enter com a linha focada: é a entrada da página do projeto
+     */
+    LinhaProjetoVisual(FluxosDeProjeto fluxos, Navegador navegador, BiConsumer<String, String> enviarCodigoDeLogin,
+                       Consumer<String> aoAbrir) {
         super(new BorderLayout());
         this.fluxos = fluxos;
         this.navegador = navegador;
         this.enviarCodigoDeLogin = enviarCodigoDeLogin;
+        this.aoAbrir = aoAbrir;
 
         semDocker.setIcon(Icones.de("fechar", 12));
         semDocker.corDoToken(Tokens.TEXTO3);
@@ -146,7 +159,66 @@ final class LinhaProjetoVisual extends Painel {
 
         ligarEventos();
         instalarHover(this);
+        tornarAbrivel();
         getAccessibleContext().setAccessibleName("Projeto");
+    }
+
+    /**
+     * A linha inteira abre a página do projeto: cursor de mão, foco por Tab com o contorno desenhado e Enter. Os botões e o
+     * campo de texto têm o próprio comportamento e continuam com ele (ver {@link #instalarHover}).
+     */
+    private void tornarAbrivel() {
+        setFocusable(true);
+        setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        getInputMap(WHEN_FOCUSED).put(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ENTER, 0), "abrir-projeto");
+        getActionMap().put("abrir-projeto", new javax.swing.AbstractAction() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                abrirProjeto();
+            }
+        });
+        addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusGained(java.awt.event.FocusEvent e) {
+                repaint();
+            }
+
+            @Override
+            public void focusLost(java.awt.event.FocusEvent e) {
+                repaint();
+            }
+        });
+    }
+
+    /** Abre a página deste projeto (o mesmo que o clique e o Enter). */
+    void abrirProjeto() {
+        if (modelo != null) {
+            aoAbrir.accept(modelo.nome());
+        }
+    }
+
+    /** O foco da linha, desenhado POR CIMA do conteúdo (quem navega pelo teclado precisa ver onde está). */
+    @Override
+    protected void paintChildren(Graphics g) {
+        super.paintChildren(g);
+        if (isFocusOwner() || focoSimulado) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(Tokens.cor(Tokens.FOCO));
+                g2.setStroke(new java.awt.BasicStroke(2f));
+                g2.drawRoundRect(2, 2, getWidth() - 5, getHeight() - 5, 8, 8);
+            } finally {
+                g2.dispose();
+            }
+        }
+    }
+
+    /** O componente é um controle com comportamento próprio (botão, campo de texto): clicar nele não abre o projeto. */
+    private static boolean ehControle(Component c) {
+        return c instanceof javax.swing.AbstractButton || c instanceof javax.swing.text.JTextComponent;
     }
 
     /** O x de cada célula da grade, na ordem das colunas (o teste compara com o do cabeçalho). */
@@ -469,6 +541,13 @@ final class LinhaProjetoVisual extends Painel {
                 java.awt.Point p = SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), LinhaProjetoVisual.this);
                 mudarHover(contains(p));
             }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getButton() == MouseEvent.BUTTON1 && !ehControle(e.getComponent())) {
+                    abrirProjeto();
+                }
+            }
         };
         raiz.addMouseListener(ouvinte);
         if (raiz instanceof java.awt.Container k) {
@@ -489,6 +568,12 @@ final class LinhaProjetoVisual extends Painel {
             sobMouse = sim;
             fundo(sim ? Tokens.SUPERFICIE2 : null);
         }
+    }
+
+    /** Só para os testes: sem janela o foco do sistema não existe, então o teste liga o contorno de foco à mão. */
+    void simularFoco(boolean sim) {
+        focoSimulado = sim;
+        repaint();
     }
 
     /** Só para os testes: simula o mouse em cima da linha. */

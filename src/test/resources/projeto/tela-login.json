@@ -1,0 +1,9 @@
+{
+  "pergunta": null,
+  "executando": null,
+  "ultimaFerramenta": null,
+  "esperandoVoce": false,
+  "tarefas": [],
+  "atividade": [],
+  "tela": "Faça login para continuar.\n\nAbra esta página no navegador:\nhttps://claude.ai/oauth/authorize?code=true&client_id=exemplo\n\nPaste code here if prompted >"
+}

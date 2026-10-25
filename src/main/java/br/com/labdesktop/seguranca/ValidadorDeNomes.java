@@ -90,6 +90,14 @@ public final class ValidadorDeNomes {
         return nome;
     }
 
+    /** Lança {@link IllegalArgumentException} se o nome do container não passar na regex do agente. */
+    public static String exigirContainer(String nome) {
+        if (!containerValido(nome)) {
+            throw new IllegalArgumentException("Nome de container inválido.");
+        }
+        return nome;
+    }
+
     /**
      * Sugere o {@code nome_do_dispositivo} a partir do nome do Mac ("Mac-de-Teste.local" vira
      * "mac-de-teste"): minúsculas, só [a-z0-9-], até 40 caracteres, nunca vazio.

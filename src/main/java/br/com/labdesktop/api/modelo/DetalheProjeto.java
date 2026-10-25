@@ -62,10 +62,14 @@ public record DetalheProjeto(
         }
     }
 
-    /** Um item da raiz do projeto; {@code tipo} é {@code pasta} ou {@code arquivo}. */
+    /**
+     * Um item da raiz do projeto; {@code tipo} é {@code pasta} ou {@code arquivo}. O agente de hoje não manda o tamanho: o campo
+     * existe (anulável) para quando mandar, e a tela mostra traço enquanto não vier.
+     */
     public record Arquivo(
         @JsonProperty("nome") String nome,
-        @JsonProperty("tipo") String tipo) {
+        @JsonProperty("tipo") String tipo,
+        @JsonProperty("tamanho") Long tamanho) {
 
         public Arquivo {
             nome = Textos.linha(nome);

@@ -102,6 +102,12 @@ public final class Navegacao extends Painel {
         mostrarCartao(lab);
     }
 
+    /** Abre a página de um projeto do servidor (o mesmo que clicar na linha dele na lista). */
+    public void abrirProjeto(ServidorLab lab, String projeto) {
+        garantirTela(lab).abrirProjeto(projeto);
+        mostrarCartao(lab);
+    }
+
     private void mostrarCartao(ServidorLab lab) {
         atual = PREFIXO_DO_SERVIDOR + lab.id();
         cartoes.show(this, atual);

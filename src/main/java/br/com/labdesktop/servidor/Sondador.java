@@ -32,7 +32,8 @@ import org.slf4j.LoggerFactory;
  *       com a janela escondida. Mac dormindo ({@link #definirSuspenso}): nada.</li>
  *   <li><b>Sem sobreposição</b>: se a consulta anterior não terminou, o tique é pulado. Um pedido de
  *       {@link #atualizarAgora} durante uma consulta roda UMA vez a mais, logo depois.</li>
- *   <li><b>Dedupe</b>: só avisa as telas se o valor mudou (os DTOs são records com igualdade por valor).</li>
+ *   <li><b>Dedupe</b>: só avisa as telas se o valor mudou (os DTOs são records com igualdade por valor); quando não mudou,
+ *       {@link OuvinteDeTopico#aoConfirmar} diz que a leitura foi feita mesmo assim (para o "lido às" não ficar velho).</li>
  *   <li><b>Falhas</b>: três falhas seguidas dobram o intervalo, e a cada falha seguinte dobra de novo, até 60 s.</li>
  *   <li><b>Calor</b>: com {@code servidor.cpu.temperatura} acima de 85 °C os intervalos dobram, até cair
  *       abaixo de 80 °C (histerese, para não oscilar).</li>
@@ -339,6 +340,8 @@ public final class Sondador implements AutoCloseable {
         } else if (mudou) {
             T v = valor;
             entrega.execute(() -> destinatarios.forEach(o -> avisar(o, v)));
+        } else {
+            entrega.execute(() -> destinatarios.forEach(Sondador::confirmar));
         }
     }
 
@@ -368,6 +371,14 @@ public final class Sondador implements AutoCloseable {
             o.aoAtualizar(valor);
         } catch (RuntimeException e) {
             LOG.warn("Ouvinte de tópico falhou: {}", e.toString(), e);
+        }
+    }
+
+    private static <T> void confirmar(OuvinteDeTopico<T> o) {
+        try {
+            o.aoConfirmar();
+        } catch (RuntimeException e) {
+            LOG.warn("Ouvinte de tópico falhou ao confirmar: {}", e.toString(), e);
         }
     }
 

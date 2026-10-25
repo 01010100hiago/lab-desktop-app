@@ -452,4 +452,48 @@ class SondadorTest {
         assertEquals("detalhe:lab", Topico.detalhe("lab").chave());
         assertNull(Topico.PROJETOS.temperaturaDe(null));
     }
+
+    @Test
+    void valorIgualNaoReentregaMasConfirmaALeituraParaOLidoAsNaoFicarVelho() {
+        Brinquedo t = new Brinquedo("confirma", false);
+        List<String> eventos = new ArrayList<>();
+        sondador.assinar(t.topico, new OuvinteDeTopico<Integer>() {
+            @Override
+            public void aoAtualizar(Integer valor) {
+                eventos.add("atualizou " + valor);
+            }
+
+            @Override
+            public void aoConfirmar() {
+                eventos.add("confirmou");
+            }
+        });
+        relogio.executarVencidas();
+        relogio.avancar(Duration.ofSeconds(20));
+        assertEquals(List.of("atualizou 1", "confirmou", "confirmou"), eventos, "a 1ª leitura muda; as seguintes só confirmam");
+        t.valor = 2;
+        relogio.avancar(Duration.ofSeconds(10));
+        assertEquals("atualizou 2", eventos.get(eventos.size() - 1), "mudou: avisa o valor novo, não confirma");
+    }
+
+    @Test
+    void falhaNaoConfirmaNada() {
+        Brinquedo t = new Brinquedo("falha-sem-confirmar", false);
+        t.falha = new ErroRede("caiu", null);
+        List<String> eventos = new ArrayList<>();
+        sondador.assinar(t.topico, new OuvinteDeTopico<Integer>() {
+            @Override
+            public void aoConfirmar() {
+                eventos.add("confirmou");
+            }
+
+            @Override
+            public void aoAtualizar(Integer valor) {
+                eventos.add("atualizou");
+            }
+        });
+        relogio.executarVencidas();
+        relogio.avancar(Duration.ofSeconds(10));
+        assertTrue(eventos.isEmpty(), "só consulta que deu certo confirma: " + eventos);
+    }
 }

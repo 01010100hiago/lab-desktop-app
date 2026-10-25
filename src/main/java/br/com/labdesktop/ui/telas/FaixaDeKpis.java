@@ -39,6 +39,11 @@ final class FaixaDeKpis extends Painel {
         atualizar(ModeloDeKpis.de(null, null));
     }
 
+    /** O nome que o leitor de tela fala para a faixa (a página do projeto tem os indicadores do projeto, não do servidor). */
+    void nomeAcessivel(String nome) {
+        getAccessibleContext().setAccessibleName(nome);
+    }
+
     void atualizar(List<Kpi> kpis) {
         if (kpis.size() > ModeloDeKpis.MAXIMO) {
             throw new IllegalArgumentException("No máximo " + ModeloDeKpis.MAXIMO + " indicadores na primeira linha.");
@@ -99,6 +104,7 @@ final class FaixaDeKpis extends Painel {
         private final Rotulo valor = new Rotulo().tamanho(18f).negrito().truncavel();
         private final Rotulo legenda = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(11.5f).truncavel();
         private final Selo selo = new Selo("", br.com.labdesktop.ui.Gravidade.NEUTRO, "info");
+        private final AEsquerda caixaDoSelo = new AEsquerda(selo);
         private Kpi atual;
         private FaixaDeKpis pai;
         private boolean sobMouse;
@@ -117,9 +123,8 @@ final class FaixaDeKpis extends Painel {
             add(valor);
             add(legenda);
             add(javax.swing.Box.createRigidArea(new Dimension(0, 8)));
-            AEsquerda s = new AEsquerda(selo);
-            s.setAlignmentX(LEFT_ALIGNMENT);
-            add(s);
+            caixaDoSelo.setAlignmentX(LEFT_ALIGNMENT);
+            add(caixaDoSelo);
             addMouseListener(new java.awt.event.MouseAdapter() {
                 @Override
                 public void mouseEntered(java.awt.event.MouseEvent e) {
@@ -212,11 +217,12 @@ final class FaixaDeKpis extends Painel {
             rotulo.setIconTextGap(6);
             valor.setText(k.valor());
             legenda.setText(k.legenda());
-            selo.atualizar(ApresentacaoDeSaude.texto(k.nivel()), ApresentacaoDeSaude.gravidade(k.nivel()),
-                ApresentacaoDeSaude.icone(k.nivel()));
+            String palavra = k.seloTexto() != null && !k.semSelo() ? k.seloTexto() : ApresentacaoDeSaude.texto(k.nivel());
+            selo.atualizar(palavra, ApresentacaoDeSaude.gravidade(k.nivel()), ApresentacaoDeSaude.icone(k.nivel()));
+            caixaDoSelo.setVisible(!k.semSelo());
             valor.setToolTipText(k.dica());
             legenda.setToolTipText(k.dica());
-            getAccessibleContext().setAccessibleName(k.rotulo() + ": " + k.valor() + ", " + ApresentacaoDeSaude.texto(k.nivel()));
+            getAccessibleContext().setAccessibleName(k.rotulo() + ": " + k.valor() + (k.semSelo() ? "" : ", " + palavra));
             getAccessibleContext().setAccessibleDescription(k.dica());
             setName("kpi-" + k.chave());
             atualizarDestino();

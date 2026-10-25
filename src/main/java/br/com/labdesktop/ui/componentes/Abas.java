@@ -176,6 +176,19 @@ public final class Abas extends Painel {
         return selecionada;
     }
 
+    /** Troca o texto de uma aba ("Backups (5)") e a largura dela; a escolhida continua escolhida. */
+    public void rotulo(String id, String novo) {
+        JToggleButton b = botoes.get(id);
+        if (b == null || novo.equals(b.getText())) {
+            return;
+        }
+        b.setText(novo);
+        b.getAccessibleContext().setAccessibleName(novo);
+        atualizarFontes();
+        revalidate();
+        repaint();
+    }
+
     public JToggleButton botao(String id) {
         return botoes.get(id);
     }

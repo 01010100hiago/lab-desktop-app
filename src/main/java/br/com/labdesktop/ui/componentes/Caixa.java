@@ -57,6 +57,22 @@ public final class Caixa {
         return p;
     }
 
+    /**
+     * Componentes lado a lado que PULAM os escondidos (o {@code BoxLayout} deixa o espaço de um componente invisível; este
+     * não): é o que serve a uma fileira de botões que aparecem e somem conforme o estado. Cada um fica no tamanho que pede.
+     *
+     * @param alinhamento {@code FlowLayout.LEFT} ou {@code FlowLayout.RIGHT}
+     */
+    public static JPanel fluxo(int alinhamento, int gap, Component... filhos) {
+        JPanel p = new Painel(new java.awt.FlowLayout(alinhamento, gap, 0));
+        for (Component c : filhos) {
+            if (c != null) {
+                p.add(c);
+            }
+        }
+        return p;
+    }
+
     /** Uma "mola": empurra o que vem depois para o fim da linha. */
     public static Component mola() {
         return Box.createHorizontalGlue();

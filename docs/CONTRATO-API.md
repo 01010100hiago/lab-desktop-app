@@ -314,7 +314,7 @@ Sessão raiz (`:p = lab`), sempre `200`:
 
 Diferenças que o app precisa respeitar: o detalhe comum não traz `login` (só a lista traz); o da raiz traz `loginPendente` (booleano) e `sessaoClaude` no lugar de `sessao`.
 
-Web: a página do projeto e a página da sessão, 10 s. Em a página da sessão serve também de PROVA para o cartão "pausada" ou "fechada" (3.10 e `ARQUITETURA.md`, seção Terminal). O front exige "forma esperada" (`sessao` objeto, ou `sessaoClaude` na raiz) antes de tratar a resposta como prova.
+Web: a página do projeto e a página da sessão, 10 s. O item de `arquivos[]` de hoje só traz `nome` e `tipo`; o app já lê um `tamanho` opcional e mostra a coluna quando ele vier. Em a página da sessão serve também de PROVA para o cartão "pausada" ou "fechada" (3.10 e `ARQUITETURA.md`, seção Terminal). O front exige "forma esperada" (`sessao` objeto, ou `sessaoClaude` na raiz) antes de tratar a resposta como prova.
 
 App: DETALHE(p).
 
@@ -348,7 +348,7 @@ Web: aba Logs da página do projeto: carrega ao abrir a aba e ao trocar containe
 
 Web: a página da sessão, 2 s (`UI.aCada`, só aba visível); renderiza só o que mudou (`renderSe`). Estado da pílula: `pergunta pendente` > `executando` > `esperando você` > `ocupado`. A aba Sessão da página do projeto chama uma vez ao abrir. Falhas: o front só toma "não está aberta" ou 3 falhas seguidas como sinal para conferir o detalhe (3.8).
 
-App: TELA(p), só com a aba Terminal do selecionada e a janela ativa.
+App: TELA(p), só com a aba Terminal do servidor ou a aba "Sessão do Claude" do projeto (3 s, 18 s sem foco) selecionada, a sessão aberta e a janela ativa. O 404 "Sessão não está aberta." vira o valor "sessão fechada" do tópico, não uma falha.
 
 ### 3.11 `GET /api/projetos/:p/claude/texto`
 

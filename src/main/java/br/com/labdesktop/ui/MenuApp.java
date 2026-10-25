@@ -37,6 +37,8 @@ public final class MenuApp {
     private final Runnable mostrarSobre;
     private final Map<Item, JMenuItem> itensDoServidor = new EnumMap<>(Item.class);
     private final JMenu menuServidor = new JMenu("Servidor");
+    private JMenuItem itemUltimoProjeto;
+    private JMenuItem itemVoltarAosProjetos;
     private final JMenuBar barra = new JMenuBar();
     private final Map<Tema, JRadioButtonMenuItem> itensDeTema = new EnumMap<>(Tema.class);
 
@@ -56,8 +58,13 @@ public final class MenuApp {
         return barra;
     }
 
+    /** A tecla de comando do sistema (Cmd no Mac). Sem tela (os testes de interface) o Toolkit não responde: vale o Cmd do Mac. */
     private static int atalho() {
-        return Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        try {
+            return Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        } catch (java.awt.HeadlessException e) {
+            return java.awt.event.InputEvent.META_DOWN_MASK;
+        }
     }
 
     private static JMenuItem item(String texto, KeyStroke tecla, Runnable acao) {
@@ -111,6 +118,11 @@ public final class MenuApp {
         ver.add(item("Servidores", KeyStroke.getKeyStroke(KeyEvent.VK_2, atalho()), painel::mostrarServidores));
         ver.add(item("Resumo do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_3, atalho()), painel::mostrarResumo));
         ver.add(item("Projetos do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_1, atalho()), painel::mostrarProjetos));
+        itemUltimoProjeto = item("Último projeto aberto", KeyStroke.getKeyStroke(KeyEvent.VK_4, atalho()), painel::mostrarUltimoProjeto);
+        ver.add(itemUltimoProjeto);
+        itemVoltarAosProjetos = item("Voltar à lista de projetos", KeyStroke.getKeyStroke(KeyEvent.VK_OPEN_BRACKET, atalho()),
+            painel::mostrarProjetos);
+        ver.add(itemVoltarAosProjetos);
         ver.addSeparator();
         JMenu aparencia = new JMenu("Aparência");
         ButtonGroup grupo = new ButtonGroup();
@@ -124,6 +136,18 @@ public final class MenuApp {
             itensDeTema.put(t, r);
         }
         ver.add(aparencia);
+        ver.addMenuListener(new MenuListener() {
+            @Override
+            public void menuSelected(MenuEvent e) {
+                atualizarHabilitacaoDoProjeto();
+            }
+
+            @Override
+            public void menuDeselected(MenuEvent e) { }
+
+            @Override
+            public void menuCanceled(MenuEvent e) { }
+        });
         barra.add(ver);
 
         // --- Janela ---
@@ -156,7 +180,21 @@ public final class MenuApp {
         itensDoServidor.forEach((i, mi) -> mi.setEnabled(validos.contains(i)));
     }
 
+    /** "Último projeto aberto" só com um projeto para reabrir; "Voltar à lista" só com uma página de projeto aberta. */
+    public void atualizarHabilitacaoDoProjeto() {
+        itemUltimoProjeto.setEnabled(painel.temUltimoProjeto());
+        itemVoltarAosProjetos.setEnabled(painel.temProjetoAberto());
+    }
+
     // ---- para os testes ----
+
+    public JMenuItem itemUltimoProjeto() {
+        return itemUltimoProjeto;
+    }
+
+    public JMenuItem itemVoltarAosProjetos() {
+        return itemVoltarAosProjetos;
+    }
 
     public JMenuItem itemDoServidor(Item i) {
         return itensDoServidor.get(i);

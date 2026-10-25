@@ -28,9 +28,23 @@ public final class ModeloDeKpis {
      * @param legenda uma linha embaixo
      * @param dica    o texto completo (tooltip e leitor de tela)
      * @param causa   a frase que a Saúde usa quando este é o pior
+     * @param seloTexto a palavra do selo no lugar de OK, Atenção ou Crítico (a página do projeto diz "Pausado"); vazio: o
+     *                  indicador não tem selo (só informa um número); {@code null}: a palavra do nível
      */
     public record Kpi(String chave, String rotulo, String icone, String valor, String legenda, String dica,
-                      NivelDeSaude nivel, String causa) { }
+                      NivelDeSaude nivel, String causa, String seloTexto) {
+
+        /** Indicador comum: o selo diz a palavra do nível. */
+        public Kpi(String chave, String rotulo, String icone, String valor, String legenda, String dica, NivelDeSaude nivel,
+                   String causa) {
+            this(chave, rotulo, icone, valor, legenda, dica, nivel, causa, null);
+        }
+
+        /** Sem selo: o indicador só mostra o número. */
+        public boolean semSelo() {
+            return seloTexto != null && seloTexto.isEmpty();
+        }
+    }
 
     private ModeloDeKpis() { }
 
