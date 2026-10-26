@@ -9,7 +9,9 @@ import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.dialogos.Apresentador;
 import br.com.labdesktop.ui.telas.TelaServidor;
 import java.awt.BorderLayout;
+import br.com.labdesktop.util.Preferencias;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * O conteúdo da janela principal: a {@link BarraServidores} à esquerda e a {@link Navegacao} no centro. Fica separado
@@ -34,12 +36,19 @@ public final class PainelPrincipal extends Painel {
     /** @param servicosDeArquivos o que o gerenciador de arquivos guarda no Mac (últimos caminhos, backups) */
     public PainelPrincipal(GerenciadorServidores gerenciador, AssistenteDeServidor assistente, Notificacoes avisos,
                            Apresentador apresentador, Navegador navegador, ServicosDeArquivos servicosDeArquivos) {
+        this(gerenciador, assistente, avisos, apresentador, navegador, servicosDeArquivos, Preferencias::padrao);
+    }
+
+    /** @param preferencias as preferências em uso (o terminal as lê a cada anexação) */
+    public PainelPrincipal(GerenciadorServidores gerenciador, AssistenteDeServidor assistente, Notificacoes avisos,
+                           Apresentador apresentador, Navegador navegador, ServicosDeArquivos servicosDeArquivos,
+                           Supplier<Preferencias> preferencias) {
         super(new BorderLayout());
         this.gerenciador = gerenciador;
         this.navegador = navegador;
         Consumer<ServidorLab> aoSelecionar = this::mostrarServidor;
         this.acoes = new AcoesDaInterface(gerenciador, assistente, avisos, apresentador, aoSelecionar);
-        this.navegacao = new Navegacao(gerenciador, acoes, navegador, avisos, apresentador, servicosDeArquivos);
+        this.navegacao = new Navegacao(gerenciador, acoes, navegador, avisos, apresentador, servicosDeArquivos, preferencias);
         this.barra = new BarraServidores(gerenciador, acoes, new BarraServidores.Ouvinte() {
             @Override
             public void aoEscolherServidor(ServidorLab lab) {
@@ -106,6 +115,14 @@ public final class PainelPrincipal extends Painel {
         ServidorLab lab = servidorOuPrimeiro();
         if (lab != null) {
             navegacao.mostrarServidor(lab, TelaServidor.Aba.ARQUIVOS);
+        }
+    }
+
+    /** A aba "Terminal" do servidor em foco (ou do primeiro cadastrado). */
+    public void mostrarTerminal() {
+        ServidorLab lab = servidorOuPrimeiro();
+        if (lab != null) {
+            navegacao.mostrarServidor(lab, TelaServidor.Aba.TERMINAL);
         }
     }
 

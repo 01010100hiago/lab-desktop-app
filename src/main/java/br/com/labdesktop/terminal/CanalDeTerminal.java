@@ -33,6 +33,18 @@ public interface CanalDeTerminal {
     /** O status de saída, se o canal já fechou com um; {@code null} se ainda aberto ou fechou sem status. */
     Integer statusDeSaida();
 
-    /** Fecha agora e sem esperar (destrava quem estiver preso numa escrita). Idempotente. */
+    /**
+     * Fecha o canal AVISANDO o outro lado (no SSH, EOF e CLOSE chegam ao servidor: o {@code docker exec} e o cliente do tmux recebem o
+     * hangup e saem). Volta na hora e destrava quem estiver preso numa escrita; se o outro lado não responder, o canal é arrancado
+     * em poucos segundos. Idempotente.
+     */
     void fechar();
+
+    /**
+     * Fecha agora, SEM avisar o outro lado: para quando a conexão já se foi e não há ninguém para avisar. Por padrão, o mesmo que
+     * {@link #fechar()}.
+     */
+    default void abortar() {
+        fechar();
+    }
 }

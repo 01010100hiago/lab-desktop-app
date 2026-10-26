@@ -90,7 +90,7 @@ class FluxosDeProjetoTest {
         esperarAviso("ok", "vendas: reiniciado.");
         Visual.naEdt(() -> fluxos.abrirSessao("vendas"));
         esperarAviso("ok", "sessão do Claude aberta");
-        assertTrue(avisos.disse("ok", "terminal nativo ainda não existe"), "diz com franqueza que o terminal ainda não está no app");
+        assertTrue(avisos.disse("ok", "use o botão Terminal na aba Sessão do Claude"), "manda o usuário para o terminal da aba Sessão do Claude");
         Visual.naEdt(() -> fluxos.fecharSessao("vendas"));
         esperarAviso("ok", "sessão do Claude encerrada");
         esperarLivre("vendas");

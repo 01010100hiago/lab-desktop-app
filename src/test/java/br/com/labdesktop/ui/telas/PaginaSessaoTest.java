@@ -55,16 +55,20 @@ class PaginaSessaoTest {
     }
 
     @Test
-    void botoesDaSessaoAbertaSaoFecharReabrirEOTerminalEmBreve() {
+    void botoesDaSessaoAbertaSaoFecharReabrirETerminal() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
         PaginaSessao p = c.tela.sessao();
         assertFalse(Visual.naEdt(p.botaoAbrir()::isVisible));
         assertTrue(Visual.naEdt(p.botaoFechar()::isVisible));
         assertTrue(Visual.naEdt(p.botaoReabrir()::isVisible));
         assertFalse(Visual.naEdt(p.botaoRetomar()::isVisible));
-        assertEquals("Terminal (em breve)", Visual.naEdt(() -> p.botaoTerminal().getText()));
-        assertFalse(Visual.naEdt(p.botaoTerminal()::isEnabled), "o terminal interativo é de outra etapa");
-        assertTrue(Visual.naEdt(() -> p.botaoTerminal().getToolTipText()).contains("próxima etapa"));
+        assertEquals("Terminal", Visual.naEdt(() -> p.botaoTerminal().getText()));
+        assertTrue(Visual.naEdt(p.botaoTerminal()::isVisible));
+        // sem servidor vivo (estes testes alimentam a página com dados fixos) não há por onde abrir o canal
+        assertFalse(Visual.naEdt(p.botaoTerminal()::isEnabled));
+        assertTrue(Visual.naEdt(() -> p.botaoTerminal().getToolTipText()).contains("não está disponível"));
+        assertFalse(Visual.naEdt(p.botaoTelaEmTexto()::isVisible));
+        assertFalse(Visual.naEdt(p.botaoFecharTerminal()::isVisible));
     }
 
     @Test

@@ -19,6 +19,10 @@ import br.com.labdesktop.ui.componentes.Selo;
 import br.com.labdesktop.ui.componentes.TextoCorrido;
 import br.com.labdesktop.ui.telas.ModeloDaSessao.Atividade;
 import br.com.labdesktop.ui.telas.ModeloDaSessao.Situacao;
+import br.com.labdesktop.terminal.ComandoDeTerminal;
+import br.com.labdesktop.terminal.EstadoDoTerminal;
+import br.com.labdesktop.terminal.LimiteDeAbas;
+import br.com.labdesktop.ui.terminal.PainelTerminal;
 import br.com.labdesktop.ui.tema.Tokens;
 import br.com.labdesktop.util.Formato;
 import java.awt.BorderLayout;
@@ -35,17 +39,24 @@ import javax.swing.SwingUtilities;
  * A aba "Sessão do Claude": em que pé a sessão está (aberta, desde quando, atualizada ou desatualizada, pausada, login
  * pendente com o campo para o código), os botões Abrir, Fechar, Reabrir (com o aviso de que interrompe a tarefa) e Retomar, a
  * TELA atual da sessão em texto somente leitura (a cada 3 s, só com a aba visível e a sessão aberta) e uma caixa para escrever
- * ao Claude com os botões Enter e Esc. O terminal interativo de verdade é de outra etapa: o botão "Terminal (em breve)" fica
- * desabilitado e diz isso.
+ * ao Claude com os botões Enter e Esc.
  *
- * <p>Assina {@code TELA(p)} só enquanto a aba está visível E o detalhe diz que a sessão está aberta; sessão fechada não custa
- * um {@code docker exec} no servidor. A tela cresce com a janela e rola por dentro.
+ * <p>O botão "Terminal" abre um terminal de verdade (JediTerm sobre SSH, ligado à sessão tmux do Claude) DENTRO da aba; "Tela em
+ * texto" volta à leitura somente leitura, que continua como alternativa, e "Fechar terminal" solta o canal (a conversa do Claude
+ * continua: fechar o terminal só solta o cliente do tmux). O terminal NÃO depende da trava {@code labdesktop.acoes}: o usuário quer usá-lo
+ * para operar. Se a sessão deixa de existir e depois volta a estar aberta (Retomar, Abrir e Reabrir produzem um container novo), o
+ * terminal reanexa sozinho.
+ *
+ * <p>Assina {@code TELA(p)} só enquanto a aba está visível, o detalhe diz que a sessão está aberta E a tela em texto está à vista;
+ * sessão fechada ou terminal na frente não custam um {@code docker exec} no servidor. A tela cresce com a janela e rola por dentro.
  */
 final class PaginaSessao extends PaginaDoProjeto {
 
     private static final long serialVersionUID = 1L;
     private static final String CARTAO_TELA = "tela";
     private static final String CARTAO_MENSAGEM = "mensagem";
+    private static final String MODO_TEXTO = "texto";
+    private static final String MODO_TERMINAL = "terminal";
 
     private final Selo seloDaSituacao = new Selo("", Gravidade.NEUTRO);
     private final Selo seloDeLogin = new Selo("login pendente", Gravidade.ATENCAO, "chave");
@@ -55,8 +66,10 @@ final class PaginaSessao extends PaginaDoProjeto {
     private final Botao fechar = Botoes.mini("Fechar", "fechar");
     private final Botao reabrir = Botoes.mini("Reabrir", "atualizar");
     private final Botao retomar = Botoes.mini("Retomar", "play");
-    private final Botao terminal = Botoes.mini("Terminal (em breve)", "terminal");
-    private final Rotulo somenteLeitura = new Rotulo("Somente leitura nesta versão: abrir, fechar e escrever ao Claude pelo painel web.")
+    private final Botao terminal = Botoes.miniPrimario("Terminal", "terminal");
+    private final Botao telaEmTexto = Botoes.mini("Tela em texto", "texto");
+    private final Botao fecharTerminal = Botoes.mini("Fechar terminal", "fechar");
+    private final Rotulo somenteLeitura = new Rotulo("Somente leitura nesta versão: abrir, fechar e as caixas de envio pelo painel web. O terminal funciona.")
         .corDoToken(Tokens.TEXTO3).tamanho(11.5f).truncavel();
 
     private final JPanel faixaDeLogin = new Painel(new BorderLayout(12, 0)).fundo(Tokens.ATENCAO_SUAVE).borda(Tokens.ATENCAO).raio(10);
@@ -74,6 +87,8 @@ final class PaginaSessao extends PaginaDoProjeto {
     private final Rotulo mensagemDaTela = new Rotulo().corDoToken(Tokens.LOGS_TEXTO2).tamanho(13f);
     private final CardLayout cartoes = new CardLayout();
     private final JPanel corpoDaTela = new Painel(cartoes);
+    private final CardLayout modos = new CardLayout();
+    private final JPanel areaPrincipal = new Painel(modos);
 
     private final JTextField mensagem = Campos.texto(40, "Escreva uma mensagem para o Claude…");
     private final Botao enviar = Botoes.miniPrimario("Enviar", "enviar");
@@ -83,6 +98,11 @@ final class PaginaSessao extends PaginaDoProjeto {
 
     private transient Inscricao inscricaoDaTela;
     private transient Inscricao ocupacao;
+    private transient PainelTerminal painelDoTerminal;
+    private boolean terminalAFrente;
+    /** Quando o terminal viu a sessão sumir: se o detalhe já dizia aberta e desde quando (só uma sessão NOVA o faz reanexar). */
+    private boolean eraAbertaNaQueda;
+    private java.time.Instant desdeNaQueda;
     private TelaClaude ultimaTela;
     private boolean recebeuTela;
     private Situacao situacaoAtual = Situacao.FECHADA;
@@ -106,10 +126,13 @@ final class PaginaSessao extends PaginaDoProjeto {
 
     @Override
     JComponent montarConteudo() {
-        terminal.setEnabled(false);
-        terminal.setToolTipText("O terminal interativo do Claude chega na próxima etapa. Por enquanto, leia a tela da sessão aqui "
-            + "e escreva mensagens na caixa de baixo.");
+        terminal.setToolTipText("Abre o terminal do Claude aqui dentro. A tela em texto continua disponível.");
         terminal.getAccessibleContext().setAccessibleDescription(terminal.getToolTipText());
+        telaEmTexto.setToolTipText("Volta a mostrar a tela da sessão em texto somente leitura. O terminal continua aberto.");
+        fecharTerminal.setToolTipText("Fecha o terminal desta aba. A conversa do Claude continua: só o cliente do tmux é solto.");
+        terminal.addActionListener(e -> abrirOuMostrarOTerminal());
+        telaEmTexto.addActionListener(e -> mostrarATelaEmTexto());
+        fecharTerminal.addActionListener(e -> encerrarTerminal());
         abrir.setToolTipText("Abre a sessão do Claude neste projeto");
         fechar.setToolTipText("Fecha a sessão do Claude (para o container dela)");
         reabrir.setToolTipText("Fecha e abre de novo continuando a conversa. A tarefa em andamento é interrompida.");
@@ -150,7 +173,7 @@ final class PaginaSessao extends PaginaDoProjeto {
         // linha do estado: selos e tempo à esquerda, botões à direita
         JPanel estado = new Painel(new BorderLayout(16, 0));
         estado.add(Caixa.fluxo(java.awt.FlowLayout.LEFT, 10, seloDaSituacao, seloDeAtualizacao, seloDeLogin, quando), BorderLayout.CENTER);
-        estado.add(Caixa.fluxo(java.awt.FlowLayout.RIGHT, 8, abrir, fechar, reabrir, retomar, terminal, somenteLeitura),
+        estado.add(Caixa.fluxo(java.awt.FlowLayout.RIGHT, 8, abrir, fechar, reabrir, retomar, somenteLeitura),
             BorderLayout.EAST);
 
         // faixa de login pendente
@@ -170,12 +193,14 @@ final class PaginaSessao extends PaginaDoProjeto {
         corpoDaTela.add(cartaoDaMensagem, CARTAO_MENSAGEM);
         corpoDaTela.add(rolagemDaTela, CARTAO_TELA);
         cartoes.show(corpoDaTela, CARTAO_MENSAGEM);
+        areaPrincipal.add(corpoDaTela, MODO_TEXTO);
+        modos.show(areaPrincipal, MODO_TEXTO);
         JPanel cabecalhoDaTela = new Painel(new BorderLayout(10, 0));
         cabecalhoDaTela.add(Caixa.fluxo(java.awt.FlowLayout.LEFT, 10, tituloDaTela, seloDeAtividade), BorderLayout.WEST);
-        cabecalhoDaTela.add(leitura, BorderLayout.EAST);
+        cabecalhoDaTela.add(Caixa.fluxo(java.awt.FlowLayout.RIGHT, 8, leitura, telaEmTexto, terminal, fecharTerminal), BorderLayout.EAST);
         JPanel caixaDaTela = new Painel(new BorderLayout(0, 8));
         caixaDaTela.add(cabecalhoDaTela, BorderLayout.NORTH);
-        caixaDaTela.add(corpoDaTela, BorderLayout.CENTER);
+        caixaDaTela.add(areaPrincipal, BorderLayout.CENTER);
 
         JPanel norte = Caixa.coluna(10, estado, faixaDeLogin);
         JPanel sul = Caixa.coluna(6, linhaDeMensagem);
@@ -212,7 +237,7 @@ final class PaginaSessao extends PaginaDoProjeto {
 
     /** A sessão está aberta e a aba está na tela: assina a tela (3 s). Senão, solta. */
     private void ajustarATela() {
-        boolean quer = situacaoAtual == Situacao.ABERTA && assinada() && ctx.servidor != null;
+        boolean quer = situacaoAtual == Situacao.ABERTA && assinada() && ctx.servidor != null && !terminalAFrente;
         if (quer && inscricaoDaTela == null) {
             inscricaoDaTela = ctx.servidor.assinar(Topico.tela(ctx.projeto), new OuvinteDeTopico<VisaoDaTela>() {
                 @Override
@@ -260,7 +285,7 @@ final class PaginaSessao extends PaginaDoProjeto {
         fechar.setVisible(acoes && aberta);
         reabrir.setVisible(acoes && aberta);
         retomar.setVisible(acoes && m.oferecerRetomar());
-        terminal.setVisible(true);
+        atualizarBotoesDoTerminal(aberta);
         somenteLeitura.setVisible(!acoes);
         linhaDeMensagem.setVisible(true);
         mensagem.setEnabled(aberta && acoes);
@@ -272,6 +297,7 @@ final class PaginaSessao extends PaginaDoProjeto {
         aplicarOcupacao();
         mostrarLoginSeHouver();
         mostrarATela();
+        reanexarSeASessaoVoltou(m);
         if (assinada()) {
             ajustarATela();
         }
@@ -316,12 +342,15 @@ final class PaginaSessao extends PaginaDoProjeto {
 
     /** A tela foi lida de novo e não mudou: a hora da leitura anda (a tela parada continua sendo a de agora). */
     void confirmarATela() {
-        if (ultimaTela != null && situacaoAtual == Situacao.ABERTA) {
+        if (ultimaTela != null && situacaoAtual == Situacao.ABERTA && !terminalAFrente) {
             leitura.setText("lida às " + Formato.fmtHora(ctx.agora(), ctx.fuso));
         }
     }
 
     private void mostrarATela() {
+        if (terminalAFrente) {
+            return; // o terminal está na frente: o cabeçalho é dele, e a tela em texto reaparece (atualizada) ao voltar
+        }
         if (situacaoAtual != Situacao.ABERTA) {
             seloDeAtividade.setVisible(false);
             leitura.setText("");
@@ -375,6 +404,129 @@ final class PaginaSessao extends PaginaDoProjeto {
         mensagemDaTela.setText(texto);
         area.setText("");
         cartoes.show(corpoDaTela, CARTAO_MENSAGEM);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Terminal
+    // ---------------------------------------------------------------------------------------------
+
+    /** O botão "Terminal": abre o terminal da sessão (se ainda não há um) e o põe na frente da tela em texto. */
+    private void abrirOuMostrarOTerminal() {
+        if (ctx.terminal == null) {
+            return;
+        }
+        if (painelDoTerminal == null) {
+            ComandoDeTerminal.SessaoDoClaude comando;
+            try {
+                comando = new ComandoDeTerminal.SessaoDoClaude(ctx.projeto);
+            } catch (IllegalArgumentException e) {
+                ctx.avisos.atencao("Não abri o terminal: o nome do projeto não é válido para o terminal.");
+                return;
+            }
+            if (!ctx.terminal.limite().reservar()) {
+                ctx.avisos.atencao(LimiteDeAbas.mensagemDoLimite());
+                return;
+            }
+            painelDoTerminal = new PainelTerminal(ctx.terminal, comando, new PainelTerminal.Saida() {
+                @Override
+                public void aoMudarTitulo(String titulo) { }
+
+                @Override
+                public void aoMudarEstado(EstadoDoTerminal estado) {
+                    aoMudarOEstadoDoTerminal(estado);
+                }
+            });
+            areaPrincipal.add(painelDoTerminal, MODO_TERMINAL);
+        }
+        terminalAFrente = true;
+        modos.show(areaPrincipal, MODO_TERMINAL);
+        tituloDaTela.setText("Terminal da sessão");
+        seloDeAtividade.setVisible(false);
+        leitura.setText("");
+        ajustarATela(); // com o terminal na frente, a tela em texto não consulta o servidor
+        atualizarBotoesDoTerminal(situacaoAtual == Situacao.ABERTA);
+        areaPrincipal.revalidate();
+        areaPrincipal.repaint();
+        PainelTerminal p = painelDoTerminal;
+        SwingUtilities.invokeLater(() -> {
+            if (terminalAFrente && painelDoTerminal == p) {
+                p.focar();
+            }
+        });
+    }
+
+    /** O botão "Tela em texto": volta à leitura somente leitura; o terminal continua aberto por trás. */
+    private void mostrarATelaEmTexto() {
+        terminalAFrente = false;
+        modos.show(areaPrincipal, MODO_TEXTO);
+        tituloDaTela.setText("Tela atual da sessão");
+        mostrarATela();
+        ajustarATela();
+        atualizarBotoesDoTerminal(situacaoAtual == Situacao.ABERTA);
+        areaPrincipal.revalidate();
+        areaPrincipal.repaint();
+    }
+
+    /**
+     * Fecha o terminal desta aba (o canal e o widget) e devolve a vaga ao limite do servidor. A conversa do Claude continua: só o
+     * cliente do tmux é solto. Também é o que acontece ao sair da página do projeto e ao bloquear o cofre.
+     */
+    void encerrarTerminal() {
+        PainelTerminal p = painelDoTerminal;
+        if (p == null) {
+            return;
+        }
+        painelDoTerminal = null;
+        p.descartar();
+        areaPrincipal.remove(p);
+        if (ctx.terminal != null) {
+            ctx.terminal.limite().liberar();
+        }
+        mostrarATelaEmTexto();
+    }
+
+    private void atualizarBotoesDoTerminal(boolean aberta) {
+        boolean disponivel = ctx.terminal != null;
+        boolean existe = painelDoTerminal != null;
+        terminal.setVisible(!terminalAFrente);
+        terminal.setEnabled(disponivel && (aberta || existe));
+        terminal.setToolTipText(!disponivel
+            ? "O terminal não está disponível: este servidor ainda não tem conexão."
+            : !aberta && !existe ? "Abra a sessão do Claude para usar o terminal."
+            : existe ? "Volta ao terminal que já está aberto nesta aba."
+            : "Abre o terminal do Claude aqui dentro. A tela em texto continua disponível.");
+        telaEmTexto.setVisible(terminalAFrente);
+        fecharTerminal.setVisible(existe);
+    }
+
+    private void aoMudarOEstadoDoTerminal(EstadoDoTerminal estado) {
+        if (estado.tipo() == EstadoDoTerminal.Tipo.SESSAO_FECHADA) {
+            ModeloDoProjeto m = ctx.modelo();
+            eraAbertaNaQueda = situacaoAtual == Situacao.ABERTA;
+            desdeNaQueda = m == null ? null : m.sessaoDesde();
+        }
+    }
+
+    /**
+     * A sessão tinha sumido e o detalhe agora diz aberta DE NOVO (estava fechada ou pausada, ou é uma sessão com outro "desde"):
+     * Retomar, Abrir e Reabrir produzem um container novo, e o terminal anexa nele sem esperar o usuário. Uma sessão que o detalhe
+     * já dava como aberta quando o terminal falhou NÃO reanexa em laço: o tmux dela pode simplesmente não existir.
+     */
+    private void reanexarSeASessaoVoltou(ModeloDoProjeto m) {
+        PainelTerminal p = painelDoTerminal;
+        if (p == null || p.estadoMostrado().tipo() != EstadoDoTerminal.Tipo.SESSAO_FECHADA) {
+            return;
+        }
+        if (situacaoAtual != Situacao.ABERTA) {
+            eraAbertaNaQueda = false; // o servidor também viu a sessão fechar: a próxima vez que disser aberta é uma sessão nova
+            return;
+        }
+        java.time.Instant desde = m.sessaoDesde();
+        if (!eraAbertaNaQueda || !java.util.Objects.equals(desde, desdeNaQueda)) {
+            eraAbertaNaQueda = true;
+            desdeNaQueda = desde;
+            p.sessao().aoSessaoAberta();
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -459,6 +611,27 @@ final class PaginaSessao extends PaginaDoProjeto {
 
     Botao botaoTerminal() {
         return terminal;
+    }
+
+    Botao botaoTelaEmTexto() {
+        return telaEmTexto;
+    }
+
+    Botao botaoFecharTerminal() {
+        return fecharTerminal;
+    }
+
+    /** O terminal aberto nesta aba, ou {@code null}. */
+    PainelTerminal painelDoTerminal() {
+        return painelDoTerminal;
+    }
+
+    boolean terminalAFrente() {
+        return terminalAFrente;
+    }
+
+    String tituloDaAreaPrincipal() {
+        return tituloDaTela.getText();
     }
 
     Botao botaoEnviar() {

@@ -59,6 +59,11 @@ final class CanalObservado implements CanalDeTerminal {
         canal.fechar();
     }
 
+    @Override
+    public void abortar() {
+        canal.abortar();
+    }
+
     /** Espera (até {@code prazoMs}) o leitor chegar ao fim da saída. {@code false} se ninguém leu até o fim a tempo. */
     boolean aguardarLeituraDoFim(long prazoMs) throws InterruptedException {
         return fimLido.await(prazoMs, TimeUnit.MILLISECONDS);

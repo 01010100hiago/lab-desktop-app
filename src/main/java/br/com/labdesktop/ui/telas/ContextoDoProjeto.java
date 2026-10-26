@@ -7,6 +7,7 @@ import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.ui.Navegador;
 import br.com.labdesktop.ui.componentes.CopiadorDeTexto;
 import br.com.labdesktop.ui.componentes.Notificacoes;
+import br.com.labdesktop.ui.terminal.ContextoDeTerminal;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.function.Consumer;
@@ -31,6 +32,8 @@ final class ContextoDoProjeto {
     /** Abre outra aba da página (um indicador, um botão que leva a outro assunto). */
     final Consumer<TelaProjeto.Aba> navegar;
     final Runnable aoAtualizar;
+    /** Por onde abrir terminais e quantos ainda cabem no servidor; {@code null} onde não há servidor vivo (testes de tela). */
+    ContextoDeTerminal terminal;
 
     EstadoServidor estado;
     DetalheProjeto detalhe;

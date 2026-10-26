@@ -215,14 +215,14 @@ public final class FluxosDeProjeto {
             f -> falhou(projeto, f));
     }
 
-    /** Abre a sessão do Claude (idempotente). Sem terminal nativo ainda: o aviso diz isso com franqueza. */
+    /** Abre a sessão do Claude (idempotente). O aviso manda o usuário para o terminal da aba Sessão do Claude. */
     public void abrirSessao(String projeto) {
         if (somenteLeitura()) {
             return;
         }
         rodar(projeto, ABRIR, () -> acoes().abrirSessao(projeto),
-            r -> avisos.ok(TextosDeLimite.nomeAmigavel(projeto) + ": sessão do Claude aberta. O terminal nativo ainda não "
-                + "existe no app: na aba Sessão do Claude do projeto dá para ler a tela e escrever mensagens; o resto, pelo painel web."),
+            r -> avisos.ok(TextosDeLimite.nomeAmigavel(projeto) + ": sessão do Claude aberta. Para "
+                + "conversar com ela, use o botão Terminal na aba Sessão do Claude do projeto."),
             f -> falhou(projeto, f));
     }
 

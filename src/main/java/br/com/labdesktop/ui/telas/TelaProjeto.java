@@ -20,6 +20,7 @@ import br.com.labdesktop.ui.componentes.Notificacoes;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
 import br.com.labdesktop.ui.componentes.Selo;
+import br.com.labdesktop.ui.terminal.ContextoDeTerminal;
 import br.com.labdesktop.ui.telas.arquivos.ContextoDeArquivos;
 import br.com.labdesktop.ui.telas.arquivos.EscolhedorLocal;
 import br.com.labdesktop.ui.telas.arquivos.GerenciadorDeArquivos;
@@ -150,6 +151,16 @@ public final class TelaProjeto extends Painel {
     TelaProjeto(ServidorLab servidor, String projeto, FluxosDeProjeto fluxos, Navegador navegador, Notificacoes avisos,
                 Aba abaInicial, Saida saida, Supplier<String> urlDeLogin, Runnable aoAtualizar, CopiadorDeTexto copiador,
                 ServicosDeArquivos servicos, EscolhedorLocal escolhedor) {
+        this(servidor, projeto, fluxos, navegador, avisos, abaInicial, saida, urlDeLogin, aoAtualizar, copiador, servicos, escolhedor, null);
+    }
+
+    /**
+     * @param terminal por onde abrir o terminal da aba Sessão do Claude e quantas vagas o servidor ainda tem; {@code null} (testes de
+     *                 tela, sem servidor vivo): o botão Terminal fica desabilitado
+     */
+    TelaProjeto(ServidorLab servidor, String projeto, FluxosDeProjeto fluxos, Navegador navegador, Notificacoes avisos,
+                Aba abaInicial, Saida saida, Supplier<String> urlDeLogin, Runnable aoAtualizar, CopiadorDeTexto copiador,
+                ServicosDeArquivos servicos, EscolhedorLocal escolhedor, ContextoDeTerminal terminal) {
         super(new BorderLayout());
         fundo(Tokens.BG);
         this.servidor = servidor;
@@ -158,6 +169,7 @@ public final class TelaProjeto extends Painel {
         this.nome = Rotulo.titulo(projeto);
         this.ctx = new ContextoDoProjeto(servidor, projeto, fluxos, navegador, avisos, copiador,
             urlDeLogin == null ? () -> null : urlDeLogin, this::mostrarAba, aoAtualizar == null ? () -> { } : aoAtualizar);
+        this.ctx.terminal = terminal;
 
         paginas.put(Aba.VISAO_GERAL, new PaginaVisaoGeral(ctx));
         paginas.put(Aba.LOGS, new PaginaLogs(ctx));
@@ -323,10 +335,19 @@ public final class TelaProjeto extends Painel {
         return arquivos.temAlteracoesNaoSalvas();
     }
 
-    /** A página saiu de vez: fecha o canal SFTP e os editores. */
+    /** A página saiu de vez: fecha o canal SFTP, os editores e o terminal da sessão do Claude. */
     public void encerrar() {
         soltar();
         arquivos.encerrar();
+        fecharTerminais();
+    }
+
+    /**
+     * Fecha o terminal da aba Sessão do Claude (o canal e o widget) e devolve a vaga ao servidor: sair da página do projeto ou bloquear o
+     * cofre. Trocar de aba DENTRO do projeto não passa por aqui: o terminal continua vivo por trás.
+     */
+    public void fecharTerminais() {
+        sessao().encerrarTerminal();
     }
 
     // ---------------------------------------------------------------------------------------------

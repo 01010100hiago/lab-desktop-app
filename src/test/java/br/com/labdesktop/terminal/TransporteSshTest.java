@@ -85,6 +85,33 @@ class TransporteSshTest {
     }
 
     @Test
+    void fecharAvisaOServidorParaOTmuxNaoFicarOrfao() throws Exception {
+        try (CenarioDeTerminal c = CenarioDeTerminal.conectado()) {
+            c.terminal.roteiro(ServidorDeTerminalFalso::roteiroQueNaoLe);
+            CanalDeTerminal canal = new TransporteSsh(c.conexao).abrir(new ComandoDeTerminal.SessaoDoClaude("orbita"), TamanhoDeTerminal.PADRAO);
+            Espera.ate(PRAZO, "aberto", () -> c.terminal.canaisAbertos.get() == 1);
+            canal.fechar();
+            assertFalse(canal.aberto());
+            // o servidor ficou sabendo (EOF e CLOSE chegaram): o docker exec e o cliente do tmux recebem o hangup e saem
+            Espera.ate(PRAZO, () -> "encerrados=" + c.terminal.canaisEncerrados.get(), () -> c.terminal.canaisEncerrados.get() == 1);
+            assertTrue(c.terminal.sessoes.get(0).saiu());
+            canal.fechar(); // idempotente
+        }
+    }
+
+    @Test
+    void abortarFechaAgoraDoLadoDoApp() throws Exception {
+        try (CenarioDeTerminal c = CenarioDeTerminal.conectado()) {
+            c.terminal.roteiro(ServidorDeTerminalFalso::roteiroQueNaoLe);
+            CanalDeTerminal canal = new TransporteSsh(c.conexao).abrir(ComandoDeTerminal.ShellDoServidor.INSTANCIA, TamanhoDeTerminal.PADRAO);
+            Espera.ate(PRAZO, "aberto", () -> c.terminal.canaisAbertos.get() == 1);
+            canal.abortar();
+            assertFalse(canal.aberto());
+            assertEquals(null, canal.aguardarFim(), "sem status: foi arrancado, não terminou");
+        }
+    }
+
+    @Test
     void canalFechadoSemStatusDevolveNulo() throws Exception {
         try (CenarioDeTerminal c = CenarioDeTerminal.conectado()) {
             c.terminal.roteiro(ServidorDeTerminalFalso::roteiroQueNaoLe);

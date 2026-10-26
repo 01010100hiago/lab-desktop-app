@@ -4,21 +4,25 @@ import br.com.labdesktop.arquivos.ServicosDeArquivos;
 import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.ui.componentes.Abas;
 import br.com.labdesktop.ui.componentes.CartoesAjustaveis;
+import br.com.labdesktop.ui.componentes.CopiadorDeTexto;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.telas.arquivos.ContextoDeArquivos;
 import br.com.labdesktop.ui.telas.arquivos.EscolhedorLocal;
 import br.com.labdesktop.ui.telas.arquivos.GerenciadorDeArquivos;
+import br.com.labdesktop.ui.terminal.ContextoDeTerminal;
 import br.com.labdesktop.ui.tema.Tokens;
+import br.com.labdesktop.util.Preferencias;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 import javax.swing.JPanel;
 
 /**
  * A página de UM servidor (ARQUITETURA 8.1): abas no topo, Resumo (a aberta de partida), Segurança, Containers, Processos,
- * Máquina e Projetos (a {@link TelaProjetos}, sem mudar em nada). Clicar no servidor na barra lateral abre esta página; a aba
+ * Máquina, Projetos (a {@link TelaProjetos}, sem mudar em nada), Arquivos e Terminal (o shell do servidor, com várias abas). Clicar no servidor na barra lateral abre esta página; a aba
  * escolhida fica lembrada enquanto o app estiver aberto: a tela de cada servidor é criada uma vez e só escondida quando o
  * usuário vai para outro lugar, então voltar ao servidor mostra a aba em que ele estava.
  *
@@ -42,7 +46,8 @@ public final class TelaServidor extends Painel {
         PROCESSOS("processos", "Processos"),
         MAQUINA("maquina", "Máquina"),
         PROJETOS("projetos", "Projetos"),
-        ARQUIVOS("arquivos", "Arquivos");
+        ARQUIVOS("arquivos", "Arquivos"),
+        TERMINAL("terminal", "Terminal");
 
         private final String id;
         private final String rotulo;
@@ -76,6 +81,8 @@ public final class TelaServidor extends Painel {
     private final GerenciadorDeArquivos arquivos;
     private final ServicosDeArquivos servicosDeArquivos;
     private final EscolhedorLocal escolhedor;
+    private final PaginaTerminal terminais;
+    private final ContextoDeTerminal contextoDeTerminal;
     private final Abas abas = new Abas();
     private final CardLayout cartoes = new CartoesAjustaveis();
     private final JPanel corpo = new Painel(cartoes);
@@ -108,6 +115,15 @@ public final class TelaServidor extends Painel {
      */
     public TelaServidor(ServidorLab servidor, TelaProjetos projetos, Runnable aoAtualizar, ServicosDeArquivos servicos,
                         EscolhedorLocal escolhedor) {
+        this(servidor, projetos, aoAtualizar, servicos, escolhedor, Preferencias::padrao);
+    }
+
+    /**
+     * @param preferencias as preferências em uso (Option como Meta, copiar ao selecionar, dono exclusivo, fonte): o terminal as lê a cada
+     *                     anexação
+     */
+    public TelaServidor(ServidorLab servidor, TelaProjetos projetos, Runnable aoAtualizar, ServicosDeArquivos servicos,
+                        EscolhedorLocal escolhedor, Supplier<Preferencias> preferencias) {
         super();
         setLayout(niveis);
         paginaDoServidor.fundo(Tokens.BG);
@@ -125,6 +141,9 @@ public final class TelaServidor extends Painel {
         this.arquivos = new GerenciadorDeArquivos(ContextoDeArquivos.de(servidor, null, servicos, projetos.fluxos().liberadas(),
             projetos.fluxos().avisos(), projetos.fluxos().apresentador(), escolhedor));
 
+        this.contextoDeTerminal = servidor == null ? null : ContextoDeTerminal.de(servidor, preferencias, projetos.navegador());
+        this.terminais = new PaginaTerminal(contextoDeTerminal, projetos.fluxos().avisos());
+
         for (Aba a : Aba.values()) {
             abas.adicionar(a.id, a.rotulo);
         }
@@ -137,6 +156,7 @@ public final class TelaServidor extends Painel {
         corpo.add(maquina, Aba.MAQUINA.id);
         corpo.add(projetos, Aba.PROJETOS.id);
         corpo.add(arquivos, Aba.ARQUIVOS.id);
+        corpo.add(terminais, Aba.TERMINAL.id);
         paginaDoServidor.add(abas, BorderLayout.NORTH);
         paginaDoServidor.add(corpo, BorderLayout.CENTER);
         add(paginaDoServidor, CARTAO_PAGINA);
@@ -200,7 +220,8 @@ public final class TelaServidor extends Painel {
             public void abaMudou(TelaProjeto.Aba nova) {
                 abasDosProjetos.put(nome, nova);
             }
-        }, () -> projetos.urlDeLoginDe(nome), aoAtualizarProjeto, servicosDeArquivos, escolhedor);
+        }, () -> projetos.urlDeLoginDe(nome), aoAtualizarProjeto, CopiadorDeTexto.doSistema(), servicosDeArquivos, escolhedor,
+            contextoDeTerminal);
         add(projetoAberto, CARTAO_PROJETO + nome);
         niveis.show(this, CARTAO_PROJETO + nome);
         revalidate();
@@ -222,6 +243,7 @@ public final class TelaServidor extends Painel {
         nomeDoProjetoAberto = null;
         niveis.show(this, CARTAO_PAGINA);
         fechando.soltar();
+        fechando.fecharTerminais(); // sair do projeto solta o cliente do tmux (a conversa do Claude continua) e devolve a vaga
         if (nome != null && fechando.temAlteracoesNaoSalvas()) {
             // Sair do projeto não pode jogar fora o que o usuário digitou: a página fica guardada, escondida, e voltar a mostra.
             projetosGuardados.put(nome, fechando);
@@ -285,7 +307,7 @@ public final class TelaServidor extends Painel {
             case CONTAINERS -> containers;
             case PROCESSOS -> processos;
             case MAQUINA -> maquina;
-            case PROJETOS, ARQUIVOS -> null;
+            case PROJETOS, ARQUIVOS, TERMINAL -> null;
         };
     }
 
@@ -311,6 +333,7 @@ public final class TelaServidor extends Painel {
         maquina.soltar();
         projetos.soltar();
         arquivos.encerrar();
+        terminais.encerrar();
         for (TelaProjeto guardada : projetosGuardados.values()) {
             guardada.encerrar();
         }
@@ -319,6 +342,16 @@ public final class TelaServidor extends Painel {
             projetoAberto.soltar();
             projetoAberto.encerrar();
         }
+    }
+
+    /** A aba Terminal: o shell do servidor, com várias abas de terminal. */
+    public PaginaTerminal terminais() {
+        return terminais;
+    }
+
+    /** O contexto dos terminais deste servidor ({@code null} sem servidor vivo): o limite de abas é dele. */
+    public ContextoDeTerminal contextoDeTerminal() {
+        return contextoDeTerminal;
     }
 
     /** O gerenciador de arquivos do servidor inteiro (a aba Arquivos). */

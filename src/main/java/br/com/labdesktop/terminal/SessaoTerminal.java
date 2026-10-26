@@ -331,7 +331,7 @@ public final class SessaoTerminal implements AutoCloseable {
             }
             case INDISPONIVEL -> {
                 if (estado.ativa() && canal != null) {
-                    canal.fechar(); // a conexão caiu: não espera o canal perceber sozinho; o fechamento dispara a reanexação
+                    canal.abortar(); // a conexão caiu: não há quem avisar: não espera o canal perceber sozinho; o fechamento dispara a reanexação
                 }
             }
             case DISPONIVEL -> {

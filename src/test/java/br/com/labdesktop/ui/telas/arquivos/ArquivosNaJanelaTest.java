@@ -139,7 +139,7 @@ class ArquivosNaJanelaTest {
     void aPaginaDoServidorTemAAbaArquivosAoLadoDeMaquinaEProjetos() throws Exception {
         abrirJanela(Tema.CLARO);
         TelaServidor t = servidor();
-        assertEquals(List.of("Resumo", "Segurança", "Containers", "Processos", "Máquina", "Projetos", "Arquivos"),
+        assertEquals(List.of("Resumo", "Segurança", "Containers", "Processos", "Máquina", "Projetos", "Arquivos", "Terminal"),
             java.util.Arrays.stream(Aba.values()).map(a -> Visual.naEdt(() -> t.abas().botao(a.id()).getText())).toList());
         Visual.naEdt(() -> t.abas().botao(Aba.ARQUIVOS.id()).doClick());
         assertEquals(Aba.ARQUIVOS, Visual.naEdt(t::abaAtual));

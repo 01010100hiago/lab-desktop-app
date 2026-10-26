@@ -3,6 +3,7 @@ package br.com.labdesktop.terminal;
 import br.com.labdesktop.ssh.ConexaoSsh;
 import br.com.labdesktop.ssh.EstadoConexao;
 import br.com.labdesktop.ssh.LimiteDeSessoesException;
+import br.com.labdesktop.util.Fundo;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -13,6 +14,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import org.apache.sshd.client.channel.ClientChannelEvent;
 import org.apache.sshd.client.channel.PtyCapableChannelSession;
+import org.apache.sshd.common.future.CloseFuture;
 
 /**
  * O {@link TransporteDeTerminal} sobre a sessão SSH de UM servidor ({@link ConexaoSsh#abrirCanalPty} e
@@ -69,6 +71,7 @@ public final class TransporteSsh implements TransporteDeTerminal {
     private static final class CanalSsh implements CanalDeTerminal {
 
         private static final Duration FATIA_DE_ESPERA = Duration.ofSeconds(30);
+        private static final Duration ESPERA_DA_RESPOSTA = Duration.ofSeconds(2);
         private static final Set<ClientChannelEvent> FECHADO = EnumSet.of(ClientChannelEvent.CLOSED);
 
         private final PtyCapableChannelSession canal;
@@ -114,8 +117,30 @@ public final class TransporteSsh implements TransporteDeTerminal {
             return canal.getExitStatus();
         }
 
+        /**
+         * {@code close(false)}: o MINA manda EOF e CLOSE ao servidor. O fechamento IMEDIATO ({@code close(true)}) só solta o canal do
+         * lado do app: o servidor nunca fica sabendo, e o {@code docker exec ... tmux attach} fica órfão até a sessão SSH inteira cair.
+         */
         @Override
         public void fechar() {
+            if (!canal.isOpen()) {
+                return;
+            }
+            CloseFuture fechamento = canal.close(false);
+            Fundo.ioVirtual().execute(() -> {
+                // se o servidor não responder ao CLOSE (a rede morreu no meio), o canal é arrancado depois da espera
+                try {
+                    if (!fechamento.await(ESPERA_DA_RESPOSTA)) {
+                        canal.close(true);
+                    }
+                } catch (IOException e) {
+                    canal.close(true);
+                }
+            });
+        }
+
+        @Override
+        public void abortar() {
             canal.close(true);
         }
     }

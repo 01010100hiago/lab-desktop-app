@@ -22,7 +22,7 @@ import javax.swing.event.MenuListener;
 /**
  * O menu do app (a barra de menus do macOS, por {@code apple.laf.useScreenMenuBar}). Regra de ouro (ARQUITETURA 7.4):
  * Cmd é do app e o resto é do terminal, e os atalhos nativos do JediTerm (Cmd+C, Cmd+V, Cmd+K, Cmd+Setas) NÃO viram
- * item de menu, para o menu da tela do macOS não engolir o atalho. Aqui só entram Cmd+N, Cmd+R, Cmd+1, Cmd+2, Cmd+W,
+ * item de menu, para o menu da tela do macOS não engolir o atalho. Aqui só entram Cmd+N, Cmd+R, Cmd+1 a Cmd+6, Cmd+W,
  * Cmd+M e Cmd+Shift+L (bloquear o cofre).
  *
  * <p>"Servidor" age sobre o servidor em foco (o da lista na tela, ou o único cadastrado) e só habilita o que faz
@@ -123,6 +123,7 @@ public final class MenuApp {
         ver.add(item("Resumo do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_3, atalho()), painel::mostrarResumo));
         ver.add(item("Projetos do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_1, atalho()), painel::mostrarProjetos));
         ver.add(item("Arquivos do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_5, atalho()), painel::mostrarArquivos));
+        ver.add(item("Terminal do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_6, atalho()), painel::mostrarTerminal));
         itemUltimoProjeto = item("Último projeto aberto", KeyStroke.getKeyStroke(KeyEvent.VK_4, atalho()), painel::mostrarUltimoProjeto);
         ver.add(itemUltimoProjeto);
         itemVoltarAosProjetos = item("Voltar à lista de projetos", KeyStroke.getKeyStroke(KeyEvent.VK_OPEN_BRACKET, atalho()),

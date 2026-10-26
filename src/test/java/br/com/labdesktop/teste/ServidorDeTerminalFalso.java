@@ -80,6 +80,8 @@ public final class ServidorDeTerminalFalso {
     public final List<String> comandos = new CopyOnWriteArrayList<>();
     public final AtomicInteger shellsAbertos = new AtomicInteger();
     public final AtomicInteger canaisAbertos = new AtomicInteger();
+    /** Canais que o servidor viu fechar (o cliente fechou, ou a conexão caiu). */
+    public final AtomicInteger canaisEncerrados = new AtomicInteger();
     /** Tudo o que chegou pelo teclado (todas as sessões juntas, em ordem de chegada). */
     private final ByteArrayOutputStream recebido = new ByteArrayOutputStream();
     /** Cada {@code window-change}, como "colunasxlinhas". */
@@ -93,6 +95,14 @@ public final class ServidorDeTerminalFalso {
 
     public ServidorDeTerminalFalso(ServidorSshDeTeste ssh) {
         this.ssh = ssh;
+        ssh.sshd.addChannelListener(new org.apache.sshd.common.channel.ChannelListener() {
+            @Override
+            public void channelClosed(org.apache.sshd.common.channel.Channel canal, Throwable motivo) {
+                if (canal instanceof ChannelSession) {
+                    canaisEncerrados.incrementAndGet();
+                }
+            }
+        });
         ssh.sshd.setCommandFactory((canal, linha) -> {
             comandos.add(linha);
             return new ComandoPty(linha, false);
@@ -190,6 +200,7 @@ public final class ServidorDeTerminalFalso {
         private InputStream teclado;
         private OutputStream tela;
         private ExitCallback aoSair;
+        private volatile Sessao sessaoAtual;
 
         ComandoPty(String linha, boolean shell) {
             this.linha = linha;
@@ -245,6 +256,7 @@ public final class ServidorDeTerminalFalso {
                     return n;
                 }
             }, tela, env, aoSair);
+            sessaoAtual = sessao;
             sessoes.add(sessao);
             Thread t = new Thread(() -> {
                 try {
@@ -263,7 +275,10 @@ public final class ServidorDeTerminalFalso {
 
         @Override
         public void destroy(ChannelSession canal) {
-            // nada a limpar: o roteiro termina ao ver o EOF do teclado
+            // o cliente fechou o canal: o programa "morre" (sem isso o MINA espera o comando sair e o canal nunca fecha do lado servidor)
+            if (sessaoAtual != null && !sessaoAtual.saiu()) {
+                sessaoAtual.sair(255);
+            }
         }
     }
 }
