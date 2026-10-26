@@ -22,8 +22,11 @@ class TesteCamadas {
 
     private static final Path RAIZ = Path.of("src", "main", "java", "br", "com", "labdesktop");
 
-    /** util, seguranca, cofre, ssh, api, servidor e arquivos (o domínio do gerenciador de arquivos, sobre SFTP). */
-    private static final Set<String> DOMINIO = Set.of("util", "seguranca", "cofre", "ssh", "api", "servidor", "arquivos");
+    /**
+     * util, seguranca, cofre, ssh, api, servidor, arquivos (o domínio do gerenciador de arquivos, sobre SFTP) e terminal (o domínio do
+     * terminal: transporte, ciclo de vida, classificador e portão de entrada; o JediTerm e o Swing ficam em {@code ui.terminal}).
+     */
+    private static final Set<String> DOMINIO = Set.of("util", "seguranca", "cofre", "ssh", "api", "servidor", "arquivos", "terminal");
 
     private static final Pattern GRAFICOS = Pattern.compile(
         "\\b(javax\\.swing|java\\.awt|com\\.formdev|com\\.jediterm)\\b");
@@ -91,7 +94,7 @@ class TesteCamadas {
     @Test
     void cofreSshEApiNaoImportamUi() throws IOException {
         List<String> violacoes = new ArrayList<>();
-        for (String pacote : List.of("cofre", "ssh", "api", "util", "seguranca", "servidor", "arquivos")) {
+        for (String pacote : List.of("cofre", "ssh", "api", "util", "seguranca", "servidor", "arquivos", "terminal")) {
             for (Path fonte : fontesDe(pacote)) {
                 for (String linha : codigoDe(fonte)) {
                     if (UI.matcher(linha).find()) {
