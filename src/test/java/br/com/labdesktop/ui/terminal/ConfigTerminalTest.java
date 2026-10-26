@@ -8,6 +8,8 @@ import br.com.labdesktop.util.Preferencias;
 import com.formdev.flatlaf.fonts.jetbrains_mono.FlatJetBrainsMonoFont;
 import com.jediterm.core.Color;
 import com.jediterm.terminal.TerminalColor;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** As decisões de {@link ConfigTerminal} e {@link PaletaTerminal} (ARQUITETURA 7.4), uma por uma. */
@@ -59,17 +61,37 @@ class ConfigTerminalTest {
         assertEquals(new Color(0xC9, 0x9A, 0x3F), selecao.getBackground().toColor(), "seleção âmbar");
     }
 
+    /** O critério REAL do TesteSemAzul (matiz de 165 a 275 graus, saturação de 0,15 e brilho de 0,15 para cima). */
+    private static boolean ehAzulOuCiano(java.awt.Color c) {
+        float[] hsb = java.awt.Color.RGBtoHSB(c.getRed(), c.getGreen(), c.getBlue(), null);
+        float matiz = hsb[0] * 360f;
+        return matiz >= 165f && matiz <= 275f && hsb[1] >= 0.15f && hsb[2] >= 0.15f;
+    }
+
+    /** As únicas cores da paleta que o critério acima pegaria: o azul e o ciano do ANSI (a ardósia), a exceção do desenho. */
+    private static final java.util.Set<Integer> ANSI_AZULADOS = java.util.Set.of(4, 12);
+
     @Test
-    void oAnsiTemAzulECianoSoDessaturados() {
-        // 4 = azul (ardósia), 6 = ciano (sálvia), 12 e 14 as versões vivas
-        for (int i = 0; i < 16; i++) {
-            int rgb = PaletaTerminal.rgbDoIndice(i);
-            java.awt.Color cor = new java.awt.Color(rgb);
+    void oVarredorEnxergaOAzulDeBrilhoCheioEOPastel() {
+        // sanidade do próprio teste: o que o cubo do xterm traz de fábrica E o pastel que uma correção só de saturação deixava são pegos
+        for (int rgb : new int[] {0x0000FF, 0x0087FF, 0x00FFFF, 0x5F5FFF, 0xB3B3FF, 0xB3CFFF, 0xB3FFFF}) {
+            assertTrue(ehAzulOuCiano(new java.awt.Color(rgb)), "#" + Integer.toHexString(rgb));
+        }
+        assertFalse(ehAzulOuCiano(new java.awt.Color(PaletaTerminal.rgbDoIndice(21))), "o azul puro do cubo foi apagado");
+    }
+
+    @Test
+    void oAnsiTemArdosiaESalviaOsDoisDessaturados() {
+        // 4 = azul (ardósia), 12 = azul vivo, 6 = ciano (sálvia, do lado verde), 14 = ciano vivo
+        for (int i : new int[] {4, 12}) {
+            java.awt.Color cor = new java.awt.Color(PaletaTerminal.rgbDoIndice(i));
             float[] hsb = java.awt.Color.RGBtoHSB(cor.getRed(), cor.getGreen(), cor.getBlue(), null);
-            float matiz = hsb[0] * 360f;
-            boolean azulado = matiz >= PaletaTerminal.MATIZ_MINIMO && matiz <= PaletaTerminal.MATIZ_MAXIMO;
-            if (azulado) {
-                assertTrue(hsb[1] <= PaletaTerminal.LIMITE_DE_SATURACAO, "ANSI " + i + " azulado e saturado demais: #" + Integer.toHexString(rgb));
+            assertTrue(hsb[1] <= PaletaTerminal.LIMITE_DE_SATURACAO, "ANSI " + i + " saturado demais");
+            assertTrue(hsb[2] <= 0.75f, "ANSI " + i + " claro demais para ardósia");
+        }
+        for (int i = 0; i < 16; i++) {
+            if (!ANSI_AZULADOS.contains(i)) {
+                assertFalse(ehAzulOuCiano(new java.awt.Color(PaletaTerminal.rgbDoIndice(i))), "ANSI " + i + " é azul ou ciano");
             }
         }
         assertEquals(0x6F7F92, PaletaTerminal.rgbDoIndice(4), "ardósia");
@@ -77,17 +99,44 @@ class ConfigTerminalTest {
     }
 
     @Test
-    void nenhumaCorDeAzulOuCianoVivoNaPaletaInteira() {
-        // o mesmo critério do TesteSemAzul (matiz de azul ou ciano e saturação acima do corte), só que sobre os 256 índices
+    void nenhumaDasDuzentasECinquentaESeisCoresEAzulOuCianoPeloCriterioDoTesteSemAzul() {
+        List<String> ruins = new ArrayList<>();
         for (int i = 0; i < 256; i++) {
             java.awt.Color cor = new java.awt.Color(PaletaTerminal.rgbDoIndice(i));
-            float[] hsb = java.awt.Color.RGBtoHSB(cor.getRed(), cor.getGreen(), cor.getBlue(), null);
-            float matiz = hsb[0] * 360f;
-            if (matiz >= PaletaTerminal.MATIZ_MINIMO && matiz <= PaletaTerminal.MATIZ_MAXIMO && hsb[2] >= 0.15f) {
-                assertTrue(hsb[1] <= PaletaTerminal.LIMITE_DE_SATURACAO + 0.01f,
-                    "índice " + i + " é azul ou ciano vivo: #" + Integer.toHexString(cor.getRGB() & 0xFFFFFF));
+            if (ehAzulOuCiano(cor) && !ANSI_AZULADOS.contains(i)) {
+                ruins.add(i + " = #" + Integer.toHexString(cor.getRGB() & 0xFFFFFF));
             }
         }
+        assertTrue(ruins.isEmpty(), "azul ou ciano pelo critério do TesteSemAzul (fora a ardósia do ANSI): " + ruins);
+    }
+
+    @Test
+    void asCoresAzuladasDoCuboSaoEscurasENuncaPastel() {
+        for (int i = 16; i < 232; i++) {
+            int original = cuboDoXterm(i);
+            java.awt.Color o = new java.awt.Color(original);
+            if (!ehAzulOuCiano(o)) {
+                assertEquals(original, PaletaTerminal.rgbDoIndice(i), "o que não é azul passa como o xterm: " + i);
+                continue;
+            }
+            java.awt.Color cor = new java.awt.Color(PaletaTerminal.rgbDoIndice(i));
+            float[] hsb = java.awt.Color.RGBtoHSB(cor.getRed(), cor.getGreen(), cor.getBlue(), null);
+            assertTrue(hsb[2] <= PaletaTerminal.BRILHO_MAXIMO_DO_CUBO + 0.01f, "índice " + i + " claro demais: #" + Integer.toHexString(cor.getRGB() & 0xFFFFFF));
+        }
+        int[] pastel = {0xB3B3FF, 0xB3CFFF, 0xB3FFFF};
+        for (int p : pastel) {
+            for (int i = 16; i < 232; i++) {
+                assertTrue(PaletaTerminal.rgbDoIndice(i) != p, "o pastel #" + Integer.toHexString(p) + " não pode estar no índice " + i);
+            }
+        }
+        assertTrue(((PaletaTerminal.rgbDoIndice(147) >> 16) & 0xFF) < 0xAF, "o azul claro #afafff do xterm (índice 147) virou um tom escuro");
+    }
+
+    /** A cor do cubo do xterm (sem apagar nada) no índice 16 a 231. */
+    private static int cuboDoXterm(int indice) {
+        int[] n = {0, 95, 135, 175, 215, 255};
+        int k = indice - 16;
+        return (n[k / 36] << 16) | (n[(k / 6) % 6] << 8) | n[k % 6];
     }
 
     @Test

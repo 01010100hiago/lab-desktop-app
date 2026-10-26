@@ -7,7 +7,8 @@ import com.jediterm.terminal.emulator.ColorPalette;
  * A paleta do terminal (ARQUITETURA 7.4): fundo e texto escuros quentes (os {@code --logs-*} do painel web) e um ANSI de 16 cores em
  * tons de terra. O app nunca usa azul nem ciano vivos: o azul do ANSI vira ARDÓSIA e o ciano vira SÁLVIA, os dois dessaturados. O
  * cubo de 216 cores e o degradê de cinza (índices 16 a 255) seguem o xterm, só que as cores azuladas e cianas do cubo também
- * ficam dessaturadas ({@link #LIMITE_DE_SATURACAO}). Cor RGB que o programa manda de verdade (truecolor) passa como veio.
+ * ficam apagadas: saturação abaixo do corte do {@code TesteSemAzul} ({@link #SATURACAO_DO_CUBO}) e brilho limitado
+ * ({@link #BRILHO_MAXIMO_DO_CUBO}), o que dá tons escuros de ardósia, nunca um azul ou ciano claro e pastel. Cor RGB que o programa manda de verdade (truecolor) passa como veio.
  */
 public final class PaletaTerminal extends ColorPalette {
 
@@ -20,8 +21,14 @@ public final class PaletaTerminal extends ColorPalette {
     /** Texto sobre a seleção. */
     public static final int SELECAO_TEXTO = 0x12110E;
 
-    /** Saturação máxima (0 a 1) de uma cor azulada ou ciana da paleta. */
+    /** Saturação máxima (0 a 1) das cores azuladas do ANSI de 16 (ardósia e sálvia): a exceção do desenho, só nesses quatro lugares. */
     public static final float LIMITE_DE_SATURACAO = 0.30f;
+    /** Saturação das cores azuladas do cubo depois de apagadas: abaixo do corte de 0,15 do {@code TesteSemAzul}, com folga para o arredondamento do RGB. */
+    public static final float SATURACAO_DO_CUBO = 0.12f;
+    /** Brilho máximo das cores azuladas do cubo: tons escuros, como a ardósia do ANSI (nunca o azul claro de brilho cheio). */
+    public static final float BRILHO_MAXIMO_DO_CUBO = 0.60f;
+    /** O corte de saturação a partir do qual uma cor de matiz azul ou ciano conta como azul ou ciano (o do {@code TesteSemAzul}). */
+    public static final float SATURACAO_DE_CORTE = 0.15f;
     /** Matiz (graus) em que começa e termina o que o app trata como azul ou ciano. */
     public static final float MATIZ_MINIMO = 165f;
     public static final float MATIZ_MAXIMO = 275f;
@@ -68,12 +75,16 @@ public final class PaletaTerminal extends ColorPalette {
         return cores[indice & 0xFF];
     }
 
-    /** Uma cor azulada ou ciana (matiz de 165 a 275 graus) com saturação acima do limite perde saturação até o limite. */
+    /**
+     * Uma cor azulada ou ciana (matiz de 165 a 275 graus, saturação a partir do corte) vira um tom escuro e apagado: saturação de
+     * {@link #SATURACAO_DO_CUBO} e brilho de no máximo {@link #BRILHO_MAXIMO_DO_CUBO}. Só reduzir a saturação deixaria o azul de brilho
+     * cheio virar um azul claro e pastel ({@code #B3B3FF}), que o usuário rejeita.
+     */
     static int dessaturarSeAzulado(int rgb) {
         float[] hsb = java.awt.Color.RGBtoHSB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, null);
         float matiz = hsb[0] * 360f;
-        if (matiz >= MATIZ_MINIMO && matiz <= MATIZ_MAXIMO && hsb[1] > LIMITE_DE_SATURACAO) {
-            return java.awt.Color.HSBtoRGB(hsb[0], LIMITE_DE_SATURACAO, hsb[2]) & 0xFFFFFF;
+        if (matiz >= MATIZ_MINIMO && matiz <= MATIZ_MAXIMO && hsb[1] >= SATURACAO_DE_CORTE) {
+            return java.awt.Color.HSBtoRGB(hsb[0], SATURACAO_DO_CUBO, Math.min(hsb[2], BRILHO_MAXIMO_DO_CUBO)) & 0xFFFFFF;
         }
         return rgb;
     }
