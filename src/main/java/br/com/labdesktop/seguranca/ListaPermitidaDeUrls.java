@@ -62,6 +62,29 @@ public final class ListaPermitidaDeUrls {
         return ok ? Optional.of(uri) : Optional.empty();
     }
 
+    /**
+     * Um link que aparece na saída de um terminal (Cmd+clique): só {@code http} ou {@code https}, com host, sem usuário na URL e sem
+     * controles. O terminal mostra o que o programa remoto imprimiu, então o link não cai na lista de hosts do app, mas nunca é
+     * {@code file:}, {@code javascript:}, {@code ssh:} nem nada que não seja uma página.
+     */
+    public static Optional<URI> validarLinkDoTerminal(String url) {
+        if (url == null || url.length() > 2048 || contemControle(url)) {
+            return Optional.empty();
+        }
+        URI uri;
+        try {
+            uri = new URI(url.strip());
+        } catch (URISyntaxException e) {
+            return Optional.empty();
+        }
+        String esquema = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+        if (!(esquema.equals("http") || esquema.equals("https")) || uri.getRawUserInfo() != null || uri.getHost() == null
+            || uri.getHost().isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(uri);
+    }
+
     /** Atalho de {@link #validar}. */
     public static boolean permitida(Tipo tipo, String url) {
         return validar(tipo, url).isPresent();

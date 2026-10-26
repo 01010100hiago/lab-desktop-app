@@ -21,6 +21,7 @@ public final class ProxyTcp implements AutoCloseable {
     private final int portaDestino;
     private final List<Ligacao> ligacoes = new CopyOnWriteArrayList<>();
     private volatile boolean fechado;
+    private volatile boolean recusandoNovas;
     public final AtomicInteger conexoesAceitas = new AtomicInteger();
 
     public ProxyTcp(int portaDestino) throws IOException {
@@ -40,6 +41,11 @@ public final class ProxyTcp implements AutoCloseable {
         ligacoes.forEach(l -> l.buracoNegro = true);
     }
 
+    /** Enquanto ligado, as conexões NOVAS são aceitas e fechadas na hora (a rede está fora e voltou pela metade). */
+    public void recusarNovas(boolean recusar) {
+        this.recusandoNovas = recusar;
+    }
+
     /** Fecha as conexões abertas de verdade (RST/EOF), como um servidor que reiniciou. */
     public void derrubarConexoes() {
         ligacoes.forEach(Ligacao::fechar);
@@ -49,6 +55,10 @@ public final class ProxyTcp implements AutoCloseable {
         while (!fechado) {
             try {
                 Socket cliente = escuta.accept();
+                if (recusandoNovas) {
+                    cliente.close();
+                    continue;
+                }
                 conexoesAceitas.incrementAndGet();
                 Socket destino = new Socket(InetAddress.getLoopbackAddress(), portaDestino);
                 Ligacao l = new Ligacao(cliente, destino);

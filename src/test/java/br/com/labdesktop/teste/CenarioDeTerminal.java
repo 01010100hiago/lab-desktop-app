@@ -20,10 +20,13 @@ public final class CenarioDeTerminal implements AutoCloseable {
     public final CofreFalso cofre;
     public final ConexaoSsh conexao;
     public final ServidorDeTerminalFalso terminal;
+    /** Entre o app e o servidor, para derrubar a rede; {@code null} no cenário sem proxy. */
+    public final ProxyTcp proxy;
 
-    private CenarioDeTerminal(ConfigSsh cfg) throws IOException, GeneralSecurityException {
+    private CenarioDeTerminal(ConfigSsh cfg, boolean comProxy) throws IOException, GeneralSecurityException {
         this.ssh = ServidorSshDeTeste.ed25519();
-        this.cofre = new CofreFalso("127.0.0.1", ssh.porta(), List.of(ssh.pin()));
+        this.proxy = comProxy ? new ProxyTcp(ssh.porta()) : null;
+        this.cofre = new CofreFalso("127.0.0.1", comProxy ? proxy.porta() : ssh.porta(), List.of(ssh.pin()));
         ssh.aceitar(cofre.par().getPublic());
         this.terminal = new ServidorDeTerminalFalso(ssh);
         this.conexao = new ConexaoSsh(CofreFalso.ID, cofre, cfg, tunel -> SondaDoAgente.Resultado.OK);
@@ -34,8 +37,17 @@ public final class CenarioDeTerminal implements AutoCloseable {
         return conectado(ConfigSsh.rapida());
     }
 
+    /** Conectado por um proxy TCP que sabe derrubar a rede (buraco negro) e recusar a volta. */
+    public static CenarioDeTerminal conectadoComProxy() throws IOException, GeneralSecurityException {
+        return conectar(ConfigSsh.rapida(), true);
+    }
+
     public static CenarioDeTerminal conectado(ConfigSsh cfg) throws IOException, GeneralSecurityException {
-        CenarioDeTerminal c = new CenarioDeTerminal(cfg);
+        return conectar(cfg, false);
+    }
+
+    private static CenarioDeTerminal conectar(ConfigSsh cfg, boolean comProxy) throws IOException, GeneralSecurityException {
+        CenarioDeTerminal c = new CenarioDeTerminal(cfg, comProxy);
         c.conexao.iniciar();
         Espera.ate(Duration.ofSeconds(20), () -> "estado=" + c.conexao.info(), () -> c.conexao.info().estado() == EstadoConexao.CONECTADO);
         return c;
@@ -45,6 +57,9 @@ public final class CenarioDeTerminal implements AutoCloseable {
     public void close() {
         conexao.fechar().join();
         try {
+            if (proxy != null) {
+                proxy.close();
+            }
             ssh.close();
         } catch (IOException e) {
             throw new java.io.UncheckedIOException(e);

@@ -27,6 +27,8 @@ import org.slf4j.LoggerFactory;
  * @param avisosAtivos       quais avisos disparam notificação (todos ligados por padrão)
  * @param autoBloqueioMinutos minutos sem uso até bloquear o cofre; 0 = nunca (padrão, decisão 5 de ARQUITETURA 14)
  * @param escalaTexto        fator do tamanho do texto da interface em porcentagem (100, 115 ou 130; Visualizar, "Aumentar texto")
+ * @param donoExclusivo      o terminal da sessão do Claude anexa com {@code tmux attach -d}, derrubando os outros clientes (desligado
+ *                           por padrão)
  */
 public record Preferencias(
     Tema tema,
@@ -36,16 +38,25 @@ public record Preferencias(
     boolean copiarAoSelecionar,
     Set<Aviso> avisosAtivos,
     int autoBloqueioMinutos,
-    int escalaTexto) {
+    int escalaTexto,
+    boolean donoExclusivo) {
 
     /** Os fatores que o menu oferece (iguais aos de {@code ui.tema.Fontes}: este pacote não importa a interface). */
     public static final int[] ESCALAS_DO_TEXTO = {100, 115, 130};
     public static final int ESCALA_PADRAO = 100;
 
-    /** Sem o fator do texto: vale 100 %. */
+    /** Sem o fator do texto (vale 100 %) nem o dono exclusivo (desligado). */
     public Preferencias(Tema tema, Janela janela, int tamanhoFonteTerminal, boolean opcaoComoMeta, boolean copiarAoSelecionar,
                         Set<Aviso> avisosAtivos, int autoBloqueioMinutos) {
-        this(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos, autoBloqueioMinutos, ESCALA_PADRAO);
+        this(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos, autoBloqueioMinutos, ESCALA_PADRAO,
+            false);
+    }
+
+    /** Sem o dono exclusivo: desligado. */
+    public Preferencias(Tema tema, Janela janela, int tamanhoFonteTerminal, boolean opcaoComoMeta, boolean copiarAoSelecionar,
+                        Set<Aviso> avisosAtivos, int autoBloqueioMinutos, int escalaTexto) {
+        this(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos, autoBloqueioMinutos, escalaTexto,
+            false);
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(Preferencias.class);
@@ -127,7 +138,7 @@ public record Preferencias(
 
     public Preferencias comEscalaTexto(int porcento) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos,
-            autoBloqueioMinutos, porcento);
+            autoBloqueioMinutos, porcento, donoExclusivo);
     }
 
     public boolean avisoAtivo(Aviso aviso) {
@@ -136,27 +147,27 @@ public record Preferencias(
 
     public Preferencias comTema(Tema novo) {
         return new Preferencias(novo, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo);
     }
 
     public Preferencias comJanela(Janela nova) {
         return new Preferencias(tema, nova, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo);
     }
 
     public Preferencias comTamanhoFonteTerminal(int pontos) {
         return new Preferencias(tema, janela, pontos, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo);
     }
 
     public Preferencias comOpcaoComoMeta(boolean ligada) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, ligada, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo);
     }
 
     public Preferencias comCopiarAoSelecionar(boolean ligada) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, ligada,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo);
     }
 
     public Preferencias comAviso(Aviso aviso, boolean ativo) {
@@ -167,12 +178,17 @@ public record Preferencias(
             novos.remove(aviso);
         }
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            novos, autoBloqueioMinutos, escalaTexto);
+            novos, autoBloqueioMinutos, escalaTexto, donoExclusivo);
+    }
+
+    public Preferencias comDonoExclusivo(boolean ligado) {
+        return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, ligado);
     }
 
     public Preferencias comAutoBloqueioMinutos(int minutos) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, minutos, escalaTexto);
+            avisosAtivos, minutos, escalaTexto, donoExclusivo);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -220,6 +236,7 @@ public record Preferencias(
         public List<String> avisos;
         public Integer autoBloqueioMinutos;
         public Integer escalaTexto;
+        public Boolean donoExclusivo;
 
         @JsonIgnoreProperties(ignoreUnknown = true)
         static final class JanelaDados {
@@ -248,6 +265,7 @@ public record Preferencias(
             d.avisos = p.avisosAtivos.stream().map(Aviso::rotulo).sorted().toList();
             d.autoBloqueioMinutos = p.autoBloqueioMinutos;
             d.escalaTexto = p.escalaTexto;
+            d.donoExclusivo = p.donoExclusivo;
             return d;
         }
 
@@ -281,7 +299,8 @@ public record Preferencias(
                 copiarAoSelecionar == null ? base.copiarAoSelecionar : copiarAoSelecionar,
                 ativos,
                 autoBloqueioMinutos == null ? base.autoBloqueioMinutos : autoBloqueioMinutos,
-                escalaTexto == null ? base.escalaTexto : escalaTexto);
+                escalaTexto == null ? base.escalaTexto : escalaTexto,
+                donoExclusivo == null ? base.donoExclusivo : donoExclusivo);
         }
     }
 }

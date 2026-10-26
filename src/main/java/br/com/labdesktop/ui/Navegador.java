@@ -37,6 +37,16 @@ public class Navegador {
         abrir(Tipo.PULL_REQUEST, url);
     }
 
+    /** Um link impresso no terminal ({@code http} ou {@code https}; {@link ListaPermitidaDeUrls#validarLinkDoTerminal}). */
+    public void abrirLinkDoTerminal(String url) {
+        Optional<URI> uri = ListaPermitidaDeUrls.validarLinkDoTerminal(url);
+        if (uri.isEmpty()) {
+            avisos.atencao("Não abri o endereço: só links http e https abrem a partir do terminal.");
+            return;
+        }
+        entregarAoSistema(uri.get());
+    }
+
     private void abrir(Tipo tipo, String url) {
         Optional<URI> uri = ListaPermitidaDeUrls.validar(tipo, url);
         if (uri.isEmpty()) {
