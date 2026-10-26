@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.apache.sshd.client.SshClient;
 import org.apache.sshd.client.auth.pubkey.PublicKeyAuthenticationReporter;
+import org.apache.sshd.client.channel.PtyCapableChannelSession;
 import org.apache.sshd.client.session.ClientSession;
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.SftpClientFactory;
@@ -381,6 +382,73 @@ public final class ConexaoSsh implements AutoCloseable {
             }
             throw e;
         }
+    }
+
+    /**
+     * Abre um canal com PTY ligado à sessão do Claude do projeto: {@code docker exec -it ... tmux -u attach -t work} (ARQUITETURA
+     * 7.1). Sem {@code -d}. O nome do projeto é validado ANTES de qualquer coisa tocar a sessão.
+     *
+     * @param colunas largura inicial em caracteres (o terminal mede depois do primeiro layout; 120 por 32 se não deu)
+     * @throws IllegalArgumentException o nome do projeto não passa na regra do agente
+     * @throws LimiteDeSessoesException o servidor recusou mais um canal de sessão
+     * @throws IOException              não há sessão SSH autenticada agora, ou o canal não abriu
+     */
+    public PtyCapableChannelSession abrirCanalPty(String projeto, int colunas, int linhas) throws IOException {
+        return abrirCanalPty(projeto, false, colunas, linhas);
+    }
+
+    /** Como {@link #abrirCanalPty(String, int, int)}, com a opção "dono exclusivo" ({@code attach -d}). */
+    public PtyCapableChannelSession abrirCanalPty(String projeto, boolean donoExclusivo, int colunas, int linhas) throws IOException {
+        String comando = LinhaDePty.sessaoDoClaude(projeto, donoExclusivo); // valida o nome antes de tocar a sessão
+        ExecRemoto.exigirLinhaSemControle(comando);
+        ClientSession s = sessaoParaCanal();
+        return abrirPty(s.createExecChannel(comando), colunas, linhas);
+    }
+
+    /** Abre um canal com PTY no shell de login do usuário no servidor ({@code xterm-256color}, a mesma regra de PTY). */
+    public PtyCapableChannelSession abrirShellPty(int colunas, int linhas) throws IOException {
+        ClientSession s = sessaoParaCanal();
+        return abrirPty(s.createShellChannel(), colunas, linhas);
+    }
+
+    private ClientSession sessaoParaCanal() throws IOException {
+        ClientSession s = sessaoViva;
+        if (s == null || !s.isOpen()) {
+            throw new IOException("Não há conexão SSH aberta com o servidor.");
+        }
+        return s;
+    }
+
+    private PtyCapableChannelSession abrirPty(PtyCapableChannelSession canal, int colunas, int linhas) throws IOException {
+        canal.setUsePty(true);
+        canal.setPtyType(LinhaDePty.TIPO_DE_TERMINAL);
+        canal.setPtyColumns(Math.max(1, colunas));
+        canal.setPtyLines(Math.max(1, linhas));
+        canal.setPtyWidth(0);
+        canal.setPtyHeight(0);
+        canal.setRedirectErrorStream(true); // com PTY o stderr já vem junto; isto garante que nada fique parado no pipe do erro
+        try {
+            canal.open().verify(cfg.abrirCanal());
+            return canal;
+        } catch (IOException | RuntimeException e) {
+            canal.close(true);
+            if (recusadoPorLimite(e)) {
+                throw new LimiteDeSessoesException(e);
+            }
+            throw e;
+        }
+    }
+
+    /** O MINA embrulha a recusa do servidor ({@code SSH_OPEN_ADMINISTRATIVELY_PROHIBITED}) numa {@code SshException}: olha a cadeia. */
+    private static boolean recusadoPorLimite(Throwable erro) {
+        Throwable t = erro;
+        for (int fundo = 0; t != null && fundo < 8; fundo++, t = t.getCause()) {
+            if (t instanceof org.apache.sshd.common.channel.exception.SshChannelOpenException aberto
+                && aberto.getReasonCode() == SshConstants.SSH_OPEN_ADMINISTRATIVELY_PROHIBITED) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // =====================================================================================================
