@@ -22,6 +22,7 @@ import br.com.labdesktop.util.Preferencias;
 import br.com.labdesktop.util.Preferencias.Tema;
 import com.jediterm.terminal.model.hyperlinks.LinkResult;
 import com.jediterm.terminal.ui.JediTermWidget;
+import com.jediterm.terminal.ui.TerminalPanel;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
@@ -330,6 +331,178 @@ class PainelTerminalTest {
         assertTrue(PainelTerminal.ehCliqueComComando(comCmd));
         p.abrirLink("https://example.com/a?b=1", comCmd);
         assertEquals(List.of("https://example.com/a?b=1"), links);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Teclas antes de haver terminal, shell que reanexa, foco
+    // ---------------------------------------------------------------------------------------------
+
+    private static final class TransporteQueNaoAbre implements br.com.labdesktop.terminal.TransporteDeTerminal {
+        final java.util.concurrent.CountDownLatch solta = new java.util.concurrent.CountDownLatch(1);
+        final boolean recusa;
+
+        TransporteQueNaoAbre(boolean recusa) {
+            this.recusa = recusa;
+        }
+
+        @Override
+        public br.com.labdesktop.terminal.CanalDeTerminal abrir(ComandoDeTerminal comando,
+                                                                         br.com.labdesktop.terminal.TamanhoDeTerminal tamanho) throws IOException {
+            if (recusa) {
+                throw new br.com.labdesktop.terminal.TerminalRecusadoException("O servidor não aceita mais terminais.", null);
+            }
+            try {
+                solta.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            throw new IOException("sem canal");
+        }
+
+        @Override
+        public Runnable observarDisponibilidade(java.util.function.Consumer<Disponibilidade> ouvinte) {
+            return () -> { };
+        }
+    }
+
+    private PainelTerminal comTransporte(TransporteQueNaoAbre t) {
+        Visual.tema(Tema.CLARO);
+        ContextoDeTerminal ctx = new ContextoDeTerminal(t, new LimiteDeAbas(), Preferencias::padrao, links::add, Agendador.doFundo());
+        painel = Visual.naEdt(() -> new PainelTerminal(ctx, new ComandoDeTerminal.SessaoDoClaude("orbita"), null));
+        Visual.renderizar(painel, 1000, 600);
+        Visual.naEdt(painel::iniciar);
+        return painel;
+    }
+
+    /** Aperta teclas de todo tipo (letra, Enter, Esc, Cmd+V, Ctrl+C) no widget que ainda não tem canal: nada pode lançar. */
+    private void digitarSemCanal(PainelTerminal p) {
+        com.jediterm.terminal.ui.TerminalPanel tp = Visual.naEdt(() -> p.widget() != null ? p.widget().getTerminalPanel() : null);
+        if (tp == null) {
+            tp = Visual.naEdt(() -> p.widgetEmEsperaParaTeste().getTerminalPanel());
+        }
+        com.jediterm.terminal.ui.TerminalPanel alvo = tp;
+        int cmd = br.com.labdesktop.ui.componentes.Teclas.comando();
+        Visual.naEdt(() -> {
+            alvo.processKeyEvent(new KeyEvent(alvo, KeyEvent.KEY_TYPED, 0L, 0, KeyEvent.VK_UNDEFINED, 'x'));
+            alvo.processKeyEvent(new KeyEvent(alvo, KeyEvent.KEY_PRESSED, 0L, 0, KeyEvent.VK_ENTER, '\n'));
+            alvo.processKeyEvent(new KeyEvent(alvo, KeyEvent.KEY_PRESSED, 0L, 0, KeyEvent.VK_ESCAPE, '\u001b'));
+            alvo.processKeyEvent(new KeyEvent(alvo, KeyEvent.KEY_PRESSED, 0L, cmd, KeyEvent.VK_V, 'v'));
+            alvo.processKeyEvent(new KeyEvent(alvo, KeyEvent.KEY_PRESSED, 0L, java.awt.event.InputEvent.CTRL_DOWN_MASK, KeyEvent.VK_C, '\u0003'));
+        });
+    }
+
+    @Test
+    void teclaEnquantoOTerminalAindaAbreNaoLancaEMostraAFaixaDeTeclasDescartadas() throws Exception {
+        TransporteQueNaoAbre t = new TransporteQueNaoAbre(false);
+        PainelTerminal p = comTransporte(t);
+        assertEquals(Tipo.ABRINDO, p.sessao().estado().tipo());
+        digitarSemCanal(p); // antes da correção: NullPointerException no tratador de teclado do JediTerm
+        assertTrue(Visual.naEdt(p::faixaVisivel));
+        assertTrue(Visual.naEdt(p::avisoDeTeclasVisivel), "a faixa diz que as teclas foram descartadas");
+        assertEquals("Abrindo o terminal…", Visual.naEdt(p::textoDaFaixaAgora));
+        t.solta.countDown();
+    }
+
+    @Test
+    void teclaSemConexaoNaPrimeiraAberturaNaoLancaEMostraAFaixa() throws Exception {
+        PainelTerminal p = comTransporte(new TransporteQueNaoAbre(true));
+        Espera.ate(PRAZO, () -> "estado=" + p.sessao().estado(), () -> p.sessao().estado().tipo() == Tipo.SEM_CONEXAO);
+        digitarSemCanal(p);
+        assertTrue(Visual.naEdt(p::avisoDeTeclasVisivel));
+        assertEquals("O servidor não aceita mais terminais.", Visual.naEdt(p::textoDaFaixaAgora));
+        assertTrue(Visual.naEdt(() -> p.botaoReconectar().isVisible()));
+    }
+
+    @Test
+    void shellDoServidorQueReanexaAvisaQueEUmTerminalNovoNoWidgetENaFaixa() throws Exception {
+        cenario = CenarioDeTerminal.conectadoComProxy();
+        PainelTerminal p = novoPainel(ComandoDeTerminal.ShellDoServidor.INSTANCIA, Preferencias::padrao);
+        abrir(p, 1000, 600);
+        JediTermWidget primeiro = Visual.naEdt(p::widget);
+        assertFalse(Visual.naEdt(p::faixaVisivel));
+        assertFalse(tela(p).contains("terminal novo"), "na primeira abertura não há aviso nenhum");
+
+        cenario.proxy.abrirBuracoNegro();
+        cenario.proxy.recusarNovas(true);
+        Espera.ate(PRAZO, () -> "estado=" + p.sessao().estado(), () -> p.sessao().estado().tipo() == Tipo.REANEXANDO);
+        cenario.proxy.recusarNovas(false);
+        esperarAtiva(p);
+        Espera.ate(PRAZO, "widget novo", () -> Visual.naEdt(() -> p.widget() != primeiro));
+
+        assertEquals(PainelTerminal.AVISO_DE_SHELL_NOVO, "A conexão caiu. Este é um terminal novo: o que estava rodando foi encerrado.");
+        esperarTela(p, PainelTerminal.AVISO_DE_SHELL_NOVO);
+        assertTrue(Visual.naEdt(p::faixaVisivel));
+        assertEquals(PainelTerminal.AVISO_DE_SHELL_NOVO, Visual.naEdt(p::textoDaFaixaAgora));
+        assertFalse(Visual.naEdt(() -> p.botaoReconectar().isVisible()));
+        assertTrue(Visual.naEdt(() -> p.botaoDispensar().isVisible()));
+        Visual.naEdt(() -> p.botaoDispensar().doClick(0));
+        assertFalse(Visual.naEdt(p::faixaVisivel), "o usuário dispensa o aviso");
+    }
+
+    @Test
+    void sessaoDoClaudeQueReanexaNaoTemAvisoDeTerminalNovoPoisOTmuxPreservaAConversa() throws Exception {
+        cenario = CenarioDeTerminal.conectadoComProxy();
+        PainelTerminal p = doClaude();
+        abrir(p, 1000, 600);
+        JediTermWidget primeiro = Visual.naEdt(p::widget);
+        cenario.proxy.abrirBuracoNegro();
+        cenario.proxy.recusarNovas(true);
+        Espera.ate(PRAZO, () -> "estado=" + p.sessao().estado(), () -> p.sessao().estado().tipo() == Tipo.REANEXANDO);
+        cenario.proxy.recusarNovas(false);
+        esperarAtiva(p);
+        Espera.ate(PRAZO, "widget novo", () -> Visual.naEdt(() -> p.widget() != primeiro));
+        assertFalse(Visual.naEdt(p::faixaVisivel));
+        assertFalse(tela(p).contains("terminal novo"));
+    }
+
+    @Test
+    void abrirDeNovoDepoisDeUmExitNaoDizQueAConexaoCaiu() throws Exception {
+        cenario = CenarioDeTerminal.conectado();
+        cenario.terminal.roteiro(ServidorDeTerminalFalso.imprimirESair("logout\r\n", 0));
+        PainelTerminal p = novoPainel(ComandoDeTerminal.ShellDoServidor.INSTANCIA, Preferencias::padrao);
+        abrirSemEsperar(p, 1000, 600);
+        Espera.ate(PRAZO, () -> "estado=" + p.sessao().estado(), () -> p.sessao().estado().tipo() == Tipo.ENCERRADA);
+        cenario.terminal.roteiro(ServidorDeTerminalFalso::roteiroQueNaoLe);
+        Visual.naEdt(() -> p.botaoReconectar().doClick(0));
+        esperarAtiva(p);
+        assertFalse(Visual.naEdt(p::faixaVisivel), "foi o usuário que saiu do shell: não houve queda");
+        assertFalse(tela(p).contains("terminal novo"));
+    }
+
+    @Test
+    void reanexarSoDevolveOFocoParaQuemOTinha() throws Exception {
+        cenario = CenarioDeTerminal.conectado();
+        PainelTerminal p = doClaude();
+        Visual.tema(Tema.CLARO);
+        com.jediterm.terminal.ui.JediTermWidget comFoco = widgetComFoco(true);
+        com.jediterm.terminal.ui.JediTermWidget semFoco = widgetComFoco(false);
+        // reanexação: o widget que sai tinha o foco -> devolve; não tinha (o usuário foi para outra tela) -> NÃO pede (antes pedia se o painel estivesse à vista)
+        assertTrue(PainelTerminal.tinhaFoco(comFoco, semFoco, false));
+        assertFalse(PainelTerminal.tinhaFoco(semFoco, comFoco, false), "o novo tem foco mas o antigo não: ninguém devolve nada");
+        // primeira anexação: quem esperava é o novo
+        assertTrue(PainelTerminal.tinhaFoco(null, comFoco, true));
+        assertFalse(PainelTerminal.tinhaFoco(null, semFoco, true));
+        assertFalse(PainelTerminal.tinhaFoco(null, comFoco, false), "sem antigo e sem espera ninguém tinha o foco");
+    }
+
+    private com.jediterm.terminal.ui.JediTermWidget widgetComFoco(boolean foco) {
+        return Visual.naEdt(() -> new com.jediterm.terminal.ui.JediTermWidget(80, 24, new ConfigTerminal()) {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            protected TerminalPanel createTerminalPanel(com.jediterm.terminal.ui.settings.SettingsProvider settings,
+                                                        com.jediterm.terminal.model.StyleState estilo,
+                                                        com.jediterm.terminal.model.TerminalTextBuffer buffer) {
+                return new TerminalPanel(settings, buffer, estilo) {
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public boolean isFocusOwner() {
+                        return foco;
+                    }
+                };
+            }
+        });
     }
 
     private static void assertSame(Object esperado, Object atual, String msg) {

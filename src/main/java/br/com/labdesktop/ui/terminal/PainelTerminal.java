@@ -67,6 +67,9 @@ public final class PainelTerminal extends Painel {
 
     private static final long serialVersionUID = 1L;
     private static final Logger LOG = LoggerFactory.getLogger(PainelTerminal.class);
+    /** O que o usuário lê quando um shell do servidor reanexa depois de uma queda: o tmux preserva a sessão do Claude, mas não um shell. */
+    public static final String AVISO_DE_SHELL_NOVO = "A conexão caiu. Este é um terminal novo: o que estava rodando foi encerrado.";
+
     private static final Pattern LINK = Pattern.compile("https?://[^\\s<>\"'`\\x00-\\x1f\\x7f]+");
 
     /** O que a tela de cima quer saber deste terminal. */
@@ -89,6 +92,7 @@ public final class PainelTerminal extends Painel {
     private final Rotulo avisoDeTeclas = new Rotulo("Sem conexão: teclas descartadas.").negrito().tamanho(12.5f)
         .corDoToken(Tokens.PERIGO);
     private final Botao reconectar = Botoes.mini("Reconectar", "atualizar");
+    private final Botao dispensar = Botoes.mini("Entendi", null);
 
     private transient JediTermWidget widget;
     private transient JediTermWidget widgetEmEspera;
@@ -96,6 +100,9 @@ public final class PainelTerminal extends Painel {
     private boolean iniciado;
     private boolean descartado;
     private boolean tecladoDescartado;
+    /** O shell do servidor perdeu a conexão: o próximo widget é um shell NOVO e o usuário precisa saber. */
+    private boolean quedaNoShell;
+    private boolean avisoDeShellNovo;
     private EstadoDoTerminal estadoMostrado = EstadoDoTerminal.ABRINDO;
     private String tituloAtual;
 
@@ -120,8 +127,13 @@ public final class PainelTerminal extends Painel {
         textoDaFaixa.corDoToken(Tokens.TEXTO);
         faixa.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
         reconectar.addActionListener(e -> sessao.reconectar());
+        dispensar.addActionListener(e -> {
+            avisoDeShellNovo = false;
+            atualizarFaixa();
+        });
+        dispensar.setToolTipText("Esconde este aviso");
         faixa.add(textoDaFaixa, BorderLayout.CENTER);
-        faixa.add(br.com.labdesktop.ui.componentes.Caixa.fluxo(java.awt.FlowLayout.RIGHT, 10, avisoDeTeclas, reconectar), BorderLayout.EAST);
+        faixa.add(br.com.labdesktop.ui.componentes.Caixa.fluxo(java.awt.FlowLayout.RIGHT, 10, avisoDeTeclas, reconectar, dispensar), BorderLayout.EAST);
         faixa.setVisible(false);
         add(faixa, BorderLayout.NORTH);
         add(centro, BorderLayout.CENTER);
@@ -212,10 +224,12 @@ public final class PainelTerminal extends Painel {
             canal.fechar();
             return;
         }
-        JediTermWidget novo = widgetEmEspera != null ? widgetEmEspera : criarWidget();
+        boolean novoEraEmEspera = widgetEmEspera != null;
+        JediTermWidget novo = novoEraEmEspera ? widgetEmEspera : criarWidget();
         widgetEmEspera = null;
         JediTermWidget antigo = widget;
-        boolean tinhaFoco = antigo != null && antigo.getTerminalPanel().isFocusOwner();
+        boolean tinhaFoco = tinhaFoco(antigo, novo, novoEraEmEspera);
+        boolean shellNovo = comando.ehShell() && quedaNoShell && antigo != null;
         SshTtyConnector conector = new SshTtyConnector(canal, () -> sessao.ativa(geracao),
             comando.ehShell() ? "shell" : "claude", new SshTtyConnector.Ouvinte() {
                 @Override
@@ -237,19 +251,34 @@ public final class PainelTerminal extends Painel {
         centro.add(novo, BorderLayout.CENTER);
         layoutarJa(centro); // o widget novo precisa de tamanho ANTES de iniciar: sem isso o terminal nasce 1 por 1
         novo.setTtyConnector(conector);
+        if (shellNovo) {
+            // no widget novo, antes de qualquer saída do servidor: o shell de antes sumiu e este começa do zero
+            novo.getTerminal().writeCharacters(AVISO_DE_SHELL_NOVO);
+            novo.getTerminal().carriageReturn();
+            novo.getTerminal().newLine();
+        }
         novo.start();
         widget = novo;
         fecharWidget(antigo);
         tecladoDescartado = false;
+        quedaNoShell = false;
+        avisoDeShellNovo = shellNovo;
         atualizarFaixa();
-        if (tinhaFoco || isShowing()) {
-            novo.getTerminalPanel().requestFocusInWindow();
+        if (tinhaFoco) {
+            novo.getTerminalPanel().requestFocusInWindow(); // só devolve o foco a quem o tinha: reanexar nunca o rouba de outra tela
         }
         revalidate();
         repaint();
     }
 
+    /** O foco estava no terminal que sai (ou, na primeira anexação, no widget que esperava e que a troca de painel desfocaria)? */
+    static boolean tinhaFoco(JediTermWidget antigo, JediTermWidget novo, boolean novoEraEmEspera) {
+        JediTermWidget quemTinha = antigo != null ? antigo : novoEraEmEspera ? novo : null;
+        return quemTinha != null && quemTinha.getTerminalPanel().isFocusOwner();
+    }
+
     private JediTermWidget criarWidget() {
+        JediTermWidget[] vaga = new JediTermWidget[1];
         ConfigTerminal config = new ConfigTerminal(ctx.preferencias().get());
         JediTermWidget w = new JediTermWidget(TamanhoDeTerminal.PADRAO.colunas(), TamanhoDeTerminal.PADRAO.linhas(), config) {
             private static final long serialVersionUID = 1L;
@@ -259,6 +288,24 @@ public final class PainelTerminal extends Painel {
                 return new TerminalPanel(settings, buffer, estilo) {
                     private static final long serialVersionUID = 1L;
 
+                    /**
+                     * Antes de o widget ter uma sessão rodando ({@code start()}), o JediTerm não tem para onde mandar a tecla e o tratador de
+                     * teclado lança {@code NullPointerException} (inclusive no Cmd+V). Enquanto isso, a tecla é engolida e a faixa diz
+                     * "teclas descartadas".
+                     */
+                    @Override
+                    public void processKeyEvent(KeyEvent e) {
+                        JediTermWidget w = vaga[0];
+                        if (w == null || !w.isSessionRunning()) {
+                            e.consume();
+                            if (e.getID() == KeyEvent.KEY_PRESSED || e.getID() == KeyEvent.KEY_TYPED) {
+                                descartouTecla();
+                            }
+                            return;
+                        }
+                        super.processKeyEvent(e);
+                    }
+
                     @Override
                     public void setWindowTitle(String titulo) {
                         super.setWindowTitle(titulo);
@@ -267,6 +314,7 @@ public final class PainelTerminal extends Painel {
                 };
             }
         };
+        vaga[0] = w;
         w.setBackground(new Color(PaletaTerminal.FUNDO));
         w.addHyperlinkFilter(filtroDeLinks());
         w.getTerminalPanel().addCustomKeyListener(new KeyAdapter() {
@@ -332,6 +380,15 @@ public final class PainelTerminal extends Painel {
         estadoMostrado = estado;
         if (estado.ativa()) {
             tecladoDescartado = false;
+        } else {
+            avisoDeShellNovo = false; // o aviso vale só para o terminal novo que acabou de anexar
+        }
+        if (comando.ehShell()) {
+            if (estado.reanexando()) {
+                quedaNoShell = true;
+            } else if (estado.tipo() == EstadoDoTerminal.Tipo.ENCERRADA || estado.tipo() == EstadoDoTerminal.Tipo.BLOQUEADA) {
+                quedaNoShell = false; // "Abrir de novo" depois de um exit não é queda de conexão
+            }
         }
         if (estado.tipo() == EstadoDoTerminal.Tipo.BLOQUEADA) {
             // o cofre foi bloqueado: o widget (com o que estava na tela) é descartado, não só escondido
@@ -357,15 +414,15 @@ public final class PainelTerminal extends Painel {
     }
 
     private void atualizarFaixa() {
-        String texto = textoDaFaixa(estadoMostrado, comando.ehShell());
+        String texto = avisoDeShellNovo && estadoMostrado.ativa() ? AVISO_DE_SHELL_NOVO : textoDaFaixa(estadoMostrado, comando.ehShell());
         boolean mostra = texto != null;
         faixa.setVisible(mostra);
         if (mostra) {
             textoDaFaixa.setText(texto);
             textoDaFaixa.setToolTipText(texto);
         }
-        avisoDeTeclas.setVisible(mostra && !estadoMostrado.ativa() && estadoMostrado.tipo() != EstadoDoTerminal.Tipo.ABRINDO
-            && tecladoDescartado);
+        avisoDeTeclas.setVisible(mostra && !estadoMostrado.ativa() && tecladoDescartado);
+        dispensar.setVisible(mostra && avisoDeShellNovo && estadoMostrado.ativa());
         reconectar.setVisible(mostra && podeReconectar(estadoMostrado));
         reconectar.setText(estadoMostrado.tipo() == EstadoDoTerminal.Tipo.ENCERRADA ? "Abrir de novo" : "Reconectar");
         faixa.revalidate();
@@ -457,6 +514,11 @@ public final class PainelTerminal extends Painel {
         return widget;
     }
 
+    /** O widget que espera o primeiro canal (ainda sem conector), para os testes digitarem nele. */
+    public JediTermWidget widgetEmEsperaParaTeste() {
+        return widgetEmEspera;
+    }
+
     public boolean faixaVisivel() {
         return faixa.isVisible();
     }
@@ -471,6 +533,10 @@ public final class PainelTerminal extends Painel {
 
     public Botao botaoReconectar() {
         return reconectar;
+    }
+
+    public Botao botaoDispensar() {
+        return dispensar;
     }
 
     public JComponent areaDoTerminal() {

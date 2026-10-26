@@ -115,18 +115,21 @@ class TecladoDoTerminalTest {
     }
 
     @Test
-    void setasHomeEndEPageUpPageDown() throws Exception {
+    void setasHomeEndPageUpEPageDownMandamOsBytesDoXterm() throws Exception {
         TerminalPanel p = abrir(Preferencias::padrao);
-        apertar(p, 0, KeyEvent.VK_UP, '￿');
-        apertar(p, 0, KeyEvent.VK_DOWN, '￿');
-        apertar(p, 0, KeyEvent.VK_RIGHT, '￿');
-        apertar(p, 0, KeyEvent.VK_LEFT, '￿');
+        apertar(p, 0, KeyEvent.VK_UP, '\uFFFF');
+        apertar(p, 0, KeyEvent.VK_DOWN, '\uFFFF');
+        apertar(p, 0, KeyEvent.VK_RIGHT, '\uFFFF');
+        apertar(p, 0, KeyEvent.VK_LEFT, '\uFFFF');
         esperarRecebido("\u001b[A\u001b[B\u001b[C\u001b[D");
-        apertar(p, 0, KeyEvent.VK_HOME, '￿');
-        apertar(p, 0, KeyEvent.VK_END, '￿');
-        Espera.ate(PRAZO, () -> "recebido=" + visivel(cenario.terminal.recebidoComoTexto()), () -> cenario.terminal.recebidoComoTexto().length() >= 4 * 3 + 6);
-        String recebido = cenario.terminal.recebidoComoTexto();
-        assertTrue(recebido.startsWith("\u001b[A\u001b[B\u001b[C\u001b[D\u001b[") , visivel(recebido));
+        apertar(p, 0, KeyEvent.VK_HOME, '\uFFFF');
+        esperarRecebido("\u001b[A\u001b[B\u001b[C\u001b[D\u001b[H");
+        apertar(p, 0, KeyEvent.VK_END, '\uFFFF');
+        esperarRecebido("\u001b[A\u001b[B\u001b[C\u001b[D\u001b[H\u001b[F");
+        apertar(p, 0, KeyEvent.VK_PAGE_UP, '\uFFFF');
+        esperarRecebido("\u001b[A\u001b[B\u001b[C\u001b[D\u001b[H\u001b[F\u001b[5~");
+        apertar(p, 0, KeyEvent.VK_PAGE_DOWN, '\uFFFF');
+        esperarRecebido("\u001b[A\u001b[B\u001b[C\u001b[D\u001b[H\u001b[F\u001b[5~\u001b[6~");
     }
 
     @Test
