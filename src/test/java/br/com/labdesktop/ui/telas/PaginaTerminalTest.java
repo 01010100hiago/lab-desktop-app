@@ -17,7 +17,14 @@ import br.com.labdesktop.ui.terminal.ContextoDeTerminal;
 import br.com.labdesktop.util.Agendador;
 import br.com.labdesktop.util.Preferencias;
 import br.com.labdesktop.util.Preferencias.Tema;
+import br.com.labdesktop.ui.tema.Fontes;
+import java.awt.Component;
+import java.awt.Container;
 import java.io.IOException;
+import java.util.ArrayList;
+import javax.swing.AbstractButton;
+import javax.swing.JLabel;
+import org.junit.jupiter.api.AfterEach;
 import java.util.List;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
@@ -51,6 +58,46 @@ class PaginaTerminalTest {
         Visual.tema(Tema.CLARO);
         ContextoDeTerminal ctx = new ContextoDeTerminal(SEM_CANAL, limite, Preferencias::padrao, url -> { }, Agendador.doFundo());
         return Visual.naEdt(() -> new PaginaTerminal(ctx, avisos));
+    }
+
+    @AfterEach
+    void voltarA100() {
+        Visual.naEdt(() -> Fontes.definirPercentual(100));
+    }
+
+    /** Nenhum texto da aba (abas, botões, contagem, aviso e a faixa de cada terminal) tem fonte menor que 12 px, em 100 % e em 130 %. */
+    @Test
+    void nenhumTextoDaAbaTemFonteMiuda() {
+        for (int percentual : new int[] {100, 130}) {
+            Visual.naEdt(() -> Fontes.definirPercentual(percentual));
+            PaginaTerminal p = pagina();
+            for (int i = 0; i < 9; i++) {
+                Visual.naEdt(() -> p.novoTerminal()); // a nona deixa o aviso do limite à vista
+            }
+            Visual.renderizar(p, 1000, 600);
+            Visual.naEdt(() -> p.terminais().forEach(t -> t.iniciar())); // sem canal: a faixa de reconexão aparece em cada um
+            Visual.renderizar(p, 1000, 600);
+            float minimo = (float) Math.floor(Fontes.MINIMO * percentual / 100f * 2) / 2f;
+            List<String> miudos = new ArrayList<>();
+            Visual.naEdt(() -> varrer(p, minimo, miudos));
+            assertTrue(miudos.isEmpty(), percentual + "%: " + miudos);
+            Visual.naEdt(p::encerrar);
+        }
+    }
+
+    private static void varrer(Component c, float minimo, List<String> ruins) {
+        if (!c.isVisible()) {
+            return;
+        }
+        String texto = c instanceof JLabel l ? l.getText() : c instanceof AbstractButton b ? b.getText() : null;
+        if (texto != null && !texto.isEmpty() && c.getFont() != null && c.getFont().getSize2D() < minimo) {
+            ruins.add("'" + texto + "' com " + c.getFont().getSize2D());
+        }
+        if (c instanceof Container k) {
+            for (Component f : k.getComponents()) {
+                varrer(f, minimo, ruins);
+            }
+        }
     }
 
     @Test

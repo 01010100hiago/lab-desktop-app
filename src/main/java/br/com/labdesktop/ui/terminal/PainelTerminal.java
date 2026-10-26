@@ -7,7 +7,6 @@ import br.com.labdesktop.terminal.PortaoDeEntrada;
 import br.com.labdesktop.terminal.SessaoTerminal;
 import br.com.labdesktop.terminal.TamanhoDeTerminal;
 import br.com.labdesktop.terminal.TituloDeAba;
-import br.com.labdesktop.ui.Gravidade;
 import br.com.labdesktop.ui.componentes.Botao;
 import br.com.labdesktop.ui.componentes.Botoes;
 import br.com.labdesktop.ui.componentes.Painel;
@@ -392,16 +391,6 @@ public final class PainelTerminal extends Painel {
                 ? "O terminal terminou" + (e.saida() == null ? "." : " (código " + e.saida() + ").")
                 : "A sessão do Claude terminou (o tmux saiu).";
             case BLOQUEADA -> "O cofre foi bloqueado: o terminal foi fechado.";
-        };
-    }
-
-    /** A gravidade que combina com o estado (para quem quiser um selo). */
-    public static Gravidade gravidadeDe(EstadoDoTerminal e) {
-        return switch (e.tipo()) {
-            case ATIVA -> Gravidade.OK;
-            case ABRINDO, REANEXANDO -> Gravidade.ATENCAO;
-            case SEM_CONEXAO, SESSAO_FECHADA, BLOQUEADA -> Gravidade.PERIGO;
-            case ENCERRADA -> Gravidade.NEUTRO;
         };
     }
 

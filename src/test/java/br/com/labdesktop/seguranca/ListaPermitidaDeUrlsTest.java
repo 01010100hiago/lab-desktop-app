@@ -62,4 +62,17 @@ class ListaPermitidaDeUrlsTest {
             ListaPermitidaDeUrls.validar(LOGIN, " https://claude.ai/x ").orElseThrow());
         assertTrue(ListaPermitidaDeUrls.validar(LOGIN, "nao é url").isEmpty());
     }
+
+    @Test
+    void linkDoTerminalSoHttpEHttpsComHostSemUsuarioESemControle() {
+        assertTrue(ListaPermitidaDeUrls.validarLinkDoTerminal("https://example.com/a?b=1#c").isPresent());
+        assertTrue(ListaPermitidaDeUrls.validarLinkDoTerminal("http://example.com:8080/x").isPresent());
+        assertTrue(ListaPermitidaDeUrls.validarLinkDoTerminal("HTTPS://Example.com/x").isPresent());
+        for (String ruim : new String[] {"file:///etc/passwd", "javascript:alert(1)", "ssh://host/x", "ftp://host/x", "mailto:a@b.c",
+            "data:text/html,<b>x</b>", "x-apple.systempreferences:com.apple.x", "https://user@example.com/", "https://", "https:///x",
+            "example.com/sem-esquema", "https://example.com/\nx", "https://example.com/\u001b[31m", "", null,
+            "https://example.com/" + "a".repeat(3000)}) {
+            assertFalse(ListaPermitidaDeUrls.validarLinkDoTerminal(ruim).isPresent(), "aceitou: " + ruim);
+        }
+    }
 }

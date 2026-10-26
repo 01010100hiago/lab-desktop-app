@@ -190,4 +190,40 @@ class PreferenciasTest {
         assertEquals(115, p.escalaTexto());
         assertEquals(115, p.comJanela(new Janela(0, 0, 1000, 700, false)).escalaTexto());
     }
+
+    @Test
+    void osPadroesDoTerminalSaoOsDoDesenho() {
+        Preferencias p = Preferencias.padrao();
+        assertFalse(p.opcaoComoMeta(), "o ABNT2 gera caracteres com Option");
+        assertFalse(p.copiarAoSelecionar(), "copiar sozinho sobrescreve a área de transferência");
+        assertFalse(p.donoExclusivo(), "sem attach -d por padrão");
+        assertEquals(13, p.tamanhoFonteTerminal());
+    }
+
+    @Test
+    void donoExclusivoViajaPeloArquivoEArquivoAntigoContinuaValendo(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Preferencias.padrao().comDonoExclusivo(true).comOpcaoComoMeta(true).salvar(c);
+        Preferencias lida = Preferencias.carregar(c);
+        assertTrue(lida.donoExclusivo());
+        assertTrue(lida.opcaoComoMeta());
+        assertTrue(Files.readString(c.arquivoPreferencias()).contains("\"donoExclusivo\" : true"));
+
+        Files.writeString(c.arquivoPreferencias(), "{\"versao\": 1, \"tema\": \"claro\", \"opcaoComoMeta\": true}");
+        Preferencias antiga = Preferencias.carregar(c);
+        assertFalse(antiga.donoExclusivo(), "arquivo de antes do campo: desligado");
+        assertTrue(antiga.opcaoComoMeta());
+        Files.writeString(c.arquivoPreferencias(), "{\"donoExclusivo\": \"sim\"}");
+        assertEquals(Preferencias.padrao(), Preferencias.carregar(c), "valor que não é booleano nunca derruba a leitura");
+    }
+
+    @Test
+    void mudarOutraPreferenciaNaoPerdeODonoExclusivo() {
+        Preferencias p = Preferencias.padrao().comDonoExclusivo(true).comTema(Tema.ESCURO).comEscalaTexto(115).comAutoBloqueioMinutos(3)
+            .comAviso(Aviso.CREDITO_75, false).comCopiarAoSelecionar(true).comTamanhoFonteTerminal(15)
+            .comJanela(new Janela(0, 0, 1000, 700, false)).comOpcaoComoMeta(true);
+        assertTrue(p.donoExclusivo());
+        assertEquals(115, p.escalaTexto());
+        assertTrue(p.copiarAoSelecionar());
+    }
 }
