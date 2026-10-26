@@ -29,7 +29,7 @@ class TransporteSshTest {
             TransporteSsh t = new TransporteSsh(c.conexao);
             CanalDeTerminal canal = t.abrir(new ComandoDeTerminal.SessaoDoClaude("orbita"), new TamanhoDeTerminal(100, 30));
             try {
-                Espera.ate(PRAZO, "comando", () -> !c.terminal.comandos.isEmpty());
+                Espera.ate(PRAZO, "o servidor abriu o canal", () -> c.terminal.canaisAbertos.get() == 1);
                 assertTrue(c.terminal.comandos.get(0).contains("lab-claude-orbita tmux -u attach -t work"));
                 assertEquals("100x30", c.terminal.tamanhosIniciais.get(0));
                 canal.entrada().write("é\n".getBytes(StandardCharsets.UTF_8));
@@ -143,6 +143,25 @@ class TransporteSshTest {
             c.conexao.bloquear();
             Espera.ate(PRAZO, () -> "vistas=" + vistas, () -> vistas.contains(Disponibilidade.BLOQUEADO));
             desfaz.run();
+        }
+    }
+
+    @Test
+    void oTerminalAbreEEscreveComOAgenteForaDoAr() throws Exception {
+        try (CenarioDeTerminal c = CenarioDeTerminal.semAgente()) {
+            assertEquals(EstadoConexao.SSH_OK_SEM_AGENTE, c.conexao.info().estado());
+            List<Disponibilidade> vistas = new CopyOnWriteArrayList<>();
+            TransporteSsh t = new TransporteSsh(c.conexao);
+            t.observarDisponibilidade(vistas::add);
+            Espera.ate(PRAZO, "primeiro valor", () -> !vistas.isEmpty());
+            assertEquals(Disponibilidade.DISPONIVEL, vistas.get(0), "sem agente o terminal continua disponível");
+
+            CanalDeTerminal canal = t.abrir(new ComandoDeTerminal.SessaoDoClaude("orbita"), TamanhoDeTerminal.PADRAO);
+            canal.entrada().write("oi\n".getBytes(StandardCharsets.UTF_8));
+            canal.entrada().flush();
+            assertEquals("oi\n", new String(canal.saida().readNBytes(3), StandardCharsets.UTF_8));
+            canal.fechar();
+            assertEquals(EstadoConexao.SSH_OK_SEM_AGENTE, c.conexao.info().estado(), "abrir e fechar o terminal não mexe na conexão");
         }
     }
 

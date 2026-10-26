@@ -30,10 +30,9 @@ class ConexaoSshPtyTest {
         try (CenarioDeTerminal c = CenarioDeTerminal.conectado()) {
             PtyCapableChannelSession canal = c.conexao.abrirCanalPty("orbita", 100, 30);
             try {
-                Espera.ate(PRAZO, "o servidor viu o comando", () -> !c.terminal.comandos.isEmpty());
+                Espera.ate(PRAZO, "o servidor abriu o canal", () -> c.terminal.canaisAbertos.get() == 1);
                 assertEquals("docker exec -it -e LANG=C.UTF-8 -e TERM=xterm-256color -e COLORTERM=truecolor lab-claude-orbita"
                     + " tmux -u attach -t work", c.terminal.comandos.get(0));
-                Espera.ate(PRAZO, "o servidor viu o PTY", () -> !c.terminal.tiposDeTerminal.isEmpty());
                 assertEquals("xterm-256color", c.terminal.tiposDeTerminal.get(0));
                 assertEquals("100x30", c.terminal.tamanhosIniciais.get(0));
             } finally {
@@ -47,7 +46,7 @@ class ConexaoSshPtyTest {
         try (CenarioDeTerminal c = CenarioDeTerminal.conectado()) {
             PtyCapableChannelSession canal = c.conexao.abrirCanalPty("orbita", true, 120, 32);
             try {
-                Espera.ate(PRAZO, "o servidor viu o comando", () -> !c.terminal.comandos.isEmpty());
+                Espera.ate(PRAZO, "o servidor abriu o canal", () -> c.terminal.canaisAbertos.get() == 1);
                 assertTrue(c.terminal.comandos.get(0).endsWith("tmux -u attach -d -t work"), c.terminal.comandos.get(0));
             } finally {
                 canal.close(true);
@@ -85,7 +84,7 @@ class ConexaoSshPtyTest {
             // o limite da regra: 49 caracteres passam
             PtyCapableChannelSession ok = c.conexao.abrirCanalPty("a".repeat(49), 120, 32);
             ok.close(true);
-            Espera.ate(PRAZO, "comando válido chegou", () -> !c.terminal.comandos.isEmpty());
+            Espera.ate(PRAZO, "o servidor abriu o canal", () -> c.terminal.canaisAbertos.get() == 1);
             assertTrue(c.terminal.comandos.get(0).contains("lab-claude-" + "a".repeat(49) + " tmux"));
         }
     }

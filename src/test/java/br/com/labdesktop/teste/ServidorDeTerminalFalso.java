@@ -229,10 +229,7 @@ public final class ServidorDeTerminalFalso {
 
         @Override
         public void start(ChannelSession canal, Environment env) throws IOException {
-            canaisAbertos.incrementAndGet();
-            if (shell) {
-                shellsAbertos.incrementAndGet();
-            }
+            // primeiro tudo o que o teste vai LER, depois os contadores em que ele ESPERA: quem vê o contador já vê os dados
             tiposDeTerminal.add(String.valueOf(env.getEnv().get(Environment.ENV_TERM)));
             tamanhosIniciais.add(env.getEnv().get(Environment.ENV_COLUMNS) + "x" + env.getEnv().get(Environment.ENV_LINES));
             env.addSignalListener((c, sinal) -> janelas.add(env.getEnv().get(Environment.ENV_COLUMNS) + "x"
@@ -258,6 +255,10 @@ public final class ServidorDeTerminalFalso {
             }, tela, env, aoSair);
             sessaoAtual = sessao;
             sessoes.add(sessao);
+            if (shell) {
+                shellsAbertos.incrementAndGet();
+            }
+            canaisAbertos.incrementAndGet();
             Thread t = new Thread(() -> {
                 try {
                     roteiro.rodar(sessao);

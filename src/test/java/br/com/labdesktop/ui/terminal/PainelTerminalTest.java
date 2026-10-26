@@ -118,6 +118,7 @@ class PainelTerminalTest {
         abrir(p, 1000, 600);
         esperarTela(p, "Olá, ação ✓");
         // o servidor recebeu o tamanho MEDIDO no componente, não o padrão de 120 por 32
+        Espera.ate(PRAZO, "o servidor abriu o canal", () -> cenario.terminal.canaisAbertos.get() == 1);
         String inicial = cenario.terminal.tamanhosIniciais.get(0);
         assertEquals(p.tamanhoAtual().colunas() + "x" + p.tamanhoAtual().linhas(), inicial);
         assertTrue(p.tamanhoAtual().colunas() > 100 && p.tamanhoAtual().colunas() != 120, "medido: " + p.tamanhoAtual());
@@ -131,6 +132,7 @@ class PainelTerminalTest {
         PainelTerminal p = doClaude();
         Visual.naEdt(p::iniciar); // sem tamanho nenhum: o painel nunca foi dimensionado
         esperarAtiva(p);
+        Espera.ate(PRAZO, "o servidor abriu o canal", () -> cenario.terminal.canaisAbertos.get() == 1);
         assertEquals("120x32", cenario.terminal.tamanhosIniciais.get(0));
     }
 

@@ -1,7 +1,6 @@
 package br.com.labdesktop.ui;
 
 import br.com.labdesktop.ui.componentes.Notificacoes;
-import java.util.ArrayList;
 import java.util.List;
 
 /** Um {@link Notificacoes} que só anota o que foi dito, para os testes conferirem as mensagens. */
@@ -10,7 +9,7 @@ public final class AvisosGravados implements Notificacoes {
     /** Uma mensagem: o tipo ("ok", "info", "atencao", "erro", "acao") e o texto. */
     public record Aviso(String tipo, String texto) { }
 
-    public final List<Aviso> todos = new ArrayList<>();
+    public final List<Aviso> todos = new java.util.concurrent.CopyOnWriteArrayList<>(); // a EDT escreve e o teste lê esperando
     public Runnable ultimaAcao;
 
     @Override

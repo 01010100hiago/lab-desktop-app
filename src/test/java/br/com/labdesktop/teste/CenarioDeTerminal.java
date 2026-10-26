@@ -23,13 +23,13 @@ public final class CenarioDeTerminal implements AutoCloseable {
     /** Entre o app e o servidor, para derrubar a rede; {@code null} no cenário sem proxy. */
     public final ProxyTcp proxy;
 
-    private CenarioDeTerminal(ConfigSsh cfg, boolean comProxy) throws IOException, GeneralSecurityException {
+    private CenarioDeTerminal(ConfigSsh cfg, boolean comProxy, SondaDoAgente sonda) throws IOException, GeneralSecurityException {
         this.ssh = ServidorSshDeTeste.ed25519();
         this.proxy = comProxy ? new ProxyTcp(ssh.porta()) : null;
         this.cofre = new CofreFalso("127.0.0.1", comProxy ? proxy.porta() : ssh.porta(), List.of(ssh.pin()));
         ssh.aceitar(cofre.par().getPublic());
         this.terminal = new ServidorDeTerminalFalso(ssh);
-        this.conexao = new ConexaoSsh(CofreFalso.ID, cofre, cfg, tunel -> SondaDoAgente.Resultado.OK);
+        this.conexao = new ConexaoSsh(CofreFalso.ID, cofre, cfg, sonda);
     }
 
     /** Conectado e pronto para abrir canais. */
@@ -46,10 +46,23 @@ public final class CenarioDeTerminal implements AutoCloseable {
         return conectar(cfg, false);
     }
 
+    /**
+     * Com o SSH de pé e o AGENTE FORA (a sonda nunca responde): a conexão fica em {@code SSH_OK_SEM_AGENTE}. O terminal não depende
+     * do agente e precisa continuar abrindo nesse estado.
+     */
+    public static CenarioDeTerminal semAgente() throws IOException, GeneralSecurityException {
+        return conectar(ConfigSsh.rapida(), false, tunel -> SondaDoAgente.Resultado.AGENTE_FORA, EstadoConexao.SSH_OK_SEM_AGENTE);
+    }
+
     private static CenarioDeTerminal conectar(ConfigSsh cfg, boolean comProxy) throws IOException, GeneralSecurityException {
-        CenarioDeTerminal c = new CenarioDeTerminal(cfg, comProxy);
+        return conectar(cfg, comProxy, tunel -> SondaDoAgente.Resultado.OK, EstadoConexao.CONECTADO);
+    }
+
+    private static CenarioDeTerminal conectar(ConfigSsh cfg, boolean comProxy, SondaDoAgente sonda, EstadoConexao esperado)
+        throws IOException, GeneralSecurityException {
+        CenarioDeTerminal c = new CenarioDeTerminal(cfg, comProxy, sonda);
         c.conexao.iniciar();
-        Espera.ate(Duration.ofSeconds(20), () -> "estado=" + c.conexao.info(), () -> c.conexao.info().estado() == EstadoConexao.CONECTADO);
+        Espera.ate(Duration.ofSeconds(20), () -> "estado=" + c.conexao.info(), () -> c.conexao.info().estado() == esperado);
         return c;
     }
 
