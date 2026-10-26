@@ -151,8 +151,7 @@ public final class SessaoTerminal implements AutoCloseable {
      */
     public void aoSessaoAberta() {
         post(() -> {
-            if (!encerrado && (estado.tipo() == EstadoDoTerminal.Tipo.SESSAO_FECHADA
-                || estado.tipo() == EstadoDoTerminal.Tipo.REANEXANDO)) {
+            if (!encerrado && estado.tipo() == EstadoDoTerminal.Tipo.SESSAO_FECHADA) {
                 falhasSeguidas = 0;
                 tentarAnexar(EstadoDoTerminal.ABRINDO);
             }

@@ -32,6 +32,10 @@ public final class ConfigTerminal extends DefaultSettingsProvider {
     /** Linhas de histórico do terminal. */
     public static final int LINHAS_DE_HISTORICO = 10_000;
 
+    static {
+        FlatJetBrainsMonoFont.install(); // idempotente: o app já a instala ao montar o tema; os testes não
+    }
+
     private static final ColorPalette PALETA = new PaletaTerminal();
     private static final TerminalColor TEXTO = TerminalColor.rgb(r(PaletaTerminal.TEXTO), g(PaletaTerminal.TEXTO), b(PaletaTerminal.TEXTO));
     private static final TerminalColor FUNDO = TerminalColor.rgb(r(PaletaTerminal.FUNDO), g(PaletaTerminal.FUNDO), b(PaletaTerminal.FUNDO));
@@ -42,7 +46,6 @@ public final class ConfigTerminal extends DefaultSettingsProvider {
     private final Font fonte;
 
     public ConfigTerminal(Preferencias prefs) {
-        FlatJetBrainsMonoFont.install(); // idempotente: o app já a instala ao montar o tema; os testes não
         this.tamanhoDaFonte = prefs.tamanhoFonteTerminal();
         this.opcaoComoMeta = prefs.opcaoComoMeta();
         this.copiarAoSelecionar = prefs.copiarAoSelecionar();
