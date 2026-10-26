@@ -94,7 +94,7 @@ class TransporteSshTest {
             assertFalse(canal.aberto());
             // o servidor ficou sabendo (EOF e CLOSE chegaram): o docker exec e o cliente do tmux recebem o hangup e saem
             Espera.ate(PRAZO, () -> "encerrados=" + c.terminal.canaisEncerrados.get(), () -> c.terminal.canaisEncerrados.get() == 1);
-            assertTrue(c.terminal.sessoes.get(0).saiu());
+            Espera.ate(PRAZO, "o programa remoto recebeu o hangup", () -> c.terminal.sessoes.get(0).saiu());
             canal.fechar(); // idempotente
         }
     }
