@@ -321,4 +321,87 @@ class SessaoTerminalTest {
         assertEquals(List.of(true), ativaNoAnexo);
         assertNull(sessao.estado().motivo());
     }
+
+    /**
+     * Canal que abre e fecha na hora com uma saída que o classificador não reconhece como "sessão ausente" (Docker parado, docker fora do
+     * PATH, tmux ausente, PermitTTY no): gasta uma das cinco tentativas, e depois delas o terminal para em SEM_CONEXAO em vez de
+     * reabrir a cada 2 s para sempre.
+     */
+    private void conferirCanalQueMorreNaHora(Integer status, String saida) {
+        transporte.comAbertura(n -> {
+            TransporteFalso.CanalFalso c = transporte.abrirNovo();
+            c.imprimir(saida);
+            c.fecharRemoto(status);
+            return c;
+        });
+        doClaude().iniciar();
+        // passo a passo e com o relógio andando pouco: cada canal tem de morrer "na hora" (vida de menos de 10 s)
+        for (int i = 0; i < 400 && sessao.estado().tipo() != Tipo.SEM_CONEXAO; i++) {
+            Espera.dormir(25);
+            relogio.avancar(Duration.ofMillis(500));
+        }
+        assertEquals(Tipo.SEM_CONEXAO, sessao.estado().tipo(), "estado=" + sessao.estado() + " aberturas=" + transporte.aberturas.get());
+        assertEquals(1 + 5, transporte.aberturas.get(), "a abertura inicial mais as 5 tentativas (2, 4, 8, 16 e 30 s)");
+        assertTrue(sessao.estado().motivo().contains("fecha") , sessao.estado().motivo());
+        relogio.avancar(Duration.ofMinutes(10));
+        Espera.naoAcontece(Duration.ofMillis(300), "reabriu sozinho depois das cinco tentativas", () -> transporte.aberturas.get() > 6);
+
+        // o botão Reconectar zera as tentativas e tenta de novo
+        int antes = transporte.aberturas.get();
+        sessao.reconectar();
+        Espera.ate(PRAZO, "reconectar abriu um canal", () -> transporte.aberturas.get() > antes);
+    }
+
+    @Test
+    void dockerParadoNaoReabreParaSempre() {
+        conferirCanalQueMorreNaHora(1, "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?\r\n");
+    }
+
+    @Test
+    void dockerForaDoPathNaoReabreParaSempre() {
+        conferirCanalQueMorreNaHora(127, "bash: docker: command not found\r\n");
+    }
+
+    @Test
+    void tmuxAusenteNaoReabreParaSempre() {
+        conferirCanalQueMorreNaHora(126, "OCI runtime exec failed: exec failed: \"tmux\": executable file not found in $PATH\r\n");
+    }
+
+    @Test
+    void semPermissaoDeTtyENaoReabreParaSempre() {
+        conferirCanalQueMorreNaHora(null, "PTY allocation request failed on channel 0\r\n");
+    }
+
+    @Test
+    void canalQueViveAlemDosDezSegundosZeraAsTentativas() {
+        doClaude().iniciar();
+        esperarAnexos(1);
+        // três quedas rápidas seguidas gastam tentativas...
+        transporte.ultimoCanal().fecharRemoto(1);
+        esperarTipo(Tipo.REANEXANDO);
+        relogio.avancar(Duration.ofSeconds(2));
+        esperarAnexos(2);
+        transporte.ultimoCanal().fecharRemoto(1);
+        Espera.ate(PRAZO, () -> "estado=" + sessao.estado(), () -> sessao.estado().reanexando() && sessao.estado().tentativa() == 2);
+        relogio.avancar(Duration.ofSeconds(4));
+        esperarAnexos(3);
+        // ...mas um canal que vive mais de 10 s é uma conversa de verdade: volta a contar do começo
+        relogio.avancar(Duration.ofSeconds(11));
+        transporte.ultimoCanal().fecharRemoto(null);
+        Espera.ate(PRAZO, () -> "estado=" + sessao.estado(), () -> sessao.estado().reanexando() && sessao.estado().tentativa() == 1);
+    }
+
+    @Test
+    void quedaDaConexaoNaoGastaTentativaMesmoComOCanalNovo() {
+        doClaude().iniciar();
+        esperarAnexos(1);
+        transporte.emitir(Disponibilidade.INDISPONIVEL);
+        esperarTipo(Tipo.REANEXANDO);
+        assertEquals(1, sessao.estado().tentativa(), "a queda da conexão não é falha do terminal");
+        transporte.emitir(Disponibilidade.DISPONIVEL);
+        esperarAnexos(2);
+        transporte.emitir(Disponibilidade.INDISPONIVEL);
+        Espera.ate(PRAZO, () -> "estado=" + sessao.estado(), () -> sessao.estado().reanexando());
+        assertEquals(1, sessao.estado().tentativa(), "de novo: a conexão caiu logo depois de anexar, e isso não conta");
+    }
 }

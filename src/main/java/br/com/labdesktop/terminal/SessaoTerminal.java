@@ -1,5 +1,6 @@
 package br.com.labdesktop.terminal;
 
+import br.com.labdesktop.seguranca.TextoSeguro;
 import br.com.labdesktop.terminal.ClassificadorDeSaida.Veredito;
 import br.com.labdesktop.terminal.TransporteDeTerminal.Disponibilidade;
 import br.com.labdesktop.util.Agendador;
@@ -78,6 +79,11 @@ public final class SessaoTerminal implements AutoCloseable {
     private Cancelavel timer;
     private boolean disponivel = true;
     private boolean abrindo;
+    /** A abertura em curso é uma das tentativas de reanexação (não a primeira abertura nem o "Reconectar"). */
+    private boolean aberturaEhTentativa;
+    /** O canal atual foi arrancado por nós porque a conexão caiu: isso não é falha do terminal. */
+    private boolean quedaDaConexao;
+    private boolean anexacaoEhTentativa;
     private boolean encerrado;
 
     // ----- visível para outras threads -----
@@ -210,6 +216,7 @@ public final class SessaoTerminal implements AutoCloseable {
         fecharCanal();
         long g = ++geracao;
         abrindo = true;
+        aberturaEhTentativa = mostrar.reanexando();
         mudar(mostrar);
         TamanhoDeTerminal t = tamanho.get();
         Fundo.ioVirtual().execute(() -> {
@@ -233,7 +240,8 @@ public final class SessaoTerminal implements AutoCloseable {
         CanalObservado c = new CanalObservado(aberto);
         canal = c;
         anexadoEm = agendador.agora();
-        falhasSeguidas = 0;
+        anexacaoEhTentativa = aberturaEhTentativa;
+        quedaDaConexao = false;
         geracaoAtiva = g;
         mudar(EstadoDoTerminal.ATIVA);
         for (Ouvinte o : ouvintes) {
@@ -295,7 +303,17 @@ public final class SessaoTerminal implements AutoCloseable {
             case SESSAO_FECHADA -> mudar(EstadoDoTerminal.SESSAO_FECHADA);
             case TERMINOU -> mudar(EstadoDoTerminal.encerrada(status));
             case QUEDA -> {
-                falhasSeguidas = 0;
+                if (vida.compareTo(ClassificadorDeSaida.VIDA_DE_FALHA_RAPIDA) >= 0) {
+                    falhasSeguidas = 0; // uma conversa de verdade: o que vier agora recomeça a contar do começo
+                } else if (anexacaoEhTentativa && !quedaDaConexao) {
+                    // Canal que abre e fecha na hora sem ser "sessão ausente" (Docker parado, docker ou tmux fora do PATH, PermitTTY no):
+                    // é uma tentativa que falhou. Sem isto, cada abertura que "deu certo" zerava a conta e o terminal reabria a cada 2 s.
+                    falhasSeguidas++;
+                    if (falhasSeguidas >= ESPERAS.size()) {
+                        mudar(EstadoDoTerminal.semConexao(motivoDeCanalQueMorreNaHora(cauda)));
+                        return;
+                    }
+                }
                 transporte.sugerirVerificacao();
                 agendarReanexacao();
             }
@@ -330,6 +348,7 @@ public final class SessaoTerminal implements AutoCloseable {
             }
             case INDISPONIVEL -> {
                 if (estado.ativa() && canal != null) {
+                    quedaDaConexao = true;
                     canal.abortar(); // a conexão caiu: não há quem avisar: não espera o canal perceber sozinho; o fechamento dispara a reanexação
                 }
             }
@@ -370,6 +389,13 @@ public final class SessaoTerminal implements AutoCloseable {
                 LOG.warn("Ouvinte do terminal falhou: {}", e.toString());
             }
         }
+    }
+
+    /** O texto de "o servidor fecha o terminal assim que ele abre", com o que ele disse (texto do servidor: limpo e curto). */
+    private static String motivoDeCanalQueMorreNaHora(byte[] cauda) {
+        String disse = cauda == null ? "" : TextoSeguro.limparLinha(new String(cauda, java.nio.charset.StandardCharsets.UTF_8));
+        String base = "O servidor fecha o terminal assim que ele abre.";
+        return disse.isBlank() ? base : base + " Ele disse: " + TextoSeguro.truncar(disse, 160);
     }
 
     private static String textoDeFalha(Throwable erro) {
