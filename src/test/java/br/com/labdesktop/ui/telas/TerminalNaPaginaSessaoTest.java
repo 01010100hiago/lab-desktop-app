@@ -203,7 +203,7 @@ class TerminalNaPaginaSessaoTest {
         cenario.terminal.roteiro(ServidorDeTerminalFalso::roteiroQueNaoLe);
         alimentar(TelaProjetoTest.detalheCom("\"desde\": \"2026-10-24T17:10:00.000Z\"", "\"desde\": \"2026-10-24T20:45:00.000Z\""));
         Espera.ate(PRAZO, () -> "estado=" + p.sessao().estado(), () -> p.sessao().estado().ativa());
-        assertEquals(2, cenario.terminal.canaisAbertos.get());
+        Espera.ate(PRAZO, () -> "canais=" + cenario.terminal.canaisAbertos.get(), () -> cenario.terminal.canaisAbertos.get() == 2);
     }
 
     @Test
@@ -225,6 +225,6 @@ class TerminalNaPaginaSessaoTest {
         cenario.terminal.roteiro(ServidorDeTerminalFalso::roteiroQueNaoLe);
         alimentar(FixturesDeApi.detalheDoProjetoSintetico()); // e abrir de novo
         Espera.ate(PRAZO, () -> "estado=" + p.sessao().estado(), () -> p.sessao().estado().ativa());
-        assertEquals(2, cenario.terminal.canaisAbertos.get());
+        Espera.ate(PRAZO, () -> "canais=" + cenario.terminal.canaisAbertos.get(), () -> cenario.terminal.canaisAbertos.get() == 2);
     }
 }
