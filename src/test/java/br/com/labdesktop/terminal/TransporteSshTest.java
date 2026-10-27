@@ -30,7 +30,7 @@ class TransporteSshTest {
             CanalDeTerminal canal = t.abrir(new ComandoDeTerminal.SessaoDoClaude("orbita"), new TamanhoDeTerminal(100, 30));
             try {
                 Espera.ate(PRAZO, "o servidor abriu o canal", () -> c.terminal.canaisAbertos.get() == 1);
-                assertTrue(c.terminal.comandos.get(0).contains("lab-claude-orbita tmux -u attach -t work"));
+                assertTrue(c.terminal.comandos.get(0).contains("lab-claude-orbita tmux -u set-option -t work mouse on ';' attach -t work"));
                 assertEquals("100x30", c.terminal.tamanhosIniciais.get(0));
                 canal.entrada().write("é\n".getBytes(StandardCharsets.UTF_8));
                 canal.entrada().flush();
@@ -54,7 +54,7 @@ class TransporteSshTest {
             t.abrir(new ComandoDeTerminal.SessaoDoClaude("a"), TamanhoDeTerminal.PADRAO).fechar();
             Espera.ate(PRAZO, "dois comandos", () -> c.terminal.comandos.size() == 2);
             assertFalse(c.terminal.comandos.get(0).contains(" -d "));
-            assertTrue(c.terminal.comandos.get(1).contains("attach -d -t work"));
+            assertTrue(c.terminal.comandos.get(1).contains("';' attach -d -t work"));
         }
     }
 

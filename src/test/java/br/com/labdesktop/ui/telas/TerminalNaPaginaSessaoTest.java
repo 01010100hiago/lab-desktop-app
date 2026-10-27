@@ -103,7 +103,7 @@ class TerminalNaPaginaSessaoTest {
 
         abrirOTerminal();
         Espera.ate(PRAZO, "o servidor viu o comando", () -> !cenario.terminal.comandos.isEmpty());
-        assertEquals("docker exec -it -e LANG=C.UTF-8 -e TERM=xterm-256color -e COLORTERM=truecolor lab-claude-orbita tmux -u attach -t work",
+        assertEquals("docker exec -it -e LANG=C.UTF-8 -e TERM=xterm-256color -e COLORTERM=truecolor lab-claude-orbita tmux -u set-option -t work mouse on ';' attach -t work",
             cenario.terminal.comandos.get(0));
         assertTrue(Visual.naEdt(pagina()::terminalAFrente));
         assertEquals("Terminal da sessão", Visual.naEdt(pagina()::tituloDaAreaPrincipal));
@@ -203,7 +203,7 @@ class TerminalNaPaginaSessaoTest {
         cenario.terminal.roteiro(ServidorDeTerminalFalso::roteiroQueNaoLe);
         alimentar(TelaProjetoTest.detalheCom("\"desde\": \"2026-10-24T17:10:00.000Z\"", "\"desde\": \"2026-10-24T20:45:00.000Z\""));
         Espera.ate(PRAZO, () -> "estado=" + p.sessao().estado(), () -> p.sessao().estado().ativa());
-        assertEquals(2, cenario.terminal.canaisAbertos.get());
+        Espera.ate(PRAZO, () -> "canais=" + cenario.terminal.canaisAbertos.get(), () -> cenario.terminal.canaisAbertos.get() == 2);
     }
 
     @Test
@@ -225,6 +225,6 @@ class TerminalNaPaginaSessaoTest {
         cenario.terminal.roteiro(ServidorDeTerminalFalso::roteiroQueNaoLe);
         alimentar(FixturesDeApi.detalheDoProjetoSintetico()); // e abrir de novo
         Espera.ate(PRAZO, () -> "estado=" + p.sessao().estado(), () -> p.sessao().estado().ativa());
-        assertEquals(2, cenario.terminal.canaisAbertos.get());
+        Espera.ate(PRAZO, () -> "canais=" + cenario.terminal.canaisAbertos.get(), () -> cenario.terminal.canaisAbertos.get() == 2);
     }
 }
