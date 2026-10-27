@@ -32,7 +32,7 @@ class ConexaoSshPtyTest {
             try {
                 Espera.ate(PRAZO, "o servidor abriu o canal", () -> c.terminal.canaisAbertos.get() == 1);
                 assertEquals("docker exec -it -e LANG=C.UTF-8 -e TERM=xterm-256color -e COLORTERM=truecolor lab-claude-orbita"
-                    + " tmux -u set-option -t work mouse on ';' attach -t work", c.terminal.comandos.get(0));
+                    + " tmux -u attach -t work", c.terminal.comandos.get(0));
                 assertEquals("xterm-256color", c.terminal.tiposDeTerminal.get(0));
                 assertEquals("100x30", c.terminal.tamanhosIniciais.get(0));
             } finally {
@@ -47,7 +47,7 @@ class ConexaoSshPtyTest {
             PtyCapableChannelSession canal = c.conexao.abrirCanalPty("orbita", true, 120, 32);
             try {
                 Espera.ate(PRAZO, "o servidor abriu o canal", () -> c.terminal.canaisAbertos.get() == 1);
-                assertTrue(c.terminal.comandos.get(0).endsWith("mouse on ';' attach -d -t work"), c.terminal.comandos.get(0));
+                assertTrue(c.terminal.comandos.get(0).endsWith("tmux -u attach -d -t work"), c.terminal.comandos.get(0));
             } finally {
                 canal.close(true);
             }
