@@ -15,6 +15,7 @@ import br.com.labdesktop.ui.componentes.Teclas;
 import br.com.labdesktop.ui.tema.Tokens;
 import br.com.labdesktop.util.Fundo;
 import com.jediterm.core.util.TermSize;
+import com.jediterm.terminal.emulator.mouse.MouseMode;
 import com.jediterm.terminal.model.StyleState;
 import com.jediterm.terminal.model.TerminalTextBuffer;
 import com.jediterm.terminal.model.hyperlinks.HyperlinkFilter;
@@ -34,12 +35,14 @@ import java.awt.event.HierarchyEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
+import javax.swing.JScrollBar;
 import javax.swing.SwingUtilities;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,6 +72,10 @@ public final class PainelTerminal extends Painel {
     private static final Logger LOG = LoggerFactory.getLogger(PainelTerminal.class);
     /** O que o usuário lê quando um shell do servidor reanexa depois de uma queda: o tmux preserva a sessão do Claude, mas não um shell. */
     public static final String AVISO_DE_SHELL_NOVO = "A conexão caiu. Este é um terminal novo: o que estava rodando foi encerrado.";
+
+    /** O que o Claude entende como rolar uma página para cima e para baixo (a roda na tela alternativa vira isto). */
+    static final byte[] PAGE_UP = {0x1b, '[', '5', '~'};
+    static final byte[] PAGE_DOWN = {0x1b, '[', '6', '~'};
 
     private static final Pattern LINK = Pattern.compile("https?://[^\\s<>\"'`\\x00-\\x1f\\x7f]+");
 
@@ -304,6 +311,50 @@ public final class PainelTerminal extends Painel {
                             return;
                         }
                         super.processKeyEvent(e);
+                    }
+
+                    private final ConversorDeRoda roda = new ConversorDeRoda();
+                    private volatile boolean telaAlternativa;
+                    private volatile boolean mouseReporting;
+
+                    @Override
+                    public void useAlternateScreenBuffer(boolean alternativa) {
+                        telaAlternativa = alternativa;
+                        super.useAlternateScreenBuffer(alternativa);
+                    }
+
+                    @Override
+                    public void terminalMouseModeSet(MouseMode modo) {
+                        mouseReporting = modo != MouseMode.MOUSE_REPORTING_NONE;
+                        super.terminalMouseModeSet(modo);
+                    }
+
+                    /**
+                     * Na tela alternativa sem mouse reporting (o Claude sobe com {@code CLAUDE_CODE_DISABLE_MOUSE=1} e o tmux não guarda
+                     * histórico dela), a roda e o trackpad viram Page Up e Page Down, que é o que o Claude usa para rolar a conversa.
+                     * Na tela normal (o shell, com o histórico local do JediTerm) e com mouse reporting ligado nada muda: a rolagem
+                     * nativa e o repasse ao aplicativo seguem como estavam.
+                     */
+                    @Override
+                    protected void handleMouseWheelEvent(MouseWheelEvent e, JScrollBar barra) {
+                        if (!telaAlternativa || mouseReporting || e.isShiftDown()) {
+                            super.handleMouseWheelEvent(e, barra);
+                            return;
+                        }
+                        e.consume();
+                        int pagina = roda.aoRodar(e.getPreciseWheelRotation());
+                        if (pagina == 0) {
+                            return;
+                        }
+                        JediTermWidget w = vaga[0];
+                        var saida = getTerminalOutputStream();
+                        if (w == null || !w.isSessionRunning() || saida == null) {
+                            descartouTecla(); // sem terminal rodando: a "tecla" é descartada e a faixa diz
+                            return;
+                        }
+                        // pela mesma via das teclas (o executor do JediTerm e o conector): fora de ATIVA o conector descarta e avisa,
+                        // e nada é enfileirado para depois
+                        saida.sendBytes(pagina < 0 ? PAGE_UP : PAGE_DOWN, true);
                     }
 
                     @Override
