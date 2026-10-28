@@ -124,7 +124,10 @@ public final class PlataformaLocal {
         };
     }
 
-    /** As opções do {@code docker run} que dão ao agente a visão da máquina (métricas); no Windows o {@code /} não é montável como no Mac. */
+    /**
+     * As opções do {@code docker run} que dão ao agente a visão da máquina (métricas): a raiz do disco SOMENTE LEITURA em {@code /host} no Mac e
+     * no Linux (é uma das coisas que {@link AvisoDeSeguranca} diz ao usuário); no Windows o {@code /} não é montável como no Mac.
+     */
     public List<String> montagemDaMaquina() {
         return sistema == SistemaOperacional.WINDOWS ? List.of() : List.of("-v", "/:/host:ro");
     }

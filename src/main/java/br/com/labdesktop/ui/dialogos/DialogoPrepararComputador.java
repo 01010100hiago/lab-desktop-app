@@ -441,6 +441,10 @@ public final class DialogoPrepararComputador extends Dialogo {
         return Caixa.linha(8, marca, Caixa.coluna(4, coluna.toArray(Component[]::new)));
     }
 
+    private br.com.labdesktop.local.SistemaOperacional sistemaDoComputador() {
+        return relatorio != null ? relatorio.sistema() : br.com.labdesktop.local.SistemaOperacional.detectar();
+    }
+
     private void montarOQueVaiAcontecer() {
         listaDoQueVaiAcontecer.removeAll();
         String pasta = campoDaPasta.getText().strip();
@@ -456,8 +460,12 @@ public final class DialogoPrepararComputador extends Dialogo {
             listaDoQueVaiAcontecer.add(dicaCorrida(t));
             listaDoQueVaiAcontecer.add(Caixa.espacoVertical(3));
         }
-        listaDoQueVaiAcontecer.add(dicaCorrida("Segurança: o agente tem acesso ao Docker deste computador (equivale a administrar o Docker), mas a "
-            + "porta é publicada só no loopback: nada entra pela rede. O app não mexe no firewall."));
+        for (String p : br.com.labdesktop.local.AvisoDeSeguranca.paragrafos(sistemaDoComputador(), pasta)) {
+            TextoCorrido t = dicaCorrida(p);
+            t.setName("aviso-de-seguranca");
+            listaDoQueVaiAcontecer.add(t);
+            listaDoQueVaiAcontecer.add(Caixa.espacoVertical(3));
+        }
         listaDoQueVaiAcontecer.add(dicaCorrida("Se algum passo falhar, o app mostra o erro e desfaz só o que ele criou. Rodar de novo não estraga nada."));
     }
 

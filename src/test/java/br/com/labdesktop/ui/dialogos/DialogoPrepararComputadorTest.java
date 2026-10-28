@@ -185,7 +185,10 @@ class DialogoPrepararComputadorTest {
         assertTrue(tudo.contains("127.0.0.1:7070"), tudo);
         assertTrue(tudo.contains(pasta), tudo);
         assertTrue(tudo.contains("rede edge"), tudo);
-        assertTrue(tudo.contains("só no loopback"), tudo);
+        assertTrue(tudo.contains("SÓ em 127.0.0.1"), tudo);
+        assertTrue(tudo.contains("soquete do Docker"), "o aviso diz o que o container recebe: " + tudo);
+        assertTrue(tudo.contains("--pid host") && tudo.contains("só para leitura") && tudo.contains("com permissão de escrita"), tudo);
+        assertTrue(tudo.contains("QUALQUER pasta") && tudo.contains("/Users"), "e o alcance do soquete no Mac: " + tudo);
         assertTrue(tudo.contains("desfaz só o que ele criou"), tudo);
         fotografar(d, "dialogo-preparar-computador-pronto");
     }

@@ -131,6 +131,8 @@ public final class ComandosLocais {
      * interfaces DO CONTAINER . Exige a credencial do app desde o primeiro minuto. A pasta dos projetos entra no container no
      * caminho que o daemon também entende ({@link MapeamentoDeCaminhos}).
      *
+     * <p><b>O que o container recebe</b>: o aviso ao usuário, em {@link AvisoDeSeguranca}, diz exatamente o que ele recebe.
+     *
      * @param montagemDaMaquina {@link PlataformaLocal#montagemDaMaquina()}
      * @param pastaNoContainer  {@link PlataformaLocal#noContainer(String)} da pasta dos projetos
      */
