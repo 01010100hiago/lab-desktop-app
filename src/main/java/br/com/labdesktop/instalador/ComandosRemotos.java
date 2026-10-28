@@ -24,6 +24,9 @@ public final class ComandosRemotos {
     public static final String ROTULO_DO_AGENTE = "br.com.labdesktop.agente";
 
     /** O comando do Docker quando o usuário já pode usá-lo. */
+    /** O arquivo que o instalador deixa na pasta dele: é como o app sabe que a pasta é sua (e só então a limpa ou a apaga). */
+    public static final String MARCADOR_DA_PASTA = ".lab-desktop";
+
     public static final String DOCKER_DIRETO = "docker";
     /** O comando do Docker quando só o {@code sudo -n} chega nele. */
     public static final String DOCKER_COM_SUDO = "sudo -n docker";
@@ -115,6 +118,15 @@ public final class ComandosRemotos {
         return "sh -c 'if [ -d \"$HOME/" + p.pasta() + "\" ]; then echo existe; else echo nao; fi'";
     }
 
+    /**
+     * De quem é a pasta do instalador: {@code app} (tem o marcador {@code .lab-desktop}, ou a versão extraída de um instalador de antes do
+     * marcador), {@code alheia} (existe e não é do app: nunca é tocada) ou {@code nao} (não existe).
+     */
+    public static String lerDonoDaPasta(ParametrosDaInstalacao p) {
+        return "sh -c 'if [ -f \"$HOME/" + p.pasta() + "/" + MARCADOR_DA_PASTA + "\" ] || [ -f \"$HOME/" + p.pasta() + "/src/VERSAO\" ]; "
+            + "then echo app; elif [ -e \"$HOME/" + p.pasta() + "\" ]; then echo alheia; else echo nao; fi'";
+    }
+
     /** A versão do pacote que está extraída no servidor (arquivo {@code VERSAO}); sai com status diferente de 0 se não há. */
     public static String lerVersaoExtraida(ParametrosDaInstalacao p) {
         return "cat \"$HOME/" + p.pasta() + "/src/VERSAO\"";
@@ -179,13 +191,13 @@ public final class ComandosRemotos {
 
     /** Cria a pasta do instalador (e a da fonte do agente) dentro da pasta pessoal. */
     public static String criarPasta(ParametrosDaInstalacao p) {
-        return "sh -c '[ -n \"$HOME\" ] && mkdir -p \"$HOME/" + p.pasta() + "/src\"'";
+        return "sh -c '[ -n \"$HOME\" ] && mkdir -p \"$HOME/" + p.pasta() + "/src\" && : > \"$HOME/" + p.pasta() + "/" + MARCADOR_DA_PASTA + "\"'";
     }
 
     /** Extrai o pacote enviado na pasta da fonte (esvaziando-a antes: é a fonte do instalador, nunca dados do usuário). */
     public static String extrairPacote(ParametrosDaInstalacao p, PacoteDoAgente pacote) {
         String base = "\"$HOME/" + p.pasta() + "\"";
-        return "sh -c '[ -n \"$HOME\" ] && rm -rf " + base + "/src && mkdir -p " + base + "/src && tar -xzf "
+        return "sh -c '[ -n \"$HOME\" ] && [ -f " + base + "/" + MARCADOR_DA_PASTA + " ] && rm -rf " + base + "/src && mkdir -p " + base + "/src && tar -xzf "
             + base + "/" + pacote.nomeDoArquivo() + " -C " + base + "/src'";
     }
 
@@ -254,45 +266,84 @@ public final class ComandosRemotos {
         return exigirDocker(docker) + " rmi " + exigirImagem(imagem);
     }
 
-    /** Apaga a pasta do instalador (só ela: o nome é validado e o caminho começa na pasta pessoal). */
+    /**
+     * Apaga a pasta do instalador, e só se ela é do app (tem o marcador, ou a versão extraída de um instalador de antes dele): o nome é
+     * validado, o caminho começa na pasta pessoal e uma pasta alheia com o mesmo nome nunca é apagada.
+     */
     public static String removerPasta(ParametrosDaInstalacao p) {
-        return "sh -c '[ -n \"$HOME\" ] && rm -rf \"$HOME/" + p.pasta() + "\"'";
+        String base = "\"$HOME/" + p.pasta();
+        return "sh -c '[ -n \"$HOME\" ] && { [ -f " + base + "/" + MARCADOR_DA_PASTA + "\" ] || [ -f " + base + "/src/VERSAO\" ]; } && rm -rf " + base + "\"'";
     }
 
     // =====================================================================================================
     // A fronteira
     // =====================================================================================================
 
-    private static final List<String> PREFIXOS_DE_LEITURA = List.of(
-        "cat /etc/os-release", "uname -m", "cat \"$HOME/", "df -Pk ", "ss -H -ltn ",
-        "sh -c 'echo \"uid=", "sh -c 'if ! command -v docker", "sh -c 'command -v docker",
-        "sh -c 'if command -v curl", "sh -c 'if [ -d \"$HOME/", "sh -c 'if command -v sha256sum");
-    private static final List<String> LEITURAS_DO_DOCKER = List.of(
-        " ps -a --filter name=", " volume ls -q ", " image inspect ", " logs --tail ");
-
     /**
      * O comando só LÊ? É a fronteira da regra: ao conectar, abrir o app ou diagnosticar, só comandos para os quais isto é
-     * verdadeiro podem rodar.
+     * verdadeiro podem rodar. A comparação é EXATA: o comando tem de ter a forma inteira de uma das leituras abaixo (com o nome do container,
+     * da pasta, a porta e a versão no lugar certo, cada um dentro da regex dele), e não só começar como uma. Um prefixo igual a uma leitura
+     * seguido de qualquer outra coisa ({@code cat "$HOME/x"; rm ...}) NÃO passa.
      */
     public static boolean ehLeitura(String comando) {
         if (comando == null) {
             return false;
         }
-        for (String prefixo : PREFIXOS_DE_LEITURA) {
-            if (comando.startsWith(prefixo)) {
+        for (Pattern leitura : LEITURAS) {
+            if (leitura.matcher(comando).matches()) {
                 return true;
             }
         }
+        return false;
+    }
+
+    private static final String RE_NOME = "[a-z0-9][a-z0-9_.-]{0,40}";
+    private static final String RE_VERSAO = "[A-Za-z0-9][A-Za-z0-9_.-]{0,40}";
+    private static final List<Pattern> LEITURAS = montarLeituras();
+
+    /**
+     * Cada leitura é construída uma vez com valores-sentinela e vira uma regex inteira: os sentinelas viram a regex do valor real, o resto é
+     * literal. Assim a lista nunca se afasta dos construtores acima.
+     */
+    private static List<Pattern> montarLeituras() {
+        ParametrosDaInstalacao p = new ParametrosDaInstalacao("zzcontainer", 54321, "zzpasta");
+        PacoteDoAgente pacote = PacoteDoAgente.de("zzversao", "abcdef0", new byte[] {0});
+        List<String> modelos = new java.util.ArrayList<>(List.of(lerOsRelease(), lerArquitetura(), lerPermissoes(), lerDocker(), lerPorta(54321),
+            lerDisco(), lerInternet(), lerSeAPastaExiste(p), lerDonoDaPasta(p), lerVersaoExtraida(p), lerSha256DoPacote(p, pacote),
+            lerSituacaoDoAgente("zzcontainer")));
         for (String docker : new String[] {DOCKER_DIRETO, DOCKER_COM_SUDO}) {
-            if (comando.startsWith(docker)) {
-                for (String leitura : LEITURAS_DO_DOCKER) {
-                    if (comando.startsWith(docker + leitura)) {
-                        return true;
-                    }
+            modelos.add(lerContainer(docker, p));
+            modelos.add(lerVolume(docker, p));
+            modelos.add(lerImagem(docker, p.imagem("zzversao")));
+            modelos.add(lerLogsDoContainer(docker, p));
+        }
+        List<Pattern> padroes = new java.util.ArrayList<>();
+        for (String modelo : modelos) {
+            padroes.add(Pattern.compile(comoRegex(modelo)));
+        }
+        return List.copyOf(padroes);
+    }
+
+    private static String comoRegex(String modelo) {
+        String[][] sentinelas = {{"zzcontainer", RE_NOME}, {"zzpasta", RE_NOME}, {"zzversao", RE_VERSAO}, {"54321", "[0-9]{1,5}"}};
+        StringBuilder re = new StringBuilder();
+        int i = 0;
+        outer:
+        while (i < modelo.length()) {
+            for (String[] s : sentinelas) {
+                if (modelo.startsWith(s[0], i)) {
+                    re.append(s[1]);
+                    i += s[0].length();
+                    continue outer;
                 }
             }
+            char c = modelo.charAt(i++);
+            if ("\\.[]{}()*+-?^$|".indexOf(c) >= 0) {
+                re.append('\\');
+            }
+            re.append(c);
         }
-        return false;
+        return re.toString();
     }
 
     private static String exigirDocker(String docker) {

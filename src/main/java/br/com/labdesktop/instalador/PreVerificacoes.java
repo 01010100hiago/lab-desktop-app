@@ -79,6 +79,7 @@ public final class PreVerificacoes {
 
         ContainerExistente existente = comandoDocker == null ? ContainerExistente.NENHUM : lerContainer(comandoDocker);
         r.add(container(modo, existente));
+        r.add(pasta(rodar(ComandosRemotos.lerDonoDaPasta(parametros)).stdout().strip()));
         r.add(porta(modo, existente));
         r.add(disco());
         r.add(internet(modo));
@@ -253,6 +254,16 @@ public final class PreVerificacoes {
         }
         return ResultadoDaVerificacao.aviso(Item.CONTAINER, "Já existe um agente deste app (versão " + TextoSeguro.truncar(TextoSeguro.limparLinha(c.versaoDoApp()), 40)
             + ") chamado " + nome + ". Ele será substituído, mantendo os dados.", null);
+    }
+
+    private ResultadoDaVerificacao pasta(String situacao) {
+        String pasta = "~/" + parametros.pasta();
+        return switch (situacao) {
+            case "alheia" -> ResultadoDaVerificacao.problema(Item.PASTA, "A pasta " + pasta + " já existe no servidor e NÃO foi criada por este app. "
+                + "O app não mexe no que não criou: escolha outro nome para a pasta nas opções avançadas, ou renomeie essa pasta.", null);
+            case "app" -> ResultadoDaVerificacao.ok(Item.PASTA, "A pasta " + pasta + " é do app (de uma instalação anterior): será reaproveitada.");
+            default -> ResultadoDaVerificacao.ok(Item.PASTA, "A pasta " + pasta + " será criada.");
+        };
     }
 
     private ResultadoDaVerificacao porta(ModoDaInstalacao modo, ContainerExistente c) throws IOException, InterruptedException {

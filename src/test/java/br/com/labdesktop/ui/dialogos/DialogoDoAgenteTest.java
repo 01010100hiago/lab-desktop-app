@@ -120,7 +120,7 @@ class DialogoDoAgenteTest {
         assertEquals("Cancelar", Visual.naEdt(() -> d.botaoCancelar().getText()));
         assertFalse(Visual.naEdt(d::executando));
         List<String> verificacoes = Visual.naEdt(d::frasesDasVerificacoes);
-        assertEquals(11, verificacoes.size(), verificacoes.toString());
+        assertEquals(12, verificacoes.size(), verificacoes.toString());
         assertTrue(verificacoes.get(0).startsWith("Sistema (ok): Debian GNU/Linux 13"), verificacoes.get(0));
         assertTrue(verificacoes.stream().anyMatch(v -> v.startsWith("Docker (ok): Docker 27.3.1")));
         assertTrue(Visual.naEdt(d::textoDoBloqueio).isEmpty());

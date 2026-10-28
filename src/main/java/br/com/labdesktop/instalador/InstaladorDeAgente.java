@@ -218,7 +218,12 @@ public final class InstaladorDeAgente {
         if (ja.status() == 0 && ja.stdout().strip().equals(pacote.versao())) {
             return false;
         }
-        boolean pastaJaExistia = "existe".equals(rodar(ComandosRemotos.lerSeAPastaExiste(parametros), LEITURA).stdout().strip());
+        String donoDaPasta = rodar(ComandosRemotos.lerDonoDaPasta(parametros), LEITURA).stdout().strip();
+        if ("alheia".equals(donoDaPasta)) {
+            throw new FalhaDePasso("A pasta ~/" + parametros.pasta() + " já existe no servidor e NÃO foi criada por este app: não mexi nela. "
+                + "Escolha outro nome nas opções avançadas, ou renomeie essa pasta.");
+        }
+        boolean pastaJaExistia = "app".equals(donoDaPasta);
         exigirSucesso(ComandosRemotos.criarPasta(parametros), ESCRITA_CURTA, "Não consegui criar a pasta do agente no servidor");
         if (!pastaJaExistia) {
             criouPasta = true;
@@ -524,13 +529,29 @@ public final class InstaladorDeAgente {
         }
         obs.aoMudarPasso(PassoDeRemocao.CONTAINER, removido ? (existe ? EstadoDoPasso.FEITO : EstadoDoPasso.JA_ESTAVA_FEITO) : EstadoDoPasso.FALHOU, "");
 
-        removerComAviso(PassoDeRemocao.DADOS, ComandosRemotos.removerVolume(docker, parametros), "os dados do agente",
-            "Apaguei os dados do agente (token e 2FA).", feito, avisos, volumeExiste());
-        // A imagem só sai se nenhum outro agente do app a usa: o próprio Docker recusa ("está em uso") e isso vira só um aviso.
-        removerComAviso(PassoDeRemocao.IMAGEM, ComandosRemotos.removerImagem(docker, parametros.imagem(pacote.versao())), "a imagem do agente",
-            "Apaguei a imagem do agente.", feito, avisos, true);
+        // Só se apaga o que é do app: o volume de dados e a imagem só saem se o container era dele (rótulo); sem container do app, ficam como
+        // estão (podem ser de outra instalação ou de um agente que o usuário guardou). A pasta só sai se tem o marcador do instalador.
+        boolean eraDoApp = existe && doApp != null;
+        String versaoInstalada = eraDoApp && doApp.matches("^[A-Za-z0-9][A-Za-z0-9_.-]{0,40}$") ? doApp : pacote.versao();
+        if (eraDoApp) {
+            removerComAviso(PassoDeRemocao.DADOS, ComandosRemotos.removerVolume(docker, parametros), "os dados do agente",
+                "Apaguei os dados do agente (token e 2FA).", feito, avisos, volumeExiste());
+            // A imagem da versão que estava instalada; se outro agente do app a usa, o Docker recusa ("está em uso") e vira só um aviso.
+            removerComAviso(PassoDeRemocao.IMAGEM, ComandosRemotos.removerImagem(docker, parametros.imagem(versaoInstalada)), "a imagem do agente",
+                "Apaguei a imagem do agente.", feito, avisos, true);
+        } else {
+            for (Passo p : new Passo[] {PassoDeRemocao.DADOS, PassoDeRemocao.IMAGEM}) {
+                obs.aoMudarPasso(p, EstadoDoPasso.JA_ESTAVA_FEITO, "");
+            }
+            avisos.add("Não havia um container deste app chamado " + parametros.container() + ", então deixei os dados e a imagem do agente como "
+                + "estavam (o app só apaga o que sabe que é dele).");
+        }
+        String donoDaPasta = rodar(ComandosRemotos.lerDonoDaPasta(parametros), LEITURA).stdout().strip();
+        if ("alheia".equals(donoDaPasta)) {
+            avisos.add("A pasta ~/" + parametros.pasta() + " não foi criada por este app: deixei como estava.");
+        }
         removerComAviso(PassoDeRemocao.PASTA, ComandosRemotos.removerPasta(parametros), "a pasta do instalador",
-            "Apaguei a pasta " + parametros.pasta() + " do instalador.", feito, avisos, true);
+            "Apaguei a pasta " + parametros.pasta() + " do instalador.", feito, avisos, "app".equals(donoDaPasta));
         concluidos.clear();
         return new ResultadoDaRemocao(removido, feito, avisos, false);
     }

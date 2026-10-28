@@ -24,6 +24,7 @@ public record ResultadoDaVerificacao(Item item, Estado estado, String frase, Str
         DOCKER("Docker"),
         COMPOSE("Docker Compose"),
         CONTAINER("Agente já instalado"),
+        PASTA("Pasta do instalador"),
         PORTA("Porta do agente"),
         DISCO("Espaço em disco"),
         INTERNET("Saída para a internet");

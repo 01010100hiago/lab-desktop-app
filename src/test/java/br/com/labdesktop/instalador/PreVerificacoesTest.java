@@ -42,7 +42,7 @@ class PreVerificacoesTest {
         RelatorioDeVerificacao r = verificar(ModoDaInstalacao.INSTALAR);
         assertFalse(r.bloqueado(), r.problemas().toString());
         assertEquals(List.of(Item.SISTEMA, Item.ARQUITETURA, Item.PERMISSAO, Item.SHELL, Item.TMUX, Item.DOCKER, Item.COMPOSE, Item.CONTAINER,
-            Item.PORTA, Item.DISCO, Item.INTERNET), r.resultados().stream().map(ResultadoDaVerificacao::item).toList());
+            Item.PASTA, Item.PORTA, Item.DISCO, Item.INTERNET), r.resultados().stream().map(ResultadoDaVerificacao::item).toList());
         for (ResultadoDaVerificacao v : r.resultados()) {
             assertEquals(Estado.OK, v.estado(), v.item() + ": " + v.frase());
             assertFalse(v.frase().isBlank());

@@ -18,7 +18,7 @@ class ComandosRemotosTest {
     private List<String> leituras(String docker) {
         List<String> l = new ArrayList<>(List.of(ComandosRemotos.lerOsRelease(), ComandosRemotos.lerArquitetura(), ComandosRemotos.lerPermissoes(),
             ComandosRemotos.lerDocker(), ComandosRemotos.lerPorta(7000), ComandosRemotos.lerDisco(), ComandosRemotos.lerInternet(),
-            ComandosRemotos.lerSeAPastaExiste(p), ComandosRemotos.lerVersaoExtraida(p), ComandosRemotos.lerSha256DoPacote(p, PACOTE),
+            ComandosRemotos.lerSeAPastaExiste(p), ComandosRemotos.lerDonoDaPasta(p), ComandosRemotos.lerVersaoExtraida(p), ComandosRemotos.lerSha256DoPacote(p, PACOTE),
             ComandosRemotos.lerSituacaoDoAgente("painel-lab")));
         l.add(ComandosRemotos.lerContainer(docker, p));
         l.add(ComandosRemotos.lerVolume(docker, p));
@@ -50,6 +50,24 @@ class ComandosRemotosTest {
         assertFalse(ComandosRemotos.ehLeitura("docker exec -i painel-lab node acesso.js token-registrar"));
         assertFalse(ComandosRemotos.ehLeitura("docker run -d --name x"));
         assertFalse(ComandosRemotos.ehLeitura("rm -rf /"));
+    }
+
+    /** A fronteira é a linha INTEIRA, não um prefixo: uma leitura seguida de qualquer outra coisa não é leitura. */
+    @Test
+    void leituraComQualquerCoisaDepoisNaoEMaisLeitura() {
+        for (String docker : List.of("docker", "sudo -n docker")) {
+            for (String c : leituras(docker)) {
+                for (String rabo : List.of("; rm -rf /", " && touch /tmp/x", " | sh", "\nrm x", " > /etc/passwd", " ", "\t")) {
+                    assertFalse(ComandosRemotos.ehLeitura(c + rabo), "NÃO é leitura: " + c + rabo);
+                }
+                assertFalse(ComandosRemotos.ehLeitura("echo oi; " + c));
+            }
+        }
+        assertFalse(ComandosRemotos.ehLeitura("cat /etc/os-release; id"));
+        assertFalse(ComandosRemotos.ehLeitura("cat \"$HOME/lab-agente/src/VERSAO\"; rm -rf \"$HOME\""));
+        assertFalse(ComandosRemotos.ehLeitura("docker ps -a --filter name=x --format '{{.Names}}' && docker rm -f x"));
+        assertFalse(ComandosRemotos.ehLeitura("docker logs --tail 40 ../../x"));
+        assertFalse(ComandosRemotos.ehLeitura("docker volume ls -q --filter name=Maiuscula"));
     }
 
     @Test
@@ -111,7 +129,8 @@ class ComandosRemotosTest {
         assertEquals("df -Pk \"$HOME\" /var/lib/docker", ComandosRemotos.lerDisco());
         assertEquals("cat \"$HOME/lab-agente/src/VERSAO\"", ComandosRemotos.lerVersaoExtraida(p));
         assertEquals("lab-agente/agente-0.1.0-abc1234.tar.gz", ComandosRemotos.caminhoDoPacote(p, PACOTE));
-        assertEquals("sh -c '[ -n \"$HOME\" ] && rm -rf \"$HOME/lab-agente\"'", ComandosRemotos.removerPasta(p));
+        assertEquals("sh -c '[ -n \"$HOME\" ] && { [ -f \"$HOME/lab-agente/.lab-desktop\" ] || [ -f \"$HOME/lab-agente/src/VERSAO\" ]; } && rm -rf \"$HOME/lab-agente\"'",
+            ComandosRemotos.removerPasta(p));
         String build = ComandosRemotos.construirImagem("docker", p, PACOTE);
         assertTrue(build.contains("docker build -f Dockerfile.monitor -t labdesktop-agente:0.1.0-abc1234 \"$HOME/lab-agente/src\""), build);
         assertTrue(build.contains("tail -n 40") && build.endsWith("exit $r'"), "guarda o fim da saída e devolve o status do build: " + build);

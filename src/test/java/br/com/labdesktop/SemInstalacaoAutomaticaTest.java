@@ -106,7 +106,7 @@ class SemInstalacaoAutomaticaTest {
     @Test
     void osComandosDeEscritaSoSaoMontadosDentroDoInstalador() throws IOException {
         Pattern escrita = Pattern.compile("ComandosRemotos\\.(instalarODocker|criarPasta|extrairPacote|construirImagem|removerContainer|subirContainer|"
-            + "removerVolume|removerImagem|removerPasta)\\(");
+            + "removerVolume|removerImagem|removerPasta|renomearContainer|pararContainer|iniciarContainer|removerContainerPeloNome)\\(");
         assertEquals(List.of(), quemUsa(escrita, Set.of("instalador/InstaladorDeAgente.java")),
             "comando de escrita do servidor só nasce no instalador (que só roda a pedido)");
     }

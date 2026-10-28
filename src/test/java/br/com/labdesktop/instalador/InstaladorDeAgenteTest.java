@@ -593,6 +593,84 @@ class InstaladorDeAgenteTest {
         assertEquals("painel-lab", servidor.containerNome);
     }
 
+    /** Sem o container do app não se sabe de quem são o volume e a imagem: ficam. A pasta com o marcador é do app e sai. */
+    @Test
+    void removerSemContainerDoAppNaoApagaVolumeNemImagem() throws Exception {
+        servidor.noGrupoDocker = true;
+        servidor.volumeExiste = true;   // o volume "painel-lab-dados" pode ser de outra instalação
+        servidor.imagemExiste = true;
+        servidor.pastaExiste = true;
+        ResultadoDaRemocao r = instalador.remover(obs, Cancelamento.NUNCA);
+
+        assertFalse(servidor.escritas().contains(ComandosRemotos.removerVolume(DK, p)), servidor.escritas().toString());
+        assertFalse(servidor.escritas().contains(ComandosRemotos.removerImagem(DK, p.imagem(PACOTE.versao()))));
+        assertTrue(servidor.volumeExiste);
+        assertTrue(servidor.imagemExiste);
+        assertFalse(servidor.pastaExiste, "a pasta é do app (marcador): sai");
+        assertTrue(r.avisos().stream().anyMatch(a -> a.contains("deixei os dados e a imagem")), r.avisos().toString());
+    }
+
+    @Test
+    void removerNuncaApagaUmaPastaQueNaoELDoApp() throws Exception {
+        servidor.noGrupoDocker = true;
+        servidor.containerNome = "painel-lab";
+        servidor.rotuloDoContainer = "0.1.0-abc1234";
+        servidor.volumeExiste = true;
+        servidor.imagemExiste = true;
+        servidor.pastaExiste = true;
+        servidor.pastaAlheia = true;
+        ResultadoDaRemocao r = instalador.remover(obs, Cancelamento.NUNCA);
+
+        assertTrue(r.removido());
+        assertTrue(servidor.pastaExiste, "a pasta alheia continua");
+        assertFalse(servidor.escritas().contains(ComandosRemotos.removerPasta(p)), "nem o comando de apagar foi enviado");
+        assertTrue(r.avisos().stream().anyMatch(a -> a.contains("não foi criada por este app")), r.avisos().toString());
+    }
+
+    @Test
+    void remocaoApagaAImagemDaVersaoQueEstavaInstaladaENaoADoPacote() throws Exception {
+        servidor.noGrupoDocker = true;
+        servidor.containerNome = "painel-lab";
+        servidor.rotuloDoContainer = "0.0.9-velha";
+        servidor.volumeExiste = true;
+        servidor.imagemExiste = true;
+        servidor.pastaExiste = true;
+        instalador.remover(obs, Cancelamento.NUNCA);
+        assertTrue(servidor.comandos.contains(ComandosRemotos.removerImagem(DK, p.imagem("0.0.9-velha"))), servidor.comandos.toString());
+        assertFalse(servidor.comandos.contains(ComandosRemotos.removerImagem(DK, p.imagem(PACOTE.versao()))));
+    }
+
+    @Test
+    void pastaAlheiaImpedeAInstalacaoNaVerificacaoENoPasso() throws Exception {
+        servidor.noGrupoDocker = true;
+        servidor.pastaExiste = true;
+        servidor.pastaAlheia = true;
+        RelatorioDeVerificacao rel = verificar(ModoDaInstalacao.INSTALAR);
+
+        assertTrue(rel.bloqueado());
+        assertEquals(ResultadoDaVerificacao.Estado.PROBLEMA, rel.de(ResultadoDaVerificacao.Item.PASTA).estado());
+        assertTrue(rel.de(ResultadoDaVerificacao.Item.PASTA).frase().contains("NÃO foi criada por este app"));
+        assertEquals(Desfecho.RECUSADA, instalar().desfecho());
+        assertTrue(servidor.escritas().isEmpty(), servidor.escritas().toString());
+    }
+
+    @Test
+    void passoDeEnviarOPacoteRecusaPastaAlheiaMesmoSemAVerificacao() throws Exception {
+        servidor.noGrupoDocker = true;
+        verificar(ModoDaInstalacao.INSTALAR);
+        servidor.pastaExiste = true;   // apareceu depois da conferência
+        servidor.pastaAlheia = true;
+        servidor.limparRegistro();
+
+        ResultadoDaInstalacao r = instalar();
+
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertEquals(PassoDeInstalacao.ENVIAR_PACOTE, r.passo());
+        assertTrue(r.erro().contains("NÃO foi criada por este app"), r.erro());
+        assertFalse(servidor.escritas().contains(ComandosRemotos.extrairPacote(p, PACOTE)), "o rm -rf do src nunca rodou");
+        assertTrue(servidor.pastaExiste);
+    }
+
     @Test
     void removerSemPermissaoNoDockerNaoFazNada() throws Exception {
         servidor.semPermissaoNenhuma();

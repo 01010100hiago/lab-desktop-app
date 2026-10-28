@@ -48,11 +48,15 @@ public final class ServidorSimulado implements ExecutorDeComandos {
 
     // ---- o que existe (mudam quando os comandos de escrita rodam) ----
     public boolean pastaExiste;
+    /** A pasta existe e NÃO é do app (sem o marcador nem a versão extraída): o instalador nunca mexe nela. */
+    public boolean pastaAlheia;
     public String versaoExtraida;
     public boolean imagemExiste;
     /** {@code null}: nenhum container com o nome. */
     public String containerNome;
     public String rotuloDoContainer = "";
+    /** O rótulo do último container removido (a imagem dele é a que "Remover agente" apaga). */
+    private String rotuloQueSaiu = "";
     public String estadoDoContainer = "running";
     /** O agente antigo guardado como {@code <container>-anterior} durante uma atualização (null = não há). */
     public String anteriorNome;
@@ -265,6 +269,9 @@ public final class ServidorSimulado implements ExecutorDeComandos {
         if (c.equals(ComandosRemotos.lerSeAPastaExiste(parametros))) {
             return ok(pastaExiste ? "existe\n" : "nao\n");
         }
+        if (c.equals(ComandosRemotos.lerDonoDaPasta(parametros))) {
+            return ok(!pastaExiste ? "nao\n" : pastaAlheia ? "alheia\n" : "app\n");
+        }
         if (c.equals(ComandosRemotos.lerVersaoExtraida(parametros))) {
             return versaoExtraida == null ? status(1, "", "cat: No such file") : ok(versaoExtraida + "\n");
         }
@@ -292,6 +299,9 @@ public final class ServidorSimulado implements ExecutorDeComandos {
             return ok("");
         }
         if (c.equals(ComandosRemotos.removerPasta(parametros))) {
+            if (pastaAlheia) {
+                return status(1, "", ""); // o guarda do próprio comando: sem marcador, nada é apagado
+            }
             pastaExiste = false;
             versaoExtraida = null;
             pacoteRecebido = null;
@@ -442,6 +452,7 @@ public final class ServidorSimulado implements ExecutorDeComandos {
             if (!permitido || containerNome == null) {
                 return status(1, "", "Error: No such container: " + parametros.container());
             }
+            rotuloQueSaiu = rotuloDoContainer;
             containerNome = null;
             rotuloDoContainer = "";
             return ok(parametros.container() + "\n");
@@ -469,7 +480,8 @@ public final class ServidorSimulado implements ExecutorDeComandos {
             volumeExiste = false;
             return ok(parametros.volume() + "\n");
         }
-        if (c.equals(ComandosRemotos.removerImagem(dk, imagem))) {
+        String imagemDoContainer = rotuloQueSaiu == null || rotuloQueSaiu.isBlank() ? imagem : parametros.imagem(rotuloQueSaiu);
+        if (c.equals(ComandosRemotos.removerImagem(dk, imagem)) || c.equals(ComandosRemotos.removerImagem(dk, imagemDoContainer))) {
             if (!permitido || !imagemExiste) {
                 return status(1, "", "Error: No such image");
             }
