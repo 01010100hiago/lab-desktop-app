@@ -104,6 +104,24 @@ class ProcessosNaTelaTest {
     }
 
     @Test
+    void semPermissaoContinuaLigadoMesmoSemAsAcoesPoisSoMostraUmComando() {
+        Acoes a = new Acoes();
+        a.liberadas = false;
+        Visual.tema(Tema.CLARO);
+        BlocoDeProcessos b = Visual.naEdt(() -> new BlocoDeProcessos(a, null));
+        InfoServidor info = FixturesDeApi.de("{\"processos\":[{\"pid\":2000,\"nome\":\"node\",\"usuario\":\"labuser\",\"cpu\":3,\"mem\":1000},"
+            + "{\"pid\":2001,\"nome\":\"nginx\",\"usuario\":\"www-data\",\"cpu\":2,\"mem\":1000}]}", InfoServidor.class);
+        Visual.naEdt(() -> b.atualizar(info, null));
+        assertEquals(List.of("Encerrar", "Sem permissão"), rotulos(b));
+        assertFalse(Visual.naEdt(() -> b.botoes().get(0).isEnabled()), "o que age fica desligado");
+        Botao semPermissao = Visual.naEdt(() -> b.botoes().get(1));
+        assertTrue(Visual.naEdt(semPermissao::isEnabled), "o que só mostra o comando do usuário não é desligado pela trava");
+        assertFalse(Visual.naEdt(() -> semPermissao.getToolTipText()).contains("desligadas nesta versão"));
+        Visual.naEdt(() -> semPermissao.doClick(0));
+        assertEquals(1, a.cliques.size(), "o clique abre a janela do comando");
+    }
+
+    @Test
     void anotaDizPorQueProcessoComumNaoTemReiniciar() {
         BlocoDeProcessos b = bloco(new Acoes(), null);
         String nota = Visual.naEdt(b::textoDaNota);
