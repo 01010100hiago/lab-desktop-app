@@ -42,7 +42,7 @@ Depois o app oferece o Docker Desktop (`winget install Docker.DockerDesktop`, co
 
 ## Instalar no Mac
 
-Funciona no macOS 12 ou mais novo. O arquivo é para o chip do Mac em que foi gerado (`...-mac-arm64.dmg` serve aos Macs com chip Apple; para um Mac Intel é preciso gerar o instalador num runner Intel).
+Feito para o macOS atual (o Java 21 do app pede o macOS 11 ou mais novo; foi testado só no macOS mais recente). O arquivo é para o chip do Mac em que foi gerado (`...-mac-arm64.dmg` serve aos Macs com chip Apple; para um Mac Intel é preciso gerar o instalador num runner Intel).
 
 1. **Baixe** `LabDesktop-<versão>-mac-arm64.dmg` e dê dois cliques.
 2. **Arraste** o Lab Desktop para a pasta **Aplicativos**.

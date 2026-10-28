@@ -1,4 +1,6 @@
 import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
@@ -351,12 +353,18 @@ val empacotar = tasks.register("empacotar") {
             feito.copyTo(alvo)
             gerados += alvo
         }
-        if (ehWindows) {
-            // versão portátil: a pasta inteira num .zip (não precisa do WiX nem instalar; roda de qualquer pasta)
+        if (ehWindows || project.hasProperty("zipPortatil")) { // -PzipPortatil faz o .zip também fora do Windows (só para provar o código num Mac; no Mac o .app zipado perde links e permissões)
+            // versão portátil: a pasta inteira num .zip (não precisa do WiX nem instalar; roda de qualquer pasta). Feito em Java (ZipOutputStream) e não com o `tar` do PATH:
+            // no Git Bash do runner o `tar` é o GNU, que não grava .zip.
             val zip = saida.resolve("$nomeBase-portatil.zip")
-            val p = ProcessBuilder("tar", "-a", "-c", "-f", zip.absolutePath, "-C", imagem.absolutePath, nomeDoApp).redirectErrorStream(true).start()
-            val texto = p.inputStream.bufferedReader().readText()
-            if (p.waitFor() != 0) throw GradleException("Não consegui montar o .zip portátil: $texto")
+            ZipOutputStream(zip.outputStream().buffered()).use { z ->
+                val pasta = imagem.resolve(if (ehMac) "$nomeDoApp.app" else nomeDoApp)
+                pasta.walkTopDown().filter { it.isFile }.forEach { f ->
+                    z.putNextEntry(ZipEntry(nomeDoApp + "/" + f.relativeTo(pasta).path.replace(File.separatorChar, '/')))
+                    f.inputStream().use { it.copyTo(z) }
+                    z.closeEntry()
+                }
+            }
             gerados += zip
         }
         if (!ehWindows && !ehMac) {

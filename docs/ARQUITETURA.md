@@ -825,6 +825,7 @@ O app é o MESMO código nos três sistemas. Tudo o que muda de um sistema para 
 4. `docker.exe` com os formatos sem aspas, o mapeamento `C:\...` para `/run/desktop/mnt/host/c/...` do Docker Desktop (WSL 2), `wsl --status`, `winget.exe` em `WindowsApps` (ponto de reparse), a junção NTFS ao apagar pasta (`ProvaDoWindowsTest` cria uma com `mklink /J` e confere).
 5. O registro do tema (`reg query`) e o vigia de relógio na vida real; a barra de título e o menu na janela do Windows; o desenho dos PNGs "como no Windows" é o do LaF genérico NUM MAC (as fontes, a escala de DPI e a barra de título do Windows não são reproduzidas).
 6. Windows em arm64 (o instalador é x64 e roda por emulação).
+7. **Trava de instância.** No Unix, apagar ou renomear o `cofre.lock` com o app aberto deixa uma SEGUNDA instância criar outro arquivo e travar o novo (duas instâncias no mesmo cofre): é uma limitação que já existia e que continua valendo. No Windows a suposição é que o arquivo aberto não some nem muda de nome, ou que a segunda instância ainda é recusada; `ProvaDoWindowsTest` confere e imprime o que o Windows fez.
 
 
 ## 12. Testes
