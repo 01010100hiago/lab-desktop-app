@@ -124,7 +124,8 @@ class CloudflareSemEfeitoSozinhoTest {
         assertEquals(List.of(), quemUsa(escrita, Set.of("cloudflare/ClienteCloudflare.java", "cloudflare/ApiCloudflare.java", "cloudflare/PublicadorNaInternet.java",
             "cloudflare/RemovedorDeEndereco.java", "cloudflare/TunelPelaApi.java")));
         assertEquals(Set.of("criarDns"), metodosQueUsam("cloudflare/PublicadorNaInternet.java", escrita), "criar e desfazer o DNS: só em criarDns, que só o executar chama");
-        assertEquals(Set.of("executar"), metodosQueUsam("cloudflare/RemovedorDeEndereco.java", escrita));
+        assertEquals(Set.of("apagarDns"), metodosQueUsam("cloudflare/RemovedorDeEndereco.java", escrita));
+        assertEquals(Set.of("executar"), metodosQueUsam("cloudflare/RemovedorDeEndereco.java", Pattern.compile("(?<![\\w.])apagarDns\\(")), "apagarDns só nasce do executar");
         assertEquals(Set.of("aplicar", "desfazer"), metodosQueUsam("cloudflare/TunelPelaApi.java", escrita));
         // criarDns só é chamado dentro de executar
         assertEquals(Set.of("executar"), metodosQueUsam("cloudflare/PublicadorNaInternet.java", Pattern.compile("(?<![\\w.])criarDns\\(previa")));
