@@ -49,6 +49,8 @@ class TerminalDoProjetoTest {
     private final LimiteDeAbas limite = new LimiteDeAbas();
     private final AvisosGravados avisos = new AvisosGravados();
     private TelaProjeto tela;
+    private FluxosDeProjeto fluxos;
+    private ContextoDeTerminal ctxDeTerminal;
 
     @BeforeEach
     void preparar() throws Exception {
@@ -57,18 +59,22 @@ class TerminalDoProjetoTest {
         cenario.terminal.roteiro(ServidorDeTerminalFalso::roteiroQueNaoLe);
         DialogosGravados dialogos = new DialogosGravados();
         // acoes = false: a trava dos botões de escrita continua ligada; o terminal não depende dela
-        FluxosDeProjeto fluxos = Visual.naEdt(() -> new FluxosDeProjeto(null, avisos, dialogos, false));
-        ContextoDeTerminal ctx = new ContextoDeTerminal(new TransporteSsh(cenario.conexao), limite, Preferencias::padrao, url -> { },
+        fluxos = Visual.naEdt(() -> new FluxosDeProjeto(null, avisos, dialogos, false));
+        ctxDeTerminal = new ContextoDeTerminal(new TransporteSsh(cenario.conexao), limite, Preferencias::padrao, url -> { },
             Agendador.doFundo());
-        tela = Visual.naEdt(() -> {
+        tela = criarTela();
+        alimentar(FixturesDeApi.detalheDoProjetoSintetico());
+        Visual.renderizar(tela, 1100, 700);
+    }
+
+    private TelaProjeto criarTela() {
+        return Visual.naEdt(() -> {
             TelaProjeto t = new TelaProjeto(null, "orbita", fluxos, new NavegadorGravado(avisos), avisos, Aba.TERMINAL,
                 new TelaProjetoTest.SaidaGravada(), () -> null, () -> { }, new CopiadorDeTexto(() -> new Clipboard("teste")),
-                ServicosDeArquivos.descartaveis(), EscolhedorLocal.doSistema(() -> null), ctx);
+                ServicosDeArquivos.descartaveis(), EscolhedorLocal.doSistema(() -> null), ctxDeTerminal);
             t.relogio(() -> TelaProjetoTest.AGORA, TelaProjetoTest.SP);
             return t;
         });
-        alimentar(FixturesDeApi.detalheDoProjetoSintetico());
-        Visual.renderizar(tela, 1100, 700);
     }
 
     @AfterEach
@@ -124,7 +130,7 @@ class TerminalDoProjetoTest {
         assertFalse(Visual.naEdt(pagina()::terminalAFrente));
         assertEquals("Tela atual da sessão", Visual.naEdt(pagina()::tituloDaAreaPrincipal));
         assertTrue(Visual.naEdt(pagina().botaoTerminal()::isVisible));
-        assertEquals("Terminal", Visual.naEdt(() -> pagina().botaoTerminal().getText()));
+        assertEquals("Terminal interativo", Visual.naEdt(() -> pagina().botaoTerminal().getText()));
         assertTrue(Visual.naEdt(pagina().botaoFecharTerminal()::isVisible), "o terminal continua aberto");
         assertTrue(terminal.sessao().estado().ativa());
         assertTrue(Visual.naEdt(() -> pagina().botaoTerminal().getToolTipText()).contains("terminal que já está aberto"));
@@ -403,6 +409,104 @@ class TerminalDoProjetoTest {
         assertNull(Visual.naEdt(pagina()::painelDoShell));
         assertTrue(avisos.disse("atencao", "8 terminais"));
         assertEquals(0, cenario.terminal.canaisAbertos.get());
+    }
+
+    @Test
+    void oShellAbreMesmoSemODetalheDoProjetoComOAgenteForaDoAr() {
+        Visual.naEdt(tela::encerrar);
+        tela = criarTela(); // nenhum detalhe chegou: o HTTP do agente não responde
+        Visual.naEdt(() -> tela.aoMudarEstado(TelaProjetoTest.estado(EstadoConexao.SSH_OK_SEM_AGENTE)));
+        Visual.renderizar(tela, 1100, 700);
+        assertFalse(Visual.naEdt(() -> pagina().mostraEsqueleto()), "sem esqueleto esperando o agente");
+        assertFalse(Visual.naEdt(() -> pagina().semDados().isVisible()), "sem cartão de 'sem dados'");
+        assertTrue(Visual.naEdt(() -> pagina().mostraCorpo()));
+        assertFalse(Visual.naEdt(() -> pagina().corpoEsmaecido()), "o terminal não é dado antigo");
+        mostrarAAba();
+        iniciar(pagina()::painelDoShell);
+        Espera.ate(PRAZO, "o servidor viu o shell", () -> cenario.terminal.comandos.size() == 1);
+        assertEquals(Modo.SHELL, Visual.naEdt(pagina()::modo));
+        assertFalse(Visual.naEdt(pagina().seletor()::isVisible), "sem saber se há Claude, só o shell");
+        assertEquals(1, limite.emUso());
+    }
+
+    @Test
+    void oAvisoDoLimiteDeTerminaisSaiUmaVezSoEOResteFicaNoCartao() {
+        for (int i = 0; i < 8; i++) {
+            assertTrue(limite.reservar());
+        }
+        alimentar(detalheSemClaude());
+        mostrarAAba();
+        alimentar(detalheSemClaude());
+        alimentar(detalheSemClaude());
+        Visual.naEdt(() -> pagina().redesenhar());
+        long avisosDoLimite = avisos.todos.stream().filter(a -> a.texto().contains("8 terminais")).count();
+        assertEquals(1, avisosDoLimite, "uma vez só, não a cada leitura do detalhe");
+        assertTrue(Visual.naEdt(pagina()::textoDoShellSemTerminal).contains("8 terminais"), "o cartão continua dizendo o motivo");
+        limite.liberar();
+        alimentar(detalheSemClaude());
+        assertNotNull(Visual.naEdt(pagina()::painelDoShell), "voltou a ter vaga: abre");
+    }
+
+    @Test
+    void oAvisoDoLimiteNoCaminhoDoClaudeTambemSaiUmaVezEPeloCliqueSempre() {
+        for (int i = 0; i < 8; i++) {
+            assertTrue(limite.reservar());
+        }
+        mostrarAAba(); // sessão aberta: o Claude vem selecionado e tenta abrir o terminal dele
+        alimentar(FixturesDeApi.detalheDoProjetoSintetico());
+        alimentar(FixturesDeApi.detalheDoProjetoSintetico());
+        assertEquals(1, avisos.todos.stream().filter(a -> a.texto().contains("8 terminais")).count());
+        Visual.naEdt(() -> pagina().botaoTerminal().doClick(0));
+        assertEquals(2, avisos.todos.stream().filter(a -> a.texto().contains("8 terminais")).count(), "o clique do usuário sempre tem resposta");
+    }
+
+    @Test
+    void servidorSemClaudeNaoFalaDoClaudeNemNosBackupsNemNosDetalhesTecnicos() {
+        String json = TelaProjetoTest.detalheEmUmaLinha().replaceAll("\"sessao\": \\{.*?\"info\": (\\{[^}]*\\}|null) \\},", "\"sessao\": null,")
+            .replace("\"backups\": [", "\"backups\": [], \"backups_antigos\": [").replace("\"acessoDocker\": true", "\"acessoDocker\": false");
+        alimentar(FixturesDeApi.de(json, DetalheProjeto.class));
+        Visual.naEdt(() -> tela.mostrarAba(Aba.BACKUPS));
+        Visual.renderizar(tela, 1100, 700);
+        String backups = Visual.naEdt(() -> textosVisiveis(tela.backups()));
+        assertTrue(backups.contains("Nenhum backup ainda."), backups);
+        assertFalse(backups.contains("Claude"), backups);
+        Visual.naEdt(() -> tela.visaoGeral().secaoTecnica().definirAberta(true));
+        String geral = Visual.naEdt(() -> textosVisiveis(tela.visaoGeral()));
+        assertFalse(geral.contains("Claude"), geral);
+    }
+
+    @Test
+    void aLegendaDoShellDizOQueRealmenteAbriu() {
+        alimentar(detalheSemClaude());
+        mostrarAAba();
+        assertEquals("Shell no servidor, na pasta do projeto", Visual.naEdt(pagina()::legendaDoShell));
+        Visual.naEdt(tela::fecharTerminais);
+
+        // a pasta não passa na regra do terminal (acento): cai no shell do servidor e a legenda não mente
+        Visual.naEdt(() -> pagina().ctx.pastaDoProjeto = () -> "/srv/lab/projetos/órbita");
+        alimentar(detalheSemClaude());
+        Visual.naEdt(() -> pagina().soltar());
+        mostrarAAba();
+        assertTrue(Visual.naEdt(pagina()::legendaDoShell).contains("pasta pessoal"), Visual.naEdt(pagina()::legendaDoShell));
+        assertFalse(Visual.naEdt(pagina()::legendaDoShell).contains("na pasta do projeto"));
+    }
+
+    @Test
+    void voltarParaAAbaOuTrocarOSeletorDevolveOFocoAoTerminalQueJaExiste() {
+        alimentar(TelaProjetoTest.detalheCom("\"aberta\": true", "\"aberta\": false"));
+        mostrarAAba();
+        iniciar(pagina()::painelDoShell);
+        Espera.ate(PRAZO, "o foco do shell novo", () -> Visual.naEdt(pagina()::pedidosDeFoco) >= 1);
+        int antes = Visual.naEdt(pagina()::pedidosDeFoco);
+
+        Visual.naEdt(() -> pagina().soltar()); // saiu da aba (o terminal continua vivo por trás)
+        Visual.naEdt(() -> pagina().assinar()); // e voltou
+        Espera.ate(PRAZO, "o foco ao voltar", () -> Visual.naEdt(pagina()::pedidosDeFoco) > antes);
+
+        int meio = Visual.naEdt(pagina()::pedidosDeFoco);
+        Visual.naEdt(() -> pagina().seletor().botao("claude").doClick());
+        Visual.naEdt(() -> pagina().seletor().botao("shell").doClick());
+        Espera.ate(PRAZO, "o foco ao voltar para o Shell no seletor", () -> Visual.naEdt(pagina()::pedidosDeFoco) > meio);
     }
 
     private static String textosVisiveis(java.awt.Component raiz) {

@@ -209,7 +209,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
             dados.add(FichaRotulada.Item.de("Última alteração", FormatosDoProjeto.haQuanto(m.mexido(), ctx.agora())));
         }
         ficha.definir(dados);
-        fichaTecnica.definir(dadosTecnicos(d));
+        fichaTecnica.definir(dadosTecnicos(d, ctx.temClaude()));
         secaoTecnica.setVisible(!fichaTecnica.pares().isEmpty());
 
         boolean acoes = ctx.acoesLiberadas();
@@ -273,7 +273,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
     }
 
     /** Arquivos de configuração (compose), redes e o acesso ao Docker: cada um com o seu rótulo, só os que existem. */
-    private static List<FichaRotulada.Item> dadosTecnicos(DetalheProjeto d) {
+    private static List<FichaRotulada.Item> dadosTecnicos(DetalheProjeto d, boolean temClaude) {
         List<FichaRotulada.Item> l = new ArrayList<>();
         if (d.composes().isEmpty()) {
             l.add(FichaRotulada.Item.de("Arquivos de configuração", "Nenhum arquivo compose"));
@@ -287,7 +287,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         if (!d.redes().isEmpty()) {
             l.add(FichaRotulada.Item.de("Redes", String.join(", ", d.redes())));
         }
-        if (Boolean.FALSE.equals(d.acessoDocker())) {
+        if (temClaude && Boolean.FALSE.equals(d.acessoDocker())) {
             l.add(FichaRotulada.Item.de("Docker na sessão do Claude", "Sem acesso a este projeto"));
         }
         return l;

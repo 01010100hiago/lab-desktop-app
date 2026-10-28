@@ -66,6 +66,14 @@ final class ContextoDoProjeto {
         return detalhe == null ? null : ModeloDoProjeto.de(detalhe);
     }
 
+    /**
+     * O servidor tem sessões do Claude. Desconhecido (sem detalhe e sem o que o agente diz de si) vale como NÃO: o app mostra só o
+     * shell, que é SSH puro e nunca depende de saber.
+     */
+    boolean temClaude() {
+        return detalhe != null && detalhe.sessao() != null;
+    }
+
     Instant agora() {
         return relogio.get();
     }

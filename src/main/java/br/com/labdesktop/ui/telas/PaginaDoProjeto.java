@@ -76,6 +76,14 @@ abstract class PaginaDoProjeto extends Painel {
         return false;
     }
 
+    /**
+     * A aba não depende do detalhe do projeto (HTTP do agente) para existir: o terminal é SSH puro e tem de estar à mão mesmo com
+     * o agente fora do ar. Com {@code true}, o conteúdo aparece sem o detalhe, sem esqueleto, sem "sem dados" e sem esmaecer.
+     */
+    boolean independeDoDetalhe() {
+        return false;
+    }
+
     /** Termina a montagem: chamado pela aba no fim do SEU construtor (os campos dela já existem). */
     final void iniciar() {
         boolean preenche = preencheAAltura();
@@ -202,6 +210,23 @@ abstract class PaginaDoProjeto extends Painel {
         }
         boolean tem = ctx.detalhe != null;
         situacao = SituacaoDaVisao.de(ctx.estado, tem, ctx.ultimaLeitura, ctx.agora(), ctx.fuso);
+        boolean usavelSemDetalhe = !tem && independeDoDetalhe();
+        if (usavelSemDetalhe) {
+            // O terminal é SSH: o agente fora ou o detalhe que ainda não veio não são aviso para ele. A faixa só fala de falta de
+            // conexão (o painel do terminal dá o próprio aviso); o resto, o conteúdo, sem esmaecer.
+            SituacaoDaVisao.Modo modo = situacao.modo();
+            boolean semSsh = modo == SituacaoDaVisao.Modo.SEM_CONEXAO_SEM_DADOS || modo == SituacaoDaVisao.Modo.SEM_CONEXAO_COM_DADOS;
+            faixaDeDados.mostrar(semSsh ? situacao : SituacaoDaVisao.de(null, true, null, ctx.agora(), ctx.fuso));
+            esqueleto.setVisible(false);
+            semDados.setVisible(false);
+            corpo.setVisible(true);
+            corpo.esmaecer(false);
+            atualizarConteudo();
+            pilha.revalidate();
+            pilha.repaint();
+            rolagem.revalidate();
+            return;
+        }
         faixaDeDados.mostrar(situacao);
         boolean erro = ctx.erroSemDados != null && !tem;
         esqueleto.setVisible(!tem && !erro && situacao.modo() == SituacaoDaVisao.Modo.CARREGANDO);

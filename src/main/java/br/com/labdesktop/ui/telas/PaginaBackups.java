@@ -57,8 +57,10 @@ final class PaginaBackups extends PaginaDoProjeto {
     void atualizarConteudo() {
         List<Backup> itens = ctx.detalhe.backups();
         apoio.setText(itens.isEmpty() ? "" : itens.size() + (itens.size() == 1 ? " backup" : " backups"));
-        tabela.definir(itens, "Nenhum backup ainda. O app do servidor faz o backup do banco de dados (pg_dump) antes de abrir a "
-            + "sessão do Claude em projetos que têm Postgres.");
+        tabela.definir(itens, ctx.temClaude()
+            ? "Nenhum backup ainda. O app do servidor faz o backup do banco de dados (pg_dump) antes de abrir a "
+                + "sessão do Claude em projetos que têm Postgres."
+            : "Nenhum backup ainda.");
         caixa.terminar();
     }
 

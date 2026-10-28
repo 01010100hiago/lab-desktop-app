@@ -70,6 +70,8 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
     private static final String MODO_SHELL = "shell";
     private static final String ID_SHELL = "shell";
     private static final String ID_CLAUDE = "claude";
+    private static final String LEGENDA_DO_SHELL_NA_PASTA = "Shell no servidor, na pasta do projeto";
+    private static final String LEGENDA_DO_SHELL_NA_PASTA_PESSOAL = "Shell no servidor, na pasta pessoal (a pasta do projeto não pôde ser usada)";
 
     /** O que a aba mostra: o shell do projeto ou a sessão do Claude. */
     enum Modo {
@@ -84,7 +86,7 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
     private final Botao fechar = Botoes.mini("Fechar", "fechar");
     private final Botao reabrir = Botoes.mini("Reabrir", "atualizar");
     private final Botao retomar = Botoes.mini("Retomar", "play");
-    private final Botao terminal = Botoes.miniPrimario("Terminal", "terminal");
+    private final Botao terminal = Botoes.miniPrimario("Terminal interativo", "terminal");
     private final Botao telaEmTexto = Botoes.mini("Tela em texto", "texto");
     private final Botao fecharTerminal = Botoes.mini("Fechar terminal", "fechar");
     private final Rotulo somenteLeitura = new Rotulo("Somente leitura nesta versão: abrir, fechar e as caixas de envio pelo painel web. O terminal funciona.")
@@ -108,7 +110,7 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
     private final CardLayout modos = new CardLayout();
     private final JPanel areaPrincipal = new Painel(modos);
     private final Abas seletor = new Abas(true);
-    private final Rotulo legendaDoShell = new Rotulo("Shell no servidor, na pasta do projeto").corDoToken(Tokens.TEXTO3).tamanho(12.5f).truncavel();
+    private final Rotulo legendaDoShell = new Rotulo(LEGENDA_DO_SHELL_NA_PASTA).corDoToken(Tokens.TEXTO3).tamanho(12.5f).truncavel();
     private final Painel cartaoDoShell = new Painel(new BorderLayout());
     private final Rotulo mensagemDoShell = new Rotulo().corDoToken(Tokens.LOGS_TEXTO2).tamanho(13f).aoCentro();
     private JPanel blocoDeEstadoDoClaude;
@@ -132,7 +134,12 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
     private boolean sincronizandoOSeletor;
     /** O usuário fechou o terminal do Claude de propósito: não reabre sozinho enquanto a sessão não fechar e abrir de novo. */
     private boolean terminalDoClaudeFechadoPeloDono;
-    private boolean temClaude = true;
+    private boolean temClaude;
+    /** O aviso de "limite de terminais" já foi dado nesta falta de vaga: o resto fica no texto do cartão (reinicia ao conseguir uma vaga). */
+    private boolean avisouDoLimiteDoShell;
+    private boolean avisouDoLimiteDoClaude;
+    /** Quantas vezes a aba devolveu o foco a um terminal que já existia (os testes não têm foco de verdade). */
+    private int pedidosDeFoco;
     private boolean terminalAFrente;
     /** Quando o terminal viu a sessão sumir: se o detalhe já dizia aberta e desde quando (só uma sessão NOVA o faz reanexar). */
     private boolean eraAbertaNaQueda;
@@ -150,6 +157,12 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
 
     @Override
     boolean preencheAAltura() {
+        return true;
+    }
+
+    /** O shell é SSH: abre mesmo sem o detalhe do projeto (agente fora, primeira leitura que ainda não veio). */
+    @Override
+    boolean independeDoDetalhe() {
         return true;
     }
 
@@ -280,13 +293,13 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
                 }
             });
         }
-        if (ctx.detalhe != null) {
-            decidirOModoInicial();
-            atualizarOSeletor();
-            aplicarOModo();
-            ajustarATela();
-            abrirSozinhaSePreciso();
-        }
+        // O shell não espera o detalhe do projeto: SSH puro, tem de abrir mesmo com o agente fora do ar.
+        decidirOModoInicial();
+        atualizarOSeletor();
+        aplicarOModo();
+        ajustarATela();
+        abrirSozinhaSePreciso();
+        focarOQueEstaNaFrente(); // voltar para a aba devolve o foco ao terminal que já estava aberto
     }
 
     /**
@@ -295,7 +308,7 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
      * aberta ao entrar" vale para o que está aberto NA HORA de entrar.
      */
     private void decidirOModoInicial() {
-        if (modoDefinido || ctx.detalhe == null) {
+        if (modoDefinido) {
             return;
         }
         modo = temClaude && situacaoAtual == Situacao.ABERTA ? Modo.CLAUDE : Modo.SHELL;
@@ -330,41 +343,31 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
 
     @Override
     void atualizarConteudo() {
-        ModeloDoProjeto m = ctx.modelo();
-        Situacao nova = ModeloDaSessao.situacao(m);
+        ModeloDoProjeto m = ctx.modelo(); // null enquanto o detalhe não veio: só o shell
+        Situacao nova = m == null ? Situacao.FECHADA : ModeloDaSessao.situacao(m);
         if (nova != Situacao.ABERTA) {
             ultimaTela = null;
             recebeuTela = false;
             terminalDoClaudeFechadoPeloDono = false; // a próxima sessão aberta volta a abrir o terminal sozinha
         }
         situacaoAtual = nova;
-        temClaude = m.temClaude();
+        temClaude = ctx.temClaude();
         decidirOModoInicial();
         if (!temClaude && modo == Modo.CLAUDE) {
             modo = Modo.SHELL;
         }
         atualizarOSeletor();
-        seloDaSituacao.atualizar(nova.rotulo(), nova.gravidade(), nova.icone());
-        String pausa = nova == Situacao.PAUSADA_PELO_LIMITE || nova == Situacao.PAUSADA_PELO_FREIO
-            ? br.com.labdesktop.ui.TextosDeLimite.texto(m.limite()) : null;
-        quando.setText(textoDoQuando(m, pausa));
-        quando.setToolTipText(quando.getText());
         boolean aberta = nova == Situacao.ABERTA;
-        seloDeAtualizacao.setVisible(aberta && m.detalhe().sessao().info() != null);
-        if (seloDeAtualizacao.isVisible()) {
-            boolean velha = m.sessaoDesatualizada();
-            seloDeAtualizacao.atualizar(velha ? "desatualizada" : "atualizada", velha ? Gravidade.ATENCAO : Gravidade.OK,
-                velha ? "alerta" : "ok");
-            seloDeAtualizacao.setToolTipText(velha
-                ? "A sessão não está na imagem atual" + (m.motivoDaSessaoDesatualizada().isEmpty() ? "" : ". Falta: " + m.motivoDaSessaoDesatualizada())
-                : "A sessão está na imagem atual do Claude");
-        }
-
         boolean acoes = ctx.acoesLiberadas();
-        abrir.setVisible(acoes && m.oferecerAbrirClaude());
-        fechar.setVisible(acoes && aberta);
-        reabrir.setVisible(acoes && aberta);
-        retomar.setVisible(acoes && m.oferecerRetomar());
+        if (m != null) {
+            atualizarOEstadoDoClaude(m, nova, aberta, acoes);
+        } else {
+            abrir.setVisible(false);
+            fechar.setVisible(false);
+            reabrir.setVisible(false);
+            retomar.setVisible(false);
+            seloDeAtualizacao.setVisible(false);
+        }
         atualizarBotoesDoTerminal(aberta);
         somenteLeitura.setVisible(!acoes);
         linhaDeMensagem.setVisible(true);
@@ -377,12 +380,36 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
         aplicarOcupacao();
         mostrarLoginSeHouver();
         mostrarATela();
-        reanexarSeASessaoVoltou(m);
+        if (m != null) {
+            reanexarSeASessaoVoltou(m);
+        }
         aplicarOModo();
         if (assinada()) {
             ajustarATela();
             abrirSozinhaSePreciso();
         }
+    }
+
+    /** Os selos, o "desde quando" e os botões da sessão do Claude (só existem com o detalhe). */
+    private void atualizarOEstadoDoClaude(ModeloDoProjeto m, Situacao nova, boolean aberta, boolean acoes) {
+        seloDaSituacao.atualizar(nova.rotulo(), nova.gravidade(), nova.icone());
+        String pausa = nova == Situacao.PAUSADA_PELO_LIMITE || nova == Situacao.PAUSADA_PELO_FREIO
+            ? br.com.labdesktop.ui.TextosDeLimite.texto(m.limite()) : null;
+        quando.setText(textoDoQuando(m, pausa));
+        quando.setToolTipText(quando.getText());
+        seloDeAtualizacao.setVisible(aberta && m.detalhe().sessao() != null && m.detalhe().sessao().info() != null);
+        if (seloDeAtualizacao.isVisible()) {
+            boolean velha = m.sessaoDesatualizada();
+            seloDeAtualizacao.atualizar(velha ? "desatualizada" : "atualizada", velha ? Gravidade.ATENCAO : Gravidade.OK,
+                velha ? "alerta" : "ok");
+            seloDeAtualizacao.setToolTipText(velha
+                ? "A sessão não está na imagem atual" + (m.motivoDaSessaoDesatualizada().isEmpty() ? "" : ". Falta: " + m.motivoDaSessaoDesatualizada())
+                : "A sessão está na imagem atual do Claude");
+        }
+        abrir.setVisible(acoes && m.oferecerAbrirClaude());
+        fechar.setVisible(acoes && aberta);
+        reabrir.setVisible(acoes && aberta);
+        retomar.setVisible(acoes && m.oferecerRetomar());
     }
 
     private String textoDoQuando(ModeloDoProjeto m, String pausa) {
@@ -505,6 +532,7 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
         if (assinada()) {
             ajustarATela();
             abrirSozinhaSePreciso();
+            focarOQueEstaNaFrente(); // trocar Shell/Claude leva o foco ao terminal que ficou à vista
         }
     }
 
@@ -542,7 +570,7 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
      * se a sessão está aberta e o usuário não o fechou). Chamada de novo a cada leitura do detalhe: só faz algo se falta o terminal do modo.
      */
     private void abrirSozinhaSePreciso() {
-        if (!assinada() || ctx.terminal == null || ctx.detalhe == null) {
+        if (!assinada() || ctx.terminal == null) {
             return;
         }
         if (modo == Modo.SHELL) {
@@ -565,6 +593,24 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
         });
     }
 
+    /**
+     * Dá o foco ao terminal que está à vista agora, se já existe um (o shell no modo Shell, o do Claude no modo Claude com ele na
+     * frente): voltar para a aba ou trocar o seletor não pode deixar o foco num botão, com as teclas indo para lugar nenhum.
+     */
+    private void focarOQueEstaNaFrente() {
+        PainelTerminal p = modo == Modo.SHELL ? painelDoShell : terminalAFrente ? painelDoTerminal : null;
+        if (p == null) {
+            return;
+        }
+        SwingUtilities.invokeLater(() -> {
+            PainelTerminal atual = modo == Modo.SHELL ? painelDoShell : terminalAFrente ? painelDoTerminal : null;
+            if (assinada() && atual == p) {
+                pedidosDeFoco++;
+                p.focar();
+            }
+        });
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Terminal do shell
     // ---------------------------------------------------------------------------------------------
@@ -576,14 +622,17 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
         }
         if (!ctx.terminal.limite().reservar()) {
             mensagemDoShell.setText(LimiteDeAbas.mensagemDoLimite());
-            if (ctx.avisos != null) {
+            if (!avisouDoLimiteDoShell && ctx.avisos != null) {
+                avisouDoLimiteDoShell = true; // uma vez só por falta de vaga: o texto do cartão diz o resto
                 ctx.avisos.atencao(LimiteDeAbas.mensagemDoLimite());
             }
             return;
         }
+        avisouDoLimiteDoShell = false;
         String pasta = ctx.pastaDoProjeto.get();
-        ComandoDeTerminal comando = ComandoDeTerminal.ShellDoProjeto.valida(pasta)
-            ? new ComandoDeTerminal.ShellDoProjeto(pasta) : ComandoDeTerminal.ShellDoServidor.INSTANCIA;
+        boolean naPasta = ComandoDeTerminal.ShellDoProjeto.valida(pasta);
+        ComandoDeTerminal comando = naPasta ? new ComandoDeTerminal.ShellDoProjeto(pasta) : ComandoDeTerminal.ShellDoServidor.INSTANCIA;
+        legendaDoShell.setText(naPasta ? LEGENDA_DO_SHELL_NA_PASTA : LEGENDA_DO_SHELL_NA_PASTA_PESSOAL);
         painelDoShell = new PainelTerminal(ctx.terminal, comando, new PainelTerminal.Saida() {
             @Override
             public void aoMudarTitulo(String titulo) { }
@@ -619,6 +668,7 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
     /** O botão "Terminal" (Claude): abre o terminal da sessão (se ainda não há um) e o põe na frente da tela em texto. */
     private void abrirOuMostrarOTerminal() {
         terminalDoClaudeFechadoPeloDono = false;
+        avisouDoLimiteDoClaude = false; // foi um clique do usuário: o aviso, se faltar vaga, é a resposta dele
         abrirOTerminalDoClaude();
     }
 
@@ -631,13 +681,19 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
             try {
                 comando = new ComandoDeTerminal.SessaoDoClaude(ctx.projeto);
             } catch (IllegalArgumentException e) {
-                ctx.avisos.atencao("Não abri o terminal: o nome do projeto não é válido para o terminal.");
+                if (ctx.avisos != null) {
+                    ctx.avisos.atencao("Não abri o terminal: o nome do projeto não é válido para o terminal.");
+                }
                 return;
             }
             if (!ctx.terminal.limite().reservar()) {
-                ctx.avisos.atencao(LimiteDeAbas.mensagemDoLimite());
+                if (!avisouDoLimiteDoClaude && ctx.avisos != null) {
+                    avisouDoLimiteDoClaude = true; // uma vez só por falta de vaga, como no shell
+                    ctx.avisos.atencao(LimiteDeAbas.mensagemDoLimite());
+                }
                 return;
             }
+            avisouDoLimiteDoClaude = false;
             painelDoTerminal = new PainelTerminal(ctx.terminal, comando, new PainelTerminal.Saida() {
                 @Override
                 public void aoMudarTitulo(String titulo) { }
@@ -847,6 +903,18 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
     /** O terminal do Claude aberto nesta aba, ou {@code null}. */
     PainelTerminal painelDoTerminal() {
         return painelDoTerminal;
+    }
+
+    int pedidosDeFoco() {
+        return pedidosDeFoco;
+    }
+
+    String legendaDoShell() {
+        return legendaDoShell.getText();
+    }
+
+    String textoDoShellSemTerminal() {
+        return mensagemDoShell.getText();
     }
 
     /** O shell do projeto aberto nesta aba, ou {@code null}. */

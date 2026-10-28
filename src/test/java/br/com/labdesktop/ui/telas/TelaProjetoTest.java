@@ -312,6 +312,12 @@ class TelaProjetoTest {
             }
             PaginaDoProjeto p = c.tela.pagina(a);
             assertEquals(SituacaoDaVisao.Modo.CARREGANDO, Visual.naEdt(() -> p.situacao().modo()), a.toString());
+            if (a == Aba.TERMINAL) {
+                // o terminal é SSH puro: não espera o detalhe do projeto nem mostra esqueleto (TerminalDoProjetoTest)
+                assertFalse(Visual.naEdt(p::mostraEsqueleto), a + ": sem esqueleto");
+                assertTrue(Visual.naEdt(p::mostraCorpo), a + ": o shell está à mão");
+                continue;
+            }
             assertTrue(Visual.naEdt(p::mostraEsqueleto), a + ": esqueleto");
             assertFalse(Visual.naEdt(p::mostraCorpo), a + ": sem corpo");
         }

@@ -62,7 +62,7 @@ class PaginaSessaoTest {
         assertTrue(Visual.naEdt(p.botaoFechar()::isVisible));
         assertTrue(Visual.naEdt(p.botaoReabrir()::isVisible));
         assertFalse(Visual.naEdt(p.botaoRetomar()::isVisible));
-        assertEquals("Terminal", Visual.naEdt(() -> p.botaoTerminal().getText()));
+        assertEquals("Terminal interativo", Visual.naEdt(() -> p.botaoTerminal().getText()));
         assertTrue(Visual.naEdt(p.botaoTerminal()::isVisible));
         // sem servidor vivo (estes testes alimentam a página com dados fixos) não há por onde abrir o canal
         assertFalse(Visual.naEdt(p.botaoTerminal()::isEnabled));
