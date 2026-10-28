@@ -24,10 +24,10 @@ class TesteCamadas {
 
     /**
      * util, seguranca, cofre, ssh, api, servidor, arquivos (o domínio do gerenciador de arquivos, sobre SFTP), instalador (o instalador do agente:
-     * verificações, passos e pacote, atrás de uma interface de execução) e local (o servidor "Este computador": processos, verificações, laboratório local), projetos (criar, importar e completar projeto: modelos puros e operações sobre um ambiente) e terminal (o domínio do
+     * verificações, passos e pacote, atrás de uma interface de execução) e local (o servidor "Este computador": processos, verificações, laboratório local), projetos (criar, importar e completar projeto: modelos puros e operações sobre um ambiente), cloudflare (a API da Cloudflare, o túnel e o endereço público) e terminal (o domínio do
      * terminal: transporte, ciclo de vida, classificador e portão de entrada; o JediTerm e o Swing ficam em {@code ui.terminal}).
      */
-    private static final Set<String> DOMINIO = Set.of("util", "seguranca", "cofre", "ssh", "api", "servidor", "arquivos", "terminal", "instalador", "local", "projetos");
+    private static final Set<String> DOMINIO = Set.of("util", "seguranca", "cofre", "ssh", "api", "servidor", "arquivos", "terminal", "instalador", "local", "projetos", "cloudflare");
 
     private static final Pattern GRAFICOS = Pattern.compile(
         "\\b(javax\\.swing|java\\.awt|com\\.formdev|com\\.jediterm)\\b");
@@ -95,7 +95,7 @@ class TesteCamadas {
     @Test
     void cofreSshEApiNaoImportamUi() throws IOException {
         List<String> violacoes = new ArrayList<>();
-        for (String pacote : List.of("cofre", "ssh", "api", "util", "seguranca", "servidor", "arquivos", "terminal", "instalador", "projetos")) {
+        for (String pacote : List.of("cofre", "ssh", "api", "util", "seguranca", "servidor", "arquivos", "terminal", "instalador", "projetos", "cloudflare")) {
             for (Path fonte : fontesDe(pacote)) {
                 for (String linha : codigoDe(fonte)) {
                     if (UI.matcher(linha).find()) {

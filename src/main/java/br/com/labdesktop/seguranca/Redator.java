@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
  * <p>É a última rede de proteção, não a primeira: o certo é o segredo nem chegar ao texto. Cobre o token do
  * cliente nativo (credencial do app), blocos {@code BEGIN/END} de chave, valores de
  * {@code Authorization}, o {@code secret=} (e a URI inteira) de {@code otpauth://} do 2FA e pares do tipo
- * {@code senha=...}, além dos tokens de GitHub e GitLab e do usuário:senha dentro de um endereço.
+ * {@code senha=...}, além dos tokens de GitHub, GitLab e Cloudflare (com prefixo) e do usuário:senha dentro de um endereço.
  */
 public final class Redator {
 
@@ -23,6 +23,8 @@ public final class Redator {
     private static final Pattern TOKEN = Pattern.compile("lab_[A-Za-z0-9_-]{20,}");
     // tokens de GitHub e GitLab (um erro do git pode repetir a URL ou a linha que o continha) e usuário:senha dentro de um endereço
     private static final Pattern TOKEN_DE_GIT = Pattern.compile("\\b(?:gh[pousr]_|github_pat_|glpat-)[A-Za-z0-9_-]{16,}");
+    // tokens de API da Cloudflare com prefixo (cfut_, cfat_, cfk_): um erro de rede que repetisse o cabeçalho os mostraria
+    private static final Pattern TOKEN_DA_CLOUDFLARE = Pattern.compile("\\bcf(?:ut|at|k)_[A-Za-z0-9]{16,}");
     private static final Pattern URL_COM_CREDENCIAL = Pattern.compile("(?i)\\b(https?://)[^/\\s@]+@");
     private static final Pattern AUTORIZACAO = Pattern.compile(
         "(?i)(authorization\\s*[:=]\\s*)(?:(?:bearer|basic)\\s+)?[^\\s,;\"']+");
@@ -48,6 +50,7 @@ public final class Redator {
         r = BEARER_SOLTO.matcher(r).replaceAll("Bearer " + MASCARA);
         r = TOKEN.matcher(r).replaceAll("lab_" + MASCARA);
         r = TOKEN_DE_GIT.matcher(r).replaceAll(MASCARA);
+        r = TOKEN_DA_CLOUDFLARE.matcher(r).replaceAll(MASCARA);
         r = URL_COM_CREDENCIAL.matcher(r).replaceAll("$1" + MASCARA + "@");
         r = PAR_DE_SENHA.matcher(r).replaceAll("$1=" + MASCARA);
         return r;
