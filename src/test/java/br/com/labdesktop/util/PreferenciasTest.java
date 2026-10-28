@@ -134,6 +134,39 @@ class PreferenciasTest {
         assertEquals(0, p.autoBloqueioMinutos());
     }
 
+    /** Um campo de TIPO errado derrubava o arquivo inteiro (o tema e a ordem das abas do usuário se perdiam por um número escrito como texto). */
+    @Test
+    void campoDeTipoErradoVoltaSoAoPadraoENaoPerdeOResto(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        c.prepararPastas();
+        Files.writeString(c.arquivoPreferencias(), """
+            { "versao": 1,
+              "tema": "escuro",
+              "fonteTerminal": "grande",
+              "opcaoComoMeta": "sim",
+              "copiarAoSelecionar": true,
+              "janela": { "x": "esquerda", "y": 6, "largura": 1200, "altura": 800, "maximizada": 1 },
+              "avisos": ["pausa_nova", 7, {"a": 1}],
+              "autoBloqueioMinutos": 15.5,
+              "escalaTexto": [115],
+              "donoExclusivo": "talvez",
+              "abasServidor": { "ordem": ["maquina", 3, "resumo"], "ocultas": "processos" },
+              "abasProjeto": "texto no lugar do objeto" }
+            """);
+        Preferencias p = Preferencias.carregar(c);
+        assertEquals(Tema.ESCURO, p.tema(), "o tema certo não se perde por causa dos vizinhos");
+        assertEquals(Preferencias.FONTE_PADRAO, p.tamanhoFonteTerminal(), "texto no lugar do número: só a fonte volta ao padrão");
+        assertFalse(p.opcaoComoMeta(), "texto no lugar do verdadeiro/falso: padrão");
+        assertTrue(p.copiarAoSelecionar(), "o campo bom é mantido");
+        assertEquals(new Janela(0, 6, 1200, 800, false), p.janela(), "campo ruim dentro da janela volta só ele ao padrão");
+        assertEquals(EnumSet.of(Aviso.PAUSA_NOVA), p.avisosAtivos(), "item que não é texto é descartado");
+        assertEquals(0, p.autoBloqueioMinutos());
+        assertEquals(Preferencias.ESCALA_PADRAO, p.escalaTexto());
+        assertFalse(p.donoExclusivo());
+        assertEquals(java.util.List.of("maquina", "resumo"), p.abasDoServidor().ordem(), "a ordem boa fica, o item de tipo errado cai");
+        assertEquals(OrdemDeAbas.PADRAO, p.abasDoProjeto());
+    }
+
     @Test
     void listaDeAvisosVaziaDesligaTodosEAusenteLigaTodos(@TempDir Path tmp) throws Exception {
         CaminhosApp c = caminhos(tmp);

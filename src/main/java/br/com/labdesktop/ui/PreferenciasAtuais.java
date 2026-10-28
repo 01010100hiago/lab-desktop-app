@@ -46,6 +46,14 @@ public final class PreferenciasAtuais {
         Fundo.emFundo(this::gravarAgora);
     }
 
+    /**
+     * Grava AGORA o que estiver na memória e só volta quando acabou (espera uma gravação em andamento). É para o fim do app: {@code Fundo.encerrar} interrompe as threads de fundo e
+     * uma gravação no meio perderia a última mudança. Um arquivo pequeno, uma vez, na saída.
+     */
+    public void descarregar() {
+        gravarAgora();
+    }
+
     /** Grava a preferência MAIS NOVA, uma gravação por vez (quem chegar depois grava o que já estiver na memória e quem já não tem o que gravar sai). */
     private void gravarAgora() {
         synchronized (travaDaGravacao) {

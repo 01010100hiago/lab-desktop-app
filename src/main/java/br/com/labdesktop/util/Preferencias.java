@@ -1,6 +1,7 @@
 package br.com.labdesktop.util;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.EnumSet;
@@ -222,8 +223,9 @@ public record Preferencias(
             return padrao();
         }
         try {
-            Dados d = Json.mapper().readValue(ArquivoPrivado.lerLimitado(arquivo, TAMANHO_MAXIMO), Dados.class);
-            return d == null ? padrao() : d.paraPreferencias();
+            // campo por campo: um valor de tipo errado (texto onde devia haver número) volta SÓ aquele campo ao padrão, e não o arquivo inteiro
+            JsonNode raiz = Json.mapper().readTree(ArquivoPrivado.lerLimitado(arquivo, TAMANHO_MAXIMO));
+            return raiz == null || !raiz.isObject() ? padrao() : Dados.deJson(raiz).paraPreferencias();
         } catch (IOException | RuntimeException e) {
             LOG.warn("Preferências ilegíveis, usando os padrões ({}).", e.getClass().getSimpleName());
             return padrao();
@@ -284,6 +286,72 @@ public record Preferencias(
             public Integer largura;
             public Integer altura;
             public Boolean maximizada;
+        }
+
+        /** Lê o JSON campo por campo: o que não tem o tipo esperado fica {@code null} (= padrão) sem afetar os outros. */
+        static Dados deJson(JsonNode n) {
+            Dados d = new Dados();
+            d.versao = inteiro(n.get("versao"));
+            d.tema = texto(n.get("tema"));
+            d.janela = janelaDeJson(n.get("janela"));
+            d.fonteTerminal = inteiro(n.get("fonteTerminal"));
+            d.opcaoComoMeta = booleano(n.get("opcaoComoMeta"));
+            d.copiarAoSelecionar = booleano(n.get("copiarAoSelecionar"));
+            d.avisos = listaDeTexto(n.get("avisos"));
+            d.autoBloqueioMinutos = inteiro(n.get("autoBloqueioMinutos"));
+            d.escalaTexto = inteiro(n.get("escalaTexto"));
+            d.donoExclusivo = booleano(n.get("donoExclusivo"));
+            d.abasServidor = abasDeJson(n.get("abasServidor"));
+            d.abasProjeto = abasDeJson(n.get("abasProjeto"));
+            return d;
+        }
+
+        private static Integer inteiro(JsonNode v) {
+            return v != null && v.isIntegralNumber() && v.canConvertToInt() ? v.intValue() : null;
+        }
+
+        private static Boolean booleano(JsonNode v) {
+            return v != null && v.isBoolean() ? v.booleanValue() : null;
+        }
+
+        private static String texto(JsonNode v) {
+            return v != null && v.isTextual() ? v.textValue() : null;
+        }
+
+        private static List<String> listaDeTexto(JsonNode v) {
+            if (v == null || !v.isArray()) {
+                return null;
+            }
+            List<String> r = new java.util.ArrayList<>();
+            for (JsonNode e : v) {
+                if (e.isTextual()) {
+                    r.add(e.textValue()); // um item que não é texto é só descartado
+                }
+            }
+            return r;
+        }
+
+        private static JanelaDados janelaDeJson(JsonNode v) {
+            if (v == null || !v.isObject()) {
+                return null;
+            }
+            JanelaDados j = new JanelaDados();
+            j.x = inteiro(v.get("x"));
+            j.y = inteiro(v.get("y"));
+            j.largura = inteiro(v.get("largura"));
+            j.altura = inteiro(v.get("altura"));
+            j.maximizada = booleano(v.get("maximizada"));
+            return j;
+        }
+
+        private static AbasDados abasDeJson(JsonNode v) {
+            if (v == null || !v.isObject()) {
+                return null;
+            }
+            AbasDados a = new AbasDados();
+            a.ordem = listaDeTexto(v.get("ordem"));
+            a.ocultas = listaDeTexto(v.get("ocultas"));
+            return a;
         }
 
         static Dados de(Preferencias p) {

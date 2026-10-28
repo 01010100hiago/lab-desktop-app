@@ -242,6 +242,7 @@ public final class Aplicacao {
         }
         encerrando = true;
         liberar();
+        preferencias.descarregar(); // antes de Fundo.encerrar(): ele interrompe a gravação em andamento e a última mudança (janela, tema) se perderia
         Fundo.encerrar();
         aoEncerrar.run();
     }
