@@ -204,6 +204,12 @@ public final class AcoesDaInterface {
         }
 
         @Override
+        public String problemaDaPasta(String pasta) {
+            var p = lab.servicosLocais().plataforma();
+            return br.com.labdesktop.local.ValidadorDaPastaDosProjetos.problema(p.sistema(), p.casa(), pasta).orElse(null);
+        }
+
+        @Override
         public LaboratorioLocal laboratorio(ParametrosDoLaboratorio parametros) {
             return lab.laboratorioLocal(parametros, pacote);
         }

@@ -671,4 +671,18 @@ class LaboratorioLocalTest {
         assertEquals(Desfecho.FALHOU, r.desfecho());
         assertTrue(r.erro().contains("motivo de verdade da falha"), r.erro());
     }
+
+    @Test
+    void pastaQueNaoServeERecusadaAntesDeCriarQualquerCoisa() {
+        for (String ruim : new String[] {"projetos/relativa", "/", "/Users/ana/../x", tmp.toString() /* a pasta pessoal do teste */}) {
+            pc.limparRegistro();
+            p = p.comPasta(ruim);
+            ResultadoDaInstalacao r = criar();
+            assertEquals(Desfecho.FALHOU, r.desfecho(), ruim);
+            assertEquals(PassoDoLaboratorio.PASTA, r.passo(), ruim);
+            assertTrue(pc.escritas().isEmpty(), "nada foi criado no Docker: " + pc.escritas());
+            assertTrue(pc.redes.isEmpty() && pc.containers.isEmpty());
+        }
+        assertFalse(Files.exists(Path.of("projetos")), "nem a pasta relativa nasceu no diretório de trabalho");
+    }
 }

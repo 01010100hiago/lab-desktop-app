@@ -88,6 +88,11 @@ class DialogoPrepararComputadorTest {
         }
 
         @Override
+        public String problemaDaPasta(String pasta) {
+            return br.com.labdesktop.local.ValidadorDaPastaDosProjetos.problema(plataforma.sistema(), plataforma.casa(), pasta).orElse(null);
+        }
+
+        @Override
         public LaboratorioLocal laboratorio(ParametrosDoLaboratorio p) {
             return new LaboratorioLocal(pc, p, plataforma, PACOTE, ganchos).comSonda(Duration.ofMillis(300), Duration.ofMillis(10));
         }
@@ -366,6 +371,21 @@ class DialogoPrepararComputadorTest {
         assertFalse(Visual.naEdt(d::frasesDasVerificacoes).stream().anyMatch(f -> f.contains("em uso por outro programa")), Visual.naEdt(d::frasesDasVerificacoes).toString());
         assertEquals(null, botaoOuNulo(d, "usar-porta-sugerida"));
         fotografar(d, "dialogo-preparar-computador-ja-roda");
+    }
+
+    @Test
+    void pastaDosProjetosQueNaoServeEMostradaNasOpcoesAntesDeConferirOuCriarNadaERelativaOuRaizOuPastaPessoalSaoRecusadas() {
+        DialogoPrepararComputador d = abrir(DialogoPrepararComputador.Acao.PREPARAR);
+        esperarPagina(d, "resultado");
+        for (String ruim : new String[] {"projetos/relativa", "/", "/etc/lab", plataforma.casa(), "/Users/ana/../x"}) {
+            Visual.naEdt(() -> d.campoDaPasta().setText(ruim));
+            pc.limparRegistro();
+            Visual.naEdt(() -> d.botaoVerificarDeNovo().doClick());
+            Espera.ate(PRAZO, () -> "erro para " + ruim, () -> !Visual.naEdt(d::textoDoErroDasOpcoes).isEmpty());
+            assertFalse(Visual.naEdt(() -> d.botaoCriar().isEnabled()), ruim);
+            assertTrue(pc.comandos.isEmpty(), "nem conferiu nada com uma pasta que não serve: " + pc.comandos);
+        }
+        assertFalse(Files.exists(Path.of("projetos")), "a pasta relativa não nasceu no diretório de trabalho");
     }
 
     @Test

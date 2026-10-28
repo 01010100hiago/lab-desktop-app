@@ -81,6 +81,11 @@ public final class DialogoPrepararComputador extends Dialogo {
         /** Monta "criar" e "remover" (nada acontece até {@code criar} ou {@code remover} serem chamados). */
         LaboratorioLocal laboratorio(ParametrosDoLaboratorio parametros);
 
+        /** Por que esta pasta não serve como pasta dos projetos (relativa, com {@code ..}, a raiz, a pasta pessoal, do sistema); {@code null} se serve. */
+        default String problemaDaPasta(String pasta) {
+            return null;
+        }
+
         /** Abre uma das páginas oficiais de download no navegador. */
         void abrirPagina(String url);
 
@@ -331,6 +336,14 @@ public final class DialogoPrepararComputador extends Dialogo {
         } catch (RuntimeException e) {
             opcoesAvancadas.definirAberta(true);
             dizerErro(erroDasOpcoes, e instanceof NumberFormatException ? "A porta deve ser um número." : e.getMessage());
+            mostrarPagina(PAGINA_RESULTADO);
+            return;
+        }
+        String problemaDaPasta = motor.problemaDaPasta(pasta);
+        if (problemaDaPasta != null) {
+            opcoesAvancadas.definirAberta(true);
+            dizerErro(erroDasOpcoes, problemaDaPasta);
+            criar.setEnabled(false);
             mostrarPagina(PAGINA_RESULTADO);
             return;
         }
@@ -599,6 +612,13 @@ public final class DialogoPrepararComputador extends Dialogo {
         } catch (RuntimeException e) {
             opcoesAvancadas.definirAberta(true);
             dizerErro(erroDasOpcoes, e instanceof NumberFormatException ? "A porta deve ser um número." : e.getMessage());
+            reajustar();
+            return;
+        }
+        String problemaDaPasta = motor.problemaDaPasta(p.pastaDosProjetos());
+        if (problemaDaPasta != null) { // a pasta pode ter mudado depois de conferir
+            opcoesAvancadas.definirAberta(true);
+            dizerErro(erroDasOpcoes, problemaDaPasta);
             reajustar();
             return;
         }
@@ -952,6 +972,10 @@ public final class DialogoPrepararComputador extends Dialogo {
 
     public JTextField campoDaPorta() {
         return campoDaPorta;
+    }
+
+    public String textoDoErroDasOpcoes() {
+        return erroDasOpcoes.isVisible() ? erroDasOpcoes.getText() : "";
     }
 
     public JTextField campoDaPasta() {

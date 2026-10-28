@@ -194,6 +194,11 @@ public final class LaboratorioLocal {
         } catch (RuntimeException e) {
             throw new FalhaDePasso("A pasta dos projetos não é um caminho válido: " + TextoSeguro.limparLinha(parametros.pastaDosProjetos()));
         }
+        // ANTES de criar qualquer coisa (e de montar a pasta no container): a raiz do disco, a pasta pessoal e as do sistema são recusadas
+        String problema = ValidadorDaPastaDosProjetos.problema(plataforma.sistema(), plataforma.casa(), parametros.pastaDosProjetos()).orElse(null);
+        if (problema != null) {
+            throw new FalhaDePasso(problema);
+        }
         if (Files.isDirectory(raiz)) {
             return false;
         }
