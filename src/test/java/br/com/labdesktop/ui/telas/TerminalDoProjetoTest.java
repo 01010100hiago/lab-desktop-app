@@ -22,6 +22,7 @@ import br.com.labdesktop.ui.DialogosGravados;
 import br.com.labdesktop.ui.NavegadorGravado;
 import br.com.labdesktop.ui.Visual;
 import br.com.labdesktop.ui.componentes.CopiadorDeTexto;
+import br.com.labdesktop.ui.telas.PaginaTerminalDoProjeto.Modo;
 import br.com.labdesktop.ui.telas.TelaProjeto.Aba;
 import br.com.labdesktop.ui.telas.arquivos.EscolhedorLocal;
 import br.com.labdesktop.ui.terminal.ContextoDeTerminal;
@@ -35,11 +36,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * O terminal dentro da aba Sessão do Claude (ARQUITETURA 7): o botão "Terminal" abre um terminal de verdade ligado à sessão tmux do
- * projeto, "Tela em texto" volta à leitura, "Fechar terminal" solta o canal. SEM a trava {@code labdesktop.acoes}: o terminal é do
- * proprietário para operar. Sem o vigia de EDT dos outros testes de tela (o JediTerm pede repintura da thread dele).
+ * A aba Terminal do projeto (ARQUITETURA 7 e 7.8): abre sozinha, o shell do projeto funciona sem Claude, e com Claude há o seletor
+ * Shell | Claude (a sessão aberta já vem selecionada). No modo Claude: o botão "Terminal" abre um terminal de verdade ligado à sessão
+ * tmux do projeto, "Tela em texto" volta à leitura, "Fechar terminal" solta o canal. SEM a trava {@code labdesktop.acoes}: o terminal
+ * é do usuário para operar. Sem o vigia de EDT dos outros testes de tela (o JediTerm pede repintura da thread dele).
  */
-class TerminalNaPaginaSessaoTest {
+class TerminalDoProjetoTest {
 
     private static final Duration PRAZO = Duration.ofSeconds(20);
 
@@ -59,7 +61,7 @@ class TerminalNaPaginaSessaoTest {
         ContextoDeTerminal ctx = new ContextoDeTerminal(new TransporteSsh(cenario.conexao), limite, Preferencias::padrao, url -> { },
             Agendador.doFundo());
         tela = Visual.naEdt(() -> {
-            TelaProjeto t = new TelaProjeto(null, "orbita", fluxos, new NavegadorGravado(avisos), avisos, Aba.SESSAO,
+            TelaProjeto t = new TelaProjeto(null, "orbita", fluxos, new NavegadorGravado(avisos), avisos, Aba.TERMINAL,
                 new TelaProjetoTest.SaidaGravada(), () -> null, () -> { }, new CopiadorDeTexto(() -> new Clipboard("teste")),
                 ServicosDeArquivos.descartaveis(), EscolhedorLocal.doSistema(() -> null), ctx);
             t.relogio(() -> TelaProjetoTest.AGORA, TelaProjetoTest.SP);
@@ -82,8 +84,8 @@ class TerminalNaPaginaSessaoTest {
         });
     }
 
-    private PaginaSessao pagina() {
-        return tela.sessao();
+    private PaginaTerminalDoProjeto pagina() {
+        return tela.terminal();
     }
 
     private void abrirOTerminal() {
@@ -151,7 +153,7 @@ class TerminalNaPaginaSessaoTest {
     void sairDaPaginaDoProjetoFechaOTerminalMasTrocarDeAbaNao() {
         abrirOTerminal();
         Visual.naEdt(() -> tela.mostrarAba(Aba.LOGS));
-        Visual.naEdt(() -> tela.mostrarAba(Aba.SESSAO));
+        Visual.naEdt(() -> tela.mostrarAba(Aba.TERMINAL));
         assertNotNull(Visual.naEdt(() -> pagina().painelDoTerminal()), "trocar de aba dentro do projeto não derruba o terminal");
         assertTrue(Visual.naEdt(() -> pagina().painelDoTerminal()).sessao().estado().ativa());
         assertEquals(1, limite.emUso());
@@ -226,5 +228,180 @@ class TerminalNaPaginaSessaoTest {
         alimentar(FixturesDeApi.detalheDoProjetoSintetico()); // e abrir de novo
         Espera.ate(PRAZO, () -> "estado=" + p.sessao().estado(), () -> p.sessao().estado().ativa());
         Espera.ate(PRAZO, () -> "canais=" + cenario.terminal.canaisAbertos.get(), () -> cenario.terminal.canaisAbertos.get() == 2);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // A aba abre sozinha; o Claude é opcional
+    // ---------------------------------------------------------------------------------------------
+
+    /** O detalhe sintético sem o objeto {@code sessao}: um servidor sem Claude. */
+    private static DetalheProjeto detalheSemClaude() {
+        String json = TelaProjetoTest.detalheEmUmaLinha().replaceAll("\"sessao\": \\{.*?\"info\": (\\{[^}]*\\}|null) \\},", "\"sessao\": null,");
+        assertFalse(json.contains("lab-claude-orbita"), "a fixture ainda tem a sessão");
+        return FixturesDeApi.de(json, DetalheProjeto.class);
+    }
+
+    private void mostrarAAba() {
+        Visual.naEdt(() -> pagina().assinar()); // a aba foi para a frente: é o que a faz abrir o terminal
+        Visual.renderizar(tela, 1100, 700);
+    }
+
+    /** Sem janela de verdade o painel não "aparece" sozinho: faz o que o primeiro layout faria. */
+    private void iniciar(java.util.function.Supplier<br.com.labdesktop.ui.terminal.PainelTerminal> qual) {
+        var p = Visual.naEdt(qual::get);
+        assertNotNull(p, "o terminal devia ter sido aberto sozinho");
+        Visual.renderizar(tela, 1100, 700);
+        Visual.naEdt(p::iniciar);
+    }
+
+    private static final String LINHA_DO_SHELL = "cd '/srv/lab/projects/orbita' 2>/dev/null || { echo 'A pasta do projeto não foi encontrada; "
+        + "abrindo na pasta pessoal.'; cd; }; exec \"${SHELL:-/bin/sh}\" -l";
+
+    @Test
+    void semClaudeAAbaAbreUmShellNaPastaDoProjetoSozinhaESemNadaDoClaude() {
+        alimentar(detalheSemClaude());
+        mostrarAAba();
+        iniciar(pagina()::painelDoShell);
+        Espera.ate(PRAZO, "o servidor viu o shell do projeto", () -> cenario.terminal.comandos.size() == 1);
+        assertEquals(LINHA_DO_SHELL, cenario.terminal.comandos.get(0));
+        var shell = Visual.naEdt(() -> pagina().painelDoShell());
+        assertNotNull(shell);
+        Visual.naEdt(shell::iniciar);
+        Espera.ate(PRAZO, () -> "estado=" + shell.sessao().estado(), () -> shell.sessao().estado().ativa());
+        assertEquals(Modo.SHELL, Visual.naEdt(pagina()::modo));
+        assertFalse(Visual.naEdt(pagina().seletor()::isVisible), "sem Claude não há seletor");
+        assertNull(Visual.naEdt(pagina()::painelDoTerminal));
+        assertEquals(1, limite.emUso());
+        Visual.naEdt(pagina()::redesenhar);
+        String visivel = Visual.naEdt(() -> textosVisiveis(pagina()));
+        assertFalse(visivel.toLowerCase().contains("claude"), "nada do Claude na tela: " + visivel);
+        for (var b : java.util.List.of(pagina().botaoAbrir(), pagina().botaoFechar(), pagina().botaoReabrir(), pagina().botaoRetomar(),
+            pagina().botaoTerminal(), pagina().botaoTelaEmTexto(), pagina().botaoEnviar(), pagina().botaoEnter(), pagina().botaoEsc())) {
+            assertFalse(Visual.naEdt(() -> pagina().aparece(b)), b.getText() + " do Claude não pode aparecer");
+        }
+        assertFalse(Visual.naEdt(() -> pagina().aparece(pagina().campoDaMensagem())));
+        // o Claude não existe nem se alguém pedir (o botão da Visão geral)
+        Visual.naEdt(pagina()::escolherOClaude);
+        assertEquals(Modo.SHELL, Visual.naEdt(pagina()::modo));
+    }
+
+    @Test
+    void comASessaoAbertaOClaudeVemSelecionadoEOTerminalDeleAbreSemClique() {
+        mostrarAAba();
+        iniciar(pagina()::painelDoTerminal);
+        Espera.ate(PRAZO, "o servidor viu o comando", () -> !cenario.terminal.comandos.isEmpty());
+        assertTrue(cenario.terminal.comandos.get(0).contains("lab-claude-orbita tmux -u attach -t work"), cenario.terminal.comandos.get(0));
+        assertEquals(Modo.CLAUDE, Visual.naEdt(pagina()::modo));
+        assertTrue(Visual.naEdt(pagina().seletor()::isVisible));
+        assertEquals("claude", Visual.naEdt(pagina().seletor()::selecionada));
+        assertTrue(Visual.naEdt(pagina()::terminalAFrente));
+        assertNotNull(Visual.naEdt(pagina()::painelDoTerminal));
+        assertNull(Visual.naEdt(pagina()::painelDoShell), "o shell só abre quando o usuário o escolhe");
+        assertEquals(1, limite.emUso());
+    }
+
+    @Test
+    void semSessaoAbertaOShellVemSelecionadoEOClaudeEUmBotao() {
+        alimentar(TelaProjetoTest.detalheCom("\"aberta\": true", "\"aberta\": false"));
+        mostrarAAba();
+        iniciar(pagina()::painelDoShell);
+        Espera.ate(PRAZO, "o servidor viu o shell", () -> cenario.terminal.comandos.size() == 1);
+        assertEquals(LINHA_DO_SHELL, cenario.terminal.comandos.get(0));
+        assertEquals(Modo.SHELL, Visual.naEdt(pagina()::modo));
+        assertEquals("shell", Visual.naEdt(pagina().seletor()::selecionada));
+        assertTrue(Visual.naEdt(pagina().seletor()::isVisible));
+        assertFalse(Visual.naEdt(() -> pagina().aparece(pagina().seloDaSituacao())), "os controles do Claude esperam o usuário escolher o Claude");
+
+        Visual.naEdt(() -> pagina().seletor().botao("claude").doClick());
+        assertEquals(Modo.CLAUDE, Visual.naEdt(pagina()::modo));
+        assertTrue(Visual.naEdt(() -> pagina().aparece(pagina().seloDaSituacao())), "agora o estado da sessão aparece");
+        assertEquals("SESSÃO FECHADA", Visual.naEdt(pagina().seloDaSituacao()::texto));
+        assertNull(Visual.naEdt(pagina()::painelDoTerminal), "sem sessão aberta não há terminal do Claude");
+        assertNotNull(Visual.naEdt(pagina()::painelDoShell), "o shell continua vivo por trás");
+        Espera.ate(PRAZO, "o canal do shell", () -> cenario.terminal.canaisAbertos.get() == 1);
+        assertEquals(1, cenario.terminal.canaisAbertos.get());
+
+        Visual.naEdt(() -> pagina().seletor().botao("shell").doClick());
+        assertEquals(Modo.SHELL, Visual.naEdt(pagina()::modo));
+        assertFalse(Visual.naEdt(() -> pagina().aparece(pagina().seloDaSituacao())));
+        assertEquals(1, cenario.terminal.canaisAbertos.get(), "voltar ao shell não abre outro");
+    }
+
+    @Test
+    void sessaoQueAbreComOClaudeSelecionadoAbreOTerminalSoEFechadoPeloDonoNaoVoltaSozinho() {
+        alimentar(TelaProjetoTest.detalheCom("\"aberta\": true", "\"aberta\": false"));
+        mostrarAAba();
+        Visual.naEdt(() -> pagina().seletor().botao("claude").doClick());
+        assertNull(Visual.naEdt(pagina()::painelDoTerminal));
+        alimentar(FixturesDeApi.detalheDoProjetoSintetico()); // o usuário abriu a sessão
+        assertNotNull(Visual.naEdt(pagina()::painelDoTerminal), "a sessão abriu com o Claude à vista: o terminal abre sozinho");
+        assertTrue(Visual.naEdt(pagina()::terminalAFrente));
+
+        Visual.naEdt(() -> pagina().botaoFecharTerminal().doClick(0));
+        assertNull(Visual.naEdt(pagina()::painelDoTerminal));
+        alimentar(FixturesDeApi.detalheDoProjetoSintetico());
+        alimentar(FixturesDeApi.detalheDoProjetoSintetico());
+        assertNull(Visual.naEdt(pagina()::painelDoTerminal), "fechado de propósito: as leituras seguintes não o reabrem");
+        Visual.naEdt(() -> pagina().botaoTerminal().doClick(0));
+        assertNotNull(Visual.naEdt(pagina()::painelDoTerminal), "o botão Terminal abre quando o usuário quiser");
+    }
+
+    @Test
+    void semAAbaNaTelaNadaAbreEAoSairDaPaginaOsDoisTerminaisFecham() {
+        Visual.renderizar(tela, 1100, 700);
+        assertNull(Visual.naEdt(pagina()::painelDoTerminal), "aba que ninguém viu não abre canal");
+        assertNull(Visual.naEdt(pagina()::painelDoShell));
+        assertEquals(0, limite.emUso());
+
+        mostrarAAba();
+        Visual.naEdt(() -> pagina().seletor().botao("shell").doClick());
+        assertNotNull(Visual.naEdt(pagina()::painelDoShell));
+        assertNotNull(Visual.naEdt(pagina()::painelDoTerminal));
+        assertEquals(2, limite.emUso());
+        iniciar(pagina()::painelDoShell);
+        iniciar(pagina()::painelDoTerminal);
+        Espera.ate(PRAZO, () -> "canais=" + cenario.terminal.canaisAbertos.get(), () -> cenario.terminal.canaisAbertos.get() == 2);
+
+        Visual.naEdt(tela::fecharTerminais);
+        assertNull(Visual.naEdt(pagina()::painelDoShell));
+        assertNull(Visual.naEdt(pagina()::painelDoTerminal));
+        assertEquals(0, limite.emUso());
+        Espera.ate(PRAZO, () -> "encerrados=" + cenario.terminal.canaisEncerrados.get(), () -> cenario.terminal.canaisEncerrados.get() == 2);
+    }
+
+    @Test
+    void shellComLimiteEstouradoMostraAMensagemSemAbrirCanal() {
+        for (int i = 0; i < 8; i++) {
+            assertTrue(limite.reservar());
+        }
+        alimentar(detalheSemClaude());
+        mostrarAAba();
+        assertNull(Visual.naEdt(pagina()::painelDoShell));
+        assertTrue(avisos.disse("atencao", "8 terminais"));
+        assertEquals(0, cenario.terminal.canaisAbertos.get());
+    }
+
+    private static String textosVisiveis(java.awt.Component raiz) {
+        StringBuilder sb = new StringBuilder();
+        coletarTextos(raiz, sb);
+        return sb.toString();
+    }
+
+    private static void coletarTextos(java.awt.Component c, StringBuilder sb) {
+        if (!c.isVisible()) {
+            return;
+        }
+        if (c instanceof javax.swing.AbstractButton b && b.getText() != null) {
+            sb.append(b.getText()).append('\n').append(b.getToolTipText()).append('\n');
+        } else if (c instanceof javax.swing.JLabel l && l.getText() != null) {
+            sb.append(l.getText()).append('\n');
+        } else if (c instanceof br.com.labdesktop.ui.componentes.Selo s) {
+            sb.append(s.texto()).append('\n');
+        }
+        if (c instanceof java.awt.Container k && !(c instanceof br.com.labdesktop.ui.terminal.PainelTerminal)) {
+            for (java.awt.Component f : k.getComponents()) {
+                coletarTextos(f, sb);
+            }
+        }
     }
 }

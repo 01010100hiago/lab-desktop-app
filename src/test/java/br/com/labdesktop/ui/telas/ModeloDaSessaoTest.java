@@ -10,7 +10,7 @@ import br.com.labdesktop.ui.telas.ModeloDaSessao.Atividade;
 import br.com.labdesktop.ui.telas.ModeloDaSessao.Situacao;
 import org.junit.jupiter.api.Test;
 
-/** As decisões da aba Sessão do Claude: em que pé está, login pendente e o que o Claude faz agora. */
+/** As decisões da parte Claude da aba Terminal: em que pé está, login pendente e o que o Claude faz agora. */
 class ModeloDaSessaoTest {
 
     @Test

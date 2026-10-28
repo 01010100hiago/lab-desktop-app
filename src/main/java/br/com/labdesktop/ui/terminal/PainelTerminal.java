@@ -144,7 +144,8 @@ public final class PainelTerminal extends Painel {
         faixa.setVisible(false);
         add(faixa, BorderLayout.NORTH);
         add(centro, BorderLayout.CENTER);
-        getAccessibleContext().setAccessibleName(comando.ehShell() ? "Terminal do servidor" : "Terminal da sessão do Claude");
+        getAccessibleContext().setAccessibleName(!comando.ehShell() ? "Terminal da sessão do Claude"
+            : comando instanceof ComandoDeTerminal.ShellDoProjeto ? "Terminal do projeto" : "Terminal do servidor");
 
         sessao.adicionarOuvinte(new SessaoTerminal.Ouvinte() {
             @Override

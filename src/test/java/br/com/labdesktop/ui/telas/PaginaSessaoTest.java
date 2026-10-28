@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
- * A aba Sessão do Claude nos estados aberta, fechada, desatualizada, pausada e com login pendente; a tela em texto somente
+ * A aba Terminal, no modo Claude, nos estados aberta, fechada, desatualizada, pausada e com login pendente; a tela em texto somente
  * leitura; a caixa de mensagem e os botões Enter e Esc. As chamadas ao agente (mensagem, teclas, abrir, fechar) estão em
  * {@code NavegacaoDoProjetoTest}, contra o servidor embutido.
  */
@@ -28,7 +28,7 @@ class PaginaSessaoTest {
 
     private static Cena cena(boolean acoes, DetalheProjeto d) {
         Visual.tema(Tema.CLARO);
-        return new Cena(acoes, Aba.SESSAO).com(EstadoConexao.CONECTADO, d);
+        return new Cena(acoes, Aba.TERMINAL).com(EstadoConexao.CONECTADO, d);
     }
 
     private static DetalheProjeto fechada() {
@@ -46,7 +46,7 @@ class PaginaSessaoTest {
     @Test
     void sessaoAbertaDizDesdeQuandoEQueEstaAtualizada() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         assertEquals("SESSÃO ABERTA", selo(p.seloDaSituacao()));
         assertEquals("aberta desde 24/10 14:10 (há 4 h)", Visual.naEdt(p::textoDoQuando));
         assertTrue(Visual.naEdt(p.seloDeAtualizacao()::isVisible));
@@ -57,7 +57,7 @@ class PaginaSessaoTest {
     @Test
     void botoesDaSessaoAbertaSaoFecharReabrirETerminal() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         assertFalse(Visual.naEdt(p.botaoAbrir()::isVisible));
         assertTrue(Visual.naEdt(p.botaoFechar()::isVisible));
         assertTrue(Visual.naEdt(p.botaoReabrir()::isVisible));
@@ -74,7 +74,8 @@ class PaginaSessaoTest {
     @Test
     void sessaoFechadaOfereceAbrirENaoTemTela() {
         Cena c = cena(true, fechada());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
+        Visual.naEdt(p::escolherOClaude); // sem sessão aberta a aba abre no Shell; o Claude é o botão do seletor
         assertEquals("SESSÃO FECHADA", selo(p.seloDaSituacao()));
         assertEquals("Nenhuma sessão do Claude aberta neste projeto.", Visual.naEdt(p::textoDoQuando));
         assertTrue(Visual.naEdt(p.botaoAbrir()::isVisible));
@@ -93,7 +94,7 @@ class PaginaSessaoTest {
     void sessaoDesatualizadaTemSeloComOQueFalta() {
         Cena c = cena(true, TelaProjetoTest.detalheCom("\"atualizada\": true, \"faltando\": []",
             "\"atualizada\": false, \"faltando\": [\"imagem antiga (Claude desatualizado)\"]"));
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         assertEquals("DESATUALIZADA", selo(p.seloDeAtualizacao()));
         assertTrue(Visual.naEdt(() -> p.seloDeAtualizacao().getToolTipText()).contains("Falta: imagem antiga (Claude desatualizado)"));
     }
@@ -101,7 +102,8 @@ class PaginaSessaoTest {
     @Test
     void sessaoPausadaPeloLimiteOfereceRetomarEExplica() {
         Cena c = cena(true, TelaProjetoTest.detalhePausado());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
+        Visual.naEdt(p::escolherOClaude); // sem sessão aberta a aba abre no Shell; o Claude é o botão do seletor
         assertEquals("PAUSADA PELO LIMITE", selo(p.seloDaSituacao()));
         assertTrue(Visual.naEdt(p::textoDoQuando).startsWith("22% de 20% da semana"), Visual.naEdt(p::textoDoQuando));
         assertTrue(Visual.naEdt(p::textoDoQuando).endsWith("A sessão só volta com Retomar."));
@@ -115,7 +117,7 @@ class PaginaSessaoTest {
         String json = TelaProjetoTest.detalheEmUmaLinha().replace("\"aberta\": true", "\"aberta\": false")
             .replace("\"estado\": \"ok\"", "\"estado\": \"pausado\"").replace("\"pausa\": null", "\"pausa\": {\"motivo\": \"freio\", \"em\": null}");
         Cena c = cena(true, FixturesDeApi.de(json, DetalheProjeto.class));
-        assertEquals("PAUSADA PELO FREIO", selo(c.tela.sessao().seloDaSituacao()));
+        assertEquals("PAUSADA PELO FREIO", selo(c.tela.terminal().seloDaSituacao()));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -125,14 +127,14 @@ class PaginaSessaoTest {
     @Test
     void antesDaPrimeiraTelaDizQueEstaLendo() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        assertEquals("Lendo a tela da sessão…", Visual.naEdt(c.tela.sessao()::textoDaMensagemDaTela));
-        assertFalse(Visual.naEdt(c.tela.sessao().seloDeAtividade()::isVisible));
+        assertEquals("Lendo a tela da sessão…", Visual.naEdt(c.tela.terminal()::textoDaMensagemDaTela));
+        assertFalse(Visual.naEdt(c.tela.terminal().seloDeAtividade()::isVisible));
     }
 
     @Test
     void telaExecutandoApareceEmTextoComOsSimbolosDeTerminalTrocados() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         Visual.naEdt(() -> p.receberTela(FixturesDeApi.telaSintetica("tela-executando")));
         String tela = Visual.naEdt(p::textoDaTela);
         assertTrue(tela.contains("Bash(npm test)"), tela);
@@ -146,7 +148,7 @@ class PaginaSessaoTest {
     @Test
     void perguntaPendenteEEsperandoVoce() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         Visual.naEdt(() -> p.receberTela(FixturesDeApi.telaSintetica("tela-pergunta")));
         assertEquals("PERGUNTA PENDENTE", selo(p.seloDeAtividade()));
         assertTrue(Visual.naEdt(p::textoDaTela).contains("Quer continuar?"));
@@ -158,7 +160,7 @@ class PaginaSessaoTest {
     @Test
     void telaSomenteLeituraNaoEEditavel() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        var area = Visual.naEdt(() -> (br.com.labdesktop.ui.componentes.AreaMonoespacada) c.tela.sessao().rolagemDaTela().getViewport().getView());
+        var area = Visual.naEdt(() -> (br.com.labdesktop.ui.componentes.AreaMonoespacada) c.tela.terminal().rolagemDaTela().getViewport().getView());
         assertFalse(Visual.naEdt(area::isEditable));
         assertEquals(Boolean.TRUE, Visual.naEdt(() -> area.getClientProperty("html.disable")));
     }
@@ -166,7 +168,7 @@ class PaginaSessaoTest {
     @Test
     void servidorDizendoQueNaoEstaAbertaMostraAExplicacao() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         Visual.naEdt(() -> p.receberTela(null));
         assertTrue(Visual.naEdt(p::textoDaMensagemDaTela).startsWith("O servidor diz que a sessão não está aberta."));
         assertEquals("", Visual.naEdt(p::textoDaTela));
@@ -175,7 +177,7 @@ class PaginaSessaoTest {
     @Test
     void telaVaziaNaoEUmaAreaPretaSemExplicacao() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         Visual.naEdt(() -> p.receberTela(FixturesDeApi.de("{\"tela\":\"  \"}", br.com.labdesktop.api.modelo.TelaClaude.class)));
         assertEquals("A tela da sessão está vazia agora.", Visual.naEdt(p::textoDaMensagemDaTela));
     }
@@ -183,7 +185,7 @@ class PaginaSessaoTest {
     @Test
     void fecharASessaoDepoisDeVerATelaLimpaATela() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         Visual.naEdt(() -> p.receberTela(FixturesDeApi.telaSintetica("tela-executando")));
         assertFalse(Visual.naEdt(p::textoDaTela).isEmpty());
         c.com(EstadoConexao.CONECTADO, fechada());
@@ -199,7 +201,7 @@ class PaginaSessaoTest {
     @Test
     void telaPedindoOCodigoMostraOLoginPendenteComOCampo() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         Visual.naEdt(() -> p.receberTela(FixturesDeApi.telaSintetica("tela-login")));
         assertTrue(p.loginPendente());
         assertEquals("LOGIN PENDENTE", selo(p.seloDeLogin()));
@@ -214,7 +216,7 @@ class PaginaSessaoTest {
     @Test
     void comOEnderecoDeLoginDaListaOBotaoAbreSoOQuePassaNaLista() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         c.urlDeLogin = "https://claude.ai/oauth/authorize?code=true&client_id=exemplo";
         Visual.naEdt(() -> p.receberTela(FixturesDeApi.telaSintetica("tela-executando")));
         assertTrue(p.loginPendente(), "a lista já tinha visto o login");
@@ -231,7 +233,7 @@ class PaginaSessaoTest {
     @Test
     void semAcoesOLoginPendenteSoInforma() {
         Cena c = cena(false, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         Visual.naEdt(() -> p.receberTela(FixturesDeApi.telaSintetica("tela-login")));
         assertTrue(Visual.naEdt(p.faixaDeLogin()::isVisible));
         assertFalse(Visual.naEdt(p.campoDoCodigo()::isVisible));
@@ -241,9 +243,9 @@ class PaginaSessaoTest {
     @Test
     void sessaoSemLoginNaoMostraAFaixa() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        Visual.naEdt(() -> c.tela.sessao().receberTela(FixturesDeApi.telaSintetica("tela-executando")));
-        assertFalse(Visual.naEdt(c.tela.sessao().faixaDeLogin()::isVisible));
-        assertFalse(Visual.naEdt(c.tela.sessao().seloDeLogin()::isVisible));
+        Visual.naEdt(() -> c.tela.terminal().receberTela(FixturesDeApi.telaSintetica("tela-executando")));
+        assertFalse(Visual.naEdt(c.tela.terminal().faixaDeLogin()::isVisible));
+        assertFalse(Visual.naEdt(c.tela.terminal().seloDeLogin()::isVisible));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -253,7 +255,7 @@ class PaginaSessaoTest {
     @Test
     void comSessaoAbertaEAcoesAsCaixasDeMensagemEstaoLigadas() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         assertTrue(Visual.naEdt(p.campoDaMensagem()::isEnabled));
         assertTrue(Visual.naEdt(p.botaoEnviar()::isEnabled));
         assertTrue(Visual.naEdt(p.botaoEnter()::isEnabled));
@@ -266,7 +268,7 @@ class PaginaSessaoTest {
     @Test
     void semAcoesNaoHaComoEscreverEATelaAvisa() {
         Cena c = cena(false, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         assertFalse(Visual.naEdt(p.campoDaMensagem()::isEnabled));
         assertFalse(Visual.naEdt(p.botaoEnviar()::isEnabled));
         assertTrue(Visual.naEdt(p::somenteLeituraVisivel));
@@ -280,7 +282,7 @@ class PaginaSessaoTest {
     @Test
     void mensagemMaiorQueOMaximoNaoSaiEAvisa() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         Visual.naEdt(() -> p.campoDaMensagem().setText("x".repeat(4001)));
         Visual.naEdt(() -> p.botaoEnviar().doClick());
         assertTrue(c.avisos.disse("atencao", "passa de 4000 caracteres"), c.avisos.todos.toString());
@@ -291,7 +293,7 @@ class PaginaSessaoTest {
     @Test
     void mensagemVaziaNaoFazNada() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        PaginaSessao p = c.tela.sessao();
+        PaginaTerminalDoProjeto p = c.tela.terminal();
         Visual.naEdt(() -> p.campoDaMensagem().setText("   "));
         Visual.naEdt(() -> p.botaoEnviar().doClick());
         assertTrue(c.avisos.todos.isEmpty());
@@ -301,7 +303,7 @@ class PaginaSessaoTest {
     @Test
     void asAcoesDeSessaoPedemConfirmacaoQuandoInterrompemATarefa() {
         Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-        Visual.naEdt(() -> c.tela.sessao().botaoReabrir().doClick());
+        Visual.naEdt(() -> c.tela.terminal().botaoReabrir().doClick());
         assertNotNull(c.dialogos.ultimoComo(br.com.labdesktop.ui.dialogos.DialogoConfirmar.class), "Reabrir avisa que a tarefa é interrompida");
     }
 
@@ -315,11 +317,11 @@ class PaginaSessaoTest {
         int i = 0;
         for (int[] j : new int[][] {{1100, 700}, {1440, 860}}) {
             Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
-            Visual.naEdt(() -> c.tela.sessao().receberTela(FixturesDeApi.telaSintetica("tela-login")));
+            Visual.naEdt(() -> c.tela.terminal().receberTela(FixturesDeApi.telaSintetica("tela-login")));
             Visual.renderizar(c.tela, j[0] - BarraServidores.LARGURA, j[1] - 28);
-            assertFalse(Visual.naEdt(() -> c.tela.sessao().rolagem().getVerticalScrollBar().isVisible()), "sem rolagem em " + j[0]);
-            assertFalse(Visual.naEdt(() -> c.tela.sessao().rolagem().rola()));
-            alturaDaTela[i++] = Visual.naEdt(() -> c.tela.sessao().rolagemDaTela().getHeight());
+            assertFalse(Visual.naEdt(() -> c.tela.terminal().rolagem().getVerticalScrollBar().isVisible()), "sem rolagem em " + j[0]);
+            assertFalse(Visual.naEdt(() -> c.tela.terminal().rolagem().rola()));
+            alturaDaTela[i++] = Visual.naEdt(() -> c.tela.terminal().rolagemDaTela().getHeight());
         }
         assertTrue(alturaDaTela[0] >= 200, "mesmo com a faixa de login aberta a tela tem altura: " + alturaDaTela[0]);
         assertTrue(alturaDaTela[1] > alturaDaTela[0] + 100, "a tela cresce com a janela: " + alturaDaTela[0] + " e " + alturaDaTela[1]);

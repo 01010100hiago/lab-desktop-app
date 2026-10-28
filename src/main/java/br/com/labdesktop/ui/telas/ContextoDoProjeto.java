@@ -34,6 +34,10 @@ final class ContextoDoProjeto {
     final Runnable aoAtualizar;
     /** Por onde abrir terminais e quantos ainda cabem no servidor; {@code null} onde não há servidor vivo (testes de tela). */
     ContextoDeTerminal terminal;
+    /** A pasta do projeto no servidor (para o shell abrir nela), ou {@code null} se não der para montar; nunca bloqueia. */
+    Supplier<String> pastaDoProjeto = () -> null;
+    /** Abre a aba Terminal já na sessão do Claude. */
+    Runnable irParaOClaude = () -> { };
 
     EstadoServidor estado;
     DetalheProjeto detalhe;

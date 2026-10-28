@@ -6,7 +6,7 @@ import br.com.labdesktop.ui.TextosDeLimite;
 import java.util.Locale;
 
 /**
- * As decisões da aba "Sessão do Claude" (puro, sem Swing): em que estado a sessão está, se o login está pendente e o que o
+ * As decisões da parte Claude da aba Terminal (puro, sem Swing): em que estado a sessão está, se o login está pendente e o que o
  * Claude está fazendo agora. O vocabulário é o do painel web: pergunta pendente, executando, esperando você, sessão aberta,
  * sessão fechada, pausada pelo limite ou pelo freio, login pendente.
  */

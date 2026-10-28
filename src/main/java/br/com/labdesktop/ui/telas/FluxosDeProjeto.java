@@ -215,14 +215,14 @@ public final class FluxosDeProjeto {
             f -> falhou(projeto, f));
     }
 
-    /** Abre a sessão do Claude (idempotente). O aviso manda o usuário para o terminal da aba Sessão do Claude. */
+    /** Abre a sessão do Claude (idempotente). O aviso manda o usuário para a aba Terminal do projeto. */
     public void abrirSessao(String projeto) {
         if (somenteLeitura()) {
             return;
         }
         rodar(projeto, ABRIR, () -> acoes().abrirSessao(projeto),
             r -> avisos.ok(TextosDeLimite.nomeAmigavel(projeto) + ": sessão do Claude aberta. Para "
-                + "conversar com ela, use o botão Terminal na aba Sessão do Claude do projeto."),
+                + "conversar com ela, abra a aba Terminal do projeto e escolha Claude."),
             f -> falhou(projeto, f));
     }
 

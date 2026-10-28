@@ -87,6 +87,15 @@ public record ModeloDoProjeto(DetalheProjeto detalhe) {
         return leituras.isEmpty() ? null : leituras.stream().mapToLong(Long::longValue).sum();
     }
 
+    /**
+     * O servidor sabe de sessões do Claude: o detalhe traz o objeto {@code sessao} (aberta ou não). Sem ele (um servidor sem Claude)
+     * o app não mostra nada do Claude. Hoje o agente do lab sempre o traz; um agente sem Claude devolve {@code sessao: null}
+     * (ARQUITETURA 7.8).
+     */
+    public boolean temClaude() {
+        return detalhe.sessao() != null;
+    }
+
     public boolean sessaoAberta() {
         return detalhe.sessao() != null && detalhe.sessao().estaAberta();
     }
@@ -117,7 +126,7 @@ public record ModeloDoProjeto(DetalheProjeto detalhe) {
 
     /** "Abrir Claude": sem sessão e sem pausa (pausada, o caminho é Retomar). */
     public boolean oferecerAbrirClaude() {
-        return !sessaoAberta() && !pausado();
+        return temClaude() && !sessaoAberta() && !pausado();
     }
 
     /** "Retomar": a sessão está pausada pelo limite ou pelo freio. */

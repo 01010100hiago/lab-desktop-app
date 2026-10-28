@@ -108,6 +108,15 @@ class NavegacaoDoProjetoTest {
             () -> Visual.naEdt(() -> t.visaoGeral().mostraCorpo()));
     }
 
+    /** A aba abre o terminal do Claude sozinha (a sessão está aberta); estes testes querem a tela em texto, que vem por HTTP. */
+    private static void telaEmTexto(TelaProjeto t) {
+        Visual.naEdt(() -> {
+            if (t.terminal().terminalAFrente()) {
+                t.terminal().botaoTelaEmTexto().doClick(0);
+            }
+        });
+    }
+
     private int leituras(String trecho) {
         return (int) cenario.agente.leiturasDeProjeto.stream().filter(l -> l.contains(trecho)).count();
     }
@@ -342,15 +351,16 @@ class NavegacaoDoProjetoTest {
         TelaProjeto t = abrirPeloLab("orbita");
         esperarDetalhe(t);
         assertEquals(0, leituras("/claude/tela"), "na Visão geral ninguém lê a tela");
-        Visual.naEdt(() -> t.abas().botao("sessao").doClick());
-        Visual.naEdt(() -> t.sessao().assinar());
-        Espera.ate(Duration.ofSeconds(20), () -> "a tela chegou", () -> Visual.naEdt(t.sessao()::textoDaTela).contains("Bash(npm test)"));
-        assertTrue(Visual.naEdt(t.sessao()::telaAssinada));
-        assertEquals("EXECUTANDO", Visual.naEdt(() -> t.sessao().seloDeAtividade().texto()));
+        Visual.naEdt(() -> t.abas().botao("terminal").doClick());
+        Visual.naEdt(() -> t.terminal().assinar());
+        telaEmTexto(t);
+        Espera.ate(Duration.ofSeconds(20), () -> "a tela chegou", () -> Visual.naEdt(t.terminal()::textoDaTela).contains("Bash(npm test)"));
+        assertTrue(Visual.naEdt(t.terminal()::telaAssinada));
+        assertEquals("EXECUTANDO", Visual.naEdt(() -> t.terminal().seloDeAtividade().texto()));
         // a aba sai da tela: a assinatura cai
         int antes = leituras("/claude/tela");
-        Visual.naEdt(() -> t.sessao().soltar());
-        assertFalse(Visual.naEdt(t.sessao()::telaAssinada));
+        Visual.naEdt(() -> t.terminal().soltar());
+        assertFalse(Visual.naEdt(t.terminal()::telaAssinada));
         esperarParar("tela depois de soltar a aba", antes, "/claude/tela");
     }
 
@@ -358,10 +368,11 @@ class NavegacaoDoProjetoTest {
     void sessaoFechadaNaoCustaUmaConsultaDeTela() {
         cenario.agente.detalhes.put("orbita", TelaProjetoTest.detalheEmUmaLinha().replace("\"aberta\": true", "\"aberta\": false"));
         TelaProjeto t = abrirPeloLab("orbita");
-        Visual.naEdt(() -> t.abas().botao("sessao").doClick());
-        Visual.naEdt(() -> t.sessao().assinar());
-        Espera.ate(Duration.ofSeconds(20), () -> "detalhe", () -> Visual.naEdt(() -> t.sessao().seloDaSituacao().texto()).equals("SESSÃO FECHADA"));
-        assertFalse(Visual.naEdt(t.sessao()::telaAssinada));
+        Visual.naEdt(() -> t.abas().botao("terminal").doClick());
+        Visual.naEdt(() -> t.terminal().escolherOClaude()); // com a sessão fechada a aba abre no Shell
+        Visual.naEdt(() -> t.terminal().assinar());
+        Espera.ate(Duration.ofSeconds(20), () -> "detalhe", () -> Visual.naEdt(() -> t.terminal().seloDaSituacao().texto()).equals("SESSÃO FECHADA"));
+        assertFalse(Visual.naEdt(t.terminal()::telaAssinada));
         Espera.naoAcontece(Duration.ofMillis(1200), "tela de sessão fechada", () -> leituras("/claude/tela") > 0);
     }
 
@@ -369,14 +380,15 @@ class NavegacaoDoProjetoTest {
     void sessaoQueFechaNoServidorDeixaDeConsultarATela() {
         cenario.agente.telas.put("orbita", FixturesDeApi.lerRecursoDoProjeto("tela-executando.json"));
         TelaProjeto t = abrirPeloLab("orbita");
-        Visual.naEdt(() -> t.abas().botao("sessao").doClick());
-        Visual.naEdt(() -> t.sessao().assinar());
-        Espera.ate(Duration.ofSeconds(20), () -> "a tela chegou", () -> Visual.naEdt(t.sessao()::telaAssinada));
+        Visual.naEdt(() -> t.abas().botao("terminal").doClick());
+        Visual.naEdt(() -> t.terminal().assinar());
+        telaEmTexto(t);
+        Espera.ate(Duration.ofSeconds(20), () -> "a tela chegou", () -> Visual.naEdt(t.terminal()::telaAssinada));
         cenario.agente.detalhes.put("orbita", TelaProjetoTest.detalheEmUmaLinha().replace("\"aberta\": true", "\"aberta\": false"));
         cenario.agente.telas.remove("orbita");
         Visual.naEdt(() -> cenario.lab.atualizarAgora());
-        Espera.ate(Duration.ofSeconds(20), () -> "a assinatura da tela caiu", () -> !Visual.naEdt(t.sessao()::telaAssinada));
-        assertEquals("SESSÃO FECHADA", Visual.naEdt(() -> t.sessao().seloDaSituacao().texto()));
+        Espera.ate(Duration.ofSeconds(20), () -> "a assinatura da tela caiu", () -> !Visual.naEdt(t.terminal()::telaAssinada));
+        assertEquals("SESSÃO FECHADA", Visual.naEdt(() -> t.terminal().seloDaSituacao().texto()));
         int antes = leituras("/claude/tela");
         esperarParar("tela depois de fechar", antes, "/claude/tela");
     }
@@ -521,14 +533,14 @@ class NavegacaoDoProjetoTest {
         cenario.agente.telas.put("orbita", FixturesDeApi.lerRecursoDoProjeto("tela-esperando.json"));
         TelaProjeto t = abrirPeloLab("orbita");
         esperarDetalhe(t);
-        Visual.naEdt(() -> t.abas().botao("sessao").doClick());
-        Visual.naEdt(() -> t.sessao().campoDaMensagem().setText("  olá, rode os testes  "));
-        Visual.naEdt(() -> t.sessao().botaoEnviar().doClick());
+        Visual.naEdt(() -> t.abas().botao("terminal").doClick());
+        Visual.naEdt(() -> t.terminal().campoDaMensagem().setText("  olá, rode os testes  "));
+        Visual.naEdt(() -> t.terminal().botaoEnviar().doClick());
         Espera.ate(Duration.ofSeconds(15), () -> "mensagem no agente", () -> cenario.agente.teclasRecebidas.size() == 1);
         String corpo = cenario.agente.teclasRecebidas.get(0);
         assertTrue(corpo.contains("\"texto\":\"olá, rode os testes\""), corpo);
         assertTrue(corpo.contains("\"enter\":true"), corpo);
-        Espera.ate(Duration.ofSeconds(15), () -> "campo limpo", () -> Visual.naEdt(() -> t.sessao().campoDaMensagem().getText()).isEmpty());
+        Espera.ate(Duration.ofSeconds(15), () -> "campo limpo", () -> Visual.naEdt(() -> t.terminal().campoDaMensagem().getText()).isEmpty());
     }
 
     @Test
@@ -536,11 +548,11 @@ class NavegacaoDoProjetoTest {
         // sem tela no agente: a sessão "não está aberta" para o agente, mesmo com o detalhe dizendo que sim (corrida real)
         TelaProjeto t = abrirPeloLab("orbita");
         esperarDetalhe(t);
-        Visual.naEdt(() -> t.abas().botao("sessao").doClick());
-        Visual.naEdt(() -> t.sessao().campoDaMensagem().setText("não perca isto"));
-        Visual.naEdt(() -> t.sessao().botaoEnviar().doClick());
+        Visual.naEdt(() -> t.abas().botao("terminal").doClick());
+        Visual.naEdt(() -> t.terminal().campoDaMensagem().setText("não perca isto"));
+        Visual.naEdt(() -> t.terminal().botaoEnviar().doClick());
         Espera.ate(Duration.ofSeconds(15), () -> "aviso", () -> avisos.disse("erro", "Erro em orbita: Sessão não está aberta."));
-        assertEquals("não perca isto", Visual.naEdt(() -> t.sessao().campoDaMensagem().getText()));
+        assertEquals("não perca isto", Visual.naEdt(() -> t.terminal().campoDaMensagem().getText()));
         assertTrue(cenario.agente.teclasRecebidas.isEmpty());
     }
 
@@ -549,10 +561,10 @@ class NavegacaoDoProjetoTest {
         cenario.agente.telas.put("orbita", FixturesDeApi.lerRecursoDoProjeto("tela-pergunta.json"));
         TelaProjeto t = abrirPeloLab("orbita");
         esperarDetalhe(t);
-        Visual.naEdt(() -> t.abas().botao("sessao").doClick());
-        Visual.naEdt(() -> t.sessao().botaoEnter().doClick());
+        Visual.naEdt(() -> t.abas().botao("terminal").doClick());
+        Visual.naEdt(() -> t.terminal().botaoEnter().doClick());
         Espera.ate(Duration.ofSeconds(15), () -> "Enter", () -> cenario.agente.teclasRecebidas.contains("{\"tecla\":\"Enter\"}"));
-        Visual.naEdt(() -> t.sessao().botaoEsc().doClick());
+        Visual.naEdt(() -> t.terminal().botaoEsc().doClick());
         Espera.ate(Duration.ofSeconds(15), () -> "Esc", () -> cenario.agente.teclasRecebidas.contains("{\"tecla\":\"Escape\"}"));
         assertEquals(2, cenario.agente.teclasRecebidas.size());
     }
@@ -561,9 +573,10 @@ class NavegacaoDoProjetoTest {
     void abrirEFecharASessaoPelaAbaChamamAsRotas() {
         cenario.agente.detalhes.put("orbita", TelaProjetoTest.detalheEmUmaLinha().replace("\"aberta\": true", "\"aberta\": false"));
         TelaProjeto t = abrirPeloLab("orbita");
-        Visual.naEdt(() -> t.abas().botao("sessao").doClick());
-        Espera.ate(Duration.ofSeconds(20), () -> "detalhe", () -> Visual.naEdt(t.sessao().botaoAbrir()::isVisible));
-        Visual.naEdt(() -> t.sessao().botaoAbrir().doClick());
+        Visual.naEdt(() -> t.abas().botao("terminal").doClick());
+        Visual.naEdt(() -> t.terminal().escolherOClaude()); // com a sessão fechada a aba abre no Shell
+        Espera.ate(Duration.ofSeconds(20), () -> "detalhe", () -> Visual.naEdt(t.terminal().botaoAbrir()::isVisible));
+        Visual.naEdt(() -> t.terminal().botaoAbrir().doClick());
         Espera.ate(Duration.ofSeconds(15), () -> "abrir", () -> cenario.recebeu("POST", "/api/projetos/orbita/claude/abrir"));
     }
 

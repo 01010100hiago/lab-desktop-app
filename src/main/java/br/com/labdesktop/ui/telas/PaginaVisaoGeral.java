@@ -104,8 +104,8 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         abrirClaude.addActionListener(e -> ctx.fluxos.abrirSessao(ctx.projeto));
         retomar.addActionListener(e -> ctx.fluxos.retomar(ctx.projeto, ctx.detalhe == null ? null : ctx.detalhe.limite()));
         retomar.setToolTipText("Tira a pausa e reabre o Claude continuando a conversa");
-        verSessao.addActionListener(e -> ctx.navegar.accept(Aba.SESSAO));
-        verSessao.setToolTipText("Abre a aba Sessão do Claude, com a tela e a caixa de mensagem");
+        verSessao.addActionListener(e -> ctx.irParaOClaude.run());
+        verSessao.setToolTipText("Abre a aba Terminal na sessão do Claude, com o terminal, a tela em texto e a caixa de mensagem");
         reabrir.addActionListener(e -> ctx.fluxos.pedirReabrir(ctx.projeto));
         reabrir.setToolTipText("Reabre a sessão continuando a conversa. A tarefa em andamento é interrompida.");
         kpis.nomeAcessivel("Indicadores do projeto");
@@ -221,7 +221,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         abrirClaude.setVisible(acoes && m.oferecerAbrirClaude());
         abrirClaude.setToolTipText("Abre a sessão do Claude neste projeto");
         retomar.setVisible(acoes && m.oferecerRetomar());
-        verSessao.setVisible(m.sessaoAberta());
+        verSessao.setVisible(m.temClaude() && m.sessaoAberta());
         somenteLeitura.setVisible(!acoes);
 
         if (m.sessaoDesatualizada()) {

@@ -20,7 +20,7 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 
 /**
- * A base de cada aba da página de UM projeto (Visão geral, Logs, Sessão do Claude, Arquivos, Backups e Consumo), irmã da
+ * A base de cada aba da página de UM projeto (Visão geral, Logs, Terminal, Arquivos, Backups e Consumo), irmã da
  * {@link PaginaDoServidor}. Cuida do que é igual em todas: os estados da página (carregando com esqueleto, sem conexão com os
  * últimos dados esmaecidos e a hora, agente fora, sem dado ainda), a área rolável (rola só se a janela for menor que a aba) e
  * a assinatura dos tópicos PRÓPRIOS da aba, só enquanto ela está visível ({@code HierarchyListener}: uma aba escondida no

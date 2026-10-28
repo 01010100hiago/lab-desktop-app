@@ -389,7 +389,7 @@ public final class TelaProjetos extends Painel {
 
     /**
      * O endereço de login do Claude que a ÚLTIMA lista viu para o projeto, ou {@code null}. Só a lista traz o login (o detalhe do
-     * projeto não); a página do projeto o pede aqui para a aba Sessão mostrar "Abrir página de login".
+     * projeto não); a página do projeto o pede aqui para a aba Terminal (modo Claude) mostrar "Abrir página de login".
      */
     String urlDeLoginDe(String projeto) {
         return projetos.stream().filter(p -> p.nome().equals(projeto) && p.temLoginPendente()).map(p -> p.login().url())

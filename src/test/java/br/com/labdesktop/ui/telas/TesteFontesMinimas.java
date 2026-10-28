@@ -130,7 +130,7 @@ class TesteFontesMinimas {
                 .comConsumo(FixturesDeApi.consumoSintetico());
             Visual.naEdt(() -> {
                 c.tela.logs().receber(FixturesDeApi.lerRecursoDoProjeto("logs-sintetico.txt"), 300);
-                c.tela.sessao().receberTela(FixturesDeApi.telaSintetica("tela-login"));
+                c.tela.terminal().receberTela(FixturesDeApi.telaSintetica("tela-login"));
             });
             Visual.renderizar(c.tela, LARGURA, ALTURA);
             ruins.addAll(miudos(c.tela, minimoDe(percentual), percentual + "% projeto/" + aba));

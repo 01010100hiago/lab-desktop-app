@@ -53,6 +53,16 @@ class PaginaVisaoGeralTest {
     }
 
     @Test
+    void semClaudeNoServidorNaoHaBotaoNemAlertaDoClaude() {
+        String json = TelaProjetoTest.detalheEmUmaLinha().replaceAll("\"sessao\": \\{.*?\"info\": (\\{[^}]*\\}|null) \\},", "\"sessao\": null,");
+        Cena c = cena(true, FixturesDeApi.de(json, DetalheProjeto.class));
+        String tudo = textoDaPagina(pagina(c));
+        assertFalse(tudo.toLowerCase().contains("claude"), "um servidor sem Claude não menciona o Claude: " + tudo);
+        Cena com = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
+        assertTrue(textoDaPagina(pagina(com)).contains("Ver sessão do Claude"), "com sessão aberta o botão continua");
+    }
+
+    @Test
     void codigoTudoSalvoEBranchDiferente() {
         Cena c = cena(true, TelaProjetoTest.detalheCom("\"sujo\": true", "\"sujo\": false"));
         assertEquals("Branch main, tudo salvo", Visual.naEdt(() -> pagina(c).ficha().pares().get(1).get(1)));

@@ -185,7 +185,7 @@ class TelaProjetoTest {
     void sao6AbasNaOrdemDaTelaESoUmaVisivel() {
         Visual.tema(Tema.CLARO);
         Cena c = new Cena(true, Aba.VISAO_GERAL).com(EstadoConexao.CONECTADO, FixturesDeApi.detalheDoProjetoSintetico());
-        assertEquals(List.of("Visão geral", "Logs", "Sessão do Claude", "Arquivos", "Backups (5)", "Consumo e limite"),
+        assertEquals(List.of("Visão geral", "Logs", "Terminal", "Arquivos", "Backups (5)", "Consumo e limite"),
             java.util.Arrays.stream(Aba.values()).map(a -> Visual.naEdt(() -> c.tela.abas().botao(a.id()).getText())).toList());
         for (Aba a : Aba.values()) {
             Visual.naEdt(() -> c.tela.abas().botao(a.id()).doClick());
@@ -211,10 +211,10 @@ class TelaProjetoTest {
     @Test
     void abreNaAbaQueOProjetoEstava() {
         Visual.tema(Tema.CLARO);
-        Cena c = new Cena(true, Aba.SESSAO);
-        assertEquals(Aba.SESSAO, c.tela.abaAtual());
-        assertEquals(Aba.SESSAO, Visual.naEdt(c.tela::abaMarcada));
-        assertTrue(Visual.naEdt(() -> c.tela.pagina(Aba.SESSAO).isVisible()));
+        Cena c = new Cena(true, Aba.TERMINAL);
+        assertEquals(Aba.TERMINAL, c.tela.abaAtual());
+        assertEquals(Aba.TERMINAL, Visual.naEdt(c.tela::abaMarcada));
+        assertTrue(Visual.naEdt(() -> c.tela.pagina(Aba.TERMINAL).isVisible()));
         assertFalse(Visual.naEdt(() -> c.tela.pagina(Aba.VISAO_GERAL).isVisible()));
         assertTrue(c.saida.pedidos.isEmpty(), "abrir na aba lembrada não é uma troca de aba");
     }
@@ -259,7 +259,7 @@ class TelaProjetoTest {
     @Test
     void escNumCampoComTextoSoLimpaOCampo() {
         Visual.tema(Tema.CLARO);
-        Cena c = new Cena(true, Aba.SESSAO);
+        Cena c = new Cena(true, Aba.TERMINAL);
         javax.swing.JTextField campo = Visual.naEdt(() -> new javax.swing.JTextField("minha mensagem pela metade"));
         Visual.naEdt(() -> c.tela.aoApertarEsc(campo));
         assertEquals("", Visual.naEdt(() -> campo.getText()), "o Esc limpou o campo");
@@ -380,7 +380,7 @@ class TelaProjetoTest {
         Cena c = new Cena(acoes, aba).com(EstadoConexao.CONECTADO, detalhe).comConsumo(FixturesDeApi.consumoSintetico());
         Visual.naEdt(() -> c.tela.logs().receber(FixturesDeApi.lerRecursoDoProjeto("logs-sintetico.txt"), 300));
         if (telaDoClaude != null) {
-            Visual.naEdt(() -> c.tela.sessao().receberTela(telaDoClaude));
+            Visual.naEdt(() -> c.tela.terminal().receberTela(telaDoClaude));
         }
         int largura = larguraDaJanela - BarraServidores.LARGURA;
         int altura = alturaDaJanela - 28;
@@ -419,13 +419,13 @@ class TelaProjetoTest {
         fotografar(Tema.ESCURO, Aba.VISAO_GERAL, 1100, 700, "projeto-visao-geral-escuro-1100", true, d, null);
         fotografar(Tema.CLARO, Aba.LOGS, 1440, 860, "projeto-logs", true, d, null);
         fotografar(Tema.ESCURO, Aba.LOGS, 1100, 700, "projeto-logs-escuro-1100", true, d, null);
-        fotografar(Tema.CLARO, Aba.SESSAO, 1440, 860, "projeto-sessao", true, d, exec);
-        fotografar(Tema.ESCURO, Aba.SESSAO, 1100, 700, "projeto-sessao-escuro-1100", true, d, exec);
+        fotografar(Tema.CLARO, Aba.TERMINAL, 1440, 860, "projeto-sessao", true, d, exec);
+        fotografar(Tema.ESCURO, Aba.TERMINAL, 1100, 700, "projeto-sessao-escuro-1100", true, d, exec);
         fotografar(Tema.CLARO, Aba.CONSUMO, 1440, 860, "projeto-consumo", true, d, null);
         fotografar(Tema.ESCURO, Aba.CONSUMO, 1100, 700, "projeto-consumo-escuro-1100", true, d, null);
         fotografar(Tema.CLARO, Aba.CONSUMO, 1440, 860, "projeto-consumo-pausado", true, detalhePausado(), null);
         fotografar(Tema.ESCURO, Aba.CONSUMO, 1100, 700, "projeto-consumo-pausado-escuro-1100", true, detalhePausado(), null);
-        fotografar(Tema.CLARO, Aba.SESSAO, 1100, 700, "projeto-sessao-login", true, d, FixturesDeApi.telaSintetica("tela-login"));
+        fotografar(Tema.CLARO, Aba.TERMINAL, 1100, 700, "projeto-sessao-login", true, d, FixturesDeApi.telaSintetica("tela-login"));
         fotografar(Tema.CLARO, Aba.VISAO_GERAL, 1100, 700, "projeto-visao-geral-claro-1100", true, desatualizadaComTudo(), null);
         fotografar(Tema.CLARO, Aba.VISAO_GERAL, 1100, 700, "projeto-visao-geral-somente-leitura", false, d, null);
         fotografar(Tema.CLARO, Aba.BACKUPS, 1100, 700, "projeto-backups", true, d, null);

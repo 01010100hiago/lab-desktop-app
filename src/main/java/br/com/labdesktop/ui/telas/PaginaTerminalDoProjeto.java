@@ -7,6 +7,7 @@ import br.com.labdesktop.servidor.OuvinteDeTopico;
 import br.com.labdesktop.servidor.Topico;
 import br.com.labdesktop.servidor.VisaoDaTela;
 import br.com.labdesktop.ui.Gravidade;
+import br.com.labdesktop.ui.componentes.Abas;
 import br.com.labdesktop.ui.componentes.AreaMonoespacada;
 import br.com.labdesktop.ui.componentes.Botao;
 import br.com.labdesktop.ui.componentes.Botoes;
@@ -36,27 +37,44 @@ import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
 /**
- * A aba "Sessão do Claude": em que pé a sessão está (aberta, desde quando, atualizada ou desatualizada, pausada, login
- * pendente com o campo para o código), os botões Abrir, Fechar, Reabrir (com o aviso de que interrompe a tarefa) e Retomar, a
- * TELA atual da sessão em texto somente leitura (a cada 3 s, só com a aba visível e a sessão aberta) e uma caixa para escrever
- * ao Claude com os botões Enter e Esc.
+ * A aba "Terminal" do projeto. Abre SOZINHA, sem clique extra, e funciona SEM Claude: o modo Shell é o shell de login do servidor, já na
+ * pasta do projeto. O Claude é opcional (regra de produto: um app só, IA opcional): se o servidor tem sessões do Claude
+ * ({@link ModeloDoProjeto#temClaude()}), aparece o seletor "Shell | Claude" e a sessão aberta vem selecionada; sem sessão aberta o
+ * Shell vem selecionado e o Claude é só um botão do seletor. Sem Claude no servidor nada do Claude aparece: nem seletor, nem selos,
+ * nem botões, nem caixa de mensagem.
  *
- * <p>O botão "Terminal" abre um terminal de verdade (JediTerm sobre SSH, ligado à sessão tmux do Claude) DENTRO da aba; "Tela em
- * texto" volta à leitura somente leitura, que continua como alternativa, e "Fechar terminal" solta o canal (a conversa do Claude
- * continua: fechar o terminal só solta o cliente do tmux). O terminal NÃO depende da trava {@code labdesktop.acoes}: o usuário quer usá-lo
- * para operar. Se a sessão deixa de existir e depois volta a estar aberta (Retomar, Abrir e Reabrir produzem um container novo), o
- * terminal reanexa sozinho.
+ * <p><b>Fronteira do Claude</b> (para um corte fácil numa versão pública): tudo o que é só do Claude está nos campos e métodos
+ * marcados "Claude" abaixo (estado da sessão, login, tela em texto, caixa de mensagem, o terminal que anexa ao tmux) e em
+ * {@link ModeloDaSessao}; o resto da classe é o shell. Mover isto para um pacote próprio custaria abrir a visibilidade de
+ * {@code PaginaDoProjeto}, {@code ContextoDoProjeto} e {@code FluxosDeProjeto}, por isso ficou aqui com esta marca (ARQUITETURA 7.8).
  *
- * <p>Assina {@code TELA(p)} só enquanto a aba está visível, o detalhe diz que a sessão está aberta E a tela em texto está à vista;
- * sessão fechada ou terminal na frente não custam um {@code docker exec} no servidor. A tela cresce com a janela e rola por dentro.
+ * <p>Modo Claude: em que pé a sessão está (aberta, desde quando, atualizada ou desatualizada, pausada, login pendente com o campo para
+ * o código), os botões Abrir, Fechar, Reabrir (com o aviso de que interrompe a tarefa) e Retomar, o terminal do Claude (JediTerm sobre
+ * SSH, ligado à sessão tmux, aberto sozinho se a sessão está aberta), a TELA atual da sessão em texto somente leitura (a cada 3 s, só
+ * com a aba visível e a sessão aberta) como alternativa e uma caixa para escrever ao Claude com os botões Enter e Esc. "Tela em texto"
+ * volta à leitura e "Fechar terminal" solta o canal (a conversa do Claude continua: só o cliente do tmux é solto). Nenhum terminal
+ * depende da trava {@code labdesktop.acoes}: o usuário quer usá-los para operar. Se a sessão deixa de existir e depois volta a estar
+ * aberta (Retomar, Abrir e Reabrir produzem um container novo), o terminal do Claude reanexa sozinho.
+ *
+ * <p>Assina {@code TELA(p)} só enquanto a aba está visível, no modo Claude, o detalhe diz que a sessão está aberta E a tela em texto
+ * está à vista; sessão fechada, shell ou terminal na frente não custam um {@code docker exec} no servidor. A tela cresce com a janela
+ * e rola por dentro.
  */
-final class PaginaSessao extends PaginaDoProjeto {
+final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
 
     private static final long serialVersionUID = 1L;
     private static final String CARTAO_TELA = "tela";
     private static final String CARTAO_MENSAGEM = "mensagem";
     private static final String MODO_TEXTO = "texto";
     private static final String MODO_TERMINAL = "terminal";
+    private static final String MODO_SHELL = "shell";
+    private static final String ID_SHELL = "shell";
+    private static final String ID_CLAUDE = "claude";
+
+    /** O que a aba mostra: o shell do projeto ou a sessão do Claude. */
+    enum Modo {
+        SHELL, CLAUDE
+    }
 
     private final Selo seloDaSituacao = new Selo("", Gravidade.NEUTRO);
     private final Selo seloDeLogin = new Selo("login pendente", Gravidade.ATENCAO, "chave");
@@ -89,6 +107,13 @@ final class PaginaSessao extends PaginaDoProjeto {
     private final JPanel corpoDaTela = new Painel(cartoes);
     private final CardLayout modos = new CardLayout();
     private final JPanel areaPrincipal = new Painel(modos);
+    private final Abas seletor = new Abas(true);
+    private final Rotulo legendaDoShell = new Rotulo("Shell no servidor, na pasta do projeto").corDoToken(Tokens.TEXTO3).tamanho(12.5f).truncavel();
+    private final JPanel cartaoDoShell = new Painel(new BorderLayout());
+    private final Rotulo mensagemDoShell = new Rotulo().corDoToken(Tokens.LOGS_TEXTO2).tamanho(13f).aoCentro();
+    private JPanel blocoDeEstadoDoClaude;
+    private JPanel cabecalhoDaTela;
+    private JPanel blocoDaMensagemDoClaude;
 
     private final JTextField mensagem = Campos.texto(40, "Escreva uma mensagem para o Claude…");
     private final Botao enviar = Botoes.miniPrimario("Enviar", "enviar");
@@ -98,7 +123,16 @@ final class PaginaSessao extends PaginaDoProjeto {
 
     private transient Inscricao inscricaoDaTela;
     private transient Inscricao ocupacao;
+    /** O terminal do Claude (Claude). */
     private transient PainelTerminal painelDoTerminal;
+    /** O shell do projeto. */
+    private transient PainelTerminal painelDoShell;
+    private Modo modo = Modo.SHELL;
+    private boolean modoDefinido;
+    private boolean sincronizandoOSeletor;
+    /** O usuário fechou o terminal do Claude de propósito: não reabre sozinho enquanto a sessão não fechar e abrir de novo. */
+    private boolean terminalDoClaudeFechadoPeloDono;
+    private boolean temClaude = true;
     private boolean terminalAFrente;
     /** Quando o terminal viu a sessão sumir: se o detalhe já dizia aberta e desde quando (só uma sessão NOVA o faz reanexar). */
     private boolean eraAbertaNaQueda;
@@ -108,7 +142,7 @@ final class PaginaSessao extends PaginaDoProjeto {
     private Situacao situacaoAtual = Situacao.FECHADA;
     private boolean loginAtual;
 
-    PaginaSessao(ContextoDoProjeto ctx) {
+    PaginaTerminalDoProjeto(ContextoDoProjeto ctx) {
         super(ctx);
         linhaDeMensagem = Caixa.linha(8, mensagem, enviar, teclaEnter, teclaEsc);
         iniciar();
@@ -126,13 +160,27 @@ final class PaginaSessao extends PaginaDoProjeto {
 
     @Override
     JComponent montarConteudo() {
+        seletor.adicionar(ID_SHELL, "Shell");
+        seletor.adicionar(ID_CLAUDE, "Claude");
+        seletor.aoSelecionar(id -> {
+            if (!sincronizandoOSeletor) {
+                escolher(ID_CLAUDE.equals(id) ? Modo.CLAUDE : Modo.SHELL);
+            }
+        });
+        seletor.getAccessibleContext().setAccessibleName("Escolha do terminal: shell ou Claude");
+        seletor.botao(ID_SHELL).setToolTipText("Um shell do servidor, já na pasta do projeto");
+        seletor.botao(ID_CLAUDE).setToolTipText("A sessão do Claude deste projeto");
+        mensagemDoShell.setText("O terminal não está disponível: este servidor ainda não tem conexão.");
+        cartaoDoShell.setBackground(new java.awt.Color(br.com.labdesktop.ui.terminal.PaletaTerminal.FUNDO));
+        cartaoDoShell.setOpaque(true);
+        cartaoDoShell.add(mensagemDoShell, BorderLayout.CENTER);
         terminal.setToolTipText("Abre o terminal do Claude aqui dentro. A tela em texto continua disponível.");
         terminal.getAccessibleContext().setAccessibleDescription(terminal.getToolTipText());
         telaEmTexto.setToolTipText("Volta a mostrar a tela da sessão em texto somente leitura. O terminal continua aberto.");
         fecharTerminal.setToolTipText("Fecha o terminal desta aba. A conversa do Claude continua: só o cliente do tmux é solto.");
         terminal.addActionListener(e -> abrirOuMostrarOTerminal());
         telaEmTexto.addActionListener(e -> mostrarATelaEmTexto());
-        fecharTerminal.addActionListener(e -> encerrarTerminal());
+        fecharTerminal.addActionListener(e -> fecharOTerminalDoClaude());
         abrir.setToolTipText("Abre a sessão do Claude neste projeto");
         fechar.setToolTipText("Fecha a sessão do Claude (para o container dela)");
         reabrir.setToolTipText("Fecha e abre de novo continuando a conversa. A tarefa em andamento é interrompida.");
@@ -195,19 +243,27 @@ final class PaginaSessao extends PaginaDoProjeto {
         cartoes.show(corpoDaTela, CARTAO_MENSAGEM);
         areaPrincipal.add(corpoDaTela, MODO_TEXTO);
         modos.show(areaPrincipal, MODO_TEXTO);
-        JPanel cabecalhoDaTela = new Painel(new BorderLayout(10, 0));
+        areaPrincipal.add(cartaoDoShell, MODO_SHELL);
+        cabecalhoDaTela = new Painel(new BorderLayout(10, 0));
         cabecalhoDaTela.add(Caixa.fluxo(java.awt.FlowLayout.LEFT, 10, tituloDaTela, seloDeAtividade), BorderLayout.WEST);
         cabecalhoDaTela.add(Caixa.fluxo(java.awt.FlowLayout.RIGHT, 8, leitura, telaEmTexto, terminal, fecharTerminal), BorderLayout.EAST);
         JPanel caixaDaTela = new Painel(new BorderLayout(0, 8));
         caixaDaTela.add(cabecalhoDaTela, BorderLayout.NORTH);
         caixaDaTela.add(areaPrincipal, BorderLayout.CENTER);
 
-        JPanel norte = Caixa.coluna(10, estado, faixaDeLogin);
-        JPanel sul = Caixa.coluna(6, linhaDeMensagem);
+        blocoDeEstadoDoClaude = Caixa.coluna(10, estado, faixaDeLogin);
+        blocoDaMensagemDoClaude = Caixa.coluna(6, linhaDeMensagem);
+        JPanel linhaDoSeletor = new Painel(new BorderLayout(12, 0));
+        linhaDoSeletor.add(seletor, BorderLayout.WEST);
+        linhaDoSeletor.add(legendaDoShell, BorderLayout.CENTER);
+        JPanel norte = new Painel(new BorderLayout(0, 10));
+        norte.add(linhaDoSeletor, BorderLayout.NORTH);
+        norte.add(blocoDeEstadoDoClaude, BorderLayout.CENTER);
         JPanel conteudo = new Painel(new BorderLayout(0, 10));
         conteudo.add(norte, BorderLayout.NORTH);
         conteudo.add(caixaDaTela, BorderLayout.CENTER);
-        conteudo.add(sul, BorderLayout.SOUTH);
+        conteudo.add(blocoDaMensagemDoClaude, BorderLayout.SOUTH);
+        aplicarOModo();
         return conteudo;
     }
 
@@ -225,8 +281,25 @@ final class PaginaSessao extends PaginaDoProjeto {
             });
         }
         if (ctx.detalhe != null) {
+            decidirOModoInicial();
+            atualizarOSeletor();
+            aplicarOModo();
             ajustarATela();
+            abrirSozinhaSePreciso();
         }
+    }
+
+    /**
+     * O modo em que a aba abre: com a sessão do Claude aberta ela vem selecionada; senão o shell. Acompanha o que o servidor diz até
+     * a aba aparecer pela primeira vez (ou o usuário escolher): a sessão pode ter aberto ou fechado desde a primeira leitura, e "já
+     * aberta ao entrar" vale para o que está aberto NA HORA de entrar.
+     */
+    private void decidirOModoInicial() {
+        if (modoDefinido || ctx.detalhe == null) {
+            return;
+        }
+        modo = temClaude && situacaoAtual == Situacao.ABERTA ? Modo.CLAUDE : Modo.SHELL;
+        modoDefinido = assinada();
     }
 
     @Override
@@ -237,7 +310,7 @@ final class PaginaSessao extends PaginaDoProjeto {
 
     /** A sessão está aberta e a aba está na tela: assina a tela (3 s). Senão, solta. */
     private void ajustarATela() {
-        boolean quer = situacaoAtual == Situacao.ABERTA && assinada() && ctx.servidor != null && !terminalAFrente;
+        boolean quer = modo == Modo.CLAUDE && situacaoAtual == Situacao.ABERTA && assinada() && ctx.servidor != null && !terminalAFrente;
         if (quer && inscricaoDaTela == null) {
             inscricaoDaTela = ctx.servidor.assinar(Topico.tela(ctx.projeto), new OuvinteDeTopico<VisaoDaTela>() {
                 @Override
@@ -262,8 +335,15 @@ final class PaginaSessao extends PaginaDoProjeto {
         if (nova != Situacao.ABERTA) {
             ultimaTela = null;
             recebeuTela = false;
+            terminalDoClaudeFechadoPeloDono = false; // a próxima sessão aberta volta a abrir o terminal sozinha
         }
         situacaoAtual = nova;
+        temClaude = m.temClaude();
+        decidirOModoInicial();
+        if (!temClaude && modo == Modo.CLAUDE) {
+            modo = Modo.SHELL;
+        }
+        atualizarOSeletor();
         seloDaSituacao.atualizar(nova.rotulo(), nova.gravidade(), nova.icone());
         String pausa = nova == Situacao.PAUSADA_PELO_LIMITE || nova == Situacao.PAUSADA_PELO_FREIO
             ? br.com.labdesktop.ui.TextosDeLimite.texto(m.limite()) : null;
@@ -298,8 +378,10 @@ final class PaginaSessao extends PaginaDoProjeto {
         mostrarLoginSeHouver();
         mostrarATela();
         reanexarSeASessaoVoltou(m);
+        aplicarOModo();
         if (assinada()) {
             ajustarATela();
+            abrirSozinhaSePreciso();
         }
     }
 
@@ -407,11 +489,140 @@ final class PaginaSessao extends PaginaDoProjeto {
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Terminal
+    // Modo: shell ou Claude
     // ---------------------------------------------------------------------------------------------
 
-    /** O botão "Terminal": abre o terminal da sessão (se ainda não há um) e o põe na frente da tela em texto. */
+    /** Passa a aba para o modo Claude (se o servidor tem Claude). Usado pelo botão "Ver sessão do Claude" da Visão geral. */
+    void escolherOClaude() {
+        escolher(Modo.CLAUDE);
+    }
+
+    private void escolher(Modo novo) {
+        modoDefinido = true; // a escolha do usuário vale
+        modo = novo == Modo.CLAUDE && !temClaude ? Modo.SHELL : novo;
+        atualizarOSeletor();
+        aplicarOModo();
+        if (assinada()) {
+            ajustarATela();
+            abrirSozinhaSePreciso();
+        }
+    }
+
+    /** O seletor Shell | Claude só existe com Claude no servidor; a escolhida acompanha o modo. */
+    private void atualizarOSeletor() {
+        seletor.setVisible(temClaude);
+        sincronizandoOSeletor = true;
+        try {
+            seletor.selecionar(modo == Modo.CLAUDE ? ID_CLAUDE : ID_SHELL);
+        } finally {
+            sincronizandoOSeletor = false;
+        }
+    }
+
+    /** Mostra o que é do modo e esconde o resto: o Claude tem o estado, o login, o cabeçalho da tela e a caixa de mensagem. */
+    private void aplicarOModo() {
+        boolean claude = modo == Modo.CLAUDE;
+        legendaDoShell.setVisible(!claude);
+        if (blocoDeEstadoDoClaude != null) {
+            blocoDeEstadoDoClaude.setVisible(claude);
+            cabecalhoDaTela.setVisible(claude);
+            blocoDaMensagemDoClaude.setVisible(claude);
+        }
+        modos.show(areaPrincipal, claude ? (terminalAFrente ? MODO_TERMINAL : MODO_TEXTO) : MODO_SHELL);
+        areaPrincipal.revalidate();
+        areaPrincipal.repaint();
+        if (claude) {
+            mostrarLoginSeHouver();
+            mostrarATela();
+        }
+    }
+
+    /**
+     * "Já aberta ao entrar": com a aba na tela e o detalhe lido, abre sozinha o terminal do modo em que ela está (o shell, ou o do Claude
+     * se a sessão está aberta e o usuário não o fechou). Chamada de novo a cada leitura do detalhe: só faz algo se falta o terminal do modo.
+     */
+    private void abrirSozinhaSePreciso() {
+        if (!assinada() || ctx.terminal == null || ctx.detalhe == null) {
+            return;
+        }
+        if (modo == Modo.SHELL) {
+            boolean novo = painelDoShell == null;
+            garantirOShell();
+            if (novo && painelDoShell != null) {
+                focarOShellDepois(painelDoShell);
+            }
+        } else if (painelDoTerminal == null && situacaoAtual == Situacao.ABERTA && !terminalDoClaudeFechadoPeloDono) {
+            abrirOTerminalDoClaude();
+        }
+    }
+
+    /** Dá o foco ao shell recém-aberto (digitar já vale), se ele ainda é o que está na frente. */
+    private void focarOShellDepois(PainelTerminal p) {
+        SwingUtilities.invokeLater(() -> {
+            if (assinada() && p == painelDoShell && modo == Modo.SHELL) {
+                p.focar();
+            }
+        });
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Terminal do shell
+    // ---------------------------------------------------------------------------------------------
+
+    /** Abre o shell do projeto se ainda não há um (e se couber no limite do servidor). */
+    private void garantirOShell() {
+        if (painelDoShell != null || ctx.terminal == null) {
+            return;
+        }
+        if (!ctx.terminal.limite().reservar()) {
+            mensagemDoShell.setText(LimiteDeAbas.mensagemDoLimite());
+            if (ctx.avisos != null) {
+                ctx.avisos.atencao(LimiteDeAbas.mensagemDoLimite());
+            }
+            return;
+        }
+        String pasta = ctx.pastaDoProjeto.get();
+        ComandoDeTerminal comando = ComandoDeTerminal.ShellDoProjeto.valida(pasta)
+            ? new ComandoDeTerminal.ShellDoProjeto(pasta) : ComandoDeTerminal.ShellDoServidor.INSTANCIA;
+        painelDoShell = new PainelTerminal(ctx.terminal, comando, new PainelTerminal.Saida() {
+            @Override
+            public void aoMudarTitulo(String titulo) { }
+
+            @Override
+            public void aoMudarEstado(EstadoDoTerminal estado) { }
+        });
+        cartaoDoShell.removeAll();
+        cartaoDoShell.add(painelDoShell, BorderLayout.CENTER);
+        cartaoDoShell.revalidate();
+        cartaoDoShell.repaint();
+    }
+
+    private void encerrarOShell() {
+        PainelTerminal p = painelDoShell;
+        if (p == null) {
+            return;
+        }
+        painelDoShell = null;
+        p.descartar();
+        cartaoDoShell.removeAll();
+        mensagemDoShell.setText("O terminal foi fechado.");
+        cartaoDoShell.add(mensagemDoShell, BorderLayout.CENTER);
+        if (ctx.terminal != null) {
+            ctx.terminal.limite().liberar();
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Terminal do Claude
+    // ---------------------------------------------------------------------------------------------
+
+    /** O botão "Terminal" (Claude): abre o terminal da sessão (se ainda não há um) e o põe na frente da tela em texto. */
     private void abrirOuMostrarOTerminal() {
+        terminalDoClaudeFechadoPeloDono = false;
+        abrirOTerminalDoClaude();
+    }
+
+    private void abrirOTerminalDoClaude() {
         if (ctx.terminal == null) {
             return;
         }
@@ -439,7 +650,7 @@ final class PaginaSessao extends PaginaDoProjeto {
             areaPrincipal.add(painelDoTerminal, MODO_TERMINAL);
         }
         terminalAFrente = true;
-        modos.show(areaPrincipal, MODO_TERMINAL);
+        modos.show(areaPrincipal, modo == Modo.CLAUDE ? MODO_TERMINAL : MODO_SHELL);
         tituloDaTela.setText("Terminal da sessão");
         seloDeAtividade.setVisible(false);
         leitura.setText("");
@@ -458,7 +669,7 @@ final class PaginaSessao extends PaginaDoProjeto {
     /** O botão "Tela em texto": volta à leitura somente leitura; o terminal continua aberto por trás. */
     private void mostrarATelaEmTexto() {
         terminalAFrente = false;
-        modos.show(areaPrincipal, MODO_TEXTO);
+        modos.show(areaPrincipal, modo == Modo.CLAUDE ? MODO_TEXTO : MODO_SHELL);
         tituloDaTela.setText("Tela atual da sessão");
         mostrarATela();
         ajustarATela();
@@ -467,9 +678,21 @@ final class PaginaSessao extends PaginaDoProjeto {
         areaPrincipal.repaint();
     }
 
+    /** O botão "Fechar terminal" (Claude): o usuário fechou de propósito, então a aba não o reabre sozinha. */
+    private void fecharOTerminalDoClaude() {
+        terminalDoClaudeFechadoPeloDono = true;
+        encerrarTerminal();
+    }
+
+    /** Fecha o shell e o terminal do Claude e devolve as vagas: sair da página do projeto ou bloquear o cofre. */
+    void encerrarTodos() {
+        encerrarOShell();
+        encerrarTerminal();
+    }
+
     /**
-     * Fecha o terminal desta aba (o canal e o widget) e devolve a vaga ao limite do servidor. A conversa do Claude continua: só o
-     * cliente do tmux é solto. Também é o que acontece ao sair da página do projeto e ao bloquear o cofre.
+     * Fecha o terminal do Claude (o canal e o widget) e devolve a vaga ao limite do servidor. A conversa do Claude continua: só o
+     * cliente do tmux é solto.
      */
     void encerrarTerminal() {
         PainelTerminal p = painelDoTerminal;
@@ -621,9 +844,22 @@ final class PaginaSessao extends PaginaDoProjeto {
         return fecharTerminal;
     }
 
-    /** O terminal aberto nesta aba, ou {@code null}. */
+    /** O terminal do Claude aberto nesta aba, ou {@code null}. */
     PainelTerminal painelDoTerminal() {
         return painelDoTerminal;
+    }
+
+    /** O shell do projeto aberto nesta aba, ou {@code null}. */
+    PainelTerminal painelDoShell() {
+        return painelDoShell;
+    }
+
+    Modo modo() {
+        return modo;
+    }
+
+    Abas seletor() {
+        return seletor;
     }
 
     boolean terminalAFrente() {

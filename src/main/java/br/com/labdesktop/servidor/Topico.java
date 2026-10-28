@@ -29,7 +29,7 @@ import java.util.function.Function;
  * SEGURANCA        60 s    6 min      parado   (por SSH exec; um por servidor, ver ServidorLab)
  * DETALHE(p)      10 s    60 s       parado   (a página do projeto aberta)
  * CONSUMO(p)      60 s    parado     parado   (só a aba "Consumo e limite" visível)
- * TELA(p)          3 s    18 s       parado   (só a aba "Sessão do Claude" visível e a sessão aberta)
+ * TELA(p)          3 s    18 s       parado   (só a aba Terminal do projeto visível, no modo Claude, e a sessão aberta)
  * LOGS(p,c,n)      5 s    parado     parado   (só a aba "Logs" visível e "atualizar a cada 5 s" marcado)
  * </pre>
  *
