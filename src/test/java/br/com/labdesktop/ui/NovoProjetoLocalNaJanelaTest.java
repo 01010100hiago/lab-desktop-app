@@ -280,8 +280,8 @@ class NovoProjetoLocalNaJanelaTest {
         MenuApp menu = menu();
         javax.swing.JMenuItem item = menu.itemNovoProjeto();
         assertEquals("Novo projeto…", Visual.naEdt(item::getText));
-        assertEquals(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, java.awt.event.InputEvent.META_DOWN_MASK | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
-            Visual.naEdt(item::getAccelerator), "sem tela o menu usa o Cmd; com tela, a tecla de comando do sistema (Ctrl no Windows)");
+        assertEquals(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, br.com.labdesktop.ui.componentes.Teclas.comando() | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
+            Visual.naEdt(item::getAccelerator), "o menu usa a tecla de comando do SISTEMA (Cmd no Mac, Ctrl no Windows e no Linux), com ou sem tela");
         assertTrue(Visual.naEdt(item::isEnabled), "o servidor em foco (Este computador) cria projeto e as ações estão ligadas");
         int antes = dialogos.mostrados.size();
         Visual.naEdt(() -> item.doClick());

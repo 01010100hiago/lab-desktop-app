@@ -62,7 +62,7 @@ class MenuTamanhoDoTextoTest {
 
     @Test
     void osAtalhosSaoCmdMaisCmdMenosECmdZero() {
-        int cmd = InputEvent.META_DOWN_MASK; // sem tela, o MenuApp usa o Cmd do Mac
+        int cmd = br.com.labdesktop.ui.componentes.Teclas.comando(); // o MenuApp usa a tecla de comando do sistema
         assertEquals(KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, cmd), Visual.naEdt(menu.itemAumentarTexto()::getAccelerator));
         assertEquals(KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, cmd), Visual.naEdt(menu.itemDiminuirTexto()::getAccelerator));
         assertEquals(KeyStroke.getKeyStroke(KeyEvent.VK_0, cmd), Visual.naEdt(menu.itemTamanhoNormal()::getAccelerator));

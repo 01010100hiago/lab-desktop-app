@@ -112,9 +112,13 @@ class AtalhosDoMenuETerminalTest {
     @Test
     void nenhumItemDeMenuUsaUmAtalhoDoJediTerm() {
         Set<KeyStroke> nativos = atalhosDoJediTerm();
-        nativos.add(KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.META_DOWN_MASK));
-        nativos.add(KeyStroke.getKeyStroke(KeyEvent.VK_V, InputEvent.META_DOWN_MASK));
-        nativos.add(KeyStroke.getKeyStroke(KeyEvent.VK_K, InputEvent.META_DOWN_MASK));
+        // no Mac o JediTerm usa Cmd+C, Cmd+V e Cmd+K; no Windows e no Linux, Ctrl+Shift+C e Ctrl+Shift+V (e os do leitor acima): o Ctrl puro é do programa que roda no terminal
+        int comando = br.com.labdesktop.ui.componentes.Teclas.comando();
+        nativos.add(KeyStroke.getKeyStroke(KeyEvent.VK_C, comando));
+        nativos.add(KeyStroke.getKeyStroke(KeyEvent.VK_V, comando));
+        nativos.add(KeyStroke.getKeyStroke(KeyEvent.VK_K, comando));
+        nativos.add(KeyStroke.getKeyStroke(KeyEvent.VK_C, comando | InputEvent.SHIFT_DOWN_MASK));
+        nativos.add(KeyStroke.getKeyStroke(KeyEvent.VK_V, comando | InputEvent.SHIFT_DOWN_MASK));
         List<String> colisoes = new ArrayList<>();
         int comAtalho = 0;
         for (JMenuItem item : itens()) {
@@ -132,21 +136,23 @@ class AtalhosDoMenuETerminalTest {
     }
 
     @Test
-    void todoAtalhoDoMenuUsaCmdESemCtrlAltEscOuTab() {
+    void todoAtalhoDoMenuUsaATeclaDeComandoDoSistemaESemAltEscOuTab() {
+        int comando = br.com.labdesktop.ui.componentes.Teclas.comando();
+        int outra = comando == InputEvent.META_DOWN_MASK ? InputEvent.CTRL_DOWN_MASK : InputEvent.META_DOWN_MASK;
         for (JMenuItem item : itens()) {
             KeyStroke a = Visual.naEdt(item::getAccelerator);
             if (a == null) {
                 continue;
             }
-            assertTrue((a.getModifiers() & InputEvent.META_DOWN_MASK) != 0, item.getText() + ": todo atalho do app é com Cmd (" + a + ")");
-            assertEquals(0, a.getModifiers() & (InputEvent.CTRL_DOWN_MASK | InputEvent.ALT_DOWN_MASK), item.getText() + " usa Ctrl ou Alt");
+            assertTrue((a.getModifiers() & comando) != 0, item.getText() + ": todo atalho do app é com a tecla de comando do sistema (" + a + ")");
+            assertEquals(0, a.getModifiers() & (outra | InputEvent.ALT_DOWN_MASK), item.getText() + " usa a tecla do outro sistema ou o Alt");
             assertFalse(a.getKeyCode() == KeyEvent.VK_ESCAPE || a.getKeyCode() == KeyEvent.VK_TAB, item.getText() + " usa Esc ou Tab");
         }
     }
 
     @Test
-    void oMenuOferecaOTerminalDoServidorComCmdSeis() {
+    void oMenuOferecaOTerminalDoServidorComATeclaDeComandoESeis() {
         JMenuItem terminal = itens().stream().filter(i -> "Terminal do servidor".equals(i.getText())).findFirst().orElseThrow();
-        assertEquals(KeyStroke.getKeyStroke(KeyEvent.VK_6, InputEvent.META_DOWN_MASK), Visual.naEdt(terminal::getAccelerator));
+        assertEquals(KeyStroke.getKeyStroke(KeyEvent.VK_6, br.com.labdesktop.ui.componentes.Teclas.comando()), Visual.naEdt(terminal::getAccelerator));
     }
 }

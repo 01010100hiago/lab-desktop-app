@@ -263,7 +263,7 @@ class AcoesDoGerenciadorTest {
     void apagarPastaDizQuantosItensETamanhoEApagaTudoSemSeguirLink(@TempDir Path tmp) throws Exception {
         try (CenaDeArquivos c = cena(tmp, true)) {
             Files.createSymbolicLink(c.sftp.orbita().resolve("src/para-outro"), Path.of("../../outro"));
-            c.teclaNaTabela(KeyEvent.VK_BACK_SPACE, KeyEvent.META_DOWN_MASK, "src"); // Cmd+Backspace também apaga
+            c.teclaNaTabela(KeyEvent.VK_BACK_SPACE, br.com.labdesktop.ui.componentes.Teclas.comando(), "src"); // Cmd (Ctrl fora do Mac)+Backspace também apaga
             DialogoApagarArquivos d = c.esperarDialogo(DialogoApagarArquivos.class);
             String texto = Visual.naEdt(() -> TextosDoTeste.de(d.raiz()));
             assertTrue(texto.contains("Apagar a pasta src?"), texto);

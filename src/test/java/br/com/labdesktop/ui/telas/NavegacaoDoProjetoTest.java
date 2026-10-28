@@ -253,7 +253,7 @@ class NavegacaoDoProjetoTest {
         var menu = Visual.naEdt(() -> new br.com.labdesktop.ui.MenuApp(null, painel,
             new br.com.labdesktop.ui.GerenciadorTema(Tema.CLARO, false), new br.com.labdesktop.ui.PreferenciasAtuais(null, null),
             () -> { }, () -> { }));
-        int cmd = java.awt.event.InputEvent.META_DOWN_MASK; // sem tela, o MenuApp usa o Cmd do Mac
+        int cmd = br.com.labdesktop.ui.componentes.Teclas.comando(); // o MenuApp usa a tecla de comando do sistema
         var ultimo = Visual.naEdt(menu::itemUltimoProjeto);
         var voltar = Visual.naEdt(menu::itemVoltarAosProjetos);
         assertEquals("Último projeto aberto", Visual.naEdt(ultimo::getText));
