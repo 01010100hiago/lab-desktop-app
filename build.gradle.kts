@@ -142,8 +142,10 @@ tasks.test {
 // Falta, na fase 4: Info.plist pós-jpackage (NSLocalNetworkUsageDescription, NSAppSleepDisabled),
 // codesign ad-hoc, ícone .icns, `empacotar` dependendo de `test` e `instalarApp`.
 // ---------------------------------------------------------------------------------------------
-val modulosDoRuntime = "java.base,java.desktop,java.logging,java.naming,java.net.http," +
-    "jdk.crypto.ec,jdk.unsupported,jdk.localedata,jdk.accessibility"
+// java.management e jdk.management: a conferência de "Este computador" lê a memória total por com.sun.management.OperatingSystemMXBean (sem eles o
+// app empacotado perderia essa leitura); java.prefs, java.rmi, java.security.jgss e java.sql vêm do `jdeps` sobre as bibliotecas (FlatLaf, MINA, JNA).
+val modulosDoRuntime = "java.base,java.desktop,java.logging,java.naming,java.net.http,java.management,jdk.management," +
+    "java.prefs,java.rmi,java.security.jgss,java.sql,jdk.crypto.ec,jdk.unsupported,jdk.localedata,jdk.accessibility"
 
 val jlinkRuntime = tasks.register<Exec>("jlinkRuntime") {
     group = "empacotamento"

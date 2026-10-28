@@ -47,14 +47,21 @@ public final class SondaReal implements SondaDoComputador {
 
     @Override
     public long memoriaTotalBytes() {
+        return lerSemCair(() -> ManagementFactory.getOperatingSystemMXBean() instanceof com.sun.management.OperatingSystemMXBean os
+            ? os.getTotalMemorySize() : -1);
+    }
+
+    /**
+     * Uma leitura da JVM que pode faltar no app empacotado (os módulos {@code java.management} e {@code jdk.management} fora do runtime enxuto dão
+     * {@link NoClassDefFoundError}, que é um {@link LinkageError}, não uma {@code Exception}): a conferência não cai inteira por causa de uma
+     * leitura, ela só diz que não conseguiu ver ({@code -1}).
+     */
+    static long lerSemCair(java.util.function.LongSupplier leitura) {
         try {
-            if (ManagementFactory.getOperatingSystemMXBean() instanceof com.sun.management.OperatingSystemMXBean os) {
-                return os.getTotalMemorySize();
-            }
-        } catch (RuntimeException e) {
-            // sem a extensão da JVM
+            return leitura.getAsLong();
+        } catch (RuntimeException | LinkageError e) {
+            return -1;
         }
-        return -1;
     }
 
     @Override
