@@ -1,0 +1,21 @@
+# Como encerro ou reinicio um processo?
+@rotulo: Encerrar e reiniciar processos
+@busca: processo encerrar matar kill reiniciar container pid parar travado sigterm sigkill forçar taskkill
+@resumo: Na lista de processos você encerra um programa que travou ou reinicia o container dele, sempre com uma confirmação antes.
+@onde: Processos do servidor | Servidor > Processos | processos
+@onde: Processos de um projeto | Página do projeto > Processos
+1. Abra Servidor, aba Processos (ou a aba Processos da página de um projeto).
+2. Na linha do programa, clique em Encerrar. Para um container, os botões são Parar e Reiniciar.
+3. A confirmação mostra o nome, o número (PID), o proprietário, o projeto ou container e a hora em que o programa começou.
+4. Encerrar pede ao programa para fechar (SIGTERM) e espera alguns segundos. O app nunca força sozinho.
+5. Se o programa continuar rodando, o botão "Forçar (SIGKILL)" mata na hora, por outro clique: a decisão é sua.
+[Ir para Processos](ir:processos)
+@acoes: sim
+@veja: servidor terminal
+## Mais detalhes
+O app só encerra processos do usuário da sua conexão, sem sudo e sem pedir senha. Se o processo é de outro usuário, o botão diz "Sem permissão" e a janela mostra o comando exato para você rodar no Terminal.
+Estes nunca são oferecidos e aparecem como "Protegido": o processo 1, o servidor SSH (sshd), o agente do painel, o Docker (dockerd e containerd), o próprio app e os processos do sistema.
+Reiniciar só existe para containers (e para serviços do systemd do seu usuário). De um processo comum o app não sabe como religá-lo: ele só encerra.
+Antes de enviar o pedido o app confere de novo que o número ainda é do mesmo programa (nome, dono e hora de início), para não encerrar outro que ganhou o mesmo número.
+Em Este computador a lista vem do próprio computador (no Mac e no Windows o agente só enxerga a máquina virtual do Docker). No Windows o app usa o taskkill e só encerra programas .exe.
+Sem as ações de escrita ligadas os botões aparecem desligados, com a explicação na dica: eles não somem.

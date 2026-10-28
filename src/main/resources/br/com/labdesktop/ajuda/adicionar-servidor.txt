@@ -12,5 +12,5 @@
 [Ir para Servidores](ir:servidores)
 @veja: conectar agente
 ## Mais detalhes
-O terminal e os arquivos de "Este computador" funcionam mesmo antes de o laboratório estar pronto.
+O terminal e os arquivos de "Este computador" funcionam mesmo antes de o laboratório estar pronto. O git, que só faz falta para importar projetos por Git, se confere e se instala depois, em Servidor > Máquina > Git.
 Os servidores aparecem na barra da esquerda; em "Gerenciar servidores" ficam os cartões deles. O menu Servidor tem "Editar…" (nome, endereço, porta e usuário) e "Remover…", que tira o servidor do app e pergunta se também apaga a chave.

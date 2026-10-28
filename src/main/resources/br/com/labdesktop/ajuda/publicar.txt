@@ -1,18 +1,19 @@
-# Como publico um projeto na internet?
-@rotulo: Publicar na internet
-@busca: publicar internet cloudflare domínio túnel endereço token remover
-@resumo: O app usa a sua conta da Cloudflare para dar um endereço público ao projeto.
+# Como dou um endereço na internet a um projeto?
+@rotulo: Adicionar domínio e publicar
+@busca: adicionar domínio publicar internet cloudflare subdomínio túnel endereço token remover
+@resumo: O botão Adicionar domínio dá ao projeto um endereço novo na sua conta da Cloudflare, em passos curtos e mostrando tudo antes de mudar.
+@onde: Adicionar domínio | Página do projeto > Adicionar domínio… (barra de cima)
+@onde: Adicionar domínio pelo menu | Menu Arquivo > Adicionar domínio…
 @onde: Conectar a Cloudflare | Servidor > Cloudflare > Conectar a Cloudflare… | cloudflare
-@onde: Publicar na internet | Página do projeto > Internet > Publicar na internet…
-1. Uma vez só: no servidor, aba Cloudflare, clique em "Conectar a Cloudflare…".
-2. A janela diz quais permissões o token precisa e tem um botão que abre a página dos tokens.
-3. Cole o token, escolha o domínio e o túnel e salve (o token fica só no cofre deste computador).
-4. Para publicar: abra a página do projeto, aba Internet, e clique em "Publicar na internet…".
-5. O app mostra tudo o que vai mudar e só muda algo depois da sua confirmação.
+1. Abra a página do projeto e clique em "Adicionar domínio…", na barra de cima (também está na aba Internet, na aba Cloudflare do servidor e no menu Arquivo).
+2. Sem a Cloudflare conectada, o app abre primeiro "Conectar a Cloudflare" (cole o token que você criou; ele fica só no cofre cifrado) e volta.
+3. Siga os passos: conta, domínio, nome do endereço, serviço e porta do projeto. Até aqui o app só pergunta e lê.
+4. O último passo mostra tudo o que vai mudar (compose, regra do túnel e DNS). Só depois do seu clique em "Publicar na internet" ele muda alguma coisa.
+5. Para tirar o endereço, use Remover na aba Internet: o app pede para você digitar o endereço.
 [Ir para Cloudflare](ir:cloudflare)
 @acoes: sim
 @veja: projetos
 ## Mais detalhes
-Para tirar um endereço, use Remover: o app pede para você digitar o endereço.
-Conectar só lê dados da Cloudflare e grava o token no cofre.
-Se algo falha no meio do caminho, o app desfaz só o que ele mesmo fez.
+O nome do endereço fica num nível só sob o seu domínio (lab-meu-projeto.example.com). Conectar só lê dados da Cloudflare e grava o token no cofre.
+Sem as ações de escrita ligadas, Adicionar domínio, Publicar e Remover aparecem desligados, com a explicação na dica: o botão não some.
+Se algo falha no meio do caminho, o app desfaz só o que ele mesmo fez. Em Este computador não há túnel, e o botão explica isso.

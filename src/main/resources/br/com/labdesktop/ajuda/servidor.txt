@@ -10,12 +10,12 @@
 @onde: Dados do computador | Servidor > Máquina | maquina
 1. Clique no nome do servidor na barra da esquerda.
 2. Resumo: a saúde geral, gráficos de CPU, memória, disco e rede, o botão Relatório e o Registro do servidor.
-3. Containers: os containers do Docker e o estado de cada um. Processos: o que roda e quanto gasta.
-4. Máquina: os dados do computador do servidor.
+3. Containers: os containers do Docker e o estado de cada um. Processos: o que roda e quanto gasta, com Encerrar e Reiniciar.
+4. Máquina: os dados do computador do servidor e se o Git está instalado.
 5. Segurança: tentativas, origens, logins aceitos, firewall e portas, e o SSH (vê se o login por senha está ligado e dá para desligá-lo).
 [Ir para Resumo](ir:resumo)
 [Ir para Segurança](ir:seguranca)
-@veja: agente terminal
+@veja: processos git agente
 ## Mais detalhes
 Sem o agente instalado, as abas de dados mostram o aviso "agente não instalado" com o botão para instalar; a tela Segurança já funciona só com o SSH.
 Algumas abas só aparecem quando o servidor tem o recurso (por exemplo, Segurança não existe em Este computador). A ordem delas você muda em Ajustes, Navegação.

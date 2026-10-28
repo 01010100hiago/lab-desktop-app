@@ -187,8 +187,11 @@ public final class GuiaDeAjuda {
             List.copyOf(onde), soComAcoes);
     }
 
-    /** A frase fixa do topo dos tópicos que falam de botões de escrita: sem as ações ligadas (o padrão) esses botões nem aparecem, e o usuário não deve achar que errou. */
-    public static final String FRASE_DAS_ACOES = "Os botões que mudam coisas no servidor só aparecem quando as ações de escrita estão ligadas.";
+    /**
+     * A frase fixa do topo dos tópicos que falam de botões de escrita: sem as ações ligadas (o padrão) uns aparecem DESLIGADOS, com a explicação na dica (Encerrar, Adicionar domínio, Publicar),
+     * e outros só aparecem com elas ligadas (Novo projeto, Adicionar container); o usuário não deve achar que errou.
+     */
+    public static final String FRASE_DAS_ACOES = "Os botões que mudam coisas no servidor só funcionam com as ações de escrita ligadas: sem elas, uns aparecem desligados (com a explicação na dica) e outros só aparecem com elas ligadas.";
 
     private static void fecharParagrafo(StringBuilder paragrafo, List<Bloco> blocos) {
         if (paragrafo.length() > 0) {

@@ -7,11 +7,13 @@ agente
 [Projetos]
 projetos
 publicar
+git
 [Arquivos e backups]
 arquivos
 backups
 [Servidor]
 servidor
+processos
 terminal
 logs-e-consumo
 [Ajustes e aparência]

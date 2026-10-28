@@ -1,12 +1,16 @@
-# Onde vejo os backups de um projeto?
-@rotulo: Ver backups
-@busca: backups cópia segurança tamanho quando baixar
-@resumo: A aba Backups da página do projeto lista os arquivos de backup, do mais novo ao mais antigo.
+# Onde vejo e baixo os backups de um projeto?
+@rotulo: Ver e baixar backups
+@busca: backups cópia segurança tamanho quando baixar download transferência pasta downloads
+@resumo: A aba Backups da página do projeto lista os arquivos de backup e baixa os que você escolher para o seu computador.
 @onde: Backups do projeto | Página do projeto > Backups
-1. Na aba Projetos, clique na linha do projeto.
-2. Abra a aba Backups. O número ao lado do nome, como em "Backups (5)", é a quantidade de arquivos.
-3. A lista mostra o arquivo, o tamanho e quando foi feito, em páginas de dez.
+1. Na aba Projetos, clique na linha do projeto e abra a aba Backups. O número ao lado do nome, como em "Backups (5)", é a quantidade de arquivos.
+2. A lista mostra o arquivo, o tamanho e quando foi feito, do mais novo ao mais antigo, em páginas de dez.
+3. Para baixar um, clique em Baixar na linha dele. Para vários, marque as caixas e clique em "Baixar selecionados".
+4. Escolha a pasta do seu computador (a janela começa em Downloads). O andamento aparece embaixo, com Cancelar.
+5. No fim, o app confere o tamanho de cada arquivo com o do servidor e mostra o botão "Mostrar na pasta".
 [Ir para Projetos](ir:projetos)
 @veja: arquivos projetos
 ## Mais detalhes
-Esta aba só mostra a lista: baixar o backup direto daqui ainda não existe. Ela também não aparece em "Este computador".
+Baixar só lê do servidor: nada é mudado lá, por isso o botão funciona mesmo com as ações de escrita desligadas. Se já existe um arquivo com o mesmo nome, o app pergunta (Substituir, Pular, Manter os dois).
+Acima de 500 MB o app pede confirmação, e sem espaço livre no disco ele diz quanto falta e não começa. Se a conexão cair no meio, o arquivo recomeça do zero (retomar ainda não existe). O servidor não informa uma soma de conferência (hash), então só o tamanho é conferido.
+O nome do arquivo vem do servidor: o app não grava nomes que são caminhos e troca por sublinhado o que o Windows não aceita. Em Este computador a aba mostra a pasta backups do projeto e "baixar" é copiar.
