@@ -8,6 +8,7 @@ import br.com.labdesktop.api.ErroApi.NaoEncontrado;
 import br.com.labdesktop.api.PedidoDeCodigo2fa;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.VersaoAgente;
+import br.com.labdesktop.arquivos.FabricaDeClienteSftp;
 import br.com.labdesktop.cofre.AcessoAoCofre;
 import br.com.labdesktop.cofre.AgenteInstalado;
 import br.com.labdesktop.cofre.CofreBloqueadoException;
@@ -31,7 +32,10 @@ import br.com.labdesktop.ssh.PoliticaDeBackoff;
 import br.com.labdesktop.ssh.ProvisionadorRemoto;
 import br.com.labdesktop.ssh.SegredoTotp;
 import br.com.labdesktop.ssh.SondaDoAgente;
-import br.com.labdesktop.ssh.TunelSsh;
+import br.com.labdesktop.terminal.TransporteDeTerminal;
+import br.com.labdesktop.terminal.TransporteSsh;
+import br.com.labdesktop.ssh.PontaDoAgente;
+import br.com.labdesktop.ssh.ConexaoDoServidor;
 import br.com.labdesktop.util.Agendador;
 import br.com.labdesktop.util.Fundo;
 import java.time.Duration;
@@ -43,6 +47,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
@@ -82,7 +87,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private final PedidoDeCodigo2fa pedidoDeCodigo;
     private final Executor entrega;
 
-    private final ConexaoSsh conexao;
+    private final ConexaoDoServidor conexao;
+    /** A mesma conexão, quando é por SSH (terminal e arquivos do servidor remoto); {@code null} em "Este computador". */
+    private final ConexaoSsh conexaoSsh;
     private final Sondador sondador;
     private final AcoesDoServidor acoes;
     /** A leitura de segurança (SSH exec, somente leitura) deste servidor, com o tópico que a entrega às telas. */
@@ -131,8 +138,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             config.estado2fa(), config.nomeDoDispositivo(), null, null);
 
         this.sondador = new Sondador(agendador, trabalho, entrega, this::aoErroDeConsulta);
-        this.conexao = new ConexaoSsh(servidorId, cofre, cfgSsh, this::sondar, agendador,
+        this.conexaoSsh = new ConexaoSsh(servidorId, cofre, cfgSsh, t -> sondar(t), agendador,
             new PoliticaDeBackoff(cfgSsh.escalaBackoff(), Math::random));
+        this.conexao = conexaoSsh;
         this.acoes = new AcoesDoServidor(this::apiAtual, sondador);
         this.topicoDeSeguranca = Topico.seguranca(new LeitorDeSegurancaPorSsh(conexao::executar, Instant::now));
         this.desinscreverConexao = conexao.observar(this::aoMudarConexao);
@@ -221,8 +229,8 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     }
 
     /** O túnel atual (porta local efêmera), se houver. */
-    public Optional<TunelSsh> tunel() {
-        return conexao.tunel();
+    public Optional<? extends PontaDoAgente> tunel() {
+        return conexao.pontaDoAgente();
     }
 
     // =====================================================================================================
@@ -314,7 +322,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     // =====================================================================================================
 
     /** Roda em thread virtual, chamada pela {@link ConexaoSsh}: o {@code GET /api/versao} que decide CONECTADO. */
-    private SondaDoAgente.Resultado sondar(TunelSsh tunel) {
+    private SondaDoAgente.Resultado sondar(PontaDoAgente tunel) {
         try {
             ClienteApi a = apiParaTunel(tunel);
             VersaoAgente v = a.versao();
@@ -335,7 +343,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         }
     }
 
-    private ClienteApi apiParaTunel(TunelSsh tunel) {
+    private ClienteApi apiParaTunel(PontaDoAgente tunel) {
         synchronized (trava) {
             if (api != null && geracaoDaApi == tunel.geracao()) {
                 return api;
@@ -515,7 +523,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * Os ganchos ligam o instalador ao túnel (sondar o agente) e ao cofre (registrar o token deste Mac).
      */
     public InstaladorDeAgente instaladorDoAgente(ParametrosDaInstalacao parametros, PacoteDoAgente pacote) {
-        return new InstaladorDeAgente(new ExecutorSsh(conexao), parametros, pacote, ganchosDeInstalacao());
+        return new InstaladorDeAgente(new ExecutorSsh(conexaoSsh), parametros, pacote, ganchosDeInstalacao());
     }
 
     /** O instalador terminou (instalou, atualizou ou removeu): repete o teste do agente para o estado refletir o que há no servidor. */
@@ -581,7 +589,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         return new GanchosDaInstalacao() {
             @Override
             public Sonda sondar() {
-                TunelSsh tunel = conexao.tunel().orElse(null);
+                PontaDoAgente tunel = conexao.pontaDoAgente().orElse(null);
                 if (tunel == null) {
                     return Sonda.NAO_RESPONDE;
                 }
@@ -623,7 +631,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     /** Consulta {@code GET /api/versao} agora (por exemplo, ao abrir "Configurar 2FA") e atualiza o estado. */
     @Override
     public VersaoAgente consultarVersao() throws ErroApi {
-        TunelSsh tunel = conexao.tunel().orElseThrow(() -> new ErroRede("Sem túnel para o agente.", null));
+        PontaDoAgente tunel = conexao.pontaDoAgente().orElseThrow(() -> new ErroRede("Sem túnel para o agente.", null));
         ClienteApi a = apiParaTunel(tunel);
         VersaoAgente v = a.versao();
         aoReceberVersao(v);
@@ -702,7 +710,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         if (!ValidadorDeNomes.dispositivoValido(nomeDoDispositivo)) {
             throw new IllegalArgumentException("Nome do dispositivo inválido (a-z, 0-9 e hífen, até 40).");
         }
-        TunelSsh tunel = tunelParaRegistrarToken();
+        PontaDoAgente tunel = tunelParaRegistrarToken();
         TokenAgente novo = TokenAgente.gerar();
         boolean registrado = false;
         boolean entregueAoCofre = false;
@@ -759,14 +767,14 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         registrarTokenCom(prov, nomeDoDispositivo);
     }
 
-    private TunelSsh tunelParaRegistrarToken() throws ErroProvisionamento {
-        return conexao.tunel().orElseThrow(() -> new ErroProvisionamento(
+    private PontaDoAgente tunelParaRegistrarToken() throws ErroProvisionamento {
+        return conexao.pontaDoAgente().orElseThrow(() -> new ErroProvisionamento(
             ErroProvisionamento.SEM_SESSAO, "Sem conexão SSH com o servidor para registrar o token."));
     }
 
     /** Nova {@link ClienteApi} com o token do cofre para o túnel atual; atualiza o que o agente diz de nós. */
     private void renovarApiDeUmaConexaoDePe() {
-        TunelSsh atual = conexao.tunel().orElse(null);
+        PontaDoAgente atual = conexao.pontaDoAgente().orElse(null);
         if (atual == null) {
             return; // a conexão caiu agora: o próximo CONECTADO entrega a API certa
         }
@@ -792,7 +800,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     }
 
     /** Insiste por até 5 s: o agente pode demorar alguns segundos para passar a reconhecer a credencial nova. */
-    private void testarToken(TunelSsh tunel, TokenAgente novo, String nome) throws ErroProvisionamento {
+    private void testarToken(PontaDoAgente tunel, TokenAgente novo, String nome) throws ErroProvisionamento {
         long limite = System.nanoTime() + prazoDoTesteDoToken.toNanos();
         String ultimoMotivo = "o agente não respondeu";
         try (ClienteApi teste = new ClienteApi(estado().nome(), tunel.portaLocal(), novo, pedidoDeCodigo)) {
@@ -953,13 +961,32 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         this.prazoDoTesteDoToken = prazo;
     }
 
+    // =====================================================================================================
+    // O que muda entre um servidor remoto (SSH) e "Este computador": o terminal, os arquivos e o sudo
+    // =====================================================================================================
+
+    /** O transporte do terminal deste servidor: um canal SSH com PTY (remoto) ou um PTY do próprio computador (local). */
+    public TransporteDeTerminal transporteDeTerminal(BooleanSupplier donoExclusivo) {
+        return new TransporteSsh(conexaoSsh, donoExclusivo);
+    }
+
+    /** Como o gerenciador de arquivos abre o cliente de arquivos deste servidor. */
+    public FabricaDeClienteSftp fabricaDeArquivos() {
+        return FabricaDeClienteSftp.doSftp(conexaoSsh::abrirSftp);
+    }
+
+    /** Roda o comando do "Salvar com sudo" do editor de arquivos; {@code null} onde não existe sudo (o computador local). */
+    public ProvisionadorRemoto.Executor executorDeSudo() {
+        return conexao::executar;
+    }
+
     /** O provisionador de comandos do agente (para a casca e os testes). */
     public ProvisionadorRemoto provisionador() {
         return provisionadorAtual();
     }
 
     /** Roda um comando na sessão SSH atual (usado pelos diálogos de provisionamento). */
-    public ConexaoSsh conexao() {
+    public ConexaoDoServidor conexao() {
         return conexao;
     }
 }

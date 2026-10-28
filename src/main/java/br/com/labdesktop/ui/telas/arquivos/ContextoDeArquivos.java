@@ -1,5 +1,6 @@
 package br.com.labdesktop.ui.telas.arquivos;
 
+import br.com.labdesktop.arquivos.FabricaDeClienteSftp;
 import br.com.labdesktop.arquivos.FabricaDeSftp;
 import br.com.labdesktop.arquivos.ServicosDeArquivos;
 import br.com.labdesktop.servidor.EstadoServidor;
@@ -42,25 +43,38 @@ public record ContextoDeArquivos(
     CopiadorDeTexto copiador,
     Function<Consumer<EstadoServidor>, Inscricao> observarEstado,
     Supplier<Instant> relogio,
-    ZoneId fuso) {
+    ZoneId fuso,
+    FabricaDeClienteSftp fabricaDeCliente) {
+
+    /**
+     * O construtor de antes: o cliente de arquivos é o do SFTP da sessão SSH ({@code fabrica}). Em "Este computador" a fábrica de cliente
+     * vem pronta ({@link ServidorLab#fabricaDeArquivos()}) e não há canal SFTP.
+     */
+    public ContextoDeArquivos(String servidorId, String servidorNome, String projeto, FabricaDeSftp fabrica,
+                              ProvisionadorRemoto.Executor executorDeSudo, ServicosDeArquivos servicos, boolean escritaLiberada,
+                              Notificacoes avisos, Apresentador apresentador, EscolhedorLocal escolhedor, CopiadorDeTexto copiador,
+                              Function<Consumer<EstadoServidor>, Inscricao> observarEstado, Supplier<Instant> relogio, ZoneId fuso) {
+        this(servidorId, servidorNome, projeto, fabrica, executorDeSudo, servicos, escritaLiberada, avisos, apresentador, escolhedor, copiador,
+            observarEstado, relogio, fuso, fabrica == null ? null : FabricaDeClienteSftp.doSftp(fabrica));
+    }
 
     /** O contexto de produção para um servidor vivo (e um projeto dele, ou {@code null}). */
     public static ContextoDeArquivos de(ServidorLab lab, String projeto, ServicosDeArquivos servicos, boolean escritaLiberada,
                                         Notificacoes avisos, Apresentador apresentador, EscolhedorLocal escolhedor) {
         return new ContextoDeArquivos(lab == null ? "sem-servidor" : lab.id(), lab == null ? "servidor" : lab.estado().nome(), projeto,
-            lab == null ? null : lab.conexao()::abrirSftp, lab == null ? null : lab.conexao()::executar, servicos, escritaLiberada,
+            null, lab == null ? null : lab.executorDeSudo(), servicos, escritaLiberada,
             avisos, apresentador, escolhedor, CopiadorDeTexto.doSistema(), lab == null ? null : lab::observarEstado, Instant::now,
-            ZoneId.systemDefault());
+            ZoneId.systemDefault(), lab == null ? null : lab.fabricaDeArquivos());
     }
 
     public ContextoDeArquivos comRelogio(Supplier<Instant> novo, ZoneId novoFuso) {
         return new ContextoDeArquivos(servidorId, servidorNome, projeto, fabrica, executorDeSudo, servicos, escritaLiberada, avisos,
-            apresentador, escolhedor, copiador, observarEstado, novo, novoFuso);
+            apresentador, escolhedor, copiador, observarEstado, novo, novoFuso, fabricaDeCliente);
     }
 
     public ContextoDeArquivos comCopiador(CopiadorDeTexto novo) {
         return new ContextoDeArquivos(servidorId, servidorNome, projeto, fabrica, executorDeSudo, servicos, escritaLiberada, avisos,
-            apresentador, escolhedor, novo, observarEstado, relogio, fuso);
+            apresentador, escolhedor, novo, observarEstado, relogio, fuso, fabricaDeCliente);
     }
 
     public boolean modoProjeto() {

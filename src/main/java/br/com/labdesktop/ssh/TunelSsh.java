@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
  * {@code 127.0.0.1:<portaAgente>} DENTRO do servidor (ARQUITETURA 6.4). A porta local é só em loopback e
  * muda a cada reconexão; o {@code ClienteApi} é por geração de túnel.
  */
-public final class TunelSsh implements AutoCloseable {
+public final class TunelSsh implements AutoCloseable, PontaDoAgente {
 
     private static final Logger LOG = LoggerFactory.getLogger(TunelSsh.class);
 
@@ -24,6 +24,7 @@ public final class TunelSsh implements AutoCloseable {
     }
 
     /** A porta local efêmera (o {@code ClienteApi} monta {@code http://127.0.0.1:<porta>}). */
+    @Override
     public int portaLocal() {
         return rastreador.getBoundAddress().getPort();
     }
@@ -34,6 +35,7 @@ public final class TunelSsh implements AutoCloseable {
     }
 
     /** Cresce a cada túnel novo da mesma {@link ConexaoSsh}. */
+    @Override
     public long geracao() {
         return geracao;
     }

@@ -3,7 +3,6 @@ package br.com.labdesktop.ui.terminal;
 import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.terminal.LimiteDeAbas;
 import br.com.labdesktop.terminal.TransporteDeTerminal;
-import br.com.labdesktop.terminal.TransporteSsh;
 import br.com.labdesktop.ui.Navegador;
 import br.com.labdesktop.util.Agendador;
 import br.com.labdesktop.util.Preferencias;
@@ -31,7 +30,7 @@ public record ContextoDeTerminal(
     /** O contexto de produção de um servidor vivo. */
     public static ContextoDeTerminal de(ServidorLab lab, Supplier<Preferencias> preferencias, Navegador navegador) {
         Supplier<Preferencias> prefs = preferencias == null ? Preferencias::padrao : preferencias;
-        return new ContextoDeTerminal(new TransporteSsh(lab.conexao(), () -> prefs.get().donoExclusivo()), new LimiteDeAbas(), prefs,
+        return new ContextoDeTerminal(lab.transporteDeTerminal(() -> prefs.get().donoExclusivo()), new LimiteDeAbas(), prefs,
             navegador == null ? url -> { } : navegador::abrirLinkDoTerminal, Agendador.doFundo());
     }
 }

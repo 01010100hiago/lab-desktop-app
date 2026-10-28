@@ -70,7 +70,7 @@ import org.slf4j.LoggerFactory;
  * compara com o pin do cofre; sem pin, esta classe nem abre a conexão (a confiança é dada pela
  * {@link SondagemDeHost} e pelo diálogo do usuário).
  */
-public final class ConexaoSsh implements AutoCloseable {
+public final class ConexaoSsh implements ConexaoDoServidor {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConexaoSsh.class);
 
@@ -156,6 +156,7 @@ public final class ConexaoSsh implements AutoCloseable {
     // =====================================================================================================
 
     /** Começa a conectar. Sem efeito se já está em andamento. */
+    @Override
     public void iniciar() {
         post(() -> {
             if (estado == EstadoConexao.DESCONECTADO || estado == EstadoConexao.BLOQUEADO_COFRE) {
@@ -171,6 +172,7 @@ public final class ConexaoSsh implements AutoCloseable {
      * "Tentar agora": pula a espera do backoff. Com o SSH de pé (agente fora, token recusado, aguardando 2FA)
      * só repete o teste do agente, sem reconectar. É também o que o usuário dispara depois de confiar no host.
      */
+    @Override
     public void tentarAgora() {
         post(() -> {
             switch (estado) {
@@ -193,6 +195,7 @@ public final class ConexaoSsh implements AutoCloseable {
      * editar o endereço, a porta ou o usuário do servidor: "Tentar agora" não serve, porque com a conexão de pé ele não
      * reconecta. Mac dormindo e cofre bloqueado ficam como estão (acordar e desbloquear já reconectam).
      */
+    @Override
     public void reconectar() {
         post(() -> {
             if (encerrado || estado == EstadoConexao.SUSPENSO || estado == EstadoConexao.BLOQUEADO_COFRE) {
@@ -208,6 +211,7 @@ public final class ConexaoSsh implements AutoCloseable {
      * do agente. É o que o Sondador pede quando uma consulta falha com erro de rede (ARQUITETURA 6.3).
      * Sessão morta vai para RECONECTANDO; agente mudo com o SSH de pé vai para SSH_OK_SEM_AGENTE.
      */
+    @Override
     public void verificarAgora() {
         post(() -> {
             if (verificando || sessao == null || !(estado == EstadoConexao.CONECTADO
@@ -223,6 +227,7 @@ public final class ConexaoSsh implements AutoCloseable {
     }
 
     /** O agente respondeu 401 sem {@code codigo} a uma consulta qualquer: o token deste Mac não vale mais. */
+    @Override
     public void informarTokenRecusado() {
         post(() -> {
             if (sessao != null && (estado == EstadoConexao.CONECTADO || estado == EstadoConexao.SSH_OK_SEM_AGENTE)) {
@@ -233,6 +238,7 @@ public final class ConexaoSsh implements AutoCloseable {
     }
 
     /** O agente exige o código do autenticador e o usuário cancelou o pedido: para de consultar até ele digitar. */
+    @Override
     public void informarCodigo2faPendente() {
         post(() -> {
             if (sessao != null && (estado == EstadoConexao.CONECTADO || estado == EstadoConexao.SSH_OK_SEM_AGENTE)) {
@@ -243,6 +249,7 @@ public final class ConexaoSsh implements AutoCloseable {
     }
 
     /** O Mac vai dormir (veja {@link MonitorDeSono}). */
+    @Override
     public void aoDormir() {
         post(() -> {
             switch (estado) {
@@ -258,6 +265,7 @@ public final class ConexaoSsh implements AutoCloseable {
     }
 
     /** O Mac acordou: espera a rede voltar e reconecta SEM esperar o heartbeat (a sessão está morta). */
+    @Override
     public void aoAcordar() {
         post(() -> {
             if (estado != EstadoConexao.SUSPENSO) {
@@ -273,6 +281,7 @@ public final class ConexaoSsh implements AutoCloseable {
     }
 
     /** O cofre foi bloqueado: fecha sessão e túnel e para. Não há reconexão enquanto o cofre estiver fechado. */
+    @Override
     public void bloquear() {
         post(() -> {
             cancelarTimer();
@@ -286,6 +295,7 @@ public final class ConexaoSsh implements AutoCloseable {
      * Encerra de vez (sessão, túnel e o cliente SSH) e para o ator. O futuro completa quando o cliente parou.
      * Idempotente.
      */
+    @Override
     public CompletableFuture<Void> fechar() {
         CompletableFuture<Void> pronto = new CompletableFuture<>();
         try {
@@ -329,6 +339,7 @@ public final class ConexaoSsh implements AutoCloseable {
     }
 
     /** O retrato atual. Sem segredo; seguro entre threads. */
+    @Override
     public InfoConexao info() {
         return info;
     }
@@ -337,6 +348,7 @@ public final class ConexaoSsh implements AutoCloseable {
      * Passa a receber cada mudança (na thread do ator: seja rápido e não bloqueie; despache para a EDT se for
      * tela). O primeiro retrato chega logo em seguida. Devolve o que desfaz a inscrição.
      */
+    @Override
     public Runnable observar(Consumer<InfoConexao> ouvinte) {
         ouvintes.add(ouvinte);
         post(() -> ouvinte.accept(info));
@@ -348,12 +360,18 @@ public final class ConexaoSsh implements AutoCloseable {
         return Optional.ofNullable(tunelAtual);
     }
 
+    @Override
+    public Optional<TunelSsh> pontaDoAgente() {
+        return tunel();
+    }
+
     /**
      * Roda um comando na sessão SSH atual (canal {@code exec}), com stdin. Funciona nos estados em que há
      * sessão, inclusive com o agente fora ou o token recusado: é assim que se registra o token novo.
      *
      * @throws IOException se não há sessão SSH autenticada agora
      */
+    @Override
     public ResultadoExec executar(String comando, byte[] stdin, Duration prazo) throws IOException, InterruptedException {
         ClientSession s = sessaoViva;
         if (s == null || !s.isOpen()) {

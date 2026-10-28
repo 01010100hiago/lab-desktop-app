@@ -2,8 +2,8 @@ package br.com.labdesktop.ui.telas.arquivos;
 
 import br.com.labdesktop.arquivos.BackupsLocais;
 import br.com.labdesktop.arquivos.CaminhoRemoto;
+import br.com.labdesktop.arquivos.ClienteSftp;
 import br.com.labdesktop.arquivos.Cancelamento;
-import br.com.labdesktop.arquivos.ClienteSftpMina;
 import br.com.labdesktop.arquivos.EditorRemoto;
 import br.com.labdesktop.arquivos.EntradaRemota;
 import br.com.labdesktop.arquivos.ErroSftp;
@@ -136,7 +136,7 @@ public final class GerenciadorDeArquivos extends Painel {
     private final transient MemoriaDeCaminhos memoria;
 
     // ---- o que o servidor deu (só a EDT mexe) ----
-    private transient ClienteSftpMina cliente;
+    private transient ClienteSftp cliente;
     private transient ServicoDeArquivos servico;
     private transient EditorRemoto editorRemoto;
     private transient BackupsLocais backups;
@@ -461,7 +461,7 @@ public final class GerenciadorDeArquivos extends Painel {
             return;
         }
         iniciado = true;
-        if (ctx.fabrica() == null) {
+        if (ctx.fabricaDeCliente() == null) {
             definirSituacao(Situacao.SEM_CONEXAO);
             return;
         }
@@ -494,7 +494,7 @@ public final class GerenciadorDeArquivos extends Painel {
         if (fila != null) {
             fila.close();
         }
-        ClienteSftpMina fechando = cliente;
+        ClienteSftp fechando = cliente;
         if (fechando != null) {
             Fundo.emFundo(fechando::close); // fechar o canal fala com o servidor: nunca na EDT
         }
@@ -519,12 +519,12 @@ public final class GerenciadorDeArquivos extends Painel {
     /** O resultado de preparar o escopo (feito fora da EDT). */
     private record Preparado(Escopo escopo, ServicoDeArquivos servico, String home, RaizDoServidor raiz, ListagemDePasta listagem) { }
 
-    private synchronized ClienteSftpMina clienteGarantido() throws ErroSftp {
-        if (ctx.fabrica() == null) {
+    private synchronized ClienteSftp clienteGarantido() throws ErroSftp {
+        if (ctx.fabricaDeCliente() == null) {
             throw ErroSftp.semConexao(null);
         }
         if (cliente == null) {
-            cliente = new ClienteSftpMina(ctx.fabrica());
+            cliente = ctx.fabricaDeCliente().criar();
         }
         return cliente;
     }
@@ -554,7 +554,7 @@ public final class GerenciadorDeArquivos extends Painel {
     }
 
     private Preparado prepararEmFundo(RaizDoServidor raizPedida, String inicio) throws ErroSftp {
-        ClienteSftpMina c = clienteGarantido();
+        ClienteSftp c = clienteGarantido();
         String casa = CaminhoRemoto.normalizar(c.caminhoCanonico("."));
         String raizDosProjetos = memoria.raizDosProjetos(ctx.servidorId());
         Escopo e;
