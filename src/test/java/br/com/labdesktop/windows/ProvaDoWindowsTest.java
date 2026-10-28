@@ -67,6 +67,41 @@ class ProvaDoWindowsTest {
     }
 
     @Test
+    void aTravaDeInstanciaSobreviveAApagarOuRenomearOArquivoAbertoNoWindows(@TempDir Path tmp) throws Exception {
+        // no Unix, apagar o cofre.lock com o app aberto deixa uma SEGUNDA instância criar outro arquivo e travar o novo (duas instâncias no mesmo cofre). No Windows a suposição é que
+        // o arquivo aberto não some nem muda de nome, ou, se some, que a segunda instância ainda é recusada. A prova imprime o que o Windows fez.
+        br.com.labdesktop.util.CaminhosApp c = br.com.labdesktop.util.CaminhosApp.de(tmp.resolve("dados"), tmp.resolve("logs"));
+        try (var primeira = br.com.labdesktop.cofre.TravaDeInstancia.adquirir(c)) {
+            java.util.Objects.requireNonNull(primeira);
+            Path trava = c.arquivoTrava();
+            boolean apagou;
+            try {
+                Files.delete(trava);
+                apagou = true;
+            } catch (java.io.IOException e) {
+                apagou = false;
+            }
+            boolean renomeou;
+            try {
+                Files.move(trava, trava.resolveSibling("outro-nome.lock"));
+                renomeou = true;
+            } catch (java.io.IOException e) {
+                renomeou = false;
+            }
+            System.out.println("[prova-windows] com a trava aberta: apagar=" + apagou + " renomear=" + renomeou);
+            boolean segundaRecusada;
+            try (var segunda = br.com.labdesktop.cofre.TravaDeInstancia.adquirir(c)) {
+                java.util.Objects.requireNonNull(segunda);
+                segundaRecusada = false;
+            } catch (br.com.labdesktop.cofre.CofreEmUsoException e) {
+                segundaRecusada = true;
+            }
+            System.out.println("[prova-windows] segunda instância recusada=" + segundaRecusada);
+            assertTrue(segundaRecusada || (!apagou && !renomeou), "ou a segunda instância é recusada, ou o Windows não deixou apagar nem renomear a trava");
+        }
+    }
+
+    @Test
     void oRegistroDoTemaResponde() {
         boolean escuro = AparenciaDoSistema.escuro();
         System.out.println("[prova-windows] AppsUseLightTheme diz: " + (escuro ? "escuro" : "claro"));
