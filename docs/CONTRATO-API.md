@@ -325,6 +325,7 @@ Projeto comum:
   "sessao": { "aberta": true, "container": "lab-claude-app-loja|null", "desde": "ISO|null", "url": "/sessao/app-loja", "info": { "atualizada": true, "faltando": [] } | null },
   "git": { "branch": "..", "commit": "..", "quando": "ISO", "sujo": false } | null,
   "backups": [ { "arquivo": "..", "tamanho": 0, "quando": "ISO" } ],             // mais recente primeiro
+  // o ARQUIVO do backup fica em <pasta do projeto>/backups/<arquivo> no servidor; o app o baixa por SFTP (a API não tem rota de download)
   "tamanho": 0, "mexido": 1760900000000, "acessoDocker": true,
   "redes": ["app-loja_default"],
   "arquivos": [ { "nome": "src", "tipo": "pasta|arquivo" } ],                    // raiz, pastas primeiro; sem ocultos, exceto .env.example e os .lab-*
