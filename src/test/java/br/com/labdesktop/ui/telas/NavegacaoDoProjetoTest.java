@@ -18,6 +18,7 @@ import br.com.labdesktop.ui.DialogosGravados;
 import br.com.labdesktop.ui.NavegadorGravado;
 import br.com.labdesktop.ui.PainelPrincipal;
 import br.com.labdesktop.ui.VerificaEdt;
+import br.com.labdesktop.ui.dialogos.DialogoConfirmar;
 import br.com.labdesktop.ui.Visual;
 import br.com.labdesktop.ui.telas.TelaProjeto.Aba;
 import br.com.labdesktop.util.Preferencias.Tema;
@@ -203,6 +204,43 @@ class NavegacaoDoProjetoTest {
         Visual.naEdt(() -> painel.navegacao().abrirProjeto(cenario.lab, "app-loja"));
         Visual.naEdt(() -> projeto().aoApertarEsc(null));
         assertNull(projeto(), "Esc também volta");
+    }
+
+    /** O link da Ajuda, Cmd/Ctrl+1 a 9 e "‹ Projetos" fechavam o terminal do projeto sem avisar. */
+    @Test
+    void sairDoProjetoComTerminalVivoPerguntaAntesECancelarMantemTudo() {
+        listaPronta();
+        TelaProjeto t = abrirPeloLab("app-loja");
+        Visual.naEdt(() -> t.abas().botao("terminal").doClick());
+        Visual.naEdt(() -> t.terminal().assinar());
+        Visual.renderizar(servidor().projetoAberto(), 1100, 700);
+        Espera.ate(Duration.ofSeconds(20), "o terminal da aba abrir", () -> Visual.naEdt(t::temTerminalVivo));
+        int antes = dialogos.mostrados.size();
+
+        Visual.naEdt(() -> painel.mostrarAbaNumero(1)); // Cmd+1: sai do projeto
+        assertEquals(antes + 1, dialogos.mostrados.size(), "perguntou antes de sair");
+        DialogoConfirmar d = dialogos.ultimoComo(DialogoConfirmar.class);
+        assertSame(t, projeto(), "enquanto não responde, o projeto e o terminal continuam");
+        assertTrue(Visual.naEdt(t::temTerminalVivo));
+        Visual.naEdt(() -> d.botaoCancelar().doClick());
+        assertSame(t, projeto(), "cancelar mantém a página");
+        assertTrue(Visual.naEdt(t::temTerminalVivo), "e o terminal vivo");
+
+        Visual.naEdt(() -> painel.irParaAba(TelaServidor.Aba.RESUMO)); // o link da Ajuda
+        Visual.naEdt(() -> dialogos.ultimoComo(DialogoConfirmar.class).botaoConfirmar().doClick());
+        assertNull(projeto(), "confirmou: saiu");
+        assertEquals(TelaServidor.Aba.RESUMO, Visual.naEdt(servidor()::abaAtual));
+        assertFalse(Visual.naEdt(t::temTerminalVivo), "o terminal fechou");
+    }
+
+    @Test
+    void sairDoProjetoSemTerminalNaoPerguntaNada() {
+        listaPronta();
+        abrirPeloLab("app-loja");
+        int antes = dialogos.mostrados.size();
+        Visual.naEdt(() -> painel.irParaAba(TelaServidor.Aba.RESUMO));
+        assertEquals(antes, dialogos.mostrados.size());
+        assertNull(projeto());
     }
 
     @Test

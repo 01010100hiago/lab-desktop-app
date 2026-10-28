@@ -382,6 +382,11 @@ public final class TelaProjeto extends Painel {
         return arquivos.temAlteracoesNaoSalvas();
     }
 
+    /** Há um terminal aberto nesta página (o shell ou o do Claude)? Sair da página o fecharia. */
+    public boolean temTerminalVivo() {
+        return terminal().temTerminalVivo();
+    }
+
     /** Editores com alterações não salvas e transferências ainda abertas desta página (para quem vai sair do app). */
     public br.com.labdesktop.ui.Pendencias pendencias() {
         return new br.com.labdesktop.ui.Pendencias(arquivos.transferenciasEmAberto(), arquivos.editoresComAlteracoes());

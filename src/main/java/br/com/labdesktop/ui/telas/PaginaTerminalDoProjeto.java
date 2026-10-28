@@ -749,6 +749,11 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
         encerrarTerminal();
     }
 
+    /** Há um terminal aberto (o shell ou o do Claude)? */
+    boolean temTerminalVivo() {
+        return painelDoShell != null || painelDoTerminal != null;
+    }
+
     /** Fecha o shell e o terminal do Claude e devolve as vagas: sair da página do projeto ou bloquear o cofre. */
     void encerrarTodos() {
         encerrarOShell();

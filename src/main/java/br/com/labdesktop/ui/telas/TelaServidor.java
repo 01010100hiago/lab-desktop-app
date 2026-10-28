@@ -213,7 +213,7 @@ public final class TelaServidor extends Painel {
         this.temProjetos = comProjetos;
         abas.definirVisivel(Aba.PROJETOS.id, comProjetos);
         if (!comProjetos && (atual == Aba.PROJETOS || projetoAberto != null)) {
-            mostrarAba(Aba.RESUMO);
+            mostrarAbaSemPerguntar(Aba.RESUMO); // o servidor mudou, não foi o usuário: não há o que perguntar
         }
     }
 
@@ -250,8 +250,32 @@ public final class TelaServidor extends Painel {
         }
     }
 
-    /** Mostra uma aba (e marca o rótulo). Se havia uma página de projeto aberta, ela fecha: o usuário pediu outro assunto. */
+    /**
+     * Mostra uma aba (e marca o rótulo). Se havia uma página de projeto aberta, ela fecha: o usuário pediu outro assunto. Se essa página tem um terminal vivo (um shell que o usuário
+     * deixou rodando), sair o fecharia sem aviso: antes disso o app PERGUNTA (vale para a barra de abas, os atalhos Cmd/Ctrl+1 a 9, os links da Ajuda e o "‹ Projetos").
+     */
     public void mostrarAba(Aba aba) {
+        if (projetoAberto != null && projetoAberto.temTerminalVivo()) {
+            perguntarAntesDeSairDoProjeto(() -> mostrarAbaSemPerguntar(aba));
+            return;
+        }
+        mostrarAbaSemPerguntar(aba);
+    }
+
+    /** A pergunta de sair do projeto com terminal aberto: o texto é do app; Enter cancela (o terminal não volta depois de fechado). */
+    private void perguntarAntesDeSairDoProjeto(Runnable aoConfirmar) {
+        String nome = br.com.labdesktop.seguranca.TextoSeguro.limparLinha(nomeDoProjetoAberto == null ? "" : nomeDoProjetoAberto);
+        projetos.fluxos().apresentador().mostrar(new br.com.labdesktop.ui.dialogos.DialogoConfirmar(
+            "Sair de " + (nome.isEmpty() ? "este projeto" : nome) + "?", "alerta",
+            "Este projeto tem um terminal aberto. Se sair da página dele agora, o terminal fecha e o que estiver rodando nele para. A conversa do Claude continua no servidor.",
+            "Sair do projeto", true, true, sim -> {
+                if (sim) {
+                    aoConfirmar.run();
+                }
+            }));
+    }
+
+    private void mostrarAbaSemPerguntar(Aba aba) {
         if (aba == Aba.PROJETOS && !temProjetos) {
             aba = Aba.RESUMO; // atalho (Cmd+1) ou voltar da lista: sem projetos, a aba não existe
         }
@@ -276,6 +300,14 @@ public final class TelaServidor extends Painel {
         if (!br.com.labdesktop.seguranca.ValidadorDeNomes.projetoValido(nome)) {
             return;
         }
+        if (projetoAberto != null && !nome.equals(nomeDoProjetoAberto) && projetoAberto.temTerminalVivo()) {
+            perguntarAntesDeSairDoProjeto(() -> abrirProjetoSemPerguntar(nome)); // "Último projeto aberto" com outro projeto aberto
+            return;
+        }
+        abrirProjetoSemPerguntar(nome);
+    }
+
+    private void abrirProjetoSemPerguntar(String nome) {
         fecharProjetoSemMostrar();
         FluxosDeProjeto fluxos = projetos.fluxos();
         TelaProjeto.Aba aba = abasDosProjetos.getOrDefault(nome, TelaProjeto.Aba.VISAO_GERAL);
@@ -299,7 +331,7 @@ public final class TelaServidor extends Painel {
             public void projetoSumiu() {
                 String sumiu = nomeDoProjetoAberto;
                 abasDosProjetos.remove(sumiu);
-                voltarParaALista();
+                mostrarAbaSemPerguntar(Aba.PROJETOS); // o projeto não existe mais: o terminal já morreu junto
                 fluxos.avisos().atencao("O projeto " + sumiu + " não existe mais no servidor. Voltei para a lista de projetos.");
             }
 
