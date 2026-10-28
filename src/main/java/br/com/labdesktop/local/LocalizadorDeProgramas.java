@@ -66,7 +66,8 @@ public final class LocalizadorDeProgramas {
         if (programa == null || programa.isBlank() || programa.contains("/") || programa.contains("\\") || programa.indexOf('\0') >= 0) {
             return Optional.empty();
         }
-        List<String> nomes = sistema == SistemaOperacional.WINDOWS ? List.of(programa + ".exe", programa + ".cmd", programa + ".bat") : List.of(programa);
+        // No Windows só .exe: um .cmd ou .bat roda pelo cmd.exe, que reinterpreta &, |, ^ e % dos argumentos (injeção por argumento). O docker, o git, o wsl e o winget são .exe.
+        List<String> nomes = sistema == SistemaOperacional.WINDOWS ? List.of(programa + ".exe") : List.of(programa);
         for (String pasta : pastas) {
             if (pasta.isBlank()) {
                 continue;

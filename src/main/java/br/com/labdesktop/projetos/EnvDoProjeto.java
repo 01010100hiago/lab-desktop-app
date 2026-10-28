@@ -39,6 +39,9 @@ public final class EnvDoProjeto {
         String base = atual == null ? "" : atual;
         List<String> acrescentadas = new ArrayList<>();
         List<String> jaExistiam = new ArrayList<>();
+        // arquivo NOVO: sempre LF (o app nunca escreve CRLF por conta própria). Arquivo do usuário que já usa CRLF (o Windows): o fim de linha dele é mantido nas linhas acrescentadas, para o
+        // arquivo não ficar com os dois jeitos; nada do que já havia é tocado.
+        String quebra = base.contains("\r\n") ? "\r\n" : "\n";
         StringBuilder sb = new StringBuilder(base);
         for (Map.Entry<String, String> e : new LinkedHashMap<>(novas).entrySet()) {
             Pattern achar = Pattern.compile("(?m)^[ \\t]*(?:export[ \\t]+)?" + Pattern.quote(e.getKey()) + "[ \\t]*=");
@@ -47,9 +50,9 @@ public final class EnvDoProjeto {
                 continue;
             }
             if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '\n') {
-                sb.append('\n');
+                sb.append(quebra);
             }
-            sb.append(e.getKey()).append('=').append(e.getValue()).append('\n');
+            sb.append(e.getKey()).append('=').append(e.getValue()).append(quebra);
             acrescentadas.add(e.getKey());
         }
         return new Mescla(sb.toString(), acrescentadas, jaExistiam);

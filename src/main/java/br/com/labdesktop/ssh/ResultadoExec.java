@@ -25,6 +25,15 @@ public final class ResultadoExec {
         return status;
     }
 
+    /** A saída padrão em BYTES, para quem sabe a codificação (o {@code wsl.exe} do Windows escreve em UTF-16). */
+    public byte[] stdoutBytes() {
+        return stdout.clone();
+    }
+
+    public byte[] stderrBytes() {
+        return stderr.clone();
+    }
+
     public String stdout() {
         return new String(stdout, StandardCharsets.UTF_8);
     }

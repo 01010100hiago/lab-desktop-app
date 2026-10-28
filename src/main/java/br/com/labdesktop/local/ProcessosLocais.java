@@ -22,10 +22,12 @@ public final class ProcessosLocais implements ExecutorDeProcesso {
 
     private final LocalizadorDeProgramas localizador;
     private final String separadorDoPath;
+    private final boolean windows;
 
     public ProcessosLocais(LocalizadorDeProgramas localizador, PlataformaLocal plataforma) {
         this.localizador = localizador;
         this.separadorDoPath = plataforma.separadorDoPath();
+        this.windows = plataforma.sistema() == br.com.labdesktop.plataforma.SistemaOperacional.WINDOWS;
     }
 
     @Override
@@ -52,6 +54,9 @@ public final class ProcessosLocais implements ExecutorDeProcesso {
         }
         List<String> comando = new ArrayList<>(argumentos);
         comando.set(0, achado.get().toString());
+        if (windows) {
+            ArgumentosDoWindows.validar(comando); // o Windows passa UMA linha de texto: aspas dentro de um argumento ou argumento vazio chegam ao programa quebrados
+        }
         ProcessBuilder pb = new ProcessBuilder(comando);
         pb.redirectErrorStream(false);
         Map<String, String> env = pb.environment();

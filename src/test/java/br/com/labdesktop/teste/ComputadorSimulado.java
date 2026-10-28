@@ -51,6 +51,8 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
     public boolean gitSoOAtalhoDoMac;
     public boolean avisoDoMacDisparado;
     public boolean wslInstalado = true;
+    /** A saída do {@code wsl --status} em BYTES (o programa de verdade escreve UTF-16LE); {@code null}: texto simples de antes. */
+    public byte[] saidaDoWslEmBytes;
     public boolean virtualizacaoLigada = true;
     public String versaoDoDocker = "29.6.2";
     /** Quantas consultas ao Docker ainda respondem "parado" depois de mandarem abri-lo (o motor demora para subir). */
@@ -160,7 +162,8 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
         return switch (programa) {
             case "docker" -> docker(a, stdin);
             case "git" -> ok("git version 2.50.1\n");
-            case "wsl" -> wslInstalado ? ok("") : erro(1, "WSL não instalado");
+            case "wsl" -> saidaDoWslEmBytes != null ? new br.com.labdesktop.ssh.ResultadoExec(wslInstalado ? 0 : 1, saidaDoWslEmBytes, new byte[0], false)
+                : wslInstalado ? ok("") : erro(1, "WSL não instalado");
             case "powershell" -> ok(virtualizacaoLigada ? "True\n" : "False\n");
             case "brew" -> instalar("brew");
             case "winget" -> instalar("winget");

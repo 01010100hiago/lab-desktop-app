@@ -197,16 +197,27 @@ public final class VerificacoesDoComputador {
     }
 
     /**
-     * Windows: WSL 2 e virtualização. Só o código de saída do {@code wsl} vale (a saída dele é UTF-16). Com o WSL 2 respondendo ({@code wsl --status}
+     * Windows: WSL 2 e virtualização. O código de saída do {@code wsl} decide (a saída muda de idioma e de versão); o texto dele, que vem em UTF-16LE e é decodificado por
+     * {@link SaidaDoWindows}, só acrescenta o que se leu inteiro: a frase do próprio Windows quando falta, e o aviso de versão padrão 1. Com o WSL 2 respondendo ({@code wsl --status}
      * sai com 0), a virtualização já está de pé e a checagem da BIOS NÃO vale: com o Hyper-V ou o WSL 2 funcionando, o hipervisor toma conta e o
      * {@code VirtualizationFirmwareEnabled} do Windows diz {@code False} (um falso "desligada"). A BIOS só entra como dica quando o WSL falta.
      */
     private ResultadoDoComputador virtualizacao() throws InterruptedException {
         boolean wslOk = false;
+        String fraseDoWindows = "";
+        int versaoPadrao = 0;
         try {
-            wslOk = executor.executar(ComandosLocais.estadoDoWsl(), LEITURA).status() == 0;
+            ResultadoExec w = executor.executar(ComandosLocais.estadoDoWsl(), LEITURA);
+            wslOk = w.status() == 0;
+            String texto = SaidaDoWindows.texto(w.stdoutBytes()) + "\n" + SaidaDoWindows.texto(w.stderrBytes());
+            fraseDoWindows = wslOk ? "" : SaidaDoWindows.primeiraLinha(texto);
+            versaoPadrao = SaidaDoWindows.versaoPadraoDoWsl(texto);
         } catch (IOException e) {
             // sem wsl: instalar
+        }
+        if (wslOk && versaoPadrao == 1) {
+            return ResultadoDoComputador.aviso(ItemDoComputador.VIRTUALIZACAO, "O WSL está instalado, mas a versão padrão dele é a 1 e o Docker Desktop precisa da 2. "
+                + "Rode o comando abaixo no PowerShell e clique em Verificar de novo.", "wsl --set-default-version 2", List.of());
         }
         if (wslOk) {
             return ResultadoDoComputador.ok(ItemDoComputador.VIRTUALIZACAO, "WSL 2 instalado e funcionando (a virtualização está ligada).");
@@ -223,7 +234,13 @@ public final class VerificacoesDoComputador {
         }
         return ResultadoDoComputador.problema(ItemDoComputador.VIRTUALIZACAO, "O WSL 2 não está instalado (o Docker Desktop precisa dele). O app não "
             + "o instala: exige administrador e reiniciar o computador. Rode o comando abaixo no PowerShell como administrador, reinicie e "
-            + "clique em Verificar de novo." + dicaDaBios, "wsl --install", List.of(PlanosDeInstalacao.wsl()));
+            + "clique em Verificar de novo." + dicaDaBios + (fraseDoWindows.isEmpty() ? "" : " O Windows respondeu: " + visivel(fraseDoWindows)), "wsl --install", List.of(PlanosDeInstalacao.wsl()));
+    }
+
+    /** Uma frase vinda do programa do Windows, curta e sem caractere de controle (ela entra numa frase da tela). */
+    private static String visivel(String frase) {
+        String limpa = frase.replaceAll("\\p{Cntrl}", " ").strip();
+        return limpa.length() > 160 ? limpa.substring(0, 160) + "…" : limpa;
     }
 
     private int portaSugerida(int pedida) {

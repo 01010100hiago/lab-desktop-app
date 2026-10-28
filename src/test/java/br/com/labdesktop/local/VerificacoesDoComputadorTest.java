@@ -228,6 +228,29 @@ class VerificacoesDoComputadorTest {
     }
 
     @Test
+    void windowsSemWslMostraAFraseDoProprioWindowsLidaDoUtf16Le() throws Exception {
+        plataforma = new PlataformaLocal(SistemaOperacional.WINDOWS, "C:\\Users\\ana", Map.of());
+        pc.wslInstalado = false;
+        pc.saidaDoWslEmBytes = "O Subsistema do Windows para Linux não está instalado. Você pode instalá-lo executando 'wsl.exe --install'.\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_16LE);
+        ResultadoDoComputador v = verificar().de(ItemDoComputador.VIRTUALIZACAO);
+        assertEquals(Estado.PROBLEMA, v.estado());
+        assertTrue(v.frase().contains("O Windows respondeu: O Subsistema do Windows para Linux não está instalado"), v.frase());
+        assertFalse(v.frase().contains("\u0000"), "nenhum byte zero do UTF-16 sobra na frase");
+        assertEquals("wsl --install", v.comandoSugerido());
+    }
+
+    @Test
+    void windowsComWslNaVersaoPadraoUmAvisaEDaOComandoParaVersaoDois() throws Exception {
+        plataforma = new PlataformaLocal(SistemaOperacional.WINDOWS, "C:\\Users\\ana", Map.of());
+        pc.saidaDoWslEmBytes = "Distribuição Padrão: Ubuntu\r\nVersão Padrão: 1\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_16LE);
+        ResultadoDoComputador v = verificar().de(ItemDoComputador.VIRTUALIZACAO);
+        assertEquals(Estado.AVISO, v.estado(), v.frase());
+        assertEquals("wsl --set-default-version 2", v.comandoSugerido());
+        pc.saidaDoWslEmBytes = "Distribuição Padrão: Ubuntu\r\nVersão Padrão: 2\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_16LE);
+        assertEquals(Estado.OK, verificar().de(ItemDoComputador.VIRTUALIZACAO).estado());
+    }
+
+    @Test
     void windowsSemWslEComABiosDesligadaAContaVemComoDicaSemMudarOQueFazer() throws Exception {
         plataforma = new PlataformaLocal(SistemaOperacional.WINDOWS, "C:\\Users\\ana", Map.of());
         pc.wslInstalado = false;

@@ -28,6 +28,17 @@ class MapeamentoDeCaminhosTest {
     }
 
     @Test
+    void noWindowsEspacoAcentoELetraMinusculaViramOCaminhoCerto() {
+        assertEquals("/run/desktop/mnt/host/c/Users/João Silva/LabLocal/projects", MapeamentoDeCaminhos.doContainer(SistemaOperacional.WINDOWS, "C:\\Users\\João Silva\\LabLocal\\projects"));
+        assertEquals("/run/desktop/mnt/host/c/Users/Ana Maria/Meus Projetos", MapeamentoDeCaminhos.doContainer(SistemaOperacional.WINDOWS, "c:\\Users\\Ana Maria\\Meus Projetos\\"));
+        assertEquals("/run/desktop/mnt/host/e/Código (novo)/lab", MapeamentoDeCaminhos.doContainer(SistemaOperacional.WINDOWS, "E:/Código (novo)/lab"), "barras dos dois lados e parênteses valem");
+        // o que o -v não aguenta, também no Windows
+        for (String ruim : List.of("\\\\servidor\\pasta\\x", "C:", "C:\\a\\..\\b", "C:\\a:b", "C:\\a\"b", "C:\\a\nb", "1:\\x")) {
+            assertThrows(IllegalArgumentException.class, () -> MapeamentoDeCaminhos.doContainer(SistemaOperacional.WINDOWS, ruim), "recusa: " + ruim);
+        }
+    }
+
+    @Test
     void caminhoQueQuebraria_oVDoDockerEhRecusado() {
         for (String ruim : List.of("/Users/ana/a,b", "/Users/ana/a:b", "/Users/ana/../etc", "/Users/ana/\"x\"", "/Users/ana/a\nb", "relativo/x", "", " ")) {
             assertThrows(IllegalArgumentException.class, () -> MapeamentoDeCaminhos.doContainer(SistemaOperacional.MAC, ruim), "recusa: " + ruim);
