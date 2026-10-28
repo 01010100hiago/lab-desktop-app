@@ -89,6 +89,13 @@ public class Rotulo extends JLabel {
         return this;
     }
 
+    /** Liga ou desliga o negrito (a trilha de passos destaca só o passo de agora). */
+    public Rotulo negrito(boolean sim) {
+        this.negrito = sim;
+        refazerAFonte();
+        return this;
+    }
+
     /** O tamanho NOMINAL (o número de sempre); quem decide os pontos de verdade é {@link Fontes}, com o fator do usuário. */
     public Rotulo tamanho(float pontos) {
         this.nominal = pontos;

@@ -75,6 +75,12 @@ public final class DialogoPublicar extends Dialogo {
         void encerrar();
     }
 
+    /**
+     * O que o assistente "Adicionar domínio" já perguntou nos passos de antes: este diálogo nasce com tudo preenchido e mostra o último passo (a prévia do que será criado e a
+     * confirmação). O usuário ainda pode mudar qualquer campo aqui.
+     */
+    public record Predefinicao(String servico, int porta, String container, String nome, boolean recriar) { }
+
     private static final int LARGURA = 560;
 
     private final Motor motor;
@@ -107,6 +113,7 @@ public final class DialogoPublicar extends Dialogo {
     private final Botao publicar = Botoes.primario("Publicar na internet", "externo");
     private final Botao conferir = Botoes.secundario("Conferir de novo", "atualizar");
     private final Botao cancelar = Botoes.secundario("Cancelar", null);
+    private final Botao voltar = Botoes.secundario("Voltar", "voltar");
     private final Botao abrirEndereco = Botoes.secundario("Abrir o endereço", "externo");
     private final Botao testarDeNovo = Botoes.secundario("Testar de novo", "atualizar");
     private final Map<Etapa, Rotulo> linhasDeEtapa = new EnumMap<>(Etapa.class);
@@ -128,9 +135,25 @@ public final class DialogoPublicar extends Dialogo {
     private boolean motorSolto;
     private String ultimoNomeSugerido = "";
     private String ultimoContainerSugerido = "";
+    private final Predefinicao predefinicao;
+    private final Runnable aoVoltar;
+    private boolean voltando;
 
     public DialogoPublicar(Motor motor, Notificacoes avisos, CopiadorDeTexto copiador, Runnable aoPublicar) {
-        super("Publicar na internet");
+        this(motor, avisos, copiador, aoPublicar, null, null);
+    }
+
+    /**
+     * O último passo do assistente "Adicionar domínio": nasce com o que os passos de antes escolheram e, com {@code aoVoltar}, ganha o botão Voltar (fecha SEM soltar o motor e devolve a
+     * conversa ao assistente, que o passa adiante).
+     *
+     * @param predefinicao o que os passos anteriores escolheram ({@code null}: o diálogo comum de "Publicar na internet")
+     * @param aoVoltar     o que o botão Voltar faz; {@code null}: sem o botão
+     */
+    public DialogoPublicar(Motor motor, Notificacoes avisos, CopiadorDeTexto copiador, Runnable aoPublicar, Predefinicao predefinicao, Runnable aoVoltar) {
+        super(predefinicao == null ? "Publicar na internet" : "Adicionar domínio: passo 5 de 5");
+        this.predefinicao = predefinicao;
+        this.aoVoltar = aoVoltar;
         this.motor = motor;
         this.avisos = avisos;
         this.aoPublicar = aoPublicar;
@@ -190,7 +213,10 @@ public final class DialogoPublicar extends Dialogo {
             avisosDaPrevia, bloqueioDaPrevia,
             tituloDoBloco, rolagemDoBloco, Caixa.linha(8, copiarBloco, Caixa.mola()),
             blocoDasEtapas, blocoDoResultado);
-        conteudoComRodape(Caixa.coluna(10, cabecalho("externo", "Publicar na internet"), corpo), rodape(null, cancelar, conferir, publicar));
+        voltar.setVisible(aoVoltar != null);
+        voltar.addActionListener(e -> voltar());
+        conteudoComRodape(Caixa.coluna(10, cabecalho("externo", predefinicao == null ? "Publicar na internet" : "Passo 5 de 5: confira e confirme"), corpo),
+            rodape(aoVoltar == null ? null : voltar, cancelar, conferir, publicar));
         botaoPadrao(publicar);
         publicar.setEnabled(false);
 
@@ -241,7 +267,11 @@ public final class DialogoPublicar extends Dialogo {
                 reajustar();
                 return;
             }
-            aoEscolherOServico();
+            if (predefinicao != null) {
+                aplicarAPredefinicao();
+            } else {
+                aoEscolherOServico();
+            }
         }, falha -> {
             if (jaFechou()) {
                 return;
@@ -250,6 +280,41 @@ public final class DialogoPublicar extends Dialogo {
             dizerErro(problemasDosCampos, falha instanceof FalhaDoProjeto f ? f.mensagem() : MensagensDeErro.de(falha));
             reajustar();
         });
+    }
+
+    /** Põe nos campos o que o assistente já perguntou (o serviço, a porta, o container e o nome do endereço), e confere a prévia. */
+    private void aplicarAPredefinicao() {
+        ajustando = true;
+        try {
+            int indice = 0;
+            for (int i = 0; i < servicos.size(); i++) {
+                if (servicos.get(i).nome().equals(predefinicao.servico())) {
+                    indice = i;
+                }
+            }
+            caixaDeServicos.setSelectedIndex(indice);
+            ComposeComEdge.Servico s = servicos.get(indice);
+            campoContainer.setText(predefinicao.container());
+            campoContainer.setEnabled(s.containerName() == null && !ocupado);
+            campoPorta.setText(String.valueOf(predefinicao.porta()));
+            campoNome.setText(predefinicao.nome());
+            recriar.setSelected(predefinicao.recriar() && motor.podeRecriar());
+            ultimoContainerSugerido = s.containerName() != null ? s.containerName() : PublicadorNaInternet.sugerirContainer(motor.projeto(), s.nome());
+            ultimoNomeSugerido = NomeDoEndereco.sugerir(motor.prefixo(), motor.projeto());
+        } finally {
+            ajustando = false;
+        }
+        aoMudarOsCampos();
+    }
+
+    /** Voltar ao assistente: fecha sem soltar o motor (ele continua com o assistente). */
+    private void voltar() {
+        if (ocupado || aoVoltar == null) {
+            return;
+        }
+        voltando = true;
+        fechar();
+        aoVoltar.run();
     }
 
     private ComposeComEdge.Servico servicoEscolhido() {
@@ -625,7 +690,7 @@ public final class DialogoPublicar extends Dialogo {
     protected void aoFechar() {
         atrasoDaPrevia.stop();
         geracao.incrementAndGet();
-        if (!ocupado) {
+        if (!ocupado && !voltando) {
             soltarOMotor();
         } // com a execução em andamento o motor fica aberto: quem o solta é o fim dela (aoTerminar, já com a janela fechada)
     }
@@ -679,6 +744,10 @@ public final class DialogoPublicar extends Dialogo {
 
     public Botao botaoCancelar() {
         return cancelar;
+    }
+
+    public Botao botaoVoltar() {
+        return voltar;
     }
 
     public Botao botaoAbrirEndereco() {
