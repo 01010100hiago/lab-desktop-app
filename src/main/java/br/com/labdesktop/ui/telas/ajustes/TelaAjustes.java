@@ -32,6 +32,7 @@ public final class TelaAjustes extends Painel {
         APARENCIA("aparencia", "Aparência"),
         NAVEGACAO("navegacao", "Navegação"),
         TERMINAL("terminal", "Terminal"),
+        SEGURANCA("seguranca", "Segurança"),
         AJUDA("ajuda", "Ajuda"),
         SOBRE("sobre", "Sobre");
 
@@ -68,6 +69,7 @@ public final class TelaAjustes extends Painel {
     private final SecaoAparencia aparencia;
     private final SecaoNavegacao navegacao;
     private final SecaoTerminal terminal;
+    private final SecaoSeguranca seguranca;
     private final PainelSobre sobre;
     private final SecaoAjuda ajuda;
     private final Botao voltar = Botoes.fantasma("Voltar", "voltar");
@@ -81,6 +83,7 @@ public final class TelaAjustes extends Painel {
         aparencia = new SecaoAparencia(controle);
         navegacao = new SecaoNavegacao(controle);
         terminal = new SecaoTerminal(controle);
+        seguranca = new SecaoSeguranca(controle);
         sobre = new PainelSobre(controle.informacoes(), controle.copiador(), controle.avisos());
         ajuda = new SecaoAjuda(controle);
 
@@ -98,6 +101,7 @@ public final class TelaAjustes extends Painel {
         corpo.add(new AreaDaPagina(aparencia, false), Secao.APARENCIA.id);
         corpo.add(new AreaDaPagina(navegacao, false), Secao.NAVEGACAO.id);
         corpo.add(new AreaDaPagina(terminal, false), Secao.TERMINAL.id);
+        corpo.add(new AreaDaPagina(seguranca, false), Secao.SEGURANCA.id);
         corpo.add(ajuda, Secao.AJUDA.id); // a Ajuda enche o espaço e rola cada painel por dentro dele: não vai dentro de outra rolagem
         corpo.add(new AreaDaPagina(sobre, false), Secao.SOBRE.id);
 
@@ -131,6 +135,7 @@ public final class TelaAjustes extends Painel {
             case APARENCIA -> aparencia.atualizar();
             case NAVEGACAO -> navegacao.atualizar();
             case TERMINAL -> terminal.atualizar();
+            case SEGURANCA -> seguranca.atualizar();
             case AJUDA -> ajuda.aoMostrar();
             case SOBRE -> { }
         }
@@ -165,6 +170,10 @@ public final class TelaAjustes extends Painel {
 
     SecaoNavegacao navegacao() {
         return navegacao;
+    }
+
+    SecaoSeguranca seguranca() {
+        return seguranca;
     }
 
     SecaoTerminal terminal() {

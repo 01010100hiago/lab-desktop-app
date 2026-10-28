@@ -68,6 +68,7 @@ public final class AcoesDaInterface {
     private final Consumer<ServidorLab> aoSelecionar;
     private final Navegador navegador;
     private final ServicosDeArquivos servicosDeArquivos;
+    private volatile ProtecaoDeContainers protecaoDeContainers = ProtecaoDeContainers.NENHUMA;
     private volatile EscolhedorLocal escolhedor = EscolhedorLocal.doSistema(() -> null);
     /**
      * A trava das ações de escrita ({@code -Dlabdesktop.acoes=true}), conferida AQUI também (defesa em profundidade): os botões já somem sem ela, mas Publicar e Remover escrevem
@@ -175,7 +176,7 @@ public final class AcoesDaInterface {
         if (trava.getAsBoolean()) {
             return false;
         }
-        avisos.atencao("As ações que escrevem no servidor estão desligadas nesta versão do app (são ligadas com -Plabdesktop.acoes=true). Nada foi feito.");
+        avisos.atencao("As ações que escrevem no servidor estão desligadas nesta versão do app. Nada foi feito.");
         return true;
     }
 
@@ -613,6 +614,11 @@ public final class AcoesDaInterface {
     // Encerrar e reiniciar processos
     // =====================================================================================================
 
+    /** De onde vêm os containers que o usuário marcou como protegidos (a janela liga às preferências ao abrir). */
+    public void usarProtecaoDeContainers(ProtecaoDeContainers protecao) {
+        this.protecaoDeContainers = protecao == null ? ProtecaoDeContainers.NENHUMA : protecao;
+    }
+
     /**
      * "Encerrar" ou "Reiniciar" um processo da lista: abre a confirmação, que só LÊ ao abrir (a identidade real do processo) e só age depois do clique. Só o CLIQUE do usuário chega
      * aqui, e a mesma trava das outras ações de escrita ({@code labdesktop.acoes}) vale também por dentro (defesa em profundidade: os botões já aparecem desligados sem ela).
@@ -620,13 +626,15 @@ public final class AcoesDaInterface {
      */
     public void encerrarOuReiniciarProcesso(ServidorLab lab, br.com.labdesktop.processos.ProcessoAlvo alvo, String origem, br.com.labdesktop.processos.Acao acao,
                                             Runnable depois) {
-        if (recusarSemAsAcoes()) {
-            return;
-        }
+        lab.definirProtegidosDoDono(() -> protecaoDeContainers.marcados(lab.id()));
         br.com.labdesktop.processos.ControleDeProcessos controle = lab.controleDeProcessos();
         br.com.labdesktop.processos.Oferta oferta = controle.avaliar(alvo);
         if (oferta.protegido()) {
             avisos.atencao(oferta.protecao());
+            return;
+        }
+        // "Sem permissão" só MOSTRA um comando para o usuário rodar sozinho (nada é enviado): vale mesmo com as ações de escrita desligadas; o resto passa pela trava
+        if (oferta.situacao() != br.com.labdesktop.processos.Oferta.Situacao.SEM_PERMISSAO && recusarSemAsAcoes()) {
             return;
         }
         if (acao == br.com.labdesktop.processos.Acao.REINICIAR && !oferta.reiniciarLigado()) {
@@ -634,7 +642,9 @@ public final class AcoesDaInterface {
             return;
         }
         boolean windows = controle.ambiente().tipo() == br.com.labdesktop.processos.AmbienteDeProcessos.Tipo.COMPUTADOR_WINDOWS;
-        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoProcesso(alvo, oferta, acao, origem, windows ? "Forçar (taskkill /F)" : "Forçar (SIGKILL)",
+        boolean administrador = controle.ambiente().usuarioDoAppEhAdministrador() && !lab.ehLocal();
+        br.com.labdesktop.ui.dialogos.DialogoProcesso dialogo = new br.com.labdesktop.ui.dialogos.DialogoProcesso(alvo, oferta, acao, origem,
+            windows ? "Forçar (taskkill /F)" : "Forçar (SIGKILL)", administrador,
             new br.com.labdesktop.ui.dialogos.DialogoProcesso.Motor() {
                 @Override
                 public br.com.labdesktop.processos.Previa preparar() throws br.com.labdesktop.processos.FalhaDeProcesso, InterruptedException {
@@ -663,7 +673,14 @@ public final class AcoesDaInterface {
                 if (depois != null) {
                     depois.run();
                 }
-            }));
+            });
+        if (alvo.ehDeContainer()) {
+            dialogo.permitirProteger(() -> {
+                protecaoDeContainers.marcar(lab.id(), alvo.container(), true);
+                avisos.ok("O container " + alvo.container() + " agora é protegido neste servidor: o app não o para nem o reinicia. Para liberar, tire a marca em Ajustes, Segurança.");
+            });
+        }
+        apresentador.mostrar(dialogo);
     }
 
     /**

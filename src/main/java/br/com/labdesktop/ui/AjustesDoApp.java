@@ -135,6 +135,11 @@ public final class AjustesDoApp implements ControleDeAjustes {
     }
 
     @Override
+    public String nomeDoServidor(String id) {
+        return painel.nomeDoServidor(id);
+    }
+
+    @Override
     public InformacoesDoApp informacoes() {
         return InformacoesDoApp.coletar(preferencias.caminhos());
     }

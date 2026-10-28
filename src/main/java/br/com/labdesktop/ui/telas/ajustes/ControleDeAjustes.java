@@ -56,6 +56,11 @@ public interface ControleDeAjustes {
     /** Abre a tela que um link da Ajuda cita (só abre; nunca escreve). Devolve {@code false} se não deu (por exemplo, não há servidor para abrir uma aba dele). */
     boolean irPara(br.com.labdesktop.ajuda.Destino destino);
 
+    /** O nome de um servidor pelo id (a Segurança mostra o nome, não o id); sem servidor com esse id, o próprio id. */
+    default String nomeDoServidor(String id) {
+        return id;
+    }
+
     /** Os dados do Sobre. */
     InformacoesDoApp informacoes();
 

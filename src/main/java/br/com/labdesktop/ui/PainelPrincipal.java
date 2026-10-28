@@ -87,6 +87,16 @@ public final class PainelPrincipal extends Painel {
         }
     }
 
+    /** O nome do servidor com este id (para os Ajustes); sem ele, o próprio id. */
+    public String nomeDoServidor(String id) {
+        return gerenciador.servidores().stream().filter(l -> l.id().equals(id)).map(l -> l.estado().nome()).findFirst().orElse(id);
+    }
+
+    /** Liga os containers que o usuário marcou como protegidos (as preferências) às ações de processos. */
+    public void usarProtecaoDeContainers(ProtecaoDeContainers protecao) {
+        acoes.usarProtecaoDeContainers(protecao);
+    }
+
     /** Liga a engrenagem da barra e os atalhos à tela Ajustes (montada só na primeira vez que for aberta). */
     public void instalarAjustes(Supplier<TelaAjustes> fabrica) {
         navegacao.instalarAjustes(fabrica);

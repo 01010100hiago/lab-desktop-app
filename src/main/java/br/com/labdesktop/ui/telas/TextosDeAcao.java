@@ -10,7 +10,7 @@ final class TextosDeAcao {
     static final String TRAVA = "As ações de escrita estão desligadas nesta versão do app.";
 
     /** A explicação curta de uma linha, abaixo de uma lista ou de um botão. */
-    static final String TRAVA_COMPLETA = TRAVA + " Ligue-as para encerrar, reiniciar, publicar e remover (opção de partida -Plabdesktop.acoes=true).";
+    static final String TRAVA_COMPLETA = TRAVA + " Sem elas o app só mostra e lê: encerrar, reiniciar, publicar e remover ficam desligados.";
 
     private TextosDeAcao() { }
 }

@@ -259,4 +259,46 @@ class PreferenciasTest {
         assertEquals(115, p.escalaTexto());
         assertTrue(p.copiarAoSelecionar());
     }
+
+    @Test
+    void containersProtegidosViajamPorServidorEArquivoAntigoContinuaValendo(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Preferencias p = Preferencias.padrao().comContainerProtegido("srv-1", "App-Loja-Web", true).comContainerProtegido("srv-1", "db", true).comContainerProtegido("srv-2", "x1", true);
+        assertEquals(java.util.Set.of("app-loja-web", "db"), p.containersProtegidosDe("srv-1"), "guarda em minúsculas");
+        assertEquals(java.util.Set.of(), p.containersProtegidosDe("outro"));
+        p.salvar(c);
+        Preferencias lida = Preferencias.carregar(c);
+        assertEquals(p, lida);
+        assertEquals(java.util.Set.of("x1"), lida.containersProtegidosDe("srv-2"));
+        Preferencias liberada = lida.comContainerProtegido("srv-1", "db", false);
+        assertEquals(java.util.Set.of("app-loja-web"), liberada.containersProtegidosDe("srv-1"));
+        assertEquals(java.util.Set.of(), liberada.comContainerProtegido("srv-1", "app-loja-web", false).containersProtegidosDe("srv-1"));
+        Preferencias.padrao().salvar(c);
+        assertFalse(Files.readString(c.arquivoPreferencias()).contains("srv-1"), "sem marcas, nada de servidor no arquivo");
+
+        Files.writeString(c.arquivoPreferencias(), "{\"versao\": 1, \"tema\": \"claro\"}");
+        assertEquals(java.util.Set.of(), Preferencias.carregar(c).containersProtegidosDe("srv-1"), "arquivo de antes do campo: nenhum");
+    }
+
+    @Test
+    void containersProtegidosComValorRuimSaoDescartadosSemDerrubarALeitura(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        c.prepararPastas();
+        Files.writeString(c.arquivoPreferencias(), "{\"tema\": \"escuro\", \"containersProtegidos\": {\"srv\": [\"ok\", \"a b\", \"$(id)\", 7, null, \"-x\", \"bom.2\"], \"\": [\"vazio\"], \"r\": \"texto\", \"s\": [1,2]}}");
+        Preferencias lida = Preferencias.carregar(c);
+        assertEquals(Tema.ESCURO, lida.tema(), "o resto do arquivo continua valendo");
+        assertEquals(java.util.Set.of("ok", "bom.2"), lida.containersProtegidosDe("srv"), "só nome que o Docker aceitaria");
+        assertEquals(java.util.Set.of(), lida.containersProtegidosDe("r"));
+        assertEquals(java.util.Set.of(), lida.containersProtegidosDe("s"));
+        Files.writeString(c.arquivoPreferencias(), "{\"containersProtegidos\": [\"a\"]}");
+        assertEquals(Preferencias.padrao(), Preferencias.carregar(c), "formato errado: o padrão");
+    }
+
+    @Test
+    void mudarOutraPreferenciaNaoPerdeOsContainersProtegidos() {
+        Preferencias p = Preferencias.padrao().comContainerProtegido("s", "db", true).comTema(Tema.ESCURO).comEscalaTexto(115).comAutoBloqueioMinutos(3)
+            .comAviso(Aviso.CREDITO_75, false).comCopiarAoSelecionar(true).comTamanhoFonteTerminal(15).comDonoExclusivo(true).comOpcaoComoMeta(true)
+            .comAbasDoServidor(OrdemDeAbas.PADRAO).comAbasDoProjeto(OrdemDeAbas.PADRAO).comJanela(new Janela(0, 0, 1000, 700, false));
+        assertEquals(java.util.Set.of("db"), p.containersProtegidosDe("s"));
+    }
 }

@@ -131,9 +131,9 @@ class DialogoProcessoTest {
         List<String> fatos = ed(d::fatos);
         assertTrue(fatos.contains("Programa: node"), fatos.toString());
         assertTrue(fatos.contains("Número do processo (PID): 3000"));
-        assertTrue(fatos.contains("Proprietário: labuser"));
+        assertTrue(fatos.contains("Dono (conferido agora): labuser (usuário nº 1000)"), fatos.toString());
         assertTrue(fatos.contains("Projeto / container: o próprio servidor (fora de container)"));
-        assertTrue(fatos.contains("Começou em: Tue Oct 28 12:00:00 2026"), fatos.toString());
+        assertTrue(fatos.contains("Começou em: 28/10/2026 às 12:00:00"), fatos.toString());
         String e = ed(d::textoDaExplicacao);
         assertTrue(e.contains("SIGTERM") && e.contains("SIGKILL") && e.contains("você decide"), e);
         assertEquals(List.of("preparar"), chamadas, "abrir só lê");
@@ -192,7 +192,7 @@ class DialogoProcessoTest {
     void semPermissaoMostraOComandoParaODonoENaoOfereceEncerrar() {
         ProcessoAlvo outro = new ProcessoAlvo(3200, "postgres", "postgres", null, null);
         DialogoProcesso d = abrir(outro, Acao.ENCERRAR);
-        assertEquals("sudo kill -TERM 3200", ed(d::textoDoComando));
+        assertEquals("ps -o pid,user,lstart,comm -p 3200\nps -o comm= -p 3200 | grep -Eq '(^|/)postgres$' && sudo kill -TERM 3200", ed(d::textoDoComando));
         assertFalse(ed(() -> d.botaoEncerrar().isVisible()), "o app não age sem permissão");
         assertTrue(ed(d::textoDaExplicacao).contains("não usa sudo nem digita senha"));
         assertEquals("Fechar", ed(() -> d.botaoFechar().getText()));
@@ -209,12 +209,89 @@ class DialogoProcessoTest {
         assertTrue(ed(() -> d.botaoReiniciar().isVisible()));
         String e = ed(d::textoDaExplicacao);
         assertTrue(e.contains("docker stop") && e.contains("docker restart") && e.contains("app-loja-web"), e);
-        assertTrue(ed(d::fatos).contains("Projeto / container: app-loja (app-loja-web)"));
+        List<String> fatos = ed(d::fatos);
+        assertTrue(fatos.contains("Container: app-loja-web") && fatos.contains("Projeto: app-loja"), fatos.toString());
+        assertTrue(fatos.stream().noneMatch(f -> f.contains("PID") || f.contains("Dono") || f.contains("Começou")), "a ação é no container: nada de número de processo nem dono: " + fatos);
+        assertEquals("Parar o container", d.titulo(), "o diálogo de container não se chama Encerrar processo");
+        assertEquals("Reiniciar o container", abrirReiniciarContainer().titulo());
         CenarioDeCloudflare.fotografar(d, "dialogo-processo-6-container");
         Visual.naEdt(() -> d.botaoReiniciar().doClick(0));
         Espera.ate(PRAZO, () -> "reiniciado", () -> !ed(d::seloDoResultado).isEmpty());
         assertEquals("REINICIADO", ed(d::seloDoResultado));
         assertEquals(List.of("preparar", "reiniciar"), chamadas);
+    }
+
+    private DialogoProcesso abrirReiniciarContainer() {
+        chamadas.clear();
+        return abrir(new ProcessoAlvo(3100, "node", "node", "app-loja-web", "app-loja"), Acao.REINICIAR);
+    }
+
+    private DialogoProcesso abrirComoAdministrador(ProcessoAlvo alvo) {
+        Visual.tema(Tema.CLARO);
+        AmbienteDeProcessos root = AmbienteDeProcessos.servidor("root", Set.of());
+        Oferta oferta = AvaliadorDeProcessos.avaliar(alvo, root);
+        DialogoProcesso d = Visual.naEdt(() -> new DialogoProcesso(alvo, oferta, Acao.ENCERRAR, "o próprio servidor", "Forçar (SIGKILL)", true, motor(alvo, oferta),
+            new CopiadorDeTexto(() -> new java.awt.datatransfer.Clipboard("t")), avisos, terminou::incrementAndGet));
+        Espera.ate(PRAZO, () -> "preparar: " + chamadas, () -> chamadas.contains("preparar"));
+        Espera.ate(PRAZO, () -> "aparecer", () -> !Visual.naEdt(d::fatos).isEmpty());
+        return d;
+    }
+
+    @Test
+    void comoAdministradorOsBotoesSoLigamDepoisDeDigitarONomeEOAvisoFicaEmDestaque() {
+        ProcessoAlvo nginx = new ProcessoAlvo(3300, "nginx", "root", null, null);
+        DialogoProcesso d = abrirComoAdministrador(nginx);
+        assertTrue(ed(d::textoDoAvisoDeAdministrador).contains("administrador (root)"), ed(d::textoDoAvisoDeAdministrador));
+        assertTrue(ed(() -> d.campoDaConfirmacao().isVisible()));
+        assertFalse(ed(() -> d.botaoEncerrar().isEnabled()), "sem digitar, o botão está desligado");
+        Visual.naEdt(() -> d.botaoEncerrar().doClick(0));
+        assertEquals(List.of("preparar"), chamadas, "o clique no botão desligado não envia nada");
+        Visual.naEdt(() -> d.campoDaConfirmacao().setText("ngin"));
+        assertFalse(ed(() -> d.botaoEncerrar().isEnabled()), "nome pela metade não vale");
+        Visual.naEdt(() -> d.campoDaConfirmacao().setText("NGINX"));
+        assertFalse(ed(() -> d.botaoEncerrar().isEnabled()), "maiúsculas diferentes não valem: é o nome do programa, não uma frase");
+        Visual.naEdt(() -> d.campoDaConfirmacao().setText(" nginx "));
+        assertTrue(ed(() -> d.botaoEncerrar().isEnabled()), "o nome certo (sem os espaços das pontas) liga");
+        CenarioDeCloudflare.fotografar(d, "dialogo-processo-8-administrador");
+        Visual.naEdt(() -> d.botaoEncerrar().doClick(0));
+        Espera.ate(PRAZO, () -> "encerrou", () -> chamadas.contains("encerrar"));
+    }
+
+    @Test
+    void comoAdministradorOContainerPedeODigitarONomeDoContainer() {
+        DialogoProcesso d = abrirComoAdministrador(new ProcessoAlvo(3100, "node", "node", "app-loja-web", "app-loja"));
+        assertFalse(ed(() -> d.botaoEncerrar().isEnabled()));
+        assertFalse(ed(() -> d.botaoReiniciar().isEnabled()));
+        Visual.naEdt(() -> d.campoDaConfirmacao().setText("node"));
+        assertFalse(ed(() -> d.botaoEncerrar().isEnabled()), "no container se digita o nome do container, não do programa");
+        Visual.naEdt(() -> d.campoDaConfirmacao().setText("app-loja-web"));
+        assertTrue(ed(() -> d.botaoEncerrar().isEnabled()) && ed(() -> d.botaoReiniciar().isEnabled()));
+    }
+
+    @Test
+    void comUsuarioComumNaoHaCampoNemAviso() {
+        DialogoProcesso d = abrir(NODE, Acao.ENCERRAR);
+        assertFalse(ed(() -> d.campoDaConfirmacao().isVisible()));
+        assertEquals("", ed(d::textoDoAvisoDeAdministrador));
+        assertTrue(ed(() -> d.botaoEncerrar().isEnabled()));
+    }
+
+    @Test
+    void protegerOContainerMarcaEFechaSoParaContainerLiberado() {
+        ProcessoAlvo app = new ProcessoAlvo(3100, "node", "node", "app-loja-web", "app-loja");
+        DialogoProcesso d = abrir(app, Acao.ENCERRAR);
+        assertFalse(ed(() -> d.botaoProteger().isVisible()), "sem quem grave a marca, o botão nem aparece");
+        List<String> marcados = new ArrayList<>();
+        Visual.naEdt(() -> d.permitirProteger(() -> marcados.add("app-loja-web")));
+        assertTrue(ed(() -> d.botaoProteger().isVisible()));
+        Visual.naEdt(() -> d.botaoProteger().doClick(0));
+        assertEquals(List.of("app-loja-web"), marcados);
+        assertTrue(ed(d::fechou));
+        // processo comum: nada a proteger
+        chamadas.clear();
+        DialogoProcesso comum = abrir(NODE, Acao.ENCERRAR);
+        Visual.naEdt(() -> comum.permitirProteger(() -> { }));
+        assertFalse(ed(() -> comum.botaoProteger().isVisible()));
     }
 
     @Test

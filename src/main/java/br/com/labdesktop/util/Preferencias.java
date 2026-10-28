@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +33,8 @@ import org.slf4j.LoggerFactory;
  *                           por padrão)
  * @param abasDoServidor     a ordem e as abas escondidas da página do servidor (Ajustes, Navegação); vale para todos os servidores
  * @param abasDoProjeto      a ordem e as abas escondidas da página do projeto
+ * @param containersProtegidos por servidor (a chave é o identificador do servidor), os containers que o usuário marcou como "nunca encerrar nem reiniciar por este app";
+ *                           além dos que o app já protege pelo nome
  */
 public record Preferencias(
     Tema tema,
@@ -44,7 +47,8 @@ public record Preferencias(
     int escalaTexto,
     boolean donoExclusivo,
     OrdemDeAbas abasDoServidor,
-    OrdemDeAbas abasDoProjeto) {
+    OrdemDeAbas abasDoProjeto,
+    Map<String, Set<String>> containersProtegidos) {
 
     /** Os fatores que o menu oferece (iguais aos de {@code ui.tema.Fontes}: este pacote não importa a interface). */
     public static final int[] ESCALAS_DO_TEXTO = {100, 115, 130};
@@ -54,14 +58,14 @@ public record Preferencias(
     public Preferencias(Tema tema, Janela janela, int tamanhoFonteTerminal, boolean opcaoComoMeta, boolean copiarAoSelecionar,
                         Set<Aviso> avisosAtivos, int autoBloqueioMinutos) {
         this(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos, autoBloqueioMinutos, ESCALA_PADRAO,
-            false, OrdemDeAbas.PADRAO, OrdemDeAbas.PADRAO);
+            false, OrdemDeAbas.PADRAO, OrdemDeAbas.PADRAO, Map.of());
     }
 
     /** Sem o dono exclusivo: desligado. */
     public Preferencias(Tema tema, Janela janela, int tamanhoFonteTerminal, boolean opcaoComoMeta, boolean copiarAoSelecionar,
                         Set<Aviso> avisosAtivos, int autoBloqueioMinutos, int escalaTexto) {
         this(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos, autoBloqueioMinutos, escalaTexto,
-            false, OrdemDeAbas.PADRAO, OrdemDeAbas.PADRAO);
+            false, OrdemDeAbas.PADRAO, OrdemDeAbas.PADRAO, Map.of());
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(Preferencias.class);
@@ -124,6 +128,55 @@ public record Preferencias(
         abasDoProjeto = abasDoProjeto == null ? OrdemDeAbas.PADRAO : abasDoProjeto;
         avisosAtivos = avisosAtivos == null || avisosAtivos.isEmpty()
             ? Set.of() : Set.copyOf(EnumSet.copyOf(avisosAtivos));
+        containersProtegidos = limparProtegidos(containersProtegidos);
+    }
+
+    /** Nome de container que cabe na lista (a mesma regra do Docker); o que não cabe é descartado na leitura. */
+    private static final java.util.regex.Pattern CONTAINER_VALIDO = java.util.regex.Pattern.compile("^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$");
+    private static final int MAXIMO_DE_SERVIDORES = 200;
+    private static final int MAXIMO_DE_CONTAINERS = 500;
+
+    private static Map<String, Set<String>> limparProtegidos(Map<String, Set<String>> bruto) {
+        if (bruto == null || bruto.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Set<String>> r = new java.util.TreeMap<>();
+        for (Map.Entry<String, Set<String>> e : bruto.entrySet()) {
+            String chave = e.getKey() == null ? "" : e.getKey().strip();
+            if (chave.isEmpty() || chave.length() > 200 || r.size() >= MAXIMO_DE_SERVIDORES || e.getValue() == null) {
+                continue;
+            }
+            Set<String> nomes = new java.util.TreeSet<>();
+            for (String n : e.getValue()) {
+                if (n != null && CONTAINER_VALIDO.matcher(n.strip()).matches() && nomes.size() < MAXIMO_DE_CONTAINERS) {
+                    nomes.add(n.strip().toLowerCase(Locale.ROOT));
+                }
+            }
+            if (!nomes.isEmpty()) {
+                r.put(chave, Set.copyOf(nomes));
+            }
+        }
+        return Map.copyOf(r);
+    }
+
+    /** Os containers que o usuário marcou como protegidos neste servidor (minúsculas). */
+    public Set<String> containersProtegidosDe(String servidor) {
+        return servidor == null ? Set.of() : containersProtegidos.getOrDefault(servidor.strip(), Set.of());
+    }
+
+    /** Marca ou desmarca um container como protegido neste servidor. */
+    public Preferencias comContainerProtegido(String servidor, String container, boolean protegido) {
+        Map<String, Set<String>> novo = new java.util.TreeMap<>(containersProtegidos);
+        Set<String> nomes = new java.util.TreeSet<>(containersProtegidosDe(servidor));
+        String nome = container == null ? "" : container.strip().toLowerCase(Locale.ROOT);
+        if (protegido) {
+            nomes.add(nome);
+        } else {
+            nomes.remove(nome);
+        }
+        novo.put(servidor == null ? "" : servidor.strip(), nomes);
+        return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, novo);
     }
 
     /** Os padrões: tema do sistema, fonte 13, Option e cópia automática desligados, todos os avisos, sem auto-bloqueio. */
@@ -145,7 +198,7 @@ public record Preferencias(
 
     public Preferencias comEscalaTexto(int porcento) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos,
-            autoBloqueioMinutos, porcento, donoExclusivo, abasDoServidor, abasDoProjeto);
+            autoBloqueioMinutos, porcento, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
     }
 
     public boolean avisoAtivo(Aviso aviso) {
@@ -154,27 +207,27 @@ public record Preferencias(
 
     public Preferencias comTema(Tema novo) {
         return new Preferencias(novo, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
     }
 
     public Preferencias comJanela(Janela nova) {
         return new Preferencias(tema, nova, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
     }
 
     public Preferencias comTamanhoFonteTerminal(int pontos) {
         return new Preferencias(tema, janela, pontos, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
     }
 
     public Preferencias comOpcaoComoMeta(boolean ligada) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, ligada, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
     }
 
     public Preferencias comCopiarAoSelecionar(boolean ligada) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, ligada,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
     }
 
     public Preferencias comAviso(Aviso aviso, boolean ativo) {
@@ -185,27 +238,27 @@ public record Preferencias(
             novos.remove(aviso);
         }
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            novos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto);
+            novos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
     }
 
     public Preferencias comDonoExclusivo(boolean ligado) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, ligado, abasDoServidor, abasDoProjeto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, ligado, abasDoServidor, abasDoProjeto, containersProtegidos);
     }
 
     public Preferencias comAbasDoServidor(OrdemDeAbas nova) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, nova, abasDoProjeto);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, nova, abasDoProjeto, containersProtegidos);
     }
 
     public Preferencias comAbasDoProjeto(OrdemDeAbas nova) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, nova);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, nova, containersProtegidos);
     }
 
     public Preferencias comAutoBloqueioMinutos(int minutos) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, minutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto);
+            avisosAtivos, minutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -257,6 +310,41 @@ public record Preferencias(
         public Boolean donoExclusivo;
         public AbasDados abasServidor;
         public AbasDados abasProjeto;
+        public Map<String, List<String>> containersProtegidos;
+
+        /** Os containers protegidos, em texto simples: servidor -> nomes; qualquer valor estranho é descartado na leitura. */
+        static final class ProtegidosDados {
+            static Map<String, List<String>> de(Map<String, Set<String>> m) {
+                if (m.isEmpty()) {
+                    return null; // o padrão é o que falta no arquivo
+                }
+                Map<String, List<String>> r = new java.util.TreeMap<>();
+                m.forEach((k, v) -> r.put(k, v.stream().sorted().toList()));
+                return r;
+            }
+
+            static Map<String, Set<String>> para(Map<String, List<String>> m) {
+                Map<String, Set<String>> r = new java.util.LinkedHashMap<>();
+                if (m != null) {
+                    m.forEach((k, v) -> r.put(k, v == null ? Set.of() : new java.util.LinkedHashSet<>(v)));
+                }
+                return r;
+            }
+
+            static Map<String, List<String>> deJson(JsonNode v) {
+                if (v == null || !v.isObject()) {
+                    return null;
+                }
+                Map<String, List<String>> r = new java.util.LinkedHashMap<>();
+                v.properties().forEach(e -> {
+                    List<String> l = listaDeTexto(e.getValue());
+                    if (l != null) {
+                        r.put(e.getKey(), l);
+                    }
+                });
+                return r;
+            }
+        }
 
         /** A ordem e as abas escondidas de uma barra; listas de texto simples, para qualquer valor estranho ser descartado na leitura. */
         @JsonIgnoreProperties(ignoreUnknown = true)
@@ -303,6 +391,7 @@ public record Preferencias(
             d.donoExclusivo = booleano(n.get("donoExclusivo"));
             d.abasServidor = abasDeJson(n.get("abasServidor"));
             d.abasProjeto = abasDeJson(n.get("abasProjeto"));
+            d.containersProtegidos = ProtegidosDados.deJson(n.get("containersProtegidos"));
             return d;
         }
 
@@ -375,6 +464,7 @@ public record Preferencias(
             d.donoExclusivo = p.donoExclusivo;
             d.abasServidor = AbasDados.de(p.abasDoServidor);
             d.abasProjeto = AbasDados.de(p.abasDoProjeto);
+            d.containersProtegidos = ProtegidosDados.de(p.containersProtegidos);
             return d;
         }
 
@@ -410,7 +500,7 @@ public record Preferencias(
                 autoBloqueioMinutos == null ? base.autoBloqueioMinutos : autoBloqueioMinutos,
                 escalaTexto == null ? base.escalaTexto : escalaTexto,
                 donoExclusivo == null ? base.donoExclusivo : donoExclusivo,
-                AbasDados.para(abasServidor), AbasDados.para(abasProjeto));
+                AbasDados.para(abasServidor), AbasDados.para(abasProjeto), ProtegidosDados.para(containersProtegidos));
         }
     }
 }

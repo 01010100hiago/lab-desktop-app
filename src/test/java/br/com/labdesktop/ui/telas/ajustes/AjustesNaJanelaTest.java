@@ -229,6 +229,23 @@ class AjustesNaJanelaTest {
     // ---------------------------------------------------------------------------------------------
 
     @Test
+    void aSecaoSegurancaListaOsContainersMarcadosELiberaCadaUm() {
+        preferencias.atualizar(p -> p.comContainerProtegido(CofreFalso.ID, "app-loja-web", true).comContainerProtegido(CofreFalso.ID, "db", true));
+        abrir(Secao.SEGURANCA);
+        SecaoSeguranca sec = Visual.naEdt(() -> ajustes.seguranca());
+        List<String> linhas = Visual.naEdt(sec::linhas);
+        assertEquals(2, linhas.size(), linhas.toString());
+        assertTrue(linhas.get(0).endsWith("app-loja-web") && linhas.get(1).endsWith("db"), linhas.toString());
+        assertTrue(linhas.get(0).startsWith(painel.nomeDoServidor(CofreFalso.ID)), "mostra o nome do servidor, não o id: " + linhas);
+        Visual.naEdt(() -> sec.botoesDeLiberar().get(0).doClick(0));
+        assertEquals(java.util.Set.of("db"), preferencias.get().containersProtegidosDe(CofreFalso.ID), "Liberar tira só aquele");
+        assertEquals(1, Visual.naEdt(sec::linhas).size());
+        Visual.naEdt(() -> sec.botoesDeLiberar().get(0).doClick(0));
+        assertEquals(java.util.Set.of(), preferencias.get().containersProtegidosDe(CofreFalso.ID));
+        assertEquals(0, Visual.naEdt(sec::linhas).size());
+    }
+
+    @Test
     void aSecaoTerminalMostraEMudaAsPreferenciasQueJaExistiam() {
         abrir(Secao.TERMINAL);
         SecaoTerminal t = Visual.naEdt(() -> ajustes.terminal());

@@ -153,7 +153,7 @@ class ProcessosNaTelaTest {
             b.atualizarLocal(List.of(new LeitorDeProcessosLocais.Linha(new ProcessoAlvo(5000, "Safari", "ana", null, null), 12.0, null),
                 new LeitorDeProcessosLocais.Linha(new ProcessoAlvo(4000, "java", "ana", null, null), 3.0, null),
                 new LeitorDeProcessosLocais.Linha(new ProcessoAlvo(300, "WindowServer", "_windowserver", null, null), 1.0, null),
-                new LeitorDeProcessosLocais.Linha(new ProcessoAlvo(777, "zsh", "ana", null, null), null, null)));
+                new LeitorDeProcessosLocais.Linha(new ProcessoAlvo(777, "slack", "ana", null, null), null, null)));
         });
         assertEquals("Safari", Visual.naEdt(() -> b.linhas().get(0).get(0)));
         assertEquals("este computador", Visual.naEdt(() -> b.linhas().get(0).get(4)));

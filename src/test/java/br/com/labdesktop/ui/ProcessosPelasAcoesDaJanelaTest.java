@@ -1,6 +1,7 @@
 package br.com.labdesktop.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.labdesktop.Espera;
@@ -46,14 +47,13 @@ class ProcessosPelasAcoesDaJanelaTest {
     final AtomicInteger depois = new AtomicInteger();
     final List<String> chamadas = new ArrayList<>();
     AcoesDaInterface acoes;
+    volatile AmbienteDeProcessos ambienteDoControle = AmbienteDeProcessos.servidor("labuser", Set.of());
 
     /** Um controle que anota o que lhe pedem (a regra é a de verdade: o avaliador). */
     private final ControleDeProcessos controle = new ControleDeProcessos() {
-        final AmbienteDeProcessos ambiente = AmbienteDeProcessos.servidor("labuser", Set.of());
-
         @Override
         public AmbienteDeProcessos ambiente() {
-            return ambiente;
+            return ambienteDoControle;
         }
 
         @Override
@@ -159,5 +159,62 @@ class ProcessosPelasAcoesDaJanelaTest {
         ProcessoAlvo alvo = new ProcessoAlvo(3000, "node", "labuser", null, null);
         Visual.naEdt(() -> acoes.encerrarOuReiniciarProcesso(lab, alvo, "x", Acao.ENCERRAR, null));
         assertEquals("Forçar (SIGKILL)", dialogos.ultimoComo(DialogoProcesso.class).rotuloDoForcar());
+    }
+
+    @Test
+    void semPermissaoSoMostraUmComandoEPorIssoAbreMesmoComAsAcoesDesligadas() {
+        acoes.usarTrava(() -> false);
+        ProcessoAlvo outro = new ProcessoAlvo(3200, "postgres", "postgres", null, null);
+        Visual.naEdt(() -> acoes.encerrarOuReiniciarProcesso(lab, outro, "o próprio servidor", Acao.ENCERRAR, null));
+        DialogoProcesso d = dialogos.ultimoComo(DialogoProcesso.class);
+        Espera.ate(PRAZO, "aberto", () -> !ed(d::textoDoComando).isEmpty());
+        assertTrue(ed(d::textoDoComando).contains("sudo kill -TERM 3200"));
+        assertFalse(ed(() -> d.botaoEncerrar().isVisible()), "o app não age: só mostra o comando");
+        assertEquals(List.of("preparar:3200"), chamadas, "nada foi enviado");
+        // o que age continua atrás da trava
+        Visual.naEdt(() -> acoes.encerrarOuReiniciarProcesso(lab, new ProcessoAlvo(3000, "node", "labuser", null, null), "x", Acao.ENCERRAR, null));
+        assertEquals(1, dialogos.mostrados.size());
+    }
+
+    @Test
+    void asFrasesDaTravaNaoFalamDeOpcaoDePartida() {
+        acoes.usarTrava(() -> false);
+        Visual.naEdt(() -> acoes.encerrarOuReiniciarProcesso(lab, new ProcessoAlvo(3000, "node", "labuser", null, null), "x", Acao.ENCERRAR, null));
+        assertFalse(avisos.ultimo().texto().contains("-P") || avisos.ultimo().texto().contains("labdesktop"), avisos.ultimo().texto());
+    }
+
+    @Test
+    void comoRootODialogoPedeODigitarOnome() {
+        ambienteDoControle = AmbienteDeProcessos.servidor("root", Set.of());
+        Visual.naEdt(() -> acoes.encerrarOuReiniciarProcesso(lab, new ProcessoAlvo(3000, "node", "root", null, null), "x", Acao.ENCERRAR, null));
+        DialogoProcesso d = dialogos.ultimoComo(DialogoProcesso.class);
+        Espera.ate(PRAZO, "aberto", () -> !ed(d::fatos).isEmpty());
+        assertTrue(ed(() -> d.campoDaConfirmacao().isVisible()));
+        assertFalse(ed(() -> d.botaoEncerrar().isEnabled()));
+    }
+
+    @Test
+    void protegerOContainerGravaAMarcaNoServidorEOControleAPassaAVer() {
+        List<String> marcas = new ArrayList<>();
+        acoes.usarProtecaoDeContainers(new ProtecaoDeContainers() {
+            @Override
+            public Set<String> marcados(String servidorId) {
+                return Set.copyOf(marcas);
+            }
+
+            @Override
+            public void marcar(String servidorId, String container, boolean protegido) {
+                if (protegido) {
+                    marcas.add(container);
+                }
+            }
+        });
+        ProcessoAlvo alvo = new ProcessoAlvo(3100, "node", "node", "app-loja-web", "app-loja");
+        Visual.naEdt(() -> acoes.encerrarOuReiniciarProcesso(lab, alvo, "app-loja (app-loja-web)", Acao.ENCERRAR, null));
+        DialogoProcesso d = dialogos.ultimoComo(DialogoProcesso.class);
+        Espera.ate(PRAZO, "aberto", () -> ed(() -> d.botaoProteger().isVisible()));
+        Visual.naEdt(() -> d.botaoProteger().doClick(0));
+        assertEquals(List.of("app-loja-web"), marcas);
+        assertTrue(avisos.ultimo().texto().contains("protegido") && avisos.ultimo().texto().contains("Ajustes"), avisos.ultimo().texto());
     }
 }

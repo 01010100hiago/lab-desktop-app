@@ -162,6 +162,20 @@ class GitEProcessosPeloServidorLabTest {
     }
 
     @Test
+    void osContainersMarcadosPeloDonoEntramNaProtecaoELiberarTiraDeNovo() throws Exception {
+        java.util.concurrent.atomic.AtomicReference<java.util.Set<String>> marcados = new java.util.concurrent.atomic.AtomicReference<>(java.util.Set.of());
+        lab.definirProtegidosDoDono(marcados::get);
+        ProcessoAlvo alvo = new ProcessoAlvo(900, "node", "root", "app-loja-web", null);
+        assertFalse(lab.controleDeProcessos().avaliar(alvo).protegido());
+        marcados.set(java.util.Set.of("app-loja-web"));
+        ControleDeProcessos depois = lab.controleDeProcessos();
+        assertTrue(depois.avaliar(alvo).protegido(), "o controle é refeito quando o usuário marca");
+        assertTrue(depois.ambiente().containersProtegidos().contains("painel-lab"), "o agente continua protegido");
+        marcados.set(java.util.Set.of());
+        assertFalse(lab.controleDeProcessos().avaliar(alvo).protegido(), "liberar tira a marca");
+    }
+
+    @Test
     void encerrarUmProcessoDeVerdadePeloSshDoServidorLab() throws Exception {
         assumeTrue(ShellDeTeste.temShell());
         new ShellDeTeste(tmp, ssh); // os comandos chegam ao sh de verdade

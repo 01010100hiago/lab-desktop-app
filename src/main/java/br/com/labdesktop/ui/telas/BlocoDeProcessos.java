@@ -183,7 +183,7 @@ final class BlocoDeProcessos extends CaixaDoServidor {
             b.getAccessibleContext().setAccessibleName("Sem permissão para encerrar " + l.nome() + ": ver o comando");
             b.setName("sem-permissao");
             b.addActionListener(e -> acoes.abrir(l.alvo(), l.origem(), Acao.ENCERRAR, aoMudar));
-            ligarSeLiberadas(b);
+            botoes.add(b); // só mostra o comando que o usuário roda: a trava das ações de escrita não o desliga
             pecas.add(b);
         } else {
             boolean container = o.podeReiniciar();

@@ -144,6 +144,10 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private br.com.labdesktop.cloudflare.ServicoCloudflare cloudflare;
     /** Encerrar e reiniciar processos, montado na primeira vez que alguém o pede (sob "this"). */
     private br.com.labdesktop.processos.ControleDeProcessos controleDeProcessos;
+    /** Os containers que o usuário marcou como protegidos neste servidor (lidos das preferências a cada uso); o controle é refeito quando mudam. */
+    private volatile java.util.function.Supplier<java.util.Set<String>> protegidosDoDono = java.util.Set::of;
+    private java.util.Set<String> protegidosUsados = java.util.Set.of();
+    private boolean controleDeTeste;
     private br.com.labdesktop.processos.LeitorDeProcessosLocais leitorDeProcessosLocais;
 
     /** Para produção: tempos do SSH padrão, agendador do {@code Fundo} e entrega pela EDT. */
@@ -1159,7 +1163,12 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * montar); quem age é o diálogo de confirmação, depois do clique do usuário. O container do agente deste servidor entra na lista de proteção.
      */
     public synchronized br.com.labdesktop.processos.ControleDeProcessos controleDeProcessos() {
+        java.util.Set<String> doDono = java.util.Set.copyOf(protegidosDoDono.get());
+        if (!controleDeTeste && !doDono.equals(protegidosUsados)) {
+            controleDeProcessos = null; // o usuário marcou ou liberou um container: a lista de proteção mudou
+        }
         if (controleDeProcessos == null) {
+            protegidosUsados = doDono;
             if (local) {
                 br.com.labdesktop.processos.ProcessosDoSistema sistema = br.com.labdesktop.processos.ProcessosDoSistema.real();
                 boolean windows = locais.plataforma().sistema() == br.com.labdesktop.plataforma.SistemaOperacional.WINDOWS;
@@ -1169,7 +1178,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             } else {
                 ConfigServidor c = config();
                 controleDeProcessos = new br.com.labdesktop.processos.ControleRemoto(conexao::executar,
-                    br.com.labdesktop.processos.AmbienteDeProcessos.servidor(c.usuario(), java.util.Set.of(comoFalarComOAgente().container())));
+                    br.com.labdesktop.processos.AmbienteDeProcessos.servidor(c.usuario(), protegidos(doDono)));
             }
         }
         return controleDeProcessos;
@@ -1186,9 +1195,21 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         return new br.com.labdesktop.instalador.InstaladorDeGit(conexao::executar);
     }
 
+    private java.util.Set<String> protegidos(java.util.Set<String> doDono) {
+        java.util.Set<String> todos = new java.util.LinkedHashSet<>(doDono);
+        todos.add(comoFalarComOAgente().container());
+        return todos;
+    }
+
+    /** De onde vêm os containers que o usuário marcou como protegidos neste servidor (as preferências); a janela liga isto ao abrir. */
+    public void definirProtegidosDoDono(java.util.function.Supplier<java.util.Set<String>> fonte) {
+        this.protegidosDoDono = fonte == null ? java.util.Set::of : fonte;
+    }
+
     /** Só os testes de tela: troca o controle de processos (um de mentira, sem sinal de verdade). */
     public synchronized void definirControleDeProcessos(br.com.labdesktop.processos.ControleDeProcessos controle) {
         this.controleDeProcessos = controle;
+        this.controleDeTeste = controle != null;
     }
 
     /** A lista de processos DESTE computador (só em "Este computador": a do agente seria a da máquina virtual do Docker); guarda a leitura anterior para calcular a CPU. */
