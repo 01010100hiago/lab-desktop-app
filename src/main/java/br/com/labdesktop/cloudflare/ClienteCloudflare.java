@@ -101,7 +101,28 @@ public final class ClienteCloudflare implements ApiCloudflare {
     /** O endereço da API: o padrão da Cloudflare, ou o da propriedade de teste. */
     public static URI urlBase() {
         String p = System.getProperty(PROPRIEDADE_DA_URL);
-        return URI.create(p == null || p.isBlank() ? URL_PADRAO : p.strip());
+        if (p == null || p.isBlank()) {
+            return URI.create(URL_PADRAO);
+        }
+        // a propriedade existe só para os testes (uma Cloudflare falsa na própria máquina): o token iria para QUALQUER host que ela dissesse, então só vale se for loopback
+        try {
+            URI u = URI.create(p.strip());
+            String esq = u.getScheme() == null ? "" : u.getScheme().toLowerCase(java.util.Locale.ROOT);
+            if (ehLoopback(u) && (esq.equals("http") || esq.equals("https"))) {
+                return u;
+            }
+        } catch (IllegalArgumentException e) {
+            // endereço que nem é endereço: cai no padrão
+        }
+        org.slf4j.LoggerFactory.getLogger(ClienteCloudflare.class).warn("A propriedade {} só vale para um endereço da própria máquina (127.0.0.1, localhost ou ::1); usando a Cloudflare de verdade.",
+            PROPRIEDADE_DA_URL);
+        return URI.create(URL_PADRAO);
+    }
+
+    /** O endereço é da própria máquina (loopback)? */
+    static boolean ehLoopback(URI u) {
+        String host = u.getHost() == null ? "" : u.getHost();
+        return host.equals("127.0.0.1") || host.equals("localhost") || host.equals("[::1]") || host.equals("::1");
     }
 
     /**
@@ -111,7 +132,7 @@ public final class ClienteCloudflare implements ApiCloudflare {
     public ClienteCloudflare(URI base, TokenCloudflare token, Opcoes opcoes) {
         String esquema = base.getScheme() == null ? "" : base.getScheme().toLowerCase(java.util.Locale.ROOT);
         String host = base.getHost() == null ? "" : base.getHost();
-        boolean loopback = host.equals("127.0.0.1") || host.equals("localhost") || host.equals("[::1]") || host.equals("::1");
+        boolean loopback = ehLoopback(base);
         if (!(esquema.equals("https") || (esquema.equals("http") && loopback))) {
             throw new IllegalArgumentException("O token da Cloudflare só vai por HTTPS.");
         }

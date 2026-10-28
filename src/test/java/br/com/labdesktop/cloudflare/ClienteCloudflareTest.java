@@ -404,4 +404,63 @@ class ClienteCloudflareTest {
             assertEquals(Tipo.RESPOSTA_INVALIDA, erro(c::zonas).tipo());
         }
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // o endereço da API e os redirecionamentos: o token nunca vai para outro host
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void aPropriedadeDeTesteSoTrocaOEnderecoParaLoopback() {
+        String antes = System.getProperty(ClienteCloudflare.PROPRIEDADE_DA_URL);
+        try {
+            System.setProperty(ClienteCloudflare.PROPRIEDADE_DA_URL, "http://127.0.0.1:9999/client/v4");
+            assertEquals("127.0.0.1", ClienteCloudflare.urlBase().getHost());
+            System.setProperty(ClienteCloudflare.PROPRIEDADE_DA_URL, "http://localhost:9999/client/v4");
+            assertEquals("localhost", ClienteCloudflare.urlBase().getHost());
+            for (String ruim : List.of("https://api.malvado.example/client/v4", "http://192.0.2.9:80/x", "https://127.0.0.1.malvado.example/", "ftp://localhost/", "https://evil.example/@127.0.0.1", "não é endereço")) {
+                System.setProperty(ClienteCloudflare.PROPRIEDADE_DA_URL, ruim);
+                assertEquals("api.cloudflare.com", ClienteCloudflare.urlBase().getHost(), "a propriedade com " + ruim + " é ignorada: o token não vai para lá");
+            }
+            System.clearProperty(ClienteCloudflare.PROPRIEDADE_DA_URL);
+            assertEquals("api.cloudflare.com", ClienteCloudflare.urlBase().getHost());
+        } finally {
+            if (antes == null) {
+                System.clearProperty(ClienteCloudflare.PROPRIEDADE_DA_URL);
+            } else {
+                System.setProperty(ClienteCloudflare.PROPRIEDADE_DA_URL, antes);
+            }
+        }
+    }
+
+    @Test
+    void umRedirecionamentoNuncaLevaOTokenParaOutroHost() throws Exception {
+        java.util.concurrent.atomic.AtomicReference<String> recebidoNoSegundo = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicInteger pedidosNoSegundo = new java.util.concurrent.atomic.AtomicInteger();
+        com.sun.net.httpserver.HttpServer segundo = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), 0), 0);
+        segundo.createContext("/", x -> {
+            pedidosNoSegundo.incrementAndGet();
+            recebidoNoSegundo.set(x.getRequestHeaders().getFirst("Authorization"));
+            byte[] corpo = "{\"success\":true,\"result\":{\"status\":\"active\"}}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            x.getResponseHeaders().add("Content-Type", "application/json");
+            x.sendResponseHeaders(200, corpo.length);
+            x.getResponseBody().write(corpo);
+            x.close();
+        });
+        segundo.start();
+        com.sun.net.httpserver.HttpServer primeiro = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), 0), 0);
+        primeiro.createContext("/", x -> {
+            x.getResponseHeaders().add("Location", "http://127.0.0.1:" + segundo.getAddress().getPort() + "/roubado");
+            x.sendResponseHeaders(302, -1);
+            x.close();
+        });
+        primeiro.start();
+        try (ClienteCloudflare c = new ClienteCloudflare(URI.create("http://127.0.0.1:" + primeiro.getAddress().getPort() + "/client/v4"), token, ClienteCloudflare.Opcoes.rapida())) {
+            assertThrows(ErroCloudflare.class, c::verificarToken);
+        } finally {
+            primeiro.stop(0);
+            segundo.stop(0);
+        }
+        assertEquals(0, pedidosNoSegundo.get(), "o cliente não segue redirecionamento: o segundo host nem foi procurado");
+        assertEquals(null, recebidoNoSegundo.get(), "e o cabeçalho Authorization não chegou lá");
+    }
 }
