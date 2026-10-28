@@ -72,7 +72,11 @@ class PacoteDoAgenteTest {
         String painel = new String(a.get("painel.js").conteudo(), StandardCharsets.UTF_8);
         assertTrue(painel.contains("PAINEL_PERFIL"), "o painel do pacote entende o perfil");
         assertTrue(painel.contains("rotaPermitidaNoMonitor"));
-        assertTrue(painel.contains("servidor.listen(PORT, '127.0.0.1'"), "escuta só no loopback");
+        // o padrão (e o do servidor remoto) é o loopback; só o container de Este computador (porta publicada só em 127.0.0.1), muda isso
+        assertTrue(painel.contains("var ENDERECO_DE_ESCUTA = ESCUTA === 'todas' ? '0.0.0.0' : '127.0.0.1';"), "o padrão escuta só no loopback");
+        assertTrue(painel.contains("servidor.listen(PORT, ENDERECO_DE_ESCUTA"));
+        assertTrue(painel.contains("(process.env.PAINEL_ESCUTA || 'loopback')"), "sem a variável, loopback");
+        assertTrue(painel.contains("PAINEL_ESCUTA inválido"), "valor desconhecido não sobe");
         for (var e : a.values()) {
             assertEquals(0, e.data(), "pacote reproduzível: " + e.nome());
         }
