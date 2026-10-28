@@ -34,7 +34,9 @@ public final class ConteudoDosAvisos {
         /** "Este computador": abre "Preparar este computador" (que só confere e pergunta; nada se instala sem a confirmação). */
         PREPARAR_COMPUTADOR("Preparar este computador"),
         /** Abre o diálogo "Remover servidor" (que pede confirmação): o caminho para quem reinstalou o servidor. */
-        REMOVER_SERVIDOR("Remover servidor");
+        REMOVER_SERVIDOR("Remover servidor"),
+        /** "Chave recusada": abre "Instalar a chave com a senha" (o app só usa a senha uma vez, depois do clique, e prova a chave numa conexão nova). */
+        INSTALAR_CHAVE("Instalar a chave com a senha…");
 
         private final String rotulo;
 
@@ -79,6 +81,10 @@ public final class ConteudoDosAvisos {
     public static final String TEXTO_DA_CHAVE_QUE_MUDOU = "Se você reinstalou o servidor, use \"Remover servidor\" e "
         + "adicione-o de novo para o app conferir a impressão digital outra vez. Se não reinstalou, não conecte: pode ser "
         + "outra máquina.";
+
+    /** O que fazer quando o servidor recusa a chave do app, em palavras simples: o botão "Instalar a chave com a senha…" resolve se o usuário ainda tem senha. */
+    public static final String TEXTO_DA_CHAVE_RECUSADA = "Se você ainda tem a senha do usuário no servidor, clique em \"Instalar a chave com a senha…\": o app usa a senha uma vez, "
+        + "instala a chave e confere que ela entra. Sem senha, peça a quem administra o servidor para adicionar a chave ao acesso do usuário. Depois, tente de novo.";
 
     /**
      * O que o usuário lê, na faixa de aviso, no Resumo e no cartão do servidor, quando o SSH conecta e o agente não está instalado. É uma
@@ -177,9 +183,11 @@ public final class ConteudoDosAvisos {
                     List.of(Acao.TENTAR_AGORA));
             case ERRO_AUTENTICACAO -> tipo == Falha.Tipo.CHAVE_NAO_USADA
                 ? new AvisoDeConexao(Gravidade.PERIGO, "chave", "O app não conseguiu usar a chave em " + nome, falha.mensagem() + " Depois, tente de novo.", List.of(Acao.TENTAR_AGORA))
+                : tipo == Falha.Tipo.CHAVE_RECUSADA
+                ? new AvisoDeConexao(Gravidade.PERIGO, "chave", nome + " recusou a chave deste app", falha.mensagem() + " " + TEXTO_DA_CHAVE_RECUSADA,
+                    List.of(Acao.INSTALAR_CHAVE, Acao.TENTAR_AGORA))
                 : new AvisoDeConexao(Gravidade.PERIGO, "chave", nome + " recusou a chave deste app",
-                    (tipo == Falha.Tipo.CHAVE_RECUSADA ? falha.mensagem() + " " : "")
-                        + "Se a chave não estiver lá, peça a quem administra o servidor para adicioná-la ao acesso do usuário. Depois, tente de novo.",
+                    "Se a chave não estiver lá, peça a quem administra o servidor para adicioná-la ao acesso do usuário. Depois, tente de novo.",
                     List.of(Acao.TENTAR_AGORA));
             case ERRO_CHAVE_HOST -> tipo == Falha.Tipo.PIN_DIVERGENTE
                 ? new AvisoDeConexao(Gravidade.PERIGO, "erro", "A chave do servidor " + nome + " mudou",

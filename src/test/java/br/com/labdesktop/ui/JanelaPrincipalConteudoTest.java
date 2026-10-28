@@ -165,7 +165,7 @@ class JanelaPrincipalConteudoTest {
     void ositensDoMenuDeContextoDependemDoEstado() {
         ServidorLab lab = cenario.lab;
         List<Item> itens = MenuDoServidor.itensPara(lab.estado());
-        assertEquals(List.of(Item.ATUALIZAR, Item.CONFIGURAR_2FA, Item.EDITAR, Item.REMOVER), itens);
+        assertEquals(List.of(Item.ATUALIZAR, Item.CONFIGURAR_2FA, Item.EDITAR, Item.INSTALAR_CHAVE, Item.REMOVER), itens);
         List<String> rotulos = new ArrayList<>();
         Visual.naEdt(() -> {
             for (var c : MenuDoServidor.popup(lab, painel.acoes()).getComponents()) {
@@ -176,7 +176,7 @@ class JanelaPrincipalConteudoTest {
                 }
             }
         });
-        assertEquals(List.of("Atualizar agora", "Configurar 2FA…", "---", "Editar…", "Remover…"), rotulos,
+        assertEquals(List.of("Atualizar agora", "Configurar 2FA…", "---", "Editar…", "Instalar a chave com a senha…", "Remover…"), rotulos,
             "Editar e Remover ficam separados das ações do dia a dia");
     }
 }

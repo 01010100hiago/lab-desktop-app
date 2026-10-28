@@ -113,8 +113,14 @@ class ConteudoDosAvisosTest {
         assertTrue(reconectando.texto().contains("última leitura"), "nunca tela vazia: " + reconectando.texto());
         assertEquals(List.of(Acao.TENTAR_AGORA), reconectando.acoes());
 
+        assertEquals(List.of(Acao.INSTALAR_CHAVE, Acao.TENTAR_AGORA), ConteudoDosAvisos.deConexao(
+            estado(EstadoConexao.ERRO_AUTENTICACAO, new Falha(Falha.Tipo.CHAVE_RECUSADA, "recusada"), null), AGORA, FUSO).acoes(),
+            "chave recusada: o botão que resolve vem antes do Tentar agora");
         assertEquals(List.of(Acao.TENTAR_AGORA), ConteudoDosAvisos.deConexao(
-            estado(EstadoConexao.ERRO_AUTENTICACAO, new Falha(Falha.Tipo.CHAVE_RECUSADA, "recusada"), null), AGORA, FUSO).acoes());
+            estado(EstadoConexao.ERRO_AUTENTICACAO, new Falha(Falha.Tipo.CHAVE_NAO_USADA, "não usou"), null), AGORA, FUSO).acoes(),
+            "a chave que o app nem conseguiu usar não se conserta com a senha do servidor");
+        assertEquals(List.of(Acao.TENTAR_AGORA), ConteudoDosAvisos.deConexao(
+            estado(EstadoConexao.ERRO_AUTENTICACAO, new Falha(Falha.Tipo.CHAVE_ILEGIVEL, "ilegível"), null), AGORA, FUSO).acoes());
         assertEquals(List.of(Acao.CONFERIR_IMPRESSAO), ConteudoDosAvisos.deConexao(
             estado(EstadoConexao.ERRO_CHAVE_HOST, new Falha(Falha.Tipo.PIN_AUSENTE, "sem pin"), null), AGORA, FUSO).acoes());
         AvisoDeConexao mudou = ConteudoDosAvisos.deConexao(

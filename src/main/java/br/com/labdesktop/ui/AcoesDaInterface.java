@@ -45,6 +45,7 @@ import br.com.labdesktop.ui.dialogos.DialogoDoAgente;
 import br.com.labdesktop.ui.dialogos.DialogoEscolherServidor;
 import br.com.labdesktop.ui.dialogos.DialogoPrepararComputador;
 import br.com.labdesktop.ui.dialogos.DialogoEditarServidor;
+import br.com.labdesktop.ui.dialogos.DialogoInstalarChave;
 import br.com.labdesktop.ui.dialogos.DialogoRegistrarToken;
 import br.com.labdesktop.ui.dialogos.DialogoNovoProjeto;
 import br.com.labdesktop.ui.dialogos.DialogoRemoverServidor;
@@ -1020,7 +1021,30 @@ public final class AcoesDaInterface {
                 + "Preparar este computador, nas opções avançadas.");
             return;
         }
-        apresentador.mostrar(new DialogoEditarServidor(lab.config(), dados -> gerenciador.atualizar(lab.id(), dados), avisos));
+        // a seção "Acesso" mostra a chave que o app usa neste servidor; sem a chave no cofre ela some (o resto da edição segue igual)
+        DialogoEditarServidor.Acesso acesso = (assistente == null ? java.util.Optional.<AssistenteDeServidor.AcessoDoServidor>empty() : assistente.acessoDo(lab)).map(a -> new DialogoEditarServidor.Acesso(a.chave().nome(), a.chave().impressao(), a.chave().publica(),
+            () -> instalarChaveComSenha(lab))).orElse(null);
+        apresentador.mostrar(new DialogoEditarServidor(lab.config(), dados -> gerenciador.atualizar(lab.id(), dados), avisos, acesso, CopiadorDeTexto.doSistema()));
+    }
+
+    /**
+     * "Instalar a chave com a senha…": o conserto de um servidor SSH que já está cadastrado e que o lab recusa ("Chave recusada"): abre o diálogo que pede a senha
+     * do usuário UMA vez, confere o host contra a impressão digital guardada, instala a chave do cofre, prova numa conexão nova e manda reconectar. Só o clique do usuário chega
+     * aqui. Fora da trava {@code labdesktop.acoes}, como o assistente de adicionar servidor, a instalação do agente e a remoção do servidor: é gerenciar o acesso ao servidor,
+     * e o usuário que ficou sem entrar precisa disto no app que baixou.
+     */
+    public void instalarChaveComSenha(ServidorLab lab) {
+        if (lab.ehLocal()) {
+            avisos.info("Este computador não usa SSH nem chave: não há o que instalar.");
+            return;
+        }
+        var acesso = assistente == null ? java.util.Optional.<AssistenteDeServidor.AcessoDoServidor>empty() : assistente.acessoDo(lab);
+        if (acesso.isEmpty()) {
+            avisos.erro("A chave deste servidor não está mais no cofre. Remova o servidor e adicione-o de novo.");
+            return;
+        }
+        apresentador.mostrar(new DialogoInstalarChave(DialogoInstalarChave.Alvo.de(acesso.get().config(), acesso.get().chave()),
+            (senha, progresso) -> assistente.repararAChaveComSenha(lab, senha, progresso), CopiadorDeTexto.doSistema(), avisos));
     }
 
     /**
@@ -1111,6 +1135,7 @@ public final class AcoesDaInterface {
             case CONFERIR_IMPRESSAO -> conferirImpressao(lab);
             case REGISTRAR_TOKEN -> registrarToken(lab);
             case REMOVER_SERVIDOR -> remover(lab);
+            case INSTALAR_CHAVE -> instalarChaveComSenha(lab);
             case INSTALAR_AGENTE -> instalarAgente(lab);
             case PREPARAR_COMPUTADOR -> prepararEsteComputador(lab);
         }

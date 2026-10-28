@@ -252,6 +252,16 @@ public final class TelaServidor extends Painel {
     }
 
     /**
+     * O que o botão "Instalar a chave com a senha…" dos avisos faz (as abas de dados mostram o aviso "Chave recusada" com ele). O app só liga isto ao diálogo: nada é instalado
+     * sem o clique, a senha e a prova da chave.
+     */
+    public void aoInstalarChave(Runnable acao) {
+        for (PaginaDoServidor p : new PaginaDoServidor[] {resumo, seguranca, containers, processos, maquina}) {
+            p.aoInstalarChave(acao);
+        }
+    }
+
+    /**
      * Mostra uma aba (e marca o rótulo). Se havia uma página de projeto aberta, ela fecha: o usuário pediu outro assunto. Se essa página tem um terminal vivo (um shell que o usuário
      * deixou rodando), sair o fecharia sem aviso: antes disso o app PERGUNTA (vale para a barra de abas, os atalhos Cmd/Ctrl+1 a 9, os links da Ajuda e o "‹ Projetos").
      */

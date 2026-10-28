@@ -326,7 +326,9 @@ public final class TelaServidores extends Painel {
         }
 
         private void reconstruirAcoes(EstadoServidor e) {
-            List<Item> itens = MenuDoServidor.itensPara(e);
+            List<Item> todos = MenuDoServidor.itensPara(e);
+            // fora do estado "Chave recusada" o cartão não mostra "Instalar a chave com a senha…" (ele mora em Editar, no menu de contexto e no menu Servidor)
+            List<Item> itens = todos.indexOf(Item.INSTALAR_CHAVE) > todos.indexOf(Item.EDITAR) ? todos.stream().filter(i -> i != Item.INSTALAR_CHAVE).toList() : todos;
             if (itens.equals(itensAtuais)) {
                 return;
             }
@@ -341,7 +343,7 @@ public final class TelaServidores extends Painel {
                     depoisDaMola = true;
                     primeiro = true;
                 }
-                Botao b = i == Item.CONFERIR_IMPRESSAO || i == Item.REGISTRAR_TOKEN || i == Item.DIGITAR_CODIGO || i == Item.INSTALAR_AGENTE || i == Item.PREPARAR_COMPUTADOR
+                Botao b = i == Item.CONFERIR_IMPRESSAO || i == Item.REGISTRAR_TOKEN || i == Item.INSTALAR_CHAVE || i == Item.DIGITAR_CODIGO || i == Item.INSTALAR_AGENTE || i == Item.PREPARAR_COMPUTADOR
                     ? Botoes.miniPrimario(i.rotulo(), i.icone())
                     : i == Item.REMOVER || i == Item.REMOVER_AGENTE || i == Item.REMOVER_LABORATORIO ? Botoes.miniPerigo(i.rotulo(), i.icone())
                         : Botoes.mini(i.rotulo(), i.icone());

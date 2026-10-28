@@ -42,6 +42,11 @@ public final class MenuDoServidor {
         REMOVER_LABORATORIO("Remover laboratório local…", "lixeira"),
         /** Nome, endereço, porta e usuário do servidor. Sempre disponível. */
         EDITAR("Editar…", "config"),
+        /**
+         * "Chave recusada": o app usa a senha do usuário UMA vez para instalar a chave do cofre no servidor e prova que ela entra. Só servidor SSH (nunca "Este computador"),
+         * em qualquer estado da conexão (o usuário pode querer refazer a chave), e sem o agente: é só SSH.
+         */
+        INSTALAR_CHAVE("Instalar a chave com a senha…", "chave"),
         /** Tira o servidor do app (com as opções de apagar a chave e revogar o acesso). Sempre disponível. */
         REMOVER("Remover…", "lixeira");
 
@@ -106,9 +111,17 @@ public final class MenuDoServidor {
             itens.add(Item.ATUALIZAR_AGENTE);
             itens.add(Item.REMOVER_AGENTE);
         }
+        // Chave recusada: o botão que resolve vem junto das ações do dia a dia (na tela de servidores é o destaque do cartão); nos outros estados fica ao lado de Editar.
+        boolean chaveRecusada = c == EstadoConexao.ERRO_AUTENTICACAO && e.falha() != null && e.falha().tipo() == Falha.Tipo.CHAVE_RECUSADA;
+        if (chaveRecusada) {
+            itens.add(Item.INSTALAR_CHAVE);
+        }
         // Editar e remover valem em QUALQUER estado: é justamente quando a conexão está quebrada (endereço errado, host
         // trocado) que o usuário precisa deles.
         itens.add(Item.EDITAR);
+        if (!chaveRecusada && c != EstadoConexao.BLOQUEADO_COFRE) {
+            itens.add(Item.INSTALAR_CHAVE);
+        }
         itens.add(Item.REMOVER);
         return itens;
     }
@@ -128,6 +141,7 @@ public final class MenuDoServidor {
             case ATUALIZAR_AGENTE -> acoes.atualizarAgente(lab);
             case REMOVER_AGENTE -> acoes.removerAgente(lab);
             case EDITAR -> acoes.editar(lab);
+            case INSTALAR_CHAVE -> acoes.instalarChaveComSenha(lab);
             case REMOVER -> acoes.remover(lab);
         }
     }

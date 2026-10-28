@@ -19,9 +19,10 @@ import java.time.ZoneId;
  * @param texto     a explicação, em palavras simples
  * @param esmaecer  os dados na tela são antigos: mostrar apagados, com o aviso dizendo de quando são
  * @param oferecerInstalar o aviso leva o botão "Instalar agente" (o servidor não tem o agente; nunca se instala sozinho)
+ * @param oferecerInstalarChave o aviso leva o botão "Instalar a chave com a senha…" (o servidor SSH recusou a chave do app; o clique abre um diálogo, nada acontece sozinho)
  */
 public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, String titulo, String texto, boolean esmaecer,
-                              boolean oferecerInstalar) {
+                              boolean oferecerInstalar, boolean oferecerInstalarChave) {
 
     /** As situações. {@code AGENTE_NAO_INSTALADO}: o SSH conectou e a leitura por SSH disse que o agente não existe (uma pergunta, não um erro). */
     public enum Modo { CARREGANDO, NORMAL, SEM_CONEXAO_COM_DADOS, SEM_CONEXAO_SEM_DADOS, SEM_AGENTE_COM_DADOS, SEM_AGENTE_SEM_DADOS,
@@ -35,8 +36,12 @@ public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, Stri
         }
     }
 
+    public SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, String titulo, String texto, boolean esmaecer, boolean oferecerInstalar) {
+        this(modo, gravidade, icone, titulo, texto, esmaecer, oferecerInstalar, false);
+    }
+
     public SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, String titulo, String texto, boolean esmaecer) {
-        this(modo, gravidade, icone, titulo, texto, esmaecer, false);
+        this(modo, gravidade, icone, titulo, texto, esmaecer, false, false);
     }
 
     private static final SituacaoDaVisao NORMAL = new SituacaoDaVisao(Modo.NORMAL, Gravidade.NEUTRO, null, "", "", false);
@@ -104,12 +109,13 @@ public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, Stri
         }
         var aviso = ConteudoDosAvisos.deConexao(estado, agora, fuso);
         String causa = aviso == null ? "Conectando ao servidor…" : aviso.titulo() + ". " + aviso.texto();
+        boolean instalarChave = aviso != null && aviso.acoes().contains(ConteudoDosAvisos.Acao.INSTALAR_CHAVE);
         if (temDados) {
             return new SituacaoDaVisao(Modo.SEM_CONEXAO_COM_DADOS, Gravidade.ATENCAO, "rede",
                 "Sem conexão com o servidor: mostrando os últimos dados de " + (hora == null ? "antes" : hora),
-                causa, true);
+                causa, true, false, instalarChave);
         }
         return new SituacaoDaVisao(Modo.SEM_CONEXAO_SEM_DADOS, Gravidade.ATENCAO, "rede",
-            "Sem conexão com o servidor", causa + " Assim que a conexão voltar, as informações aparecem aqui.", false);
+            "Sem conexão com o servidor", causa + " Assim que a conexão voltar, as informações aparecem aqui.", false, false, instalarChave);
     }
 }

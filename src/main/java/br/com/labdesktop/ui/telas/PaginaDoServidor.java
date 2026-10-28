@@ -335,6 +335,15 @@ public abstract class PaginaDoServidor extends Painel {
         redesenhar();
     }
 
+    /**
+     * O que o botão "Instalar a chave com a senha…" dos avisos faz (abre o diálogo; nada é instalado sem o clique, a senha e a prova da chave). Sem isto o aviso não leva o botão.
+     */
+    public final void aoInstalarChave(Runnable acao) {
+        faixaDeDados.definirAoInstalarChave(acao);
+        semDados.definirAoInstalarChave(acao);
+        redesenhar();
+    }
+
     /** Troca o relógio e o fuso (os testes fixam a hora para o "há 4 d" não variar). */
     final void relogio(Supplier<Instant> novo, ZoneId novoFuso) {
         this.relogio = novo;
@@ -502,7 +511,9 @@ public abstract class PaginaDoServidor extends Painel {
         private final Rotulo titulo = new Rotulo().negrito().tamanho(13f).truncavel();
         private final TextoCorrido texto = new TextoCorrido("", 600).tamanho(12.5f).corDoToken(Tokens.TEXTO2);
         private final Botao instalar = Botoes.miniPrimario("Instalar agente", "servidor");
+        private final Botao instalarChave = Botoes.miniPrimario(br.com.labdesktop.ui.ConteudoDosAvisos.Acao.INSTALAR_CHAVE.rotulo(), "chave");
         private Runnable aoInstalar;
+        private Runnable aoInstalarChave;
 
         private final JPanel linhaDoTitulo = new Painel(new BorderLayout(10, 0));
 
@@ -511,13 +522,19 @@ public abstract class PaginaDoServidor extends Painel {
             setBorder(javax.swing.BorderFactory.createEmptyBorder(9, 14, 9, 14));
             // o botão mora na linha do título (à direita): o aviso "agente não instalado" ocupa UMA linha e deixa a altura para o Registro (o Resumo cabe em 1100 x 700)
             linhaDoTitulo.add(titulo, BorderLayout.CENTER);
-            linhaDoTitulo.add(instalar, BorderLayout.EAST);
+            linhaDoTitulo.add(Caixa.linha(8, instalarChave, instalar), BorderLayout.EAST);
             add(linhaDoTitulo, BorderLayout.NORTH);
             add(texto, BorderLayout.CENTER);
             instalar.setVisible(false);
             instalar.addActionListener(e -> {
                 if (aoInstalar != null) {
                     aoInstalar.run();
+                }
+            });
+            instalarChave.setVisible(false);
+            instalarChave.addActionListener(e -> {
+                if (aoInstalarChave != null) {
+                    aoInstalarChave.run();
                 }
             });
             setVisible(false);
@@ -529,12 +546,22 @@ public abstract class PaginaDoServidor extends Painel {
             this.aoInstalar = acao;
         }
 
+        /** O que o botão "Instalar a chave com a senha…" faz (a tela que a usa). */
+        public void definirAoInstalarChave(Runnable acao) {
+            this.aoInstalarChave = acao;
+        }
+
         public Botao botaoInstalar() {
             return instalar;
         }
 
+        public Botao botaoInstalarChave() {
+            return instalarChave;
+        }
+
         public void mostrar(SituacaoDaVisao s) {
             setVisible(s.temAviso());
+            instalarChave.setVisible(s.temAviso() && s.oferecerInstalarChave() && aoInstalarChave != null);
             instalar.setText(s.modo() == SituacaoDaVisao.Modo.LOCAL_A_PREPARAR ? "Preparar este computador" : "Instalar agente");
             instalar.setVisible(s.temAviso() && s.oferecerInstalar() && aoInstalar != null);
             if (!s.temAviso()) {
@@ -576,7 +603,9 @@ public abstract class PaginaDoServidor extends Painel {
         private final TextoCorrido texto = new TextoCorrido("", 520).corDoToken(Tokens.TEXTO2);
         private final Botao tentar;
         private final Botao instalar = Botoes.primario("Instalar agente", "servidor");
+        private final Botao instalarChave = Botoes.primario(br.com.labdesktop.ui.ConteudoDosAvisos.Acao.INSTALAR_CHAVE.rotulo(), "chave");
         private Runnable aoInstalar;
+        private Runnable aoInstalarChave;
         private final String assunto;
 
         SemDados(Runnable aoTentar) {
@@ -599,7 +628,13 @@ public abstract class PaginaDoServidor extends Painel {
                     aoInstalar.run();
                 }
             });
-            add(Caixa.linha(8, instalar, tentar, Caixa.mola()), BorderLayout.SOUTH);
+            instalarChave.setVisible(false);
+            instalarChave.addActionListener(e -> {
+                if (aoInstalarChave != null) {
+                    aoInstalarChave.run();
+                }
+            });
+            add(Caixa.linha(8, instalar, instalarChave, tentar, Caixa.mola()), BorderLayout.SOUTH);
             setVisible(false);
             setName("sem-dados");
         }
@@ -608,11 +643,20 @@ public abstract class PaginaDoServidor extends Painel {
             this.aoInstalar = acao;
         }
 
+        void definirAoInstalarChave(Runnable acao) {
+            this.aoInstalarChave = acao;
+        }
+
         Botao botaoInstalar() {
             return instalar;
         }
 
+        Botao botaoInstalarChave() {
+            return instalarChave;
+        }
+
         void mostrar(String erro, SituacaoDaVisao situacao) {
+            instalarChave.setVisible(erro == null && situacao != null && situacao.oferecerInstalarChave() && aoInstalarChave != null);
             instalar.setText(situacao != null && situacao.modo() == SituacaoDaVisao.Modo.LOCAL_A_PREPARAR ? "Preparar este computador" : "Instalar agente");
             instalar.setVisible(erro == null && situacao != null && situacao.oferecerInstalar() && aoInstalar != null);
             tentar.setVisible(!instalar.isVisible());

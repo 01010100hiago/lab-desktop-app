@@ -179,7 +179,7 @@ class EdicaoERemocaoPelaInterfaceTest {
         for (EstadoConexao conexao : EstadoConexao.values()) {
             EstadoServidor e = new EstadoServidor("s1", "lab", conexao, null, 0, null, null, 0, Estado2fa.DESLIGADO, "mac", null, null);
             List<Item> itens = MenuDoServidor.itensPara(e);
-            assertEquals(List.of(Item.EDITAR, Item.REMOVER), itens.subList(itens.size() - 2, itens.size()),
+            assertTrue(itens.containsAll(List.of(Item.EDITAR, Item.REMOVER)) && itens.get(itens.size() - 1) == Item.REMOVER,
                 "Editar e Remover valem em " + conexao + ": é quando a conexão está quebrada que o usuário mais precisa deles");
         }
         assertEquals("Editar…", Item.EDITAR.rotulo());
