@@ -102,16 +102,37 @@ public final class RegraDaApi {
         nova.put("hostname", h);
         nova.put("service", servico);
         int ultima = ingress.size() - 1;
+        boolean temFinal = !ingress.isEmpty() && ehFinal(ingress.get(ultima));
+        // a Cloudflare usa a PRIMEIRA regra que casa: uma curinga (*.dominio) ou só de caminho do usuário antes da final pegaria o endereço novo. A nova entra antes dela.
+        int sombra = -1;
+        for (int i = 0; i < (temFinal ? ultima : ingress.size()); i++) {
+            JsonNode r = ingress.get(i);
+            String rh = r.path("hostname").asText("");
+            if (rh.isEmpty() || (rh.contains("*") && ConfigYmlDoCloudflared.casaComCuringa(rh, h))) {
+                sombra = i;
+                break;
+            }
+        }
         if (ingress.isEmpty()) {
             ingress.add(nova);
             ingress.add(Json.mapper().createObjectNode().put("service", "http_status:404"));
             avisos.add("O túnel não tinha regras: o app acrescentou a regra e a regra final (http_status:404), que a Cloudflare exige.");
-        } else if (ehFinal(ingress.get(ultima))) {
-            ingress.insert(ultima, nova);
         } else {
-            ingress.add(nova);
-            ingress.add(Json.mapper().createObjectNode().put("service", "http_status:404"));
-            avisos.add("O túnel não tinha a regra final (http_status:404), que a Cloudflare exige: o app a acrescentou depois da nova regra.");
+            if (!temFinal) {
+                ingress.add(Json.mapper().createObjectNode().put("service", "http_status:404"));
+                avisos.add("O túnel não tinha a regra final (http_status:404), que a Cloudflare exige: o app a acrescentou depois da nova regra.");
+            }
+            if (sombra >= 0) {
+                JsonNode r = ingress.get(sombra);
+                ingress.insert(sombra, nova);
+                avisos.add("Atenção: " + (r.path("hostname").asText("").isEmpty() ? "uma regra só de caminho (sem endereço) do túnel" : "a regra curinga " + r.path("hostname").asText(""))
+                    + " (" + r.path("service").asText("sem serviço") + ") vem antes e também casaria com " + h + ", e a Cloudflare usa a primeira regra que casa. Por isso a regra nova "
+                    + "entra ANTES dela; as outras continuam como estavam.");
+            } else if (temFinal) {
+                ingress.insert(ultima, nova);
+            } else {
+                ingress.insert(ingress.size() - 1, nova);
+            }
         }
         return new Edicao(config, false, avisos);
     }

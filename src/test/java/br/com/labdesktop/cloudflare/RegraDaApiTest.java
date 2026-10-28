@@ -37,6 +37,23 @@ class RegraDaApiTest {
     }
 
     @Test
+    void curingaOuRegraSoDeCaminhoDoDonoAntesDaFinalFazAregraNovaEntrarAntesComAviso() throws Exception {
+        ObjectNode curinga = json("{\"ingress\":[{\"hostname\":\"a.example.com\",\"service\":\"http://a:1\"},{\"hostname\":\"*.example.com\",\"service\":\"http://proxy:80\"},"
+            + "{\"service\":\"http_status:404\"}]}");
+        RegraDaApi.Edicao e = RegraDaApi.acrescentar(curinga, "lab-demo.example.com", "http://demo:3000");
+        assertEquals(List.of("a.example.com -> http://a:1", "lab-demo.example.com -> http://demo:3000", "*.example.com -> http://proxy:80", "(todo o resto) -> http_status:404"),
+            RegraDaApi.linhas(e.config()));
+        assertEquals(1, e.avisos().size());
+        assertTrue(e.avisos().get(0).contains("*.example.com") && e.avisos().get(0).contains("ANTES"), e.avisos().get(0));
+        ObjectNode caminho = json("{\"ingress\":[{\"path\":\"/api/.*\",\"service\":\"http://api:1\"},{\"service\":\"http_status:404\"}]}");
+        RegraDaApi.Edicao c = RegraDaApi.acrescentar(caminho, "lab-demo.example.com", "http://demo:3000");
+        assertEquals("lab-demo.example.com", c.config().path("ingress").get(0).path("hostname").asText());
+        assertEquals(1, c.avisos().size());
+        ObjectNode deOutro = json("{\"ingress\":[{\"hostname\":\"*.outro.com.br\",\"service\":\"http://x:1\"},{\"service\":\"http_status:404\"}]}");
+        assertEquals(List.of(), RegraDaApi.acrescentar(deOutro, "lab-demo.example.com", "http://demo:3000").avisos());
+    }
+
+    @Test
     void semAFinalOuSemRegrasOuSemIngressOAppAcrescentaAFinalComAviso() throws Exception {
         RegraDaApi.Edicao sem = RegraDaApi.acrescentar(json("{\"ingress\":[{\"hostname\":\"a.example.com\",\"service\":\"http://a:1\"}]}"), "b.example.com", "http://b:2");
         assertEquals(List.of("a.example.com -> http://a:1", "b.example.com -> http://b:2", "(todo o resto) -> http_status:404"), RegraDaApi.linhas(sem.config()));

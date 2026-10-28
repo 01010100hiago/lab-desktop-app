@@ -46,6 +46,65 @@ class ConfigYmlDoCloudflaredTest {
     }
 
     @Test
+    void regraCuringaDoDonoAntesDaFinalFazARegraNovaEntrarAntesDelaComAviso() throws Problema {
+        String comCuringa = "tunnel: " + UUID + "\ningress:\n"
+            + "  - hostname: meu-painel.example.com\n    service: http://app:3000\n"
+            + "  # o resto do dominio vai para o proxy\n"
+            + "  - hostname: \"*.example.com\"\n    service: http://proxy:80\n"
+            + "  - service: http_status:404\n";
+        ConfigYmlDoCloudflared.Edicao e = com(comCuringa);
+        assertEquals("tunnel: " + UUID + "\ningress:\n"
+            + "  - hostname: meu-painel.example.com\n    service: http://app:3000\n"
+            + "  # lab-desktop: lab-demo.example.com (projeto demo)\n"
+            + "  - hostname: lab-demo.example.com\n    service: http://demo-web:3000\n"
+            + "  # o resto do dominio vai para o proxy\n"
+            + "  - hostname: \"*.example.com\"\n    service: http://proxy:80\n"
+            + "  - service: http_status:404\n", e.texto(), "entra antes da curinga (e do comentário dela), nada mais muda");
+        assertEquals(1, e.avisos().size());
+        assertTrue(e.avisos().get(0).contains("*.example.com") && e.avisos().get(0).contains("ANTES"), e.avisos().get(0));
+        // a regra nova, depois de gravada, é a primeira que casa com o endereço dela
+        ConfigYmlDoCloudflared.Analise a = ConfigYmlDoCloudflared.analisar(e.texto());
+        assertEquals("lab-demo.example.com", a.regras().stream().filter(r -> r.hostname().equals("lab-demo.example.com") || r.hostname().startsWith("*")).findFirst().orElseThrow().hostname());
+    }
+
+    @Test
+    void curingaDeOutroDominioOuQueNaoCasaNaoMudaOLugarDaRegra() throws Problema {
+        String deOutro = DO_DONO.replace("  # tudo o mais\n", "  - hostname: \"*.outro.com.br\"\n    service: http://x:1\n  # tudo o mais\n");
+        ConfigYmlDoCloudflared.Edicao e = com(deOutro);
+        assertEquals(List.of(), e.avisos());
+        assertTrue(e.texto().indexOf("lab-demo.example.com") > e.texto().indexOf("*.outro.com.br"), "entra antes da final, depois da curinga que não casa");
+    }
+
+    @Test
+    void regraSoDeCaminhoAntesDaFinalTambemFazARegraNovaEntrarAntes() throws Problema {
+        String comCaminho = "ingress:\n  - path: /api/.*\n    service: http://api:1\n  - service: http_status:404\n";
+        ConfigYmlDoCloudflared.Edicao e = com(comCaminho);
+        assertTrue(e.texto().indexOf("lab-demo.example.com") < e.texto().indexOf("path: /api"), e.texto());
+        assertEquals(1, e.avisos().size());
+        assertTrue(e.avisos().get(0).contains("só de caminho"), e.avisos().get(0));
+    }
+
+    @Test
+    void semAFinalEComCuringaAFinalEAnovaEntramEACuringaFicaDepois() throws Problema {
+        String semFinal = "ingress:\n  - hostname: \"*.example.com\"\n    service: http://proxy:80\n";
+        ConfigYmlDoCloudflared.Edicao e = com(semFinal);
+        String t = e.texto();
+        assertTrue(t.indexOf("lab-demo.example.com") < t.indexOf("*.example.com"), t);
+        assertTrue(t.trim().endsWith("- service: http_status:404"), t);
+        assertEquals(2, e.avisos().size(), e.avisos().toString());
+    }
+
+    @Test
+    void casaComCuringaValoresConhecidos() {
+        assertTrue(ConfigYmlDoCloudflared.casaComCuringa("*.example.com", "lab-demo.example.com"));
+        assertTrue(ConfigYmlDoCloudflared.casaComCuringa("*.example.com", "a.b.example.com"));
+        assertFalse(ConfigYmlDoCloudflared.casaComCuringa("*.example.com", "example.com"));
+        assertFalse(ConfigYmlDoCloudflared.casaComCuringa("*.outro.com.br", "lab-demo.example.com"));
+        assertTrue(ConfigYmlDoCloudflared.casaComCuringa("lab-*.example.com", "lab-demo.example.com"));
+        assertFalse(ConfigYmlDoCloudflared.casaComCuringa("lab-*.example.com", "x-demo.example.com"));
+    }
+
+    @Test
     void oRestoDoArquivoNaoMudaUmByte() throws Problema {
         String novo = com(DO_DONO).texto();
         // só linhas a mais: tirando as três novas, volta exatamente ao que era

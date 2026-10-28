@@ -347,20 +347,77 @@ public final class ConfigYmlDoCloudflared {
             novas.addAll(bloco[0] + 1, tudo);
             avisos.add("A seção ingress estava sem regras: o app acrescentou a regra e a regra final (http_status:404), que o cloudflared exige.");
         } else if (temFinal) {
-            int p = regras.get(regras.size() - 1).inicio();
-            // um comentário no recuo das regras logo acima da regra final pertence a ela: a nova entra antes dele
-            while (p - 1 > bloco[0] && comentario(t.linhas().get(p - 1)) && recuo(t.linhas().get(p - 1)) == itens.recuoDosTracos() && !MARCA.matcher(t.linhas().get(p - 1)).matches()) {
-                p--;
+            Regra sombra = primeiraQueSombreia(regras, true, h);
+            int p;
+            if (sombra != null) {
+                // o cloudflared usa a PRIMEIRA regra que casa: uma curinga (*.dominio) ou só de caminho do usuário, antes da final, pegaria o endereço novo e a regra nova nunca
+                // seria usada (o teste do endereço até daria "no ar", com o serviço errado). A nova entra ANTES dela: só o endereço novo muda de destino.
+                p = sombra.inicio();
+                while (p - 1 > bloco[0] && comentario(t.linhas().get(p - 1)) && recuo(t.linhas().get(p - 1)) == itens.recuoDosTracos()) {
+                    p--;
+                }
+                avisos.add(avisoDaSombra(sombra, h));
+            } else {
+                p = regras.get(regras.size() - 1).inicio();
+                // um comentário no recuo das regras logo acima da regra final pertence a ela: a nova entra antes dele
+                while (p - 1 > bloco[0] && comentario(t.linhas().get(p - 1)) && recuo(t.linhas().get(p - 1)) == itens.recuoDosTracos() && !MARCA.matcher(t.linhas().get(p - 1)).matches()) {
+                    p--;
+                }
             }
             novas.addAll(p, bloco3);
         } else {
             Regra ultima = regras.get(regras.size() - 1);
             List<String> tudo = new ArrayList<>(bloco3);
             tudo.add(" ".repeat(itens.recuoDosTracos()) + "- service: http_status:404");
-            novas.addAll(ultima.fim(), tudo);
+            Regra sombra = primeiraQueSombreia(regras, false, h);
+            if (sombra == null) {
+                novas.addAll(ultima.fim(), tudo);
+            } else {
+                novas.addAll(ultima.fim(), List.of(" ".repeat(itens.recuoDosTracos()) + "- service: http_status:404")); // a final, no fim (índice maior primeiro)
+                int p = sombra.inicio();
+                while (p - 1 > bloco[0] && comentario(t.linhas().get(p - 1)) && recuo(t.linhas().get(p - 1)) == itens.recuoDosTracos()) {
+                    p--;
+                }
+                novas.addAll(p, bloco3);
+                avisos.add(avisoDaSombra(sombra, h));
+            }
             avisos.add("O config.yml não tinha a regra final (http_status:404), que o cloudflared exige: o app a acrescentou depois da nova regra.");
         }
         return new Edicao(new Texto(novas, t.crlf(), t.terminaEmEol() || t.linhas().isEmpty()).montar(novas), false, avisos);
+    }
+
+    /**
+     * A primeira regra (de cima para baixo, sem contar a final) que o cloudflared acharia ANTES da nova para este endereço: a de hostname curinga que casa
+     * ({@code *.dominio}) ou a só de caminho (sem hostname, que não é a última). {@code null} se nenhuma.
+     */
+    private static Regra primeiraQueSombreia(List<Regra> regras, boolean ultimaEhFinal, String hostname) {
+        int limite = ultimaEhFinal ? regras.size() - 1 : regras.size();
+        for (int i = 0; i < limite; i++) {
+            Regra r = regras.get(i);
+            if (r.hostname().isEmpty() || (r.hostname().contains("*") && casaComCuringa(r.hostname(), hostname))) {
+                return r;
+            }
+        }
+        return null;
+    }
+
+    /** O curinga do cloudflared, do jeito conservador: cada {@code *} vale "qualquer coisa" (pecar por achar que casa só faz o app inserir mais cedo, o que é inofensivo). */
+    static boolean casaComCuringa(String padrao, String hostname) {
+        String[] partes = padrao.toLowerCase(Locale.ROOT).split("\\*", -1);
+        StringBuilder re = new StringBuilder();
+        for (int i = 0; i < partes.length; i++) {
+            if (i > 0) {
+                re.append(".*");
+            }
+            re.append(Pattern.quote(partes[i]));
+        }
+        return hostname.toLowerCase(Locale.ROOT).matches(re.toString());
+    }
+
+    private static String avisoDaSombra(Regra sombra, String hostname) {
+        String quem = sombra.hostname().isEmpty() ? "uma regra só de caminho (sem endereço) do seu config.yml" : "a regra curinga " + sombra.hostname() + " do seu config.yml";
+        return "Atenção: " + quem + " (" + (sombra.servico().isEmpty() ? "sem serviço" : sombra.servico()) + ") vem antes e também casaria com " + hostname
+            + ", e o cloudflared usa a primeira regra que casa. Por isso a regra nova entra ANTES dela; as outras continuam como estavam.";
     }
 
     private static List<String> regra(int recuoDoTraco, String hostname, String servico, String observacao) {
