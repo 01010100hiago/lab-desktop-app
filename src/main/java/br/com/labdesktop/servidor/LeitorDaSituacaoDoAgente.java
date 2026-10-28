@@ -16,15 +16,22 @@ final class LeitorDaSituacaoDoAgente {
 
     private final ProvisionadorRemoto.Executor executor;
     private final String container;
+    private final String docker;
 
     LeitorDaSituacaoDoAgente(ProvisionadorRemoto.Executor executor, String container) {
+        this(executor, container, ComandosRemotos.DOCKER_DIRETO);
+    }
+
+    /** @param docker {@code docker} ou {@code sudo -n docker}: como o app fala com o Docker deste servidor */
+    LeitorDaSituacaoDoAgente(ProvisionadorRemoto.Executor executor, String container, String docker) {
         this.executor = executor;
         this.container = container;
+        this.docker = docker;
     }
 
     SituacaoDoAgente ler() throws InterruptedException {
         try {
-            String saida = executor.executar(ComandosRemotos.lerSituacaoDoAgente(container), new byte[0], PRAZO).stdout().strip();
+            String saida = executor.executar(ComandosRemotos.lerSituacaoDoAgente(container, docker), new byte[0], PRAZO).stdout().strip();
             return interpretar(saida);
         } catch (IOException e) {
             return SituacaoDoAgente.DESCONHECIDA; // sem sessão agora: o próximo SSH_OK_SEM_AGENTE pergunta de novo

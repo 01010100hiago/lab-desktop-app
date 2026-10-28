@@ -9,6 +9,7 @@ import br.com.labdesktop.api.PedidoDeCodigo2fa;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.VersaoAgente;
 import br.com.labdesktop.cofre.AcessoAoCofre;
+import br.com.labdesktop.cofre.AgenteInstalado;
 import br.com.labdesktop.cofre.CofreBloqueadoException;
 import br.com.labdesktop.cofre.CofreException;
 import br.com.labdesktop.cofre.ConfigServidor;
@@ -84,7 +85,6 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private final ConexaoSsh conexao;
     private final Sondador sondador;
     private final AcoesDoServidor acoes;
-    private final ProvisionadorRemoto provisionador;
     /** A leitura de segurança (SSH exec, somente leitura) deste servidor, com o tópico que a entrega às telas. */
     private final Topico<ResumoDeSeguranca> topicoDeSeguranca;
     private final OuvinteDeTopico<LimitesConta> ouvinteDeLimites;
@@ -134,7 +134,6 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         this.conexao = new ConexaoSsh(servidorId, cofre, cfgSsh, this::sondar, agendador,
             new PoliticaDeBackoff(cfgSsh.escalaBackoff(), Math::random));
         this.acoes = new AcoesDoServidor(this::apiAtual, sondador);
-        this.provisionador = new ProvisionadorRemoto(conexao::executar);
         this.topicoDeSeguranca = Topico.seguranca(new LeitorDeSegurancaPorSsh(conexao::executar, Instant::now));
         this.desinscreverConexao = conexao.observar(this::aoMudarConexao);
         this.ouvinteDeLimites = new OuvinteDeTopico<LimitesConta>() {
@@ -470,12 +469,25 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * em vez de "agente fora". Só lê: instalar é sempre do usuário, com clique e confirmação.
      */
     private void diagnosticarOAgente() {
+        diagnosticarOAgente(true);
+    }
+
+    /**
+     * @param repetirSeFaltou a leitura pode terminar ANTES de a conexão virar {@code SSH_OK_SEM_AGENTE} (a sonda que falhou dispara a leitura
+     *                        ainda em {@code CONECTADO}, e o resultado seria descartado): se ao fim o estado já é "sem agente" e a situação
+     *                        continua desconhecida, lê mais uma vez
+     */
+    private void diagnosticarOAgente(boolean repetirSeFaltou) {
         if (estado().situacaoDoAgente() != SituacaoDoAgente.DESCONHECIDA || !diagnosticando.compareAndSet(false, true)) {
             return;
         }
         trabalho.execute(() -> {
             try {
-                SituacaoDoAgente lida = new LeitorDaSituacaoDoAgente(conexao::executar, ParametrosDaInstalacao.CONTAINER_PADRAO).ler();
+                AgenteInstalado como = comoFalarComOAgente();
+                SituacaoDoAgente lida = new LeitorDaSituacaoDoAgente(conexao::executar, como.container(), como.docker()).ler();
+                if (lida == SituacaoDoAgente.NAO_INSTALADO) {
+                    esquecerComoFalarComOAgente(); // foi removido (ou nunca esteve): o que se lembrava dele não vale mais
+                }
                 atualizarEstado(e -> e.conexao() == br.com.labdesktop.ssh.EstadoConexao.CONECTADO
                     ? e : e.comSituacaoDoAgente(lida));
             } catch (InterruptedException e) {
@@ -484,6 +496,12 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
                 LOG.warn("Não consegui descobrir se o agente de {} está instalado: {}", id, Redator.redigir(e));
             } finally {
                 diagnosticando.set(false);
+            }
+            EstadoServidor agora = estado();
+            if (repetirSeFaltou && agora.conexao() == br.com.labdesktop.ssh.EstadoConexao.SSH_OK_SEM_AGENTE
+                && agora.situacaoDoAgente() == SituacaoDoAgente.DESCONHECIDA
+                && (agora.falha() == null || agora.falha().tipo() != br.com.labdesktop.ssh.Falha.Tipo.AGENTE_DESATUALIZADO)) {
+                diagnosticarOAgente(false);
             }
         });
     }
@@ -513,6 +531,52 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         }
     }
 
+    // =====================================================================================================
+    // Como falar com o agente (container e sudo), lembrado no cofre
+    // =====================================================================================================
+
+    /**
+     * O container e o comando do Docker do agente que este app instalou aqui (lembrados no cofre, ao lado do servidor); sem registro, o
+     * padrão: {@code docker exec -i painel-lab} (o agente do lab). É o que faz o token, o 2FA, a rotação e o diagnóstico falarem com o
+     * container certo e, com um usuário que só chega ao Docker por {@code sudo -n}, usarem o sudo (antes só a instalação o usava).
+     */
+    private AgenteInstalado comoFalarComOAgente() {
+        try {
+            return cofre.agenteInstalado(id).orElse(AGENTE_PADRAO);
+        } catch (CofreBloqueadoException e) {
+            return AGENTE_PADRAO;
+        }
+    }
+
+    private static final AgenteInstalado AGENTE_PADRAO = new AgenteInstalado(ParametrosDaInstalacao.CONTAINER_PADRAO, false);
+
+    private void lembrarComoFalarComOAgente(ParametrosDaInstalacao parametros, String docker) {
+        try {
+            cofre.gravarAgenteInstalado(id, new AgenteInstalado(parametros.container(), docker != null && docker.startsWith("sudo")));
+        } catch (CofreException e) {
+            LOG.warn("Não consegui guardar como falar com o agente de {}: {}", id, Redator.redigir(e));
+        } catch (CofreBloqueadoException | IllegalArgumentException e) {
+            // cofre fechado no meio, ou servidor que já saiu dele: sem problema
+        }
+    }
+
+    private void esquecerComoFalarComOAgente() {
+        try {
+            if (cofre.agenteInstalado(id).isPresent()) {
+                cofre.gravarAgenteInstalado(id, null);
+            }
+        } catch (CofreException e) {
+            LOG.warn("Não consegui apagar o registro do agente de {}: {}", id, Redator.redigir(e));
+        } catch (CofreBloqueadoException | IllegalArgumentException e) {
+            // sem problema
+        }
+    }
+
+    private ProvisionadorRemoto provisionadorAtual() {
+        AgenteInstalado como = comoFalarComOAgente();
+        return ProvisionadorRemoto.para(conexao::executar, como.container(), como.docker());
+    }
+
     private GanchosDaInstalacao ganchosDeInstalacao() {
         return new GanchosDaInstalacao() {
             @Override
@@ -536,6 +600,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
 
             @Override
             public boolean registrarToken(ParametrosDaInstalacao parametros, String docker) throws ErroProvisionamento, CofreException {
+                lembrarComoFalarComOAgente(parametros, docker); // o container subiu e responde: daqui em diante o app o chama pelo nome e do jeito que ele foi instalado
                 Sonda agora = sondar();
                 if (agora == Sonda.RESPONDE && !estado().semToken()) {
                     return false; // o token do app já vale neste agente (atualização: os dados e o token ficaram)
@@ -571,7 +636,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      */
     @Override
     public SegredoTotp iniciarConfiguracao2fa() throws ErroProvisionamento {
-        return provisionador.totpIniciar();
+        return provisionadorAtual().totpIniciar();
     }
 
     /**
@@ -582,7 +647,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      */
     @Override
     public Optional<Instant> confirmarConfiguracao2fa(String codigo) throws ErroProvisionamento {
-        Optional<Instant> ate = provisionador.totpConfirmar(codigo, nomeDoDispositivoAtual());
+        Optional<Instant> ate = provisionadorAtual().totpConfirmar(codigo, nomeDoDispositivoAtual());
         marcarEstado2fa(Estado2fa.ATIVO);
         conexao.tentarAgora(); // se estava aguardando o código, o teste do agente repete (e passa)
         return ate;
@@ -591,7 +656,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     /** "Desativar 2FA": exige um código válido. */
     @Override
     public void desativar2fa(String codigo) throws ErroProvisionamento {
-        provisionador.totpDesativar(codigo);
+        provisionadorAtual().totpDesativar(codigo);
         marcarEstado2fa(Estado2fa.DESLIGADO);
     }
 
@@ -630,7 +695,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * @param nomeDoDispositivo {@code ^[a-z0-9-]{1,40}$}; por exemplo {@code ValidadorDeNomes.sugerirNomeDeDispositivo(NomeDoMac.hostname())}
      */
     public void registrarToken(String nomeDoDispositivo) throws ErroProvisionamento, CofreException {
-        registrarTokenCom(provisionador, nomeDoDispositivo);
+        registrarTokenCom(provisionadorAtual(), nomeDoDispositivo);
     }
 
     private void registrarTokenCom(ProvisionadorRemoto prov, String nomeDoDispositivo) throws ErroProvisionamento, CofreException {
@@ -676,7 +741,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * da revogação, o estado é o mesmo de "token perdido" e o usuário pode tentar de novo.
      */
     public void reprovisionarToken(String nomeDoDispositivo) throws ErroProvisionamento, CofreException {
-        reprovisionarTokenCom(provisionador, nomeDoDispositivo);
+        reprovisionarTokenCom(provisionadorAtual(), nomeDoDispositivo);
     }
 
     private void reprovisionarTokenCom(ProvisionadorRemoto prov, String nomeDoDispositivo) throws ErroProvisionamento, CofreException {
@@ -834,7 +899,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         String dispositivo = acesso.nomeDoDispositivo();
         if (dispositivo != null) {
             try {
-                provisionador.revogarToken(dispositivo);
+                provisionadorAtual().revogarToken(dispositivo);
                 token = true;
             } catch (ErroProvisionamento e) {
                 if (ErroProvisionamento.TOKEN_INEXISTENTE.equals(e.codigo())) {
@@ -864,7 +929,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             return false;
         }
         try {
-            switch (provisionador.removerChaveAutorizada(acesso.chavePublica())) {
+            switch (provisionadorAtual().removerChaveAutorizada(acesso.chavePublica())) {
                 case REMOVIDA -> {
                     return true;
                 }
@@ -890,7 +955,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
 
     /** O provisionador de comandos do agente (para a casca e os testes). */
     public ProvisionadorRemoto provisionador() {
-        return provisionador;
+        return provisionadorAtual();
     }
 
     /** Roda um comando na sessão SSH atual (usado pelos diálogos de provisionamento). */

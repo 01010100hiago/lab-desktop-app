@@ -310,8 +310,20 @@ public final class ServidorSimulado implements ExecutorDeComandos {
             }
             return ok("");
         }
-        if (c.equals(ComandosRemotos.lerSituacaoDoAgente(parametros.container()))) {
-            return ok(!dockerInstalado ? "sem-docker\n" : containerNome == null ? "ausente\n" : "existe:" + estadoDoContainer + "\n");
+        for (String dk : new String[] {ComandosRemotos.DOCKER_DIRETO, ComandosRemotos.DOCKER_COM_SUDO}) {
+            if (!parametros.container().equals(ParametrosDaInstalacao.CONTAINER_PADRAO)
+                && c.equals(ComandosRemotos.lerSituacaoDoAgente(ParametrosDaInstalacao.CONTAINER_PADRAO, dk))) {
+                // sem registro do app, o diagnóstico olha o container padrão (o do lab): aqui não existe
+                boolean podeUsar = dk.equals(ComandosRemotos.DOCKER_DIRETO) ? dockerDireto() : dockerPorSudo() || dockerDireto();
+                return ok(!dockerInstalado ? "sem-docker\n" : !podeUsar && !dockerParado ? "sem-permissao\n" : "ausente\n");
+            }
+            if (c.equals(ComandosRemotos.lerSituacaoDoAgente(parametros.container(), dk))) {
+                boolean podeUsar = dk.equals(ComandosRemotos.DOCKER_DIRETO) ? dockerDireto() : dockerPorSudo() || dockerDireto();
+                if (dockerInstalado && !podeUsar && !dockerParado) {
+                    return ok("sem-permissao\n");
+                }
+                return ok(!dockerInstalado ? "sem-docker\n" : containerNome == null ? "ausente\n" : "existe:" + estadoDoContainer + "\n");
+            }
         }
         // instalar o Docker: cada comando da lista conta; o último deixa o Docker pronto
         for (boolean comoRoot : new boolean[] {true, false}) {

@@ -169,7 +169,7 @@ public final class AssistenteDeServidor {
      */
     public boolean descartarChaveNaoUsada(String chaveId) {
         try {
-            if (cofre.servidores().stream().anyMatch(s -> s.chaveId().equals(chaveId))) {
+            if (cofre.servidores().stream().anyMatch(s -> chaveId.equals(s.chaveId()))) {
                 return false;
             }
             cofre.removerChave(chaveId);

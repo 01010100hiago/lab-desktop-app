@@ -374,7 +374,7 @@ public final class AgenteDoLab implements AutoCloseable {
     }
 
     private static boolean ehComandoDeSeguranca(String linha) {
-        return linha.startsWith("sudo -n ") || linha.startsWith("ss ") || linha.startsWith("systemctl ");
+        return (linha.startsWith("sudo -n ") && !linha.startsWith("sudo -n docker ")) || linha.startsWith("ss ") || linha.startsWith("systemctl ");
     }
 
     /** As saídas SINTÉTICAS dos comandos de segurança (o registro tem um ataque simulado). */

@@ -148,9 +148,14 @@ public final class ComandosRemotos {
      * {@code sem-docker}, {@code ausente}, {@code sem-permissao}, {@code existe:<estado>} ou {@code erro}.
      */
     public static String lerSituacaoDoAgente(String container) {
+        return lerSituacaoDoAgente(container, DOCKER_DIRETO);
+    }
+
+    /** Como {@link #lerSituacaoDoAgente(String)}, com o comando do Docker que vale neste servidor ({@code docker} ou {@code sudo -n docker}). */
+    public static String lerSituacaoDoAgente(String container, String docker) {
         new ParametrosDaInstalacao(container, ParametrosDaInstalacao.PORTA_PADRAO, ParametrosDaInstalacao.PASTA_PADRAO); // a mesma regra de nome
         return "sh -c 'command -v docker >/dev/null 2>&1 || { echo sem-docker; exit 0; }; "
-            + "o=$(docker inspect -f \"{{.State.Status}}\" " + container + " 2>&1); r=$?; "
+            + "o=$(" + exigirDocker(docker) + " inspect -f \"{{.State.Status}}\" " + container + " 2>&1); r=$?; "
             + "if [ $r -eq 0 ]; then echo \"existe:$o\"; "
             + "elif echo \"$o\" | grep -qi \"permission denied\"; then echo sem-permissao; "
             + "elif echo \"$o\" | grep -qi \"no such\"; then echo ausente; "
@@ -310,7 +315,7 @@ public final class ComandosRemotos {
         PacoteDoAgente pacote = PacoteDoAgente.de("zzversao", "abcdef0", new byte[] {0});
         List<String> modelos = new java.util.ArrayList<>(List.of(lerOsRelease(), lerArquitetura(), lerPermissoes(), lerDocker(), lerPorta(54321),
             lerDisco(), lerInternet(), lerSeAPastaExiste(p), lerDonoDaPasta(p), lerVersaoExtraida(p), lerSha256DoPacote(p, pacote),
-            lerSituacaoDoAgente("zzcontainer")));
+            lerSituacaoDoAgente("zzcontainer"), lerSituacaoDoAgente("zzcontainer", DOCKER_COM_SUDO)));
         for (String docker : new String[] {DOCKER_DIRETO, DOCKER_COM_SUDO}) {
             modelos.add(lerContainer(docker, p));
             modelos.add(lerVolume(docker, p));

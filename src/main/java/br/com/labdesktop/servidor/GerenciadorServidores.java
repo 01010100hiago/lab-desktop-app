@@ -220,6 +220,9 @@ public final class GerenciadorServidores implements AutoCloseable {
         if (este == null) {
             return List.of();
         }
+        if (este.ehLocal()) {
+            return List.of(); // "Este computador" não tem chave SSH
+        }
         String impressao = cofre.infoDaChave(este.chaveId()).map(InfoChave::impressao).orElse(null);
         return cofre.servidores().stream()
             .filter(o -> !o.id().equals(servidorId) && usaAMesmaChave(o, este, impressao))
@@ -228,6 +231,9 @@ public final class GerenciadorServidores implements AutoCloseable {
     }
 
     private boolean usaAMesmaChave(ConfigServidor outro, ConfigServidor este, String impressaoDeste) {
+        if (outro.ehLocal()) {
+            return false;
+        }
         if (outro.chaveId().equals(este.chaveId())) {
             return true;
         }
@@ -238,6 +244,7 @@ public final class GerenciadorServidores implements AutoCloseable {
     /** Quem criou a chave do servidor (o app ou o usuário): o diálogo "Remover" diz ao usuário se ela será tirada do servidor. */
     public InfoChave.Origem origemDaChaveDe(String servidorId) {
         return cofre.servidor(servidorId)
+            .filter(c -> !c.ehLocal())
             .flatMap(c -> cofre.infoDaChave(c.chaveId()))
             .map(InfoChave::origem)
             .orElse(InfoChave.Origem.DESCONHECIDA);
