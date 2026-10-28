@@ -44,7 +44,8 @@ import java.util.List;
 public final class TunelPorArquivo implements Tunel {
 
     private static final int LIMITE_DO_ARQUIVO = 512 * 1024;
-    private static final int PERMISSAO_DA_COPIA = 0644;
+    /** Só se o servidor não disser o modo do arquivo: a cópia datada nasce com o MESMO modo do config.yml (nunca mais aberta que ele). */
+    private static final int PERMISSAO_PADRAO_DA_COPIA = 0640;
     private static final Duration PRAZO_DO_COMANDO = Duration.ofSeconds(60);
     private static final Duration ESPERA_DO_REINICIO = Duration.ofSeconds(25);
     /** Quanto tempo o cloudflared tem de ficar de pé, sem cair nem reiniciar, para valer como "voltou". */
@@ -411,7 +412,7 @@ public final class TunelPorArquivo implements Tunel {
                     throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.OUTRO, "O config.yml mudou depois que você viu a diferença. Nada foi gravado: confira de novo.");
                 }
                 copia = nomeDaCopia(c, cfg.caminhoDoConfig());
-                c.gravarAtomico(copia, original, PERMISSAO_DA_COPIA);
+                c.gravarAtomico(copia, original, permissoesDoConfig(c));
                 try {
                     c.gravarNoLugar(cfg.caminhoDoConfig(), novo);
                 } catch (ErroSftp e) {
@@ -593,6 +594,16 @@ public final class TunelPorArquivo implements Tunel {
                 }
                 return naoDesfez;
             }
+        }
+    }
+
+    /** O modo que o config.yml tem agora (o arquivo em si é gravado NO LUGAR e o conserva; a cópia nasce igual a ele). */
+    private int permissoesDoConfig(ClienteSftp c) {
+        try {
+            int p = c.estatisticas(cfg.caminhoDoConfig()).permissoes() & 0777;
+            return p == 0 ? PERMISSAO_PADRAO_DA_COPIA : p;
+        } catch (ErroSftp e) {
+            return PERMISSAO_PADRAO_DA_COPIA;
         }
     }
 

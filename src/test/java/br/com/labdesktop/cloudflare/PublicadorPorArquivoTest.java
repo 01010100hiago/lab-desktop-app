@@ -369,6 +369,39 @@ class PublicadorPorArquivoTest {
     }
 
     @Test
+    void asCopiasDatadasTemOsModosDosOriginaisEACopiaDoComposeFicaForaDoGit() throws Exception {
+        Path compose = lab.arquivo(LabSimulado.PROJETOS + "/demo/docker-compose.yml");
+        Path config = lab.arquivo(LabSimulado.CONFIG);
+        Files.setPosixFilePermissions(compose, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        Files.setPosixFilePermissions(config, java.nio.file.attribute.PosixFilePermissions.fromString("rw-r-----"));
+        lab.escrever(LabSimulado.PROJETOS + "/demo/.gitignore", "node_modules/\ndist/\ncoverage/\n.env\n.env.*\n!.env.example\n*.log\n.DS_Store\nbackups/\n.pgdata/\n.minio/\n");
+        PublicadorNaInternet.Resultado r;
+        try (PublicadorNaInternet p = publicador()) {
+            r = p.executar(p.preparar(pedido()), observador(), Cancelamento.NUNCA);
+        }
+        assertEquals(PublicadorNaInternet.Desfecho.PUBLICADO, r.desfecho(), r.falha());
+        assertEquals("rw-------", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(compose)), "o compose do usuário continua 0600");
+        assertEquals("rw-------", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(
+            lab.arquivo(LabSimulado.PROJETOS + "/demo/docker-compose.yml.20261028-153000.bak"))), "a cópia nasce com o mesmo modo");
+        assertEquals("rw-r-----", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(config)), "o config.yml é gravado no lugar e conserva o modo");
+        assertEquals("rw-r-----", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(
+            lab.arquivo(LabSimulado.CONFIG + ".20261028-153000.bak"))), "a cópia do config.yml não é mais aberta que ele");
+        assertTrue(lab.ler(LabSimulado.PROJETOS + "/demo/.gitignore").contains("docker-compose.yml.*.bak"), "a cópia entra no .gitignore do esqueleto do app");
+    }
+
+    @Test
+    void seOGitIgnoreEDoDonoOAppNaoOReescreveEAvisa() throws Exception {
+        lab.escrever(LabSimulado.PROJETOS + "/demo/.gitignore", "node_modules\n");
+        PublicadorNaInternet.Resultado r;
+        try (PublicadorNaInternet p = publicador()) {
+            r = p.executar(p.preparar(pedido()), observador(), Cancelamento.NUNCA);
+        }
+        assertEquals(PublicadorNaInternet.Desfecho.PUBLICADO, r.desfecho(), r.falha());
+        assertEquals("node_modules\n", lab.ler(LabSimulado.PROJETOS + "/demo/.gitignore"));
+        assertTrue(r.avisos().stream().anyMatch(a -> a.contains(".gitignore") && a.contains("docker-compose.yml.*.bak")), r.avisos().toString());
+    }
+
+    @Test
     void seOCloudflaredRecusaAsRegrasODevolveOArquivoENadaEReiniciado() throws Exception {
         Object inode = arquivoDe(LabSimulado.CONFIG);
         lab.validarSempreFalha = true;

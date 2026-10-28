@@ -159,7 +159,7 @@ public final class EscritorDeCompose {
      * A cópia datada fica na pasta do projeto e iria para o git junto. Se o {@code .gitignore} é exatamente o do esqueleto do app, o padrão entra nele
      * (o app mexe no que é dele); se é do usuário, o app não o reescreve: só avisa, com a linha a acrescentar.
      */
-    private void cuidarDaCopiaNoGit(ClienteSftp c, String pasta, String copia, List<String> avisos) {
+    public static void cuidarDaCopiaNoGit(ClienteSftp c, String pasta, String copia, List<String> avisos) {
         try {
             String ignore = CaminhoRemoto.juntar(pasta, ".gitignore");
             String atual = lerTexto(c, ignore);

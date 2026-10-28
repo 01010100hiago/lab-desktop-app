@@ -9,6 +9,7 @@ import br.com.labdesktop.local.ProgramaNaoEncontradoException;
 import br.com.labdesktop.projetos.AmbienteDeProjetos;
 import br.com.labdesktop.projetos.ComandosDeProjeto;
 import br.com.labdesktop.projetos.Diferenca;
+import br.com.labdesktop.projetos.EscritorDeCompose;
 import br.com.labdesktop.projetos.FalhaDoProjeto;
 import br.com.labdesktop.projetos.GabaritoDoProjeto;
 import br.com.labdesktop.seguranca.Redator;
@@ -286,12 +287,13 @@ public final class PublicadorNaInternet implements AutoCloseable {
         }
         List<Desfazer> pilha = new ArrayList<>();
         List<String> copias = new ArrayList<>();
+        List<String> avisosDaExecucao = new ArrayList<>();
         Etapa atual = Etapa.COMPOSE;
         try {
             // 1. compose
             atual = Etapa.COMPOSE;
             conferir(cancelamento);
-            comporNoServidor(previa, obs, pilha, copias);
+            comporNoServidor(previa, obs, pilha, copias, avisosDaExecucao);
 
             // 2. a regra do túnel (e, no arquivo, a conferência e o reinício)
             atual = Etapa.REGRA;
@@ -328,14 +330,14 @@ public final class PublicadorNaInternet implements AutoCloseable {
             conferir(cancelamento);
         } catch (FalhaDoProjeto f) {
             obs.etapa(atual, ObservadorDaEtapa.Estado.FALHOU, f.mensagem());
-            return reverter(previa, f, atual, pilha, obs, copias);
+            return reverter(previa, f, atual, pilha, obs, copias, avisosDaExecucao);
         }
 
         // 5. testar (não desfaz nada se não passar)
         obs.etapa(Etapa.TESTE, ObservadorDaEtapa.Estado.ANDANDO, "Abrindo " + previa.url() + "…");
         TestadorDeUrl.Resultado teste = testador.testar(previa.hostname(), cancelamento);
         obs.etapa(Etapa.TESTE, teste.noAr() || teste.estado() == TestadorDeUrl.Estado.EM_DUVIDA ? ObservadorDaEtapa.Estado.FEITO : ObservadorDaEtapa.Estado.FALHOU, teste.frase());
-        return new Resultado(Desfecho.PUBLICADO, previa.hostname(), previa.url(), teste, null, null, List.of(), List.of(), copias, previa.avisos());
+        return new Resultado(Desfecho.PUBLICADO, previa.hostname(), previa.url(), teste, null, null, List.of(), List.of(), copias, juntar(previa.avisos(), avisosDaExecucao));
     }
 
     private static void conferir(Cancelamento c) throws FalhaDoProjeto {
@@ -344,7 +346,13 @@ public final class PublicadorNaInternet implements AutoCloseable {
         }
     }
 
-    private Resultado reverter(Previa previa, FalhaDoProjeto f, Etapa etapa, List<Desfazer> pilha, ObservadorDaEtapa obs, List<String> copias) {
+    private static List<String> juntar(List<String> a, List<String> b) {
+        List<String> l = new ArrayList<>(a);
+        l.addAll(b);
+        return l;
+    }
+
+    private Resultado reverter(Previa previa, FalhaDoProjeto f, Etapa etapa, List<Desfazer> pilha, ObservadorDaEtapa obs, List<String> copias, List<String> avisosDaExecucao) {
         List<String> desfeito = new ArrayList<>();
         List<String> naoConsegui = new ArrayList<>();
         for (int i = pilha.size() - 1; i >= 0; i--) {
@@ -363,14 +371,14 @@ public final class PublicadorNaInternet implements AutoCloseable {
             }
         }
         boolean cancelou = f.tipo() == FalhaDoProjeto.Tipo.CANCELADO;
-        return new Resultado(cancelou ? Desfecho.CANCELADO : Desfecho.FALHOU, previa.hostname(), previa.url(), null, f.mensagem(), etapa, desfeito, naoConsegui, copias, previa.avisos());
+        return new Resultado(cancelou ? Desfecho.CANCELADO : Desfecho.FALHOU, previa.hostname(), previa.url(), null, f.mensagem(), etapa, desfeito, naoConsegui, copias, juntar(previa.avisos(), avisosDaExecucao));
     }
 
     // ---------------------------------------------------------------------------------------------
     // Os passos
     // ---------------------------------------------------------------------------------------------
 
-    private void comporNoServidor(Previa previa, ObservadorDaEtapa obs, List<Desfazer> pilha, List<String> copias) throws FalhaDoProjeto {
+    private void comporNoServidor(Previa previa, ObservadorDaEtapa obs, List<Desfazer> pilha, List<String> copias, List<String> avisos) throws FalhaDoProjeto {
         ComposeComEdge.Proposta prop = previa.proposta();
         if (prop == null || prop.situacao() == ComposeComEdge.Situacao.PRONTO) {
             obs.etapa(Etapa.COMPOSE, ObservadorDaEtapa.Estado.PULADO, "O docker-compose.yml já está pronto.");
@@ -392,14 +400,18 @@ public final class PublicadorNaInternet implements AutoCloseable {
             if (!Arrays.equals(naHora, previa.bytesDoCompose())) {
                 throw mudou();
             }
+            // as permissões que o arquivo já tinha valem para o novo e para a cópia (um compose 0600 do usuário não vira 0644 por causa do app)
+            int modo = permissoesDe(c, arquivo);
             String copia = nomeDaCopia(c, pasta);
-            c.gravarAtomico(CaminhoRemoto.juntar(pasta, copia), naHora, PERMISSAO_DO_COMPOSE);
+            c.gravarAtomico(CaminhoRemoto.juntar(pasta, copia), naHora, modo);
             copias.add(CaminhoRemoto.juntar(pasta, copia));
-            c.gravarAtomico(arquivo, novo, PERMISSAO_DO_COMPOSE);
+            // a cópia fica na pasta do projeto e o git a veria como arquivo novo (e levaria o conteúdo do compose para o repositório)
+            EscritorDeCompose.cuidarDaCopiaNoGit(c, pasta, copia, avisos);
+            c.gravarAtomico(arquivo, novo, modo);
             byte[] original = previa.bytesDoCompose();
             pilha.add(new Desfazer(Etapa.COMPOSE, "o docker-compose.yml", () -> {
                 try (ClienteSftp d = ambiente.abrirArquivos()) {
-                    d.gravarAtomico(arquivo, original, PERMISSAO_DO_COMPOSE);
+                    d.gravarAtomico(arquivo, original, modo);
                     return List.of();
                 } catch (ErroSftp e) {
                     return List.of("Não consegui devolver o docker-compose.yml como estava (" + e.mensagemSimples() + "): copie a cópia datada (" + copia + ") de volta por cima dele.");
@@ -412,6 +424,16 @@ public final class PublicadorNaInternet implements AutoCloseable {
             }
             throw new FalhaDoProjeto(e.tipo() == ErroSftp.Tipo.SEM_PERMISSAO ? FalhaDoProjeto.Tipo.SEM_PERMISSAO : FalhaDoProjeto.Tipo.OUTRO,
                 "Não consegui gravar o docker-compose.yml: " + e.mensagemSimples(), null, e);
+        }
+    }
+
+    /** O modo (rwx) que o arquivo tem agora; 0644 só se o servidor não disse. */
+    private static int permissoesDe(ClienteSftp c, String arquivo) {
+        try {
+            int p = c.estatisticas(arquivo).permissoes() & 0777;
+            return p == 0 ? PERMISSAO_DO_COMPOSE : p;
+        } catch (ErroSftp e) {
+            return PERMISSAO_DO_COMPOSE;
         }
     }
 
