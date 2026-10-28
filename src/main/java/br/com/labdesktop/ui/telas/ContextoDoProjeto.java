@@ -38,6 +38,10 @@ final class ContextoDoProjeto {
     Supplier<String> pastaDoProjeto = () -> null;
     /** Abre a aba Terminal já na sessão do Claude. */
     Runnable irParaOClaude = () -> { };
+    /** O que o botão "Adicionar container" faz (abre o diálogo; quem sabe montá-lo é a janela). */
+    Runnable adicionarContainer = () -> { };
+    /** O servidor sabe escrever no compose deste projeto (o agente do lab, ou este computador) e as ações estão liberadas? */
+    Supplier<Boolean> podeAdicionarContainer = () -> false;
 
     EstadoServidor estado;
     DetalheProjeto detalhe;

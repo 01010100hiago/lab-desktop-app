@@ -41,6 +41,7 @@ public final class MenuApp {
     private JMenuItem itemAumentar;
     private JMenuItem itemDiminuir;
     private JMenuItem itemNormal;
+    private JMenuItem itemNovoProjeto;
     private JMenuItem itemUltimoProjeto;
     private JMenuItem itemVoltarAosProjetos;
     private final JMenuBar barra = new JMenuBar();
@@ -89,6 +90,26 @@ public final class MenuApp {
         cofre.addSeparator();
         cofre.add(item("Sobre o Lab Desktop", null, mostrarSobre));
         barra.add(cofre);
+
+        // --- Arquivo ---
+        JMenu arquivo = new JMenu("Arquivo");
+        // Cmd+Shift+N no Mac, Ctrl+Shift+N nos outros (a tecla de comando do sistema; Cmd+N é "Adicionar servidor")
+        itemNovoProjeto = item("Novo projeto…", KeyStroke.getKeyStroke(KeyEvent.VK_N, atalho() | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
+            () -> painel.novoProjetoNoServidorEmFoco());
+        arquivo.add(itemNovoProjeto);
+        arquivo.addMenuListener(new MenuListener() {
+            @Override
+            public void menuSelected(MenuEvent e) {
+                atualizarHabilitacaoDoNovoProjeto();
+            }
+
+            @Override
+            public void menuDeselected(MenuEvent e) { }
+
+            @Override
+            public void menuCanceled(MenuEvent e) { }
+        });
+        barra.add(arquivo);
 
         // --- Servidor ---
         menuServidor.add(item("Adicionar servidor…", KeyStroke.getKeyStroke(KeyEvent.VK_N, atalho()),
@@ -173,6 +194,7 @@ public final class MenuApp {
             () -> janela.dispatchEvent(new java.awt.event.WindowEvent(janela, java.awt.event.WindowEvent.WINDOW_CLOSING))));
         barra.add(menuJanela);
         atualizarHabilitacao();
+        atualizarHabilitacaoDoNovoProjeto();
     }
 
     private void trocarTema(Tema t) {
@@ -236,6 +258,11 @@ public final class MenuApp {
         });
     }
 
+    /** "Novo projeto…" só com as ações liberadas e um servidor em foco que cria projeto (o agente do lab, ou este computador). */
+    public void atualizarHabilitacaoDoNovoProjeto() {
+        itemNovoProjeto.setEnabled(painel.podeCriarProjetoNoServidorEmFoco());
+    }
+
     /** "Último projeto aberto" só com um projeto para reabrir; "Voltar à lista" só com uma página de projeto aberta. */
     public void atualizarHabilitacaoDoProjeto() {
         itemUltimoProjeto.setEnabled(painel.temUltimoProjeto());
@@ -254,6 +281,10 @@ public final class MenuApp {
 
     public JMenuItem itemTamanhoNormal() {
         return itemNormal;
+    }
+
+    public JMenuItem itemNovoProjeto() {
+        return itemNovoProjeto;
     }
 
     public JMenuItem itemUltimoProjeto() {

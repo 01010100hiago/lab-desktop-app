@@ -11,6 +11,8 @@ import br.com.labdesktop.api.modelo.ResultadoAcao;
 import br.com.labdesktop.api.modelo.SessaoAberta;
 import br.com.labdesktop.api.modelo.TelaClaude;
 import br.com.labdesktop.api.modelo.TokensDoProjeto;
+import br.com.labdesktop.local.ProjetosLocais;
+import java.io.IOException;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -26,10 +28,38 @@ public final class AcoesDoServidor {
 
     private final Supplier<ClienteApi> api;
     private final Sondador sondador;
+    /** Os projetos de "Este computador" (o agente local não os conhece): iniciar, parar, reiniciar e reiniciar container vão por aqui; {@code null} no servidor remoto. */
+    private final ProjetosLocais locais;
 
     AcoesDoServidor(Supplier<ClienteApi> api, Sondador sondador) {
+        this(api, sondador, null);
+    }
+
+    AcoesDoServidor(Supplier<ClienteApi> api, Sondador sondador, ProjetosLocais locais) {
         this.api = api;
         this.sondador = sondador;
+        this.locais = locais;
+    }
+
+    @FunctionalInterface
+    private interface ChamadaLocal<T> {
+        T executar() throws IOException, InterruptedException;
+    }
+
+    /** Uma ação do computador local: sem agente no meio; o resto é igual (a lista e o detalhe são relidos ao fim, com sucesso ou não). */
+    private <T> T rodarLocal(String projeto, ChamadaLocal<T> chamada) throws ErroApi {
+        try {
+            return chamada.executar();
+        } catch (ProjetosLocais.ProjetoNaoExisteException e) {
+            throw new ErroApi.NaoEncontrado(null, e.getMessage());
+        } catch (IOException e) {
+            throw new ErroApi.ServidorErro(500, null, e.getMessage() == null ? "O Docker não conseguiu." : e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ErroApi.ServidorErro(500, null, "A ação foi interrompida.");
+        } finally {
+            sondador.atualizarAgora(Topico.PROJETOS, Topico.detalhe(projeto), Topico.LIMITES);
+        }
     }
 
     @FunctionalInterface
@@ -70,14 +100,23 @@ public final class AcoesDoServidor {
     }
 
     public ResultadoAcao iniciar(String projeto) throws ErroApi {
+        if (locais != null) {
+            return rodarLocal(projeto, () -> new ResultadoAcao(true, locais.iniciar(projeto)));
+        }
         return rodar(projeto, a -> a.iniciar(projeto));
     }
 
     public ResultadoAcao parar(String projeto) throws ErroApi {
+        if (locais != null) {
+            return rodarLocal(projeto, () -> new ResultadoAcao(true, locais.parar(projeto)));
+        }
         return rodar(projeto, a -> a.parar(projeto));
     }
 
     public ResultadoAcao reiniciar(String projeto) throws ErroApi {
+        if (locais != null) {
+            return rodarLocal(projeto, () -> new ResultadoAcao(true, locais.reiniciar(projeto)));
+        }
         return rodar(projeto, a -> a.reiniciar(projeto));
     }
 
@@ -120,6 +159,13 @@ public final class AcoesDoServidor {
      * e a lista, para a tabela mostrar o estado de verdade.
      */
     public void reiniciarContainer(String projeto, String container) throws ErroApi {
+        if (locais != null) {
+            rodarLocal(projeto, () -> {
+                locais.reiniciarContainer(projeto, container);
+                return Boolean.TRUE;
+            });
+            return;
+        }
         rodar(projeto, a -> {
             a.reiniciarContainer(projeto, container);
             return null;

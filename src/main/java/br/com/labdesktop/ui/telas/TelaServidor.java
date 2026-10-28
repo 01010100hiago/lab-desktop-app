@@ -2,6 +2,7 @@ package br.com.labdesktop.ui.telas;
 
 import br.com.labdesktop.arquivos.ServicosDeArquivos;
 import br.com.labdesktop.servidor.ServidorLab;
+import br.com.labdesktop.ui.AcoesDaInterface;
 import br.com.labdesktop.ui.componentes.Abas;
 import br.com.labdesktop.ui.componentes.CartoesAjustaveis;
 import br.com.labdesktop.ui.componentes.CopiadorDeTexto;
@@ -169,6 +170,20 @@ public final class TelaServidor extends Painel {
         niveis.show(this, CARTAO_PAGINA);
         cartoes.show(corpo, Aba.RESUMO.id);
         projetos.aoAbrirProjeto(this::abrirProjeto);
+        projetos.aoCriarProjeto(new AcoesDaInterface.DepoisDeCriar() {
+            @Override
+            public void abrirNoTerminal(String projeto) {
+                abrirProjetoNoTerminal(projeto);
+            }
+
+            @Override
+            public void abrirNoClaude(String projeto) {
+                abrirProjetoNoTerminal(projeto);
+                if (projetoAberto != null && projeto.equals(nomeDoProjetoAberto)) {
+                    projetoAberto.mostrarOClaude();
+                }
+            }
+        });
         getAccessibleContext().setAccessibleName("Servidor");
         if (servidor != null) {
             inscricaoDoEstado = servidor.observarEstado(e -> aplicarRecursos(e.temProjetos()));
@@ -259,12 +274,28 @@ public final class TelaServidor extends Painel {
             public void abaMudou(TelaProjeto.Aba nova) {
                 abasDosProjetos.put(nome, nova);
             }
+
+            @Override
+            public void adicionarContainer() {
+                projetos.adicionarContainerDe(nome);
+            }
+
+            @Override
+            public boolean podeAdicionarContainer() {
+                return projetos.podeAdicionarContainer();
+            }
         }, () -> projetos.urlDeLoginDe(nome), aoAtualizarProjeto, CopiadorDeTexto.doSistema(), servicosDeArquivos, escolhedor,
             contextoDeTerminal);
         add(projetoAberto, CARTAO_PROJETO + nome);
         niveis.show(this, CARTAO_PROJETO + nome);
         revalidate();
         repaint();
+    }
+
+    /** Abre a página de um projeto recém-criado ou importado direto na aba Terminal (o shell já na pasta). */
+    public void abrirProjetoNoTerminal(String nome) {
+        abasDosProjetos.put(nome, TelaProjeto.Aba.TERMINAL);
+        abrirProjeto(nome);
     }
 
     /** "‹ Projetos" e Esc: fecha a página do projeto e mostra a aba Projetos do servidor. */

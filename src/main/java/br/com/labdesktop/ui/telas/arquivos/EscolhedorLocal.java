@@ -20,6 +20,11 @@ public interface EscolhedorLocal {
     /** A pasta do Mac onde guardar o que for baixado (começa em {@code padrao}); vazio se cancelou. */
     Optional<Path> escolherPastaParaBaixar(Path padrao);
 
+    /** A pasta do computador que o usuário quer importar como projeto (o seletor do sistema, só pastas); vazio se cancelou. */
+    default Optional<Path> escolherPastaParaImportar() {
+        return Optional.empty();
+    }
+
     /** O de produção: o seletor de arquivos do Swing, sobre a janela que {@code janela} devolver na hora de abrir. */
     static EscolhedorLocal doSistema(java.util.function.Supplier<Component> janela) {
         return new EscolhedorLocal() {
@@ -38,6 +43,15 @@ public interface EscolhedorLocal {
                     l.add(f.toPath());
                 }
                 return l;
+            }
+
+            @Override
+            public Optional<Path> escolherPastaParaImportar() {
+                JFileChooser c = new JFileChooser();
+                c.setDialogTitle("Escolha a pasta do projeto que você quer importar");
+                c.setApproveButtonText("Importar esta pasta");
+                c.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+                return c.showOpenDialog(janela.get()) == JFileChooser.APPROVE_OPTION ? Optional.of(c.getSelectedFile().toPath()) : Optional.empty();
             }
 
             @Override

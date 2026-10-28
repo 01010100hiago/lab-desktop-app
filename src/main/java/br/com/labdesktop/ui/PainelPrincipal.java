@@ -49,6 +49,7 @@ public final class PainelPrincipal extends Painel {
         Consumer<ServidorLab> aoSelecionar = this::mostrarServidor;
         this.acoes = new AcoesDaInterface(gerenciador, assistente, avisos, apresentador, aoSelecionar, navegador, servicosDeArquivos);
         this.navegacao = new Navegacao(gerenciador, acoes, navegador, avisos, apresentador, servicosDeArquivos, preferencias);
+        acoes.usarEscolhedor(navegacao.escolhedor());
         this.barra = new BarraServidores(gerenciador, acoes, new BarraServidores.Ouvinte() {
             @Override
             public void aoEscolherServidor(ServidorLab lab) {
@@ -72,6 +73,38 @@ public final class PainelPrincipal extends Painel {
         } else {
             navegacao.mostrarServidores();
         }
+    }
+
+    /**
+     * "Novo projeto" do menu: o servidor em foco, se ele sabe criar projeto e as ações estão liberadas; depois de criar, seleciona o projeto e leva à
+     * aba Terminal dele.
+     */
+    public void novoProjetoNoServidorEmFoco() {
+        ServidorLab lab = servidorEmFoco();
+        if (lab == null) {
+            return;
+        }
+        acoes.novoProjeto(lab, new AcoesDaInterface.DepoisDeCriar() {
+            @Override
+            public void abrirNoTerminal(String projeto) {
+                navegacao.mostrarServidor(lab);
+                navegacao.telaServidorDe(lab.id()).abrirProjetoNoTerminal(projeto);
+            }
+
+            @Override
+            public void abrirNoClaude(String projeto) {
+                abrirNoTerminal(projeto);
+                var aberto = navegacao.telaServidorDe(lab.id()).projetoAberto();
+                if (aberto != null) {
+                    aberto.mostrarOClaude();
+                }
+            }
+        });
+    }
+
+    /** O item "Novo projeto…" do menu vale agora? (o servidor em foco cria projeto e as ações estão liberadas) */
+    public boolean podeCriarProjetoNoServidorEmFoco() {
+        return br.com.labdesktop.ui.telas.FluxosDeProjeto.liberadasPorPropriedade() && AcoesDaInterface.podeCriarProjeto(servidorEmFoco());
     }
 
     public AcoesDaInterface acoes() {

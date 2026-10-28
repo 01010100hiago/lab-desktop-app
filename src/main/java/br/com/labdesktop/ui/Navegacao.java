@@ -82,6 +82,10 @@ public final class Navegacao extends Painel {
 
     private TelaServidor garantirTela(ServidorLab lab) {
         return telas.computeIfAbsent(lab.id(), id -> {
+            if (lab.ehLocal()) {
+                // os projetos de "Este computador" são a pasta que o usuário escolheu em Preparar este computador (lida a cada consulta)
+                lab.definirPastaDosProjetosLocais(() -> acoes.pastaDosProjetosLocais(lab));
+            }
             FluxosDeProjeto fluxos = new FluxosDeProjeto(lab, avisos, apresentador, FluxosDeProjeto.liberadasPorPropriedade());
             TelaProjetos projetos = new TelaProjetos(lab, fluxos, navegador, acoes);
             TelaServidor t = new TelaServidor(lab, projetos, () -> acoes.atualizar(lab), servicosDeArquivos, escolhedor, preferencias);
@@ -122,6 +126,11 @@ public final class Navegacao extends Painel {
     public void mostrarServidor(ServidorLab lab, Aba aba) {
         garantirTela(lab).mostrarAba(aba);
         mostrarCartao(lab);
+    }
+
+    /** Quem escolhe pastas e arquivos do computador (o seletor do sistema, sobre esta janela). */
+    public EscolhedorLocal escolhedor() {
+        return escolhedor;
     }
 
     /** Abre a página de um projeto do servidor (o mesmo que clicar na linha dele na lista). */

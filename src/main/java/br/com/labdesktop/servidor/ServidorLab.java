@@ -6,8 +6,10 @@ import br.com.labdesktop.api.ErroApi.ErroRede;
 import br.com.labdesktop.api.ErroApi.NaoAutorizado;
 import br.com.labdesktop.api.ErroApi.NaoEncontrado;
 import br.com.labdesktop.api.PedidoDeCodigo2fa;
+import br.com.labdesktop.api.modelo.Detalhe;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.VersaoAgente;
+import br.com.labdesktop.arquivos.CaminhosLocais;
 import br.com.labdesktop.arquivos.ClienteSftpLocal;
 import br.com.labdesktop.arquivos.FabricaDeClienteSftp;
 import br.com.labdesktop.cofre.AcessoAoCofre;
@@ -21,6 +23,7 @@ import br.com.labdesktop.local.ConexaoLocal;
 import br.com.labdesktop.local.ExecutorDeLinhaFixa;
 import br.com.labdesktop.local.LaboratorioLocal;
 import br.com.labdesktop.local.ParametrosDoLaboratorio;
+import br.com.labdesktop.local.ProjetosLocais;
 import br.com.labdesktop.local.ServicosLocais;
 import br.com.labdesktop.servidor.ResumoDeSeguranca.Leitura;
 import br.com.labdesktop.cofre.TokenAgente;
@@ -29,6 +32,7 @@ import br.com.labdesktop.instalador.GanchosDaInstalacao;
 import br.com.labdesktop.instalador.InstaladorDeAgente;
 import br.com.labdesktop.instalador.PacoteDoAgente;
 import br.com.labdesktop.instalador.ParametrosDaInstalacao;
+import br.com.labdesktop.projetos.AmbienteDeProjetos;
 import br.com.labdesktop.seguranca.Redator;
 import br.com.labdesktop.seguranca.ValidadorDeNomes;
 import br.com.labdesktop.ssh.ConexaoSsh;
@@ -46,6 +50,7 @@ import br.com.labdesktop.ssh.PontaDoAgente;
 import br.com.labdesktop.ssh.ConexaoDoServidor;
 import br.com.labdesktop.util.Agendador;
 import br.com.labdesktop.util.Fundo;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -57,6 +62,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,6 +109,10 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private final ServicosLocais locais;
     private final Sondador sondador;
     private final AcoesDoServidor acoes;
+    /** Os projetos de "Este computador" (as pastas e o Docker); {@code null} no servidor remoto, onde quem sabe é o agente do lab. */
+    private final ProjetosLocais projetosLocais;
+    /** A pasta dos projetos locais como texto do sistema; a interface a troca pela lembrada (o usuário pode mudá-la em Preparar este computador). */
+    private volatile Supplier<String> pastaDosProjetosLocais;
     /** A leitura de segurança (SSH exec, somente leitura) deste servidor, com o tópico que a entrega às telas. */
     private final Topico<ResumoDeSeguranca> topicoDeSeguranca;
     private final OuvinteDeTopico<LimitesConta> ouvinteDeLimites;
@@ -166,7 +176,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
                 new PoliticaDeBackoff(cfgSsh.escalaBackoff(), Math::random));
             this.conexao = conexaoSsh;
         }
-        this.acoes = new AcoesDoServidor(this::apiAtual, sondador);
+        this.pastaDosProjetosLocais = () -> locais.plataforma().pastaDeProjetosPadrao();
+        this.projetosLocais = local ? new ProjetosLocais(() -> Path.of(pastaDosProjetosLocais.get()), locais.executor()) : null;
+        this.acoes = new AcoesDoServidor(this::apiAtual, sondador, projetosLocais);
         this.topicoDeSeguranca = Topico.seguranca(local
             ? () -> new ResumoDeSeguranca(Instant.now(), Leitura.indisponivel(), Leitura.indisponivel(), Leitura.indisponivel(),
                 Leitura.indisponivel(), Leitura.indisponivel()) // a leitura de segurança é do SSH de um servidor remoto; a aba nem aparece aqui
@@ -249,6 +261,47 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      */
     public Inscricao assinarSeguranca(OuvinteDeTopico<ResumoDeSeguranca> ouvinte) {
         return sondador.assinar(topicoDeSeguranca, ouvinte);
+    }
+
+    /** O tópico da lista de projetos: a do agente do lab ({@code /api/projetos}) ou, em "Este computador", a das pastas e do Docker. */
+    public Topico<VisaoProjetos> topicoDeProjetos() {
+        return local ? Topico.projetosLocais(projetosLocais) : Topico.PROJETOS;
+    }
+
+    /** O tópico do detalhe de um projeto (do agente, ou do computador local). */
+    public Topico<Detalhe> topicoDeDetalhe(String projeto) {
+        return local ? Topico.detalheLocal(projetosLocais, projeto) : Topico.detalhe(projeto);
+    }
+
+    /** Pede já a lista de projetos (depois de criar, importar ou escrever num compose): a tela não espera o ciclo de 10 s. */
+    public void atualizarProjetosAgora() {
+        sondador.atualizarAgora(Topico.PROJETOS);
+    }
+
+    /** Pede já a lista e o detalhe de UM projeto (depois de escrever no compose dele). */
+    public void atualizarProjetoAgora(String projeto) {
+        sondador.atualizarAgora(Topico.PROJETOS, Topico.detalhe(projeto));
+    }
+
+    /**
+     * A pasta dos projetos locais, como texto do sistema, lida a cada consulta (o usuário pode trocá-la em Preparar este computador). Só vale em
+     * "Este computador"; o padrão é {@code <pasta do usuário>/LabLocal/projects}.
+     */
+    public void definirPastaDosProjetosLocais(Supplier<String> pasta) {
+        this.pastaDosProjetosLocais = pasta;
+    }
+
+    /**
+     * Onde os projetos moram e como mexer neles (para Novo projeto, importar e Adicionar container): neste computador, arquivos por
+     * {@code java.nio} e programas por processo; num servidor, SFTP e linha de comando por SSH. Só monta (nada roda).
+     *
+     * @param raizDosProjetos a pasta dos projetos no caminho do app (a que o gerenciador de arquivos lembra)
+     */
+    public AmbienteDeProjetos ambienteDeProjetos(String raizDosProjetos) {
+        if (local) {
+            return AmbienteDeProjetos.local(raizDosProjetos, fabricaDeArquivos(), locais.executor(), CaminhosLocais.doSistema());
+        }
+        return AmbienteDeProjetos.remoto(raizDosProjetos, fabricaDeArquivos(), conexao::executar);
     }
 
     /** As ações (iniciar, parar, abrir sessão, limite...). */

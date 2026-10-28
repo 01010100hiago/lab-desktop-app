@@ -5,6 +5,7 @@ import br.com.labdesktop.api.ErroApi;
 import br.com.labdesktop.api.ErroApi.ErroRede;
 import br.com.labdesktop.api.ErroApi.NaoAutorizado;
 import br.com.labdesktop.api.ErroApi.NaoEncontrado;
+import br.com.labdesktop.api.ErroApi.ServidorErro;
 import br.com.labdesktop.api.modelo.Detalhe;
 import br.com.labdesktop.api.modelo.DetalheRaiz;
 import br.com.labdesktop.api.modelo.DetalheServidor;
@@ -12,7 +13,9 @@ import br.com.labdesktop.api.modelo.InfoServidor;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.ListaProjetos;
 import br.com.labdesktop.api.modelo.TokensDoProjeto;
+import br.com.labdesktop.local.ProjetosLocais;
 import br.com.labdesktop.seguranca.ValidadorDeNomes;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.function.Function;
@@ -93,6 +96,35 @@ public final class Topico<T> {
         return new Topico<>("detalhe:" + p, api -> api.detalhe(p), DEZ_SEGUNDOS, SESSENTA_SEGUNDOS, false, null);
     }
 
+    /**
+     * A lista de projetos de "Este computador": lida da pasta dos projetos e do Docker (o agente local é do perfil monitor e não conhece projetos).
+     * Mesma cadência de {@link #PROJETOS} e a MESMA chave: a tela e o {@code atualizarAgora} a tratam igual. Roda sem o agente.
+     */
+    public static Topico<VisaoProjetos> projetosLocais(ProjetosLocais locais) {
+        return new Topico<>(PROJETOS.chave(), api -> lerLocal(() -> new VisaoProjetos(locais.lista(), null)), DEZ_SEGUNDOS, SESSENTA_SEGUNDOS, false, null, true);
+    }
+
+    /** O detalhe de um projeto de "Este computador" (mesma chave e cadência de {@link #detalhe}); {@code NaoEncontrado} se a pasta sumiu. */
+    public static Topico<Detalhe> detalheLocal(ProjetosLocais locais, String projeto) {
+        String p = ValidadorDeNomes.exigirProjeto(projeto);
+        return new Topico<>("detalhe:" + p, api -> lerLocal(() -> locais.detalhe(p)), DEZ_SEGUNDOS, SESSENTA_SEGUNDOS, false, null, true);
+    }
+
+    @FunctionalInterface
+    private interface LeituraLocal<T> {
+        T ler() throws IOException;
+    }
+
+    private static <T> T lerLocal(LeituraLocal<T> leitura) throws ErroApi {
+        try {
+            return leitura.ler();
+        } catch (ProjetosLocais.ProjetoNaoExisteException e) {
+            throw new NaoEncontrado(null, e.getMessage());
+        } catch (IOException e) {
+            throw new ServidorErro(500, null, "Não consegui ler os projetos deste computador: " + e.getMessage());
+        }
+    }
+
     /** O consumo de um projeto: ao abrir a aba e a cada 60 s (o cache do agente só muda de minuto em minuto); parado sem foco. */
     public static Topico<TokensDoProjeto> consumo(String projeto) {
         String p = ValidadorDeNomes.exigirProjeto(projeto);
@@ -131,9 +163,17 @@ public final class Topico<T> {
     private final Duration cadenciaSemFoco;
     private final boolean rodaComJanelaEscondida;
     private final Function<T, Double> temperatura;
+    /** Consulta o computador local (disco e Docker), não o agente: roda mesmo sem API (a conexão com o agente não importa). */
+    private final boolean semApi;
 
     private Topico(String chave, Consulta<T> consulta, Duration cadenciaAtiva, Duration cadenciaSemFoco,
                    boolean rodaComJanelaEscondida, Function<T, Double> temperatura) {
+        this(chave, consulta, cadenciaAtiva, cadenciaSemFoco, rodaComJanelaEscondida, temperatura, false);
+    }
+
+    private Topico(String chave, Consulta<T> consulta, Duration cadenciaAtiva, Duration cadenciaSemFoco,
+                   boolean rodaComJanelaEscondida, Function<T, Double> temperatura, boolean semApi) {
+        this.semApi = semApi;
         this.chave = chave;
         this.consulta = consulta;
         this.cadenciaAtiva = cadenciaAtiva;
@@ -149,6 +189,11 @@ public final class Topico<T> {
 
     Consulta<T> consulta() {
         return consulta;
+    }
+
+    /** A consulta é do computador local e não depende do agente (roda também sem API). */
+    boolean semApi() {
+        return semApi;
     }
 
     /** A temperatura do servidor que este valor traz (para a guarda de calor), ou {@code null}. */

@@ -106,9 +106,51 @@ public final class ComandosLocais {
         return List.of(DOCKER, "inspect", "-f", "{{.State.Status}}", exigirNome(container));
     }
 
+    /**
+     * Os containers de projetos do compose, de qualquer projeto: {@code nome|estado|status|portas|imagem|rótulos}. Os rótulos vão por último e
+     * inteiros ({@code k=v,k=v}): o app tira deles o nome do projeto do compose e a pasta de trabalho. SEM aspas no formato (Windows).
+     */
+    public static List<String> lerContainersDosProjetos() {
+        return List.of(DOCKER, "ps", "-a", "--filter", "label=com.docker.compose.project", "--format",
+            "{{.Names}}|{{.State}}|{{.Status}}|{{.Ports}}|{{.Image}}|{{.Labels}}");
+    }
+
     // =====================================================================================================
     // ESCRITAS (só depois do clique do usuário)
     // =====================================================================================================
+
+    /** O que Iniciar, Parar e Reiniciar um projeto fazem com cada arquivo compose dele (a mesma coisa que o agente do lab faz). */
+    public enum AcaoDeProjeto {
+        INICIAR(List.of("up", "-d")), REINICIAR(List.of("restart")), PARAR(List.of("down")); // down SEM -v: volume nenhum some por aqui
+
+        private final List<String> argumentos;
+
+        AcaoDeProjeto(List<String> argumentos) {
+            this.argumentos = argumentos;
+        }
+    }
+
+    /**
+     * {@code docker compose -p <projeto do compose> -f <arquivo> <ação>}. O {@code -p} explícito é o do agente (um {@code COMPOSE_PROJECT_NAME}
+     * num {@code .env} não pode desviar a ação para outro projeto); o arquivo é o caminho do SISTEMA, absoluto, e a pasta de trabalho do compose
+     * é a dele (os volumes relativos resolvem a partir dali).
+     */
+    public static List<String> comporProjeto(String projetoDoCompose, String arquivoDoSistema, AcaoDeProjeto acao) {
+        if (projetoDoCompose == null || !projetoDoCompose.matches("[a-z0-9][a-z0-9_-]{0,62}")) {
+            throw new IllegalArgumentException("Nome de projeto do compose inválido.");
+        }
+        if (arquivoDoSistema == null || arquivoDoSistema.isBlank() || arquivoDoSistema.indexOf('\0') >= 0) {
+            throw new IllegalArgumentException("Arquivo compose inválido.");
+        }
+        List<String> c = new ArrayList<>(List.of(DOCKER, "compose", "-p", projetoDoCompose, "-f", arquivoDoSistema));
+        c.addAll(acao.argumentos);
+        return List.copyOf(c);
+    }
+
+    /** {@code docker restart <container>}: o botão Reiniciar de um container do projeto. */
+    public static List<String> reiniciarContainerDoProjeto(String container) {
+        return List.of(DOCKER, "restart", exigirNome(container));
+    }
 
     /** Cria a rede dos projetos, marcada como do app. */
     public static List<String> criarRede(ParametrosDoLaboratorio p) {
@@ -235,7 +277,8 @@ public final class ComandosLocais {
     private static List<List<Pattern>> montarLeituras() {
         ParametrosDoLaboratorio p = new ParametrosDoLaboratorio("zzcontainer", 54321, "zzrede", "zzimagem", "/zzpasta");
         List<List<String>> modelos = List.of(versaoDoDocker(), versaoDoComposeDoDocker(), versaoDoGit(), estadoDoWsl(), virtualizacaoDoWindows(),
-            lerRede(p), lerContainersNaRede(p), lerContainer(p), lerVolume(p), lerImagensDoApp(p), lerImagem(p, "zzversao"), lerLogs(p), lerEstadoDoContainer("zzcontainer"));
+            lerRede(p), lerContainersNaRede(p), lerContainer(p), lerVolume(p), lerImagensDoApp(p), lerImagem(p, "zzversao"), lerLogs(p), lerEstadoDoContainer("zzcontainer"),
+            lerContainersDosProjetos());
         List<List<Pattern>> moldes = new ArrayList<>();
         for (List<String> modelo : modelos) {
             List<Pattern> m = new ArrayList<>();

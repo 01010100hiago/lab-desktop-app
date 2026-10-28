@@ -104,6 +104,14 @@ public final class TelaProjeto extends Painel {
 
         /** O usuário trocou de aba (para a página lembrar). */
         void abaMudou(Aba aba);
+
+        /** O usuário pediu "Adicionar container" (a janela abre o diálogo; o app só escreve depois do clique de gravar). */
+        default void adicionarContainer() { }
+
+        /** A janela sabe adicionar container neste servidor? (o agente do lab ou este computador, com as ações liberadas) */
+        default boolean podeAdicionarContainer() {
+            return false;
+        }
     }
 
     private final transient ServidorLab servidor;
@@ -175,6 +183,8 @@ public final class TelaProjeto extends Painel {
         this.ctx.terminal = terminal;
         this.ctx.pastaDoProjeto = () -> pastaDoProjeto(servicos, servidor, projeto);
         this.ctx.irParaOClaude = this::mostrarOClaude;
+        this.ctx.adicionarContainer = saida::adicionarContainer;
+        this.ctx.podeAdicionarContainer = saida::podeAdicionarContainer;
 
         paginas.put(Aba.VISAO_GERAL, new PaginaVisaoGeral(ctx));
         paginas.put(Aba.LOGS, new PaginaLogs(ctx));
@@ -300,7 +310,7 @@ public final class TelaProjeto extends Painel {
         if (servidor == null || inscricaoDoEstado != null) {
             return;
         }
-        inscricaoDoDetalhe = servidor.assinar(Topico.detalhe(projeto), new OuvinteDeTopico<Detalhe>() {
+        inscricaoDoDetalhe = servidor.assinar(servidor.topicoDeDetalhe(projeto), new OuvinteDeTopico<Detalhe>() {
             @Override
             public void aoAtualizar(Detalhe valor) {
                 aoReceberDetalhe(valor);
@@ -365,7 +375,7 @@ public final class TelaProjeto extends Painel {
     }
 
     /** Mostra a aba Terminal já na sessão do Claude (o botão "Ver sessão do Claude" da Visão geral). */
-    void mostrarOClaude() {
+    public void mostrarOClaude() {
         mostrarAba(Aba.TERMINAL);
         terminal().escolherOClaude();
     }
@@ -421,8 +431,12 @@ public final class TelaProjeto extends Painel {
         atualizarCabecalho();
         // Servidor sem Claude: não há consumo nem limite do plano a mostrar, então a aba some (e, se estava aberta, a Visão geral a substitui).
         boolean semClaude = (ctx.estado != null && Boolean.FALSE.equals(ctx.estado.temClaude())) || (ctx.detalhe != null && !ctx.temClaude());
-        abas.definirVisivel(Aba.CONSUMO.id, !semClaude);
-        if (semClaude && atual == Aba.CONSUMO) {
+        // "Este computador": os projetos vêm da pasta e do Docker, sem o agente de projetos; logs, backups e consumo são do agente do lab
+        boolean local = servidor != null && servidor.ehLocal();
+        abas.definirVisivel(Aba.LOGS.id, !local);
+        abas.definirVisivel(Aba.BACKUPS.id, !local);
+        abas.definirVisivel(Aba.CONSUMO.id, !semClaude && !local);
+        if ((semClaude || local) && atual == Aba.CONSUMO || local && (atual == Aba.LOGS || atual == Aba.BACKUPS)) {
             mostrarAba(Aba.VISAO_GERAL);
         }
         paginas.values().forEach(PaginaDoProjeto::redesenhar);

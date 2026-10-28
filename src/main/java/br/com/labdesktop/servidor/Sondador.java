@@ -220,7 +220,7 @@ public final class Sondador implements AutoCloseable {
     // =====================================================================================================
 
     private boolean deveRodar(Canal<?> c) {
-        return !fechado && !suspenso && api != null && !c.ouvintes.isEmpty()
+        return !fechado && !suspenso && (api != null || c.topico.semApi()) && !c.ouvintes.isEmpty()
             && c.topico.intervalo(janela, cadenciaCheiaSemFoco).isPresent();
     }
 
@@ -308,7 +308,7 @@ public final class Sondador implements AutoCloseable {
         List<OuvinteDeTopico<T>> destinatarios;
         synchronized (this) {
             c.rodando = false;
-            if (fechado || minhaApi != api) {
+            if (fechado || (!c.topico.semApi() && minhaApi != api)) {
                 // Resultado de uma geração de túnel que já acabou: descarta e consulta de novo na atual.
                 reprogramar(c, true);
                 return;

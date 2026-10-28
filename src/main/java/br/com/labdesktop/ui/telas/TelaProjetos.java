@@ -92,6 +92,13 @@ public final class TelaProjetos extends Painel {
     private final JTextField busca = Campos.busca(16, "Buscar por nome…");
     private final Map<Filtro, JToggleButton> botoesDeFiltro = new EnumMap<>(Filtro.class);
     private final Botao atualizar = Botoes.mini("Atualizar", "atualizar");
+    /** "Novo projeto": só com as ações liberadas e um servidor que sabe criar projeto (o agente do lab ou este computador). */
+    private final Botao novoProjeto = Botoes.miniPrimario("Novo projeto", "pasta-mais");
+    /** O convite grande da lista vazia: "Criar o primeiro projeto" (as mesmas condições do botão). */
+    private final Botao convite = Botoes.primario("Criar o primeiro projeto", "pasta-mais");
+    private final Rotulo textoDoVazio = new Rotulo().corDoToken(Tokens.TEXTO2);
+    private Runnable aoPedirNovoProjeto = this::pedirNovoProjeto;
+    private AcoesDaInterface.DepoisDeCriar depoisDeCriar;
     private final CardLayout cartoes = new br.com.labdesktop.ui.componentes.CartoesAjustaveis();
     private final JPanel corpo = new Painel(cartoes);
     private final JPanel linhasPanel = new Painel();
@@ -174,7 +181,7 @@ public final class TelaProjetos extends Painel {
         // duas linhas: o título com os números e o Atualizar; embaixo a busca e os filtros. Numa linha só, com o texto de 14,
         // a busca encolhia para um ponto e o último filtro saía da janela de 1100.
         JComponent cabecalho = Caixa.coluna(8,
-            Caixa.linha(14, Rotulo.titulo("Projetos"), resumo, Caixa.mola(), atualizar),
+            Caixa.linha(14, Rotulo.titulo("Projetos"), resumo, Caixa.mola(), novoProjeto, atualizar),
             Caixa.linha(8, busca, Caixa.linha(6, botoesDoGrupo.toArray(Component[]::new)), Caixa.mola()));
 
         topo = Caixa.coluna(12, faixa, credito, cabecalho);
@@ -185,8 +192,7 @@ public final class TelaProjetos extends Painel {
         linhasPanel.setLayout(new BoxLayout(linhasPanel, BoxLayout.Y_AXIS));
         corpo.add(new Esqueleto(), CARTAO_ESQUELETO);
         corpo.add(cartaoDeErro(), CARTAO_ERRO);
-        corpo.add(vazio("pasta", "Nenhum projeto ainda", "Os projetos aparecem aqui quando houver pastas em /srv/lab/projects."),
-            CARTAO_VAZIO);
+        corpo.add(cartaoVazio(), CARTAO_VAZIO);
         corpo.add(vazio("busca", "Nada encontrado", "Ajuste a busca ou o filtro rápido."), CARTAO_NADA);
         corpo.add(linhasPanel, CARTAO_LISTA);
 
@@ -253,7 +259,77 @@ public final class TelaProjetos extends Painel {
         return c;
     }
 
+    /** A lista vazia: o texto de sempre e, quando dá para criar, o convite grande "Criar o primeiro projeto". */
+    private JComponent cartaoVazio() {
+        Rotulo t = Rotulo.titulo("Nenhum projeto ainda").tamanho(15f);
+        t.setIcon(Icones.colorido("pasta", 20, Tokens.TEXTO3));
+        t.setIconTextGap(8);
+        convite.setVisible(false);
+        convite.addActionListener(e -> aoPedirNovoProjeto.run());
+        JPanel c = Caixa.coluna(8, t, textoDoVazio, convite);
+        c.setBorder(javax.swing.BorderFactory.createEmptyBorder(28, 28, 28, 28));
+        atualizarOTextoDoVazio();
+        return c;
+    }
+
+    private void atualizarOTextoDoVazio() {
+        boolean local = ultimoEstado != null && ultimoEstado.local();
+        boolean pode = podeCriarProjeto();
+        String pasta = local && acoesUi != null && servidor != null ? acoesUi.pastaDosProjetosLocais(servidor) : "/srv/lab/projects";
+        textoDoVazio.setText(pode ? "Crie um projeto novo ou importe um que já existe (do GitHub ou de uma pasta). Eles ficam em " + pasta + "."
+            : "Os projetos aparecem aqui quando houver pastas em " + pasta + ".");
+        convite.setVisible(pode);
+    }
+
+    /** O botão e o convite só existem com as ações liberadas e um servidor que cria projeto (o agente do lab, ou este computador). */
+    private boolean podeCriarProjeto() {
+        return fluxos.liberadas() && ultimoEstado != null && (ultimoEstado.local() || ultimoEstado.agenteCriaProjetos());
+    }
+
+    private void atualizarONovoProjeto() {
+        novoProjeto.setVisible(podeCriarProjeto());
+        atualizarOTextoDoVazio();
+    }
+
+    private void pedirNovoProjeto() {
+        if (acoesUi == null || servidor == null || !podeCriarProjeto()) {
+            return;
+        }
+        acoesUi.novoProjeto(servidor, depoisDeCriar != null ? depoisDeCriar : new AcoesDaInterface.DepoisDeCriar() {
+            @Override
+            public void abrirNoTerminal(String projeto) {
+                aoAbrirProjeto.accept(projeto);
+            }
+
+            @Override
+            public void abrirNoClaude(String projeto) {
+                aoAbrirProjeto.accept(projeto);
+            }
+        });
+    }
+
+    /** O que fazer depois de criar ou importar: a {@link TelaServidor} abre a página do projeto na aba Terminal. */
+    public void aoCriarProjeto(AcoesDaInterface.DepoisDeCriar depois) {
+        this.depoisDeCriar = depois;
+    }
+
+    /** "Adicionar container" da página de um projeto: abre o diálogo (o app só escreve depois do clique de gravar). */
+    void adicionarContainerDe(String projeto) {
+        if (acoesUi == null || servidor == null || !podeCriarProjeto()) {
+            return;
+        }
+        acoesUi.adicionarContainer(servidor, projeto, () -> fluxos.iniciar(projeto));
+    }
+
+    /** A página do projeto pode oferecer "Adicionar container" (as ações liberadas e um servidor que sabe escrever em projeto)? */
+    boolean podeAdicionarContainer() {
+        return podeCriarProjeto();
+    }
+
     private void ligarEventos() {
+        novoProjeto.setVisible(false);
+        novoProjeto.setToolTipText("Cria um projeto do zero ou importa um que já existe");
+        novoProjeto.addActionListener(e -> aoPedirNovoProjeto.run());
         busca.getDocument().addDocumentListener(new br.com.labdesktop.ui.dialogos.SimplesOuvinteDeDocumento(() -> {
             termo = busca.getText();
             redesenhar();
@@ -276,7 +352,7 @@ public final class TelaProjetos extends Painel {
         if (inscricaoDoTopico != null) {
             return;
         }
-        inscricaoDoTopico = servidor.assinar(Topico.PROJETOS, new OuvinteDeTopico<VisaoProjetos>() {
+        inscricaoDoTopico = servidor.assinar(servidor.topicoDeProjetos(), new OuvinteDeTopico<VisaoProjetos>() {
             @Override
             public void aoAtualizar(VisaoProjetos v) {
                 aoReceberProjetos(v);
@@ -359,6 +435,7 @@ public final class TelaProjetos extends Painel {
         }
         faixa.atualizar(e);
         credito.atualizar(e.limites(), Instant.now(), ZoneId.systemDefault());
+        atualizarONovoProjeto();
     }
 
     /** Mostra ou esconde tudo do Claude na lista: a coluna, os filtros "Com Claude" e "Pausados", as frases do resumo. */
@@ -502,6 +579,23 @@ public final class TelaProjetos extends Painel {
 
     public String textoDoResumo() {
         return resumoEmTexto;
+    }
+
+    public Botao botaoNovoProjeto() {
+        return novoProjeto;
+    }
+
+    public Botao botaoDoConvite() {
+        return convite;
+    }
+
+    public String textoDoVazio() {
+        return textoDoVazio.getText();
+    }
+
+    /** Troca o que "Novo projeto" faz (os testes contam os cliques sem abrir o diálogo). */
+    public void aoPedirNovoProjeto(Runnable acao) {
+        this.aoPedirNovoProjeto = acao == null ? this::pedirNovoProjeto : acao;
     }
 
     public JTextField campoDeBusca() {

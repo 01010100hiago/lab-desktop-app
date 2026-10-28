@@ -53,6 +53,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
 
     private final Botao compose = Botoes.mini("Iniciar projeto", "play");
     private final Botao reiniciar = Botoes.mini("Reiniciar projeto", "atualizar");
+    private final Botao adicionarContainer = Botoes.mini("Adicionar container", "mais");
     private final Botao abrirClaude = Botoes.miniPrimario("Abrir Claude", "terminal");
     private final Botao retomar = Botoes.mini("Retomar sessão", "play");
     private final Botao verSessao = Botoes.mini("Ver sessão do Claude", "terminal");
@@ -101,6 +102,8 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         });
         reiniciar.addActionListener(e -> ctx.fluxos.reiniciar(ctx.projeto));
         reiniciar.setToolTipText("Reinicia todos os containers do projeto");
+        adicionarContainer.addActionListener(e -> ctx.adicionarContainer.run());
+        adicionarContainer.setToolTipText("Acrescenta ao docker-compose.yml um container pronto (Node, Postgres, Redis ou uma imagem). Mostra a diferença antes de gravar.");
         abrirClaude.addActionListener(e -> ctx.fluxos.abrirSessao(ctx.projeto));
         retomar.addActionListener(e -> ctx.fluxos.retomar(ctx.projeto, ctx.detalhe == null ? null : ctx.detalhe.limite()));
         retomar.setToolTipText("Tira a pausa e reabre o Claude continuando a conversa");
@@ -113,7 +116,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
 
         // linha 1: a descrição; linha 2: a ficha; linha 3: os detalhes técnicos (fechados) à esquerda e os botões à direita
         // (sem as ações ligadas, no lugar dos botões vai o aviso de somente leitura)
-        JPanel acoes = Caixa.fluxo(java.awt.FlowLayout.RIGHT, 8, compose, reiniciar, abrirClaude, retomar, verSessao, somenteLeitura);
+        JPanel acoes = Caixa.fluxo(java.awt.FlowLayout.RIGHT, 8, compose, reiniciar, adicionarContainer, abrirClaude, retomar, verSessao, somenteLeitura);
         JPanel linha3 = new Painel(new BorderLayout(16, 0));
         linha3.add(new AEsquerda(secaoTecnica), BorderLayout.CENTER);
         linha3.add(acoes, BorderLayout.EAST);
@@ -218,6 +221,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         compose.setIcon(Icones.de(m.mostrarParar() ? "parar" : "play", 14));
         compose.setToolTipText((m.mostrarParar() ? "Para" : "Inicia") + " todos os containers do projeto");
         reiniciar.setVisible(acoes && m.temCompose());
+        adicionarContainer.setVisible(acoes && ctx.podeAdicionarContainer.get());
         abrirClaude.setVisible(acoes && m.oferecerAbrirClaude());
         abrirClaude.setToolTipText("Abre a sessão do Claude neste projeto");
         retomar.setVisible(acoes && m.oferecerRetomar());
@@ -313,6 +317,10 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
 
     Botao botaoReiniciar() {
         return reiniciar;
+    }
+
+    Botao botaoAdicionarContainer() {
+        return adicionarContainer;
     }
 
     Botao botaoAbrirClaude() {

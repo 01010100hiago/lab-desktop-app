@@ -1,5 +1,7 @@
 package br.com.labdesktop.ui;
 
+import br.com.labdesktop.api.ErroApi;
+import br.com.labdesktop.api.modelo.RespostaNovoProjeto;
 import br.com.labdesktop.arquivos.CaminhosLocais;
 import br.com.labdesktop.arquivos.ErroSftp;
 import br.com.labdesktop.arquivos.MemoriaDeCaminhos;
@@ -14,6 +16,16 @@ import br.com.labdesktop.local.PlanoDeInstalacao;
 import br.com.labdesktop.local.RelatorioDoComputador;
 import br.com.labdesktop.local.ServicosLocais;
 import br.com.labdesktop.local.VerificacoesDoComputador;
+import br.com.labdesktop.projetos.AgenteDeProjetos;
+import br.com.labdesktop.projetos.AmbienteDeProjetos;
+import br.com.labdesktop.projetos.CriadorDeProjeto;
+import br.com.labdesktop.projetos.CriadorNoAmbiente;
+import br.com.labdesktop.projetos.CriadorPeloAgente;
+import br.com.labdesktop.projetos.FalhaDoProjeto;
+import br.com.labdesktop.projetos.FiltroDeEnvio;
+import br.com.labdesktop.projetos.FluxoDeCriacao;
+import br.com.labdesktop.projetos.ImportadorDeProjeto;
+import br.com.labdesktop.projetos.UrlDeGit;
 import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.EstadoServidor;
 import br.com.labdesktop.servidor.GerenciadorServidores;
@@ -32,7 +44,9 @@ import br.com.labdesktop.ui.dialogos.DialogoEscolherServidor;
 import br.com.labdesktop.ui.dialogos.DialogoPrepararComputador;
 import br.com.labdesktop.ui.dialogos.DialogoEditarServidor;
 import br.com.labdesktop.ui.dialogos.DialogoRegistrarToken;
+import br.com.labdesktop.ui.dialogos.DialogoNovoProjeto;
 import br.com.labdesktop.ui.dialogos.DialogoRemoverServidor;
+import br.com.labdesktop.ui.telas.arquivos.EscolhedorLocal;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -52,6 +66,7 @@ public final class AcoesDaInterface {
     private final Consumer<ServidorLab> aoSelecionar;
     private final Navegador navegador;
     private final ServicosDeArquivos servicosDeArquivos;
+    private volatile EscolhedorLocal escolhedor = EscolhedorLocal.doSistema(() -> null);
 
     /**
      * @param aoSelecionar chamado na EDT depois de um servidor ser adicionado, para a janela mostrá-lo
@@ -90,6 +105,213 @@ public final class AcoesDaInterface {
         boolean primeiro = gerenciador.servidores().stream().noneMatch(s -> !s.ehLocal());
         apresentador.mostrar(new DialogoAdicionarServidor(assistente, primeiro, avisos, aoSelecionar, null, null,
             CopiadorDeTexto.doSistema(), this::instalarAgente));
+    }
+
+    // =====================================================================================================
+    // Novo projeto
+    // =====================================================================================================
+
+    /** O que a janela faz depois que o projeto está pronto: abrir a página dele (aba Terminal) e, se o usuário pediu, a sessão do Claude. */
+    public interface DepoisDeCriar {
+        /** Seleciona o projeto na lista, leva à página dele e à aba Terminal (o shell já na pasta). */
+        void abrirNoTerminal(String projeto);
+
+        /** A sessão do Claude do projeto acabou de abrir: leva à aba Terminal, no Claude. */
+        void abrirNoClaude(String projeto);
+    }
+
+    /** Quem escolhe a pasta do computador a importar (o seletor do sistema, sobre a janela do app). */
+    public void usarEscolhedor(EscolhedorLocal novo) {
+        this.escolhedor = novo == null ? EscolhedorLocal.doSistema(() -> null) : novo;
+    }
+
+    /**
+     * O servidor deste computador, ou um servidor com o agente do lab, sabe criar projeto? Só então o botão e o item de menu existem. Servidor
+     * sem agente, ou com o agente do perfil monitor, não: o texto da aba já diz que falta o agente.
+     */
+    public static boolean podeCriarProjeto(ServidorLab lab) {
+        return lab != null && (lab.ehLocal() || lab.estado().agenteCriaProjetos());
+    }
+
+    /** A pasta dos projetos locais como texto do sistema (a lembrada, ou {@code <pasta do usuário>/LabLocal/projects}). */
+    public String pastaDosProjetosLocais(ServidorLab lab) {
+        return pastaDosProjetosLocais(lab, CaminhosLocais.doSistema());
+    }
+
+    /** A raiz dos projetos no caminho do app (com barras): a que o gerenciador de arquivos lembra, ou a do laboratório local. */
+    private String raizDosProjetosNoApp(ServidorLab lab) {
+        if (lab.ehLocal()) {
+            CaminhosLocais c = CaminhosLocais.doSistema();
+            return c.doTextoDoSistema(pastaDosProjetosLocais(lab, c));
+        }
+        return servicosDeArquivos.memoria().raizDosProjetos(lab.id());
+    }
+
+    /**
+     * "Novo projeto": abre o diálogo (criar do zero, importar). Só o CLIQUE do usuário chega aqui (botão da lista, convite da lista vazia, item de
+     * menu); nada é criado antes do clique em "Criar projeto" ou "Importar projeto" lá dentro. O que fazer ao terminar é de quem chamou.
+     */
+    public void novoProjeto(ServidorLab lab, DepoisDeCriar depois) {
+        if (!podeCriarProjeto(lab)) {
+            avisos.atencao("Este servidor ainda não tem o agente do lab, que é quem cria projetos. Instale o agente ou use um servidor com ele.");
+            return;
+        }
+        String raiz = raizDosProjetosNoApp(lab);
+        AmbienteDeProjetos ambiente = lab.ambienteDeProjetos(raiz);
+        EstadoServidor e = lab.estado();
+        boolean guiaIa = !lab.ehLocal() && Boolean.TRUE.equals(e.temClaude()) && e.entendeGuiaIa();
+        CriadorDeProjeto criador = lab.ehLocal() ? new CriadorNoAmbiente(ambiente) : new CriadorPeloAgente(agenteDeProjetos(lab));
+        DialogoNovoProjeto.Motor motor = new MotorDeProjetos(lab, ambiente, criador, raiz, guiaIa);
+        apresentador.mostrar(new DialogoNovoProjeto(motor, avisos, CopiadorDeTexto.doSistema(), c -> aoConcluirNovoProjeto(lab, c, depois)));
+    }
+
+    private static AgenteDeProjetos agenteDeProjetos(ServidorLab lab) {
+        return new AgenteDeProjetos() {
+            @Override
+            public boolean conectado() {
+                return lab.acoes().conectado();
+            }
+
+            @Override
+            public RespostaNovoProjeto criar(String nome, Boolean guiaIa) throws ErroApi {
+                return lab.acoes().criarProjeto(nome, guiaIa);
+            }
+
+            @Override
+            public List<String> nomes() throws ErroApi {
+                return lab.acoes().nomesDosProjetos();
+            }
+        };
+    }
+
+    private void aoConcluirNovoProjeto(ServidorLab lab, DialogoNovoProjeto.Concluido c, DepoisDeCriar depois) {
+        lab.atualizarProjetosAgora(); // a lista não espera o ciclo de 10 s
+        if (c.talvez()) {
+            avisos.atencao(c.mensagem());
+            return;
+        }
+        boolean claude = !lab.ehLocal() && Boolean.TRUE.equals(lab.estado().temClaude());
+        if (claude) {
+            avisos.comAcao(c.mensagem(), "Abrir o Claude neste projeto", () -> abrirOClaudeDoProjeto(lab, c.nome(), depois));
+        } else {
+            avisos.ok(c.mensagem());
+        }
+        c.avisos().forEach(avisos::atencao);
+        depois.abrirNoTerminal(c.nome());
+    }
+
+    /** O botão (nunca automático) "Abrir o Claude neste projeto": abre a sessão e leva à aba Terminal, no Claude. */
+    private void abrirOClaudeDoProjeto(ServidorLab lab, String projeto, DepoisDeCriar depois) {
+        Tarefas.rodar(() -> lab.acoes().abrirSessao(projeto), sessao -> depois.abrirNoClaude(projeto),
+            falha -> avisos.erro("Não consegui abrir o Claude em " + projeto + ": " + MensagensDeErro.de(falha)));
+    }
+
+    /**
+     * "Adicionar container" na página de um projeto: abre o diálogo (modelo, a diferença do compose, gravar). Só o clique do usuário chega aqui, e nada é
+     * escrito antes do clique em "Gravar no docker-compose.yml"; "Iniciar" é outro clique.
+     *
+     * @param iniciar o que "Iniciar o projeto" faz (o mesmo botão da página do projeto); {@code null} não mostra o botão
+     */
+    public void adicionarContainer(ServidorLab lab, String projeto, Runnable iniciar) {
+        if (!podeCriarProjeto(lab)) {
+            avisos.atencao("Este servidor ainda não tem o agente do lab, então não dá para acrescentar containers por aqui.");
+            return;
+        }
+        br.com.labdesktop.projetos.EscritorDeCompose escritor =
+            new br.com.labdesktop.projetos.EscritorDeCompose(lab.ambienteDeProjetos(raizDosProjetosNoApp(lab)));
+        br.com.labdesktop.ui.dialogos.DialogoAdicionarContainer.Motor motor = new br.com.labdesktop.ui.dialogos.DialogoAdicionarContainer.Motor() {
+            @Override
+            public br.com.labdesktop.projetos.EscritorDeCompose.Previa preparar(br.com.labdesktop.projetos.BlocoDeServico bloco) throws FalhaDoProjeto {
+                return escritor.preparar(projeto, bloco);
+            }
+
+            @Override
+            public br.com.labdesktop.projetos.EscritorDeCompose.Gravado gravar(br.com.labdesktop.projetos.EscritorDeCompose.Previa previa) throws FalhaDoProjeto {
+                return escritor.gravar(previa);
+            }
+        };
+        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoAdicionarContainer(projeto, motor, () -> lab.atualizarProjetoAgora(projeto), iniciar, avisos,
+            CopiadorDeTexto.doSistema()));
+    }
+
+    /** O que o diálogo "Novo projeto" usa do domínio, sobre o servidor de verdade. */
+    private final class MotorDeProjetos implements DialogoNovoProjeto.Motor {
+        private final ServidorLab lab;
+        private final AmbienteDeProjetos ambiente;
+        private final CriadorDeProjeto criador;
+        private final String raiz;
+        private final boolean guiaIa;
+
+        MotorDeProjetos(ServidorLab lab, AmbienteDeProjetos ambiente, CriadorDeProjeto criador, String raiz, boolean guiaIa) {
+            this.lab = lab;
+            this.ambiente = ambiente;
+            this.criador = criador;
+            this.raiz = raiz;
+            this.guiaIa = guiaIa;
+        }
+
+        @Override
+        public boolean local() {
+            return lab.ehLocal();
+        }
+
+        @Override
+        public boolean guiaIaDisponivel() {
+            return guiaIa;
+        }
+
+        @Override
+        public String pastaDosProjetos() {
+            return paraExibir(raiz);
+        }
+
+        @Override
+        public String caminhoDoProjeto(String nome) {
+            return paraExibir(raiz + (raiz.endsWith("/") ? "" : "/") + nome);
+        }
+
+        private String paraExibir(String caminhoDoApp) {
+            if (!lab.ehLocal()) {
+                return caminhoDoApp;
+            }
+            try {
+                return CaminhosLocais.doSistema().paraTextoDoSistema(caminhoDoApp);
+            } catch (IllegalArgumentException e) {
+                return caminhoDoApp;
+            }
+        }
+
+        @Override
+        public FluxoDeCriacao.Desfecho criar(String nome, Boolean guia) {
+            return FluxoDeCriacao.criar(criador, nome, guia);
+        }
+
+        @Override
+        public ImportadorDeProjeto.Resultado clonar(UrlDeGit url, String nome, ImportadorDeProjeto.Observador obs) throws FalhaDoProjeto, InterruptedException {
+            return new ImportadorDeProjeto(ambiente).clonar(url, nome, obs);
+        }
+
+        @Override
+        public ImportadorDeProjeto.Resultado importarPasta(java.nio.file.Path pasta, String nome, FiltroDeEnvio filtro, ImportadorDeProjeto.Observador obs,
+                                                           br.com.labdesktop.arquivos.Cancelamento cancelamento) throws FalhaDoProjeto {
+            return new ImportadorDeProjeto(ambiente).importarPasta(pasta, nome, filtro, obs, cancelamento);
+        }
+
+        @Override
+        public List<ImportadorDeProjeto.Candidata> candidatas() throws FalhaDoProjeto {
+            return new ImportadorDeProjeto(ambiente).candidatasParaAdotar();
+        }
+
+        @Override
+        public ImportadorDeProjeto.Resultado adotar(String origem, String nome, ImportadorDeProjeto.Modo modo, ImportadorDeProjeto.Observador obs)
+            throws FalhaDoProjeto, InterruptedException {
+            return new ImportadorDeProjeto(ambiente).adotar(origem, nome, modo, obs);
+        }
+
+        @Override
+        public java.util.Optional<java.nio.file.Path> escolherPasta() {
+            return escolhedor.escolherPastaParaImportar();
+        }
     }
 
     // =====================================================================================================
