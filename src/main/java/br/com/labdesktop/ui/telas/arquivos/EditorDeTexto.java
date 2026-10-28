@@ -32,7 +32,7 @@ import org.fife.ui.rtextarea.SearchEngine;
 import org.fife.ui.rtextarea.SearchResult;
 
 /**
- * O editor de UM arquivo de texto do servidor: fonte monoespaçada, números de linha, realce de sintaxe com a paleta quente do
+ * O editor de UM arquivo de texto do servidor: fonte monoespaçada, números de linha, realce de sintaxe com a paleta neutra do
  * app, busca (Cmd+F), indicação de modificado (um asterisco no nome), Salvar (Cmd+S), "Desfazer a última edição" (volta à cópia
  * local anterior à última gravação), Recarregar e Fechar. A parte de rede (salvar com conflito, backup, sudo) é do gerenciador,
  * que recebe os pedidos por {@link Acoes}; aqui só se edita e se mostra.
