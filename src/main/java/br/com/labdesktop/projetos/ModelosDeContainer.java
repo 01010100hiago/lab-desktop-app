@@ -14,7 +14,8 @@ public final class ModelosDeContainer {
 
     /** Os modelos, na ordem da tela. */
     public enum Modelo {
-        NODE("Aplicação Node", "Roda o seu código com Node (a pasta do projeto vira /app) e abre uma porta neste computador.", "app", 3000, 3000),
+        NODE("Aplicação Node", "Roda o seu código com Node (a pasta do projeto vira /app, e o container roda como o usuário \"node\", de número 1000, para o npm install não "
+            + "deixar arquivos do administrador na sua pasta; se o seu usuário não for o 1000, ajuste a linha user:) e abre uma porta neste computador.", "app", 3000, 3000),
         POSTGRES("Banco Postgres", "Um Postgres com os dados num volume nomeado (não se perdem ao recriar o container) e a senha no .env.",
             "postgres", null, 5432),
         REDIS("Redis", "Um Redis com os dados num volume nomeado. Os outros serviços o acham pelo nome, dentro da rede do projeto.", "redis", null, 6379),
@@ -120,6 +121,7 @@ public final class ModelosDeContainer {
             case NODE -> {
                 l.add("    image: node:22-alpine");
                 l.add("    working_dir: /app");
+                l.add("    user: \"node\"");
                 l.add("    command: [\"sh\", \"-c\", \"npm install && npm start\"]");
                 l.add("    environment:");
                 l.add("      NODE_ENV: \"${NODE_ENV:-development}\"");

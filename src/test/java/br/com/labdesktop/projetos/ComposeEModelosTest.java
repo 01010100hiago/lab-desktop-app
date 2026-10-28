@@ -70,7 +70,7 @@ class ComposeEModelosTest {
     @Test
     void redisNoEsqueletoValorConhecido() {
         String novo = ComposeDoProjeto.acrescentar(ESQUELETO, "demo", bloco(Modelo.REDIS)).orElseThrow();
-        assertEquals("name: demo\n"
+        assertEquals("name: \"demo\"\n"
             + "# Esqueleto: acrescente os serviços abaixo (o botão \"Adicionar container\" do Lab Desktop escreve aqui).\n"
             + "# Convenções: banco, cache e filas só na rede default; segredos só no .env (nunca neste arquivo);\n"
             + "# portas no host só se precisar, e sempre em 127.0.0.1 (ex.: \"127.0.0.1:5440:5432\").\n"
@@ -101,7 +101,7 @@ class ComposeEModelosTest {
     @Test
     void semArquivoNasceDoEsqueleto() {
         String novo = ComposeDoProjeto.acrescentar(null, "demo", bloco(Modelo.POSTGRES)).orElseThrow();
-        assertTrue(novo.startsWith("name: demo\n# Esqueleto"), novo);
+        assertTrue(novo.startsWith("name: \"demo\"\n# Esqueleto"), novo);
         assertTrue(novo.contains("services:\n  postgres:\n"), novo);
         assertTrue(novo.endsWith("volumes:\n  postgres_dados:\n"), novo);
     }
@@ -186,5 +186,19 @@ class ComposeEModelosTest {
         assertFalse(r.contains(".env"));
         String n = bloco(Modelo.NODE).textoParaCopiar();
         assertFalse(n.contains("# 2) Em \"volumes:\""), "Node não tem seção volumes");
+    }
+
+    @Test
+    void ocomentarioDaLinhaServicesContinuaOndeEstava() {
+        String original = "name: demo\nservices: {}   # aqui entram os serviços\n";
+        String novo = ComposeDoProjeto.acrescentar(original, "demo", bloco(Modelo.REDIS)).orElseThrow();
+        assertTrue(novo.startsWith("name: demo\nservices: # aqui entram os serviços\n  redis:\n"), novo);
+    }
+
+    @Test
+    void aAplicacaoNodeRodaComoOUsuarioNodeParaONpmNaoDeixarArquivosDoAdministrador() {
+        String novo = ComposeDoProjeto.acrescentar(ESQUELETO, "demo", bloco(Modelo.NODE)).orElseThrow();
+        assertTrue(novo.contains("    working_dir: /app\n    user: \"node\"\n"), novo);
+        assertTrue(Modelo.NODE.descricao().contains("usuário \"node\""), Modelo.NODE.descricao());
     }
 }

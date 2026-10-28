@@ -9,6 +9,9 @@ import br.com.labdesktop.seguranca.TextoSeguro;
 import br.com.labdesktop.ssh.ComandoDemorouException;
 import br.com.labdesktop.ssh.ResultadoExec;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -16,6 +19,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +40,8 @@ import java.util.Optional;
 public final class EscritorDeCompose {
 
     /** O que {@link #preparar} mostra ao usuário antes de gravar. */
-    public record Previa(String projeto, ComposeDoProjeto.Situacao situacao, String original, String novo, BlocoDeServico bloco, String diferenca) {
+    public record Previa(String projeto, ComposeDoProjeto.Situacao situacao, String original, String novo, BlocoDeServico bloco, String diferenca,
+                         byte[] bytesLidos) {
 
         /** O app pode escrever neste arquivo (é o esqueleto, ou não existe)? Senão, só mostra o bloco para copiar. */
         public boolean gravavel() {
@@ -90,11 +95,16 @@ public final class EscritorDeCompose {
             if (!c.existe(pasta)) {
                 throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.RECUSADO, "A pasta do projeto não existe mais no servidor.");
             }
-            String original = lerTexto(c, CaminhoRemoto.juntar(pasta, GabaritoDoProjeto.ARQUIVO_COMPOSE));
+            byte[] bytes = lerBytes(c, CaminhoRemoto.juntar(pasta, GabaritoDoProjeto.ARQUIVO_COMPOSE));
+            String original = decodificar(bytes);
+            if (bytes != null && original == null) {
+                // não é UTF-8 (um arquivo em Latin-1/ANSI): decodificar corromperia os acentos, então o app não escreve neste arquivo, só mostra o bloco
+                return new Previa(projeto, ComposeDoProjeto.Situacao.COMPLEXO, null, null, bloco, "", bytes);
+            }
             ComposeDoProjeto.Situacao situacao = ComposeDoProjeto.situacaoDe(original);
             Optional<String> novo = ComposeDoProjeto.acrescentar(original, projeto, bloco);
             String diferenca = novo.map(n -> Diferenca.legivel(original == null ? "" : original, n, 2)).orElse("");
-            return new Previa(projeto, situacao, original, novo.orElse(null), bloco, diferenca);
+            return new Previa(projeto, situacao, original, novo.orElse(null), bloco, diferenca, bytes);
         } catch (ErroSftp e) {
             throw Falhas.de(e, "ler o docker-compose.yml");
         }
@@ -114,16 +124,21 @@ public final class EscritorDeCompose {
         try (ClienteSftp c = ambiente.abrirArquivos()) {
             String pasta = CaminhoRemoto.juntar(ambiente.raizDosProjetos(), previa.projeto());
             String arquivo = CaminhoRemoto.juntar(pasta, GabaritoDoProjeto.ARQUIVO_COMPOSE);
-            String agora = lerTexto(c, arquivo);
-            if (!java.util.Objects.equals(agora, previa.original())) {
-                throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.OUTRO, "O docker-compose.yml mudou depois que você viu a diferença. Nada foi gravado: abra "
-                    + "\"Adicionar container\" de novo para ver o que muda agora.");
+            if (!Arrays.equals(lerBytes(c, arquivo), previa.bytesLidos())) {
+                throw mudou();
             }
             conferirComODocker(pasta, previa);
+            // a conferência pode levar até um minuto: relê logo antes de guardar a cópia e de trocar, e só segue se o arquivo é exatamente o que foi
+            // visto e conferido (a cópia datada sai destes BYTES, fiéis ao que havia, qualquer que seja a codificação)
+            byte[] naHora = lerBytes(c, arquivo);
+            if (!Arrays.equals(naHora, previa.bytesLidos())) {
+                throw mudou();
+            }
             String copia = null;
-            if (previa.original() != null) {
+            if (naHora != null) {
                 copia = nomeDaCopia(c, pasta);
-                c.gravarAtomico(CaminhoRemoto.juntar(pasta, copia), previa.original().getBytes(StandardCharsets.UTF_8), PERMISSAO_DO_COMPOSE);
+                c.gravarAtomico(CaminhoRemoto.juntar(pasta, copia), naHora, PERMISSAO_DO_COMPOSE);
+                cuidarDaCopiaNoGit(c, pasta, copia, avisos);
             }
             List<String> variaveisNovas = acrescentarAoEnv(c, pasta, previa.bloco(), avisos);
             c.gravarAtomico(arquivo, previa.novo().getBytes(StandardCharsets.UTF_8), PERMISSAO_DO_COMPOSE);
@@ -135,6 +150,42 @@ public final class EscritorDeCompose {
             }
             throw Falhas.de(e, "gravar o docker-compose.yml");
         }
+    }
+
+    /** O padrão que deixa as cópias datadas do compose fora do git. */
+    static final String PADRAO_DAS_COPIAS = GabaritoDoProjeto.ARQUIVO_COMPOSE + ".*.bak";
+
+    /**
+     * A cópia datada fica na pasta do projeto e iria para o git junto. Se o {@code .gitignore} é exatamente o do esqueleto do app, o padrão entra nele
+     * (o app mexe no que é dele); se é do usuário, o app não o reescreve: só avisa, com a linha a acrescentar.
+     */
+    private void cuidarDaCopiaNoGit(ClienteSftp c, String pasta, String copia, List<String> avisos) {
+        try {
+            String ignore = CaminhoRemoto.juntar(pasta, ".gitignore");
+            String atual = lerTexto(c, ignore);
+            if (atual == null) {
+                if (c.existe(CaminhoRemoto.juntar(pasta, ".git"))) {
+                    avisos.add("A cópia " + copia + " fica na pasta do projeto e o git a veria como arquivo novo: acrescente " + PADRAO_DAS_COPIAS + " ao .gitignore.");
+                }
+                return;
+            }
+            if (atual.equals(GabaritoDoProjeto.GITIGNORE)) {
+                c.gravarAtomico(ignore, (atual + PADRAO_DAS_COPIAS + "\n").getBytes(StandardCharsets.UTF_8), PERMISSAO_DO_COMPOSE);
+                return;
+            }
+            boolean jaIgnora = atual.lines().map(String::strip).anyMatch(l -> l.equals("*.bak") || l.equals(PADRAO_DAS_COPIAS) || l.equals("docker-compose*.bak"));
+            if (!jaIgnora) {
+                avisos.add("A cópia " + copia + " fica na pasta do projeto e o git a veria como arquivo novo: acrescente " + PADRAO_DAS_COPIAS + " ao .gitignore (o app não "
+                    + "reescreve o .gitignore que é seu).");
+            }
+        } catch (ErroSftp | FalhaDoProjeto e) {
+            avisos.add("A cópia " + copia + " fica na pasta do projeto; confira se o .gitignore a deixa de fora.");
+        }
+    }
+
+    private static FalhaDoProjeto mudou() {
+        return new FalhaDoProjeto(FalhaDoProjeto.Tipo.OUTRO, "O docker-compose.yml mudou depois que você viu a diferença. Nada foi gravado: abra "
+            + "\"Adicionar container\" de novo para ver o que muda agora.");
     }
 
     private void conferirComODocker(String pasta, Previa previa) throws FalhaDoProjeto {
@@ -205,20 +256,43 @@ public final class EscritorDeCompose {
         return nome;
     }
 
-    /** O texto do arquivo, ou {@code null} se ele não existe. */
-    private static String lerTexto(ClienteSftp c, String caminho) throws ErroSftp, FalhaDoProjeto {
+    /** Os bytes do arquivo, ou {@code null} se ele não existe. */
+    private static byte[] lerBytes(ClienteSftp c, String caminho) throws ErroSftp, FalhaDoProjeto {
         try {
             byte[] bytes = c.lerArquivo(caminho, LIMITE_DO_COMPOSE + 1);
             if (bytes.length > LIMITE_DO_COMPOSE) {
                 throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.RECUSADO, "O arquivo " + CaminhoRemoto.nome(caminho) + " é grande demais para o app mexer (mais de 512 KB).");
             }
-            return new String(bytes, StandardCharsets.UTF_8);
+            return bytes;
         } catch (ErroSftp e) {
             if (e.tipo() == ErroSftp.Tipo.NAO_EXISTE) {
                 return null;
             }
             throw e;
         }
+    }
+
+    /** UTF-8 estrito: {@code null} se os bytes não são texto UTF-8 válido (e também se não há arquivo). */
+    static String decodificar(byte[] bytes) {
+        if (bytes == null) {
+            return null;
+        }
+        try {
+            return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes)).toString();
+        } catch (CharacterCodingException e) {
+            return null;
+        }
+    }
+
+    /** O texto do arquivo, ou {@code null} se ele não existe ou não é UTF-8 (o .env e o .env.example: nesses o app só acrescenta e nunca reescreve o que não entende). */
+    private static String lerTexto(ClienteSftp c, String caminho) throws ErroSftp, FalhaDoProjeto {
+        byte[] bytes = lerBytes(c, caminho);
+        if (bytes != null && decodificar(bytes) == null) {
+            throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.RECUSADO, "O arquivo " + CaminhoRemoto.nome(caminho) + " não está em UTF-8: o app não mexe nele para não estragar os acentos. "
+                + "Nada foi gravado.");
+        }
+        return bytes == null ? null : decodificar(bytes);
     }
 
     private static void exigirProjeto(String projeto) throws FalhaDoProjeto {

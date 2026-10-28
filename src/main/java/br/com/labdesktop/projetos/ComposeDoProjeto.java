@@ -71,8 +71,10 @@ public final class ComposeDoProjeto {
         String base = s == Situacao.AUSENTE ? GabaritoDoProjeto.composeVazio(nomeDoProjeto) : original;
         List<String> saida = new ArrayList<>();
         for (String linha : base.split("\n", -1)) {
-            if (SERVICOS.matcher(linha).matches()) {
-                saida.add("services:");
+            java.util.regex.Matcher m = SERVICOS.matcher(linha);
+            if (m.matches()) {
+                // o comentário da linha (services: {}  # nota do usuário) continua onde estava
+                saida.add(m.group(2) == null ? "services:" : "services: " + m.group(2));
                 saida.addAll(bloco.linhasDoServico());
             } else {
                 saida.add(linha);

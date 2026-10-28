@@ -107,7 +107,7 @@ class EscritorDeComposeTest {
         EscritorDeCompose.Previa p = escritor().preparar("demo", bloco(Modelo.REDIS));
         assertEquals(ComposeDoProjeto.Situacao.AUSENTE, p.situacao());
         assertTrue(p.gravavel());
-        assertTrue(p.diferenca().startsWith("+ name: demo\n"), p.diferenca());
+        assertTrue(p.diferenca().startsWith("+ name: \"demo\"\n"), p.diferenca());
         assertEquals(List.of(), nomes(projeto));
     }
 
@@ -229,7 +229,7 @@ class EscritorDeComposeTest {
         montar(null);
         EscritorDeCompose.Gravado g = escritor().gravar(escritor().preparar("demo", bloco(Modelo.REDIS)));
         assertNull(g.copia(), "não havia o que copiar");
-        assertTrue(lerCompose().startsWith("name: demo\n"));
+        assertTrue(lerCompose().startsWith("name: \"demo\"\n"));
         assertTrue(lerCompose().contains("services:\n  redis:\n"));
         assertEquals(List.of("docker-compose.yml"), nomes(projeto));
     }
@@ -282,5 +282,72 @@ class EscritorDeComposeTest {
         montar("# " + "x".repeat(EscritorDeCompose.LIMITE_DO_COMPOSE + 10) + "\nservices: {}\n");
         FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> escritor().preparar("demo", bloco(Modelo.REDIS)));
         assertTrue(f.mensagem().contains("grande demais"));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // casos de borda do compose
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void composeEmLatin1NaoEDecodificadoNemGravadoSoMostraOBloco() throws Exception {
+        montar(null);
+        byte[] latin1 = "name: demo\n# comentário com acento: ação\nservices: {}\n".getBytes(java.nio.charset.Charset.forName("ISO-8859-1"));
+        Files.write(projeto.resolve("docker-compose.yml"), latin1);
+        EscritorDeCompose.Previa p = escritor().preparar("demo", bloco(Modelo.REDIS));
+        assertFalse(p.gravavel(), "decodificar corromperia os acentos (U+FFFD): o app não escreve neste arquivo");
+        assertEquals(ComposeDoProjeto.Situacao.COMPLEXO, p.situacao());
+        assertNull(p.original());
+        assertTrue(p.textoParaCopiar().contains("redis"));
+        assertThrows(FalhaDoProjeto.class, () -> escritor().gravar(p));
+        assertTrue(java.util.Arrays.equals(latin1, Files.readAllBytes(projeto.resolve("docker-compose.yml"))), "o arquivo não mudou nem um byte");
+    }
+
+    @Test
+    void aCopiaDatadaSaiDosBytesLidosFielmenteInclusiveComAcentoEmUtf8() throws Exception {
+        String original = "# serviço de ação\nname: demo\nservices: {}\n";
+        montar(original);
+        EscritorDeCompose.Gravado g = escritor().gravar(escritor().preparar("demo", bloco(Modelo.REDIS)));
+        assertTrue(java.util.Arrays.equals(original.getBytes(StandardCharsets.UTF_8), Files.readAllBytes(projeto.resolve(g.copia()))), "a cópia é fiel ao que havia");
+    }
+
+    @Test
+    void seOArquivoMudaEnquantoODockerConfereNadaEGravadoENemACopiaNemOEnv() throws Exception {
+        String original = GabaritoDoProjeto.composeVazio("demo");
+        montar(original);
+        EscritorDeCompose.Previa p = escritor().preparar("demo", bloco(Modelo.POSTGRES));
+        a.roteiro = c -> {
+            // a conferência demora até um minuto: neste meio-tempo outro cliente edita o arquivo
+            Files.writeString(projeto.resolve("docker-compose.yml"), original + "# o usuário mexeu agora\n");
+            return AmbienteFalso.ok("");
+        };
+        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> escritor().gravar(p));
+        assertTrue(f.mensagem().contains("mudou"), f.mensagem());
+        assertEquals(original + "# o usuário mexeu agora\n", Files.readString(projeto.resolve("docker-compose.yml")), "o que o outro escreveu ficou intacto");
+        assertEquals(List.of("docker-compose.yml"), nomes(projeto), "nem cópia datada nem .env");
+    }
+
+    @Test
+    void aCopiaDatadaFicaForaDoGitQuandoOGitignoreEDoEsqueletoDoApp() throws Exception {
+        montar(GabaritoDoProjeto.composeVazio("demo"));
+        Files.writeString(projeto.resolve(".gitignore"), GabaritoDoProjeto.GITIGNORE);
+        escritor().gravar(escritor().preparar("demo", bloco(Modelo.REDIS)));
+        assertTrue(Files.readString(projeto.resolve(".gitignore")).endsWith(".minio/\ndocker-compose.yml.*.bak\n"), Files.readString(projeto.resolve(".gitignore")));
+    }
+
+    @Test
+    void comGitignoreDoDonoOAppNaoReescreveSoAvisa() throws Exception {
+        montar(GabaritoDoProjeto.composeVazio("demo"));
+        Files.writeString(projeto.resolve(".gitignore"), "node_modules/\n");
+        EscritorDeCompose.Gravado g = escritor().gravar(escritor().preparar("demo", bloco(Modelo.REDIS)));
+        assertEquals("node_modules/\n", Files.readString(projeto.resolve(".gitignore")));
+        assertTrue(g.avisos().stream().anyMatch(x -> x.contains("docker-compose.yml.*.bak") && x.contains(".gitignore")), g.avisos().toString());
+    }
+
+    @Test
+    void comGitignoreQueJaIgnoraBakNaoAvisaNada() throws Exception {
+        montar(GabaritoDoProjeto.composeVazio("demo"));
+        Files.writeString(projeto.resolve(".gitignore"), "*.bak\n");
+        EscritorDeCompose.Gravado g = escritor().gravar(escritor().preparar("demo", bloco(Modelo.REDIS)));
+        assertEquals(List.of(), g.avisos());
     }
 }
