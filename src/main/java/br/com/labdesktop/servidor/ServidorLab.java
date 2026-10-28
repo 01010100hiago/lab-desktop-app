@@ -133,6 +133,8 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     /** A última configuração lida do cofre: o que as telas ainda desenham depois de o servidor sair dele (ver {@link #config()}). */
     private volatile ConfigServidor ultimaConfig;
     private volatile Duration prazoDoTesteDoToken = PRAZO_PADRAO_DO_TESTE_DO_TOKEN;
+    /** A fachada da Cloudflare, criada na primeira vez que alguém a pede (sob "this"). */
+    private br.com.labdesktop.cloudflare.ServicoCloudflare cloudflare;
 
     /** Para produção: tempos do SSH padrão, agendador do {@code Fundo} e entrega pela EDT. */
     public ServidorLab(String servidorId, AcessoAoCofre cofre, PedidoDeCodigo2fa pedidoDeCodigo) {
@@ -302,6 +304,19 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             return AmbienteDeProjetos.local(raizDosProjetos, fabricaDeArquivos(), locais.executor(), CaminhosLocais.doSistema());
         }
         return AmbienteDeProjetos.remoto(raizDosProjetos, fabricaDeArquivos(), conexao::executar);
+    }
+
+    /**
+     * A Cloudflare deste servidor: o token e a escolha no cofre, a API, publicar e remover endereços. Só MONTA a fachada (nada roda, nada é lido ao montar);
+     * quem a usa para escrever são os diálogos, depois do clique de confirmação.
+     */
+    public synchronized br.com.labdesktop.cloudflare.ServicoCloudflare cloudflare() {
+        if (cloudflare == null) {
+            cloudflare = new br.com.labdesktop.cloudflare.ServicoCloudflare(cofre, id, local, this::ambienteDeProjetos,
+                br.com.labdesktop.cloudflare.ClienteCloudflare::urlBase, br.com.labdesktop.cloudflare.ClienteCloudflare.Opcoes.padrao(),
+                br.com.labdesktop.cloudflare.TestadorDeUrl.Https::new, java.time.Clock.systemDefaultZone(), d -> Thread.sleep(d));
+        }
+        return cloudflare;
     }
 
     /** As ações (iniciar, parar, abrir sessão, limite...). */

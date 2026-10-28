@@ -251,6 +251,29 @@ public final class ServicoCloudflare {
         return cfg.porArquivo() ? new TunelPorArquivo(ambiente, cfg, comSudo(), relogio, esperador) : new TunelPelaApi(api, cfg);
     }
 
+    /**
+     * Os serviços do {@code docker-compose.yml} do projeto (só LEITURA, por SFTP), para a tela escolher o que vai para a internet. Vazio se o arquivo não existe, não é UTF-8 ou
+     * não está no formato de blocos que o app lê.
+     */
+    public List<ComposeComEdge.Servico> servicosDoProjeto(String projeto) throws FalhaDoProjeto {
+        if (local) {
+            throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.RECUSADO, "Publicar na internet pede um servidor com o cloudflared (o túnel). Este computador não tem um túnel configurado pelo app.");
+        }
+        if (!br.com.labdesktop.seguranca.ValidadorDeNomes.projetoValido(projeto)) {
+            throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.RECUSADO, "Nome de projeto inválido.");
+        }
+        AmbienteDeProjetos ambiente = ambientes.apply(RAIZ_DOS_PROJETOS);
+        try (br.com.labdesktop.arquivos.ClienteSftp c = ambiente.abrirArquivos()) {
+            String arquivo = br.com.labdesktop.arquivos.CaminhoRemoto.juntar(br.com.labdesktop.arquivos.CaminhoRemoto.juntar(ambiente.raizDosProjetos(), projeto),
+                PublicadorNaInternet.ARQUIVO_COMPOSE);
+            byte[] bytes = TunelPorArquivo.lerBytes(c, arquivo);
+            String texto = TunelPorArquivo.decodificar(bytes);
+            return texto == null ? List.of() : ComposeComEdge.servicos(texto);
+        } catch (br.com.labdesktop.arquivos.ErroSftp e) {
+            throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.SEM_CONEXAO, "Não consegui ler o docker-compose.yml no servidor: " + e.mensagemSimples(), null, e);
+        }
+    }
+
     /** Confere o token guardado (só leitura): ainda vale? */
     public TokenVerificado conferirToken() throws ErroCloudflare, FalhaDoProjeto {
         try (ClienteCloudflare api = clienteDoCofre()) {

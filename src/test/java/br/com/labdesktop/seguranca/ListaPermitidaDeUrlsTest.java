@@ -75,4 +75,28 @@ class ListaPermitidaDeUrlsTest {
             assertFalse(ListaPermitidaDeUrls.validarLinkDoTerminal(ruim).isPresent(), "aceitou: " + ruim);
         }
     }
+
+    @Test
+    void asPaginasDaCloudflareSaoSoAsDoisEnderecosExatos() {
+        assertTrue(permitida(ListaPermitidaDeUrls.Tipo.PAGINA_DA_CLOUDFLARE, ListaPermitidaDeUrls.PAGINA_DOS_TOKENS));
+        assertTrue(permitida(ListaPermitidaDeUrls.Tipo.PAGINA_DA_CLOUDFLARE, ListaPermitidaDeUrls.GUIA_DO_TOKEN));
+        for (String ruim : new String[] {"http://dash.cloudflare.com/profile/api-tokens", "https://dash.cloudflare.com/", "https://dash.cloudflare.com/profile/api-tokens?x=1",
+            "https://dash.cloudflare.com/profile/api-tokens#a", "https://malvado.example/dash.cloudflare.com/profile/api-tokens", "https://dash.cloudflare.com.malvado.example/profile/api-tokens",
+            "https://dash.cloudflare.com@malvado.example/profile/api-tokens", "https://cloudflare.com/profile/api-tokens", "https://dash.cloudflare.com:8443/profile/api-tokens"}) {
+            assertFalse(permitida(ListaPermitidaDeUrls.Tipo.PAGINA_DA_CLOUDFLARE, ruim), ruim);
+        }
+    }
+
+    @Test
+    void oEnderecoPublicoEDeUmNivelSobOZonaDoDonoEDeMaisNada() {
+        assertTrue(ListaPermitidaDeUrls.validarEnderecoPublico("example.com", "https://lab-demo.example.com/").isPresent());
+        assertTrue(ListaPermitidaDeUrls.validarEnderecoPublico("example.org", "https://site.example.org/").isPresent(), "a zona é a do usuário, não uma lista fixa");
+        for (String ruim : new String[] {"http://lab-demo.example.com/", "https://a.b.example.com/", "https://example.com/", "https://lab-demo.outro.example.com/", "https://lab-demo.example.com.malvado.example/",
+            "https://malvado.example@lab-demo.example.com/", "https://lab-demo.example.com:8443/", "https://LAB_demo.example.com/", "https://-a.example.com/", "javascript:alert(1)"}) {
+            assertFalse(ListaPermitidaDeUrls.validarEnderecoPublico("example.com", ruim).isPresent(), ruim);
+        }
+        assertFalse(ListaPermitidaDeUrls.validarEnderecoPublico("zona", "https://a.zona/").isPresent(), "zona inválida");
+        assertFalse(ListaPermitidaDeUrls.validarEnderecoPublico(null, "https://a.example.com/").isPresent());
+        assertFalse(ListaPermitidaDeUrls.validarEnderecoPublico("example.com", null).isPresent());
+    }
 }

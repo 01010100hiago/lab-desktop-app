@@ -42,6 +42,21 @@ public class Navegador {
         abrir(Tipo.PAGINA_DE_DOWNLOAD, url);
     }
 
+    /** Uma das páginas oficiais da Cloudflare (onde se cria o token): endereços exatos. */
+    public void abrirPaginaDaCloudflare(String url) {
+        abrir(Tipo.PAGINA_DA_CLOUDFLARE, url);
+    }
+
+    /** O endereço público que o app publicou, de UM nível sob o domínio da zona que o usuário escolheu ({@code https://<host>/}). */
+    public void abrirEnderecoPublico(String zona, String hostname) {
+        Optional<URI> uri = ListaPermitidaDeUrls.validarEnderecoPublico(zona, "https://" + hostname + "/");
+        if (uri.isEmpty()) {
+            avisos.atencao("Não abri o endereço: ele não é um endereço do seu domínio na Cloudflare.");
+            return;
+        }
+        entregarAoSistema(uri.get());
+    }
+
     /** Um link impresso no terminal ({@code http} ou {@code https}; {@link ListaPermitidaDeUrls#validarLinkDoTerminal}). */
     public void abrirLinkDoTerminal(String url) {
         Optional<URI> uri = ListaPermitidaDeUrls.validarLinkDoTerminal(url);

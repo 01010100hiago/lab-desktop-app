@@ -26,8 +26,17 @@ public final class ListaPermitidaDeUrls {
         /** Hostname de projeto: {@code https://*.example.com/...}. */
         HOST_DE_PROJETO,
         /** As páginas oficiais de download que "Preparar este computador" abre (Docker Desktop, guia do Docker no Linux, git): endereços EXATOS. */
-        PAGINA_DE_DOWNLOAD
+        PAGINA_DE_DOWNLOAD,
+        /** As páginas oficiais da Cloudflare que a tela "Cloudflare" abre (onde criar o token): endereços EXATOS. */
+        PAGINA_DA_CLOUDFLARE
     }
+
+    /** O endereço da página onde o usuário cria o token de API (Meu perfil > Tokens de API). */
+    public static final String PAGINA_DOS_TOKENS = "https://dash.cloudflare.com/profile/api-tokens";
+    /** O guia oficial de criação de token. */
+    public static final String GUIA_DO_TOKEN = "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/";
+
+    private static final Set<String> PAGINAS_DA_CLOUDFLARE = Set.of("dash.cloudflare.com/profile/api-tokens", "developers.cloudflare.com/fundamentals/api/get-started/create-token/");
 
     /** Os endereços exatos de {@link Tipo#PAGINA_DE_DOWNLOAD} (host e caminho, sem consulta). */
     private static final Set<String> PAGINAS_DE_DOWNLOAD = Set.of("www.docker.com/products/docker-desktop/", "docs.docker.com/engine/install/",
@@ -65,6 +74,7 @@ public final class ListaPermitidaDeUrls {
             case PULL_REQUEST -> host.equals("github.com") && CAMINHO_DE_PR.matcher(caminho).matches();
             case HOST_DE_PROJETO -> hostDeProjetoValido(host);
             case PAGINA_DE_DOWNLOAD -> uri.getRawQuery() == null && uri.getRawFragment() == null && PAGINAS_DE_DOWNLOAD.contains(host + caminho);
+            case PAGINA_DA_CLOUDFLARE -> uri.getRawQuery() == null && uri.getRawFragment() == null && PAGINAS_DA_CLOUDFLARE.contains(host + caminho);
         };
         return ok ? Optional.of(uri) : Optional.empty();
     }
@@ -90,6 +100,32 @@ public final class ListaPermitidaDeUrls {
             return Optional.empty();
         }
         return Optional.of(uri);
+    }
+
+    /**
+     * O endereço público que o app publicou ({@code https://lab-demo.example.com/}): host de UM nível sob o domínio da zona do usuário (o que ele escolheu na tela Cloudflare,
+     * não uma lista fixa), https, sem usuário nem porta. Só abre o que o app criou ou conferiu.
+     */
+    public static Optional<URI> validarEnderecoPublico(String zona, String url) {
+        if (zona == null || !ValidadorDeNomes.zonaDnsValida(zona) || url == null || url.length() > 2048 || contemControle(url)) {
+            return Optional.empty();
+        }
+        URI uri;
+        try {
+            uri = new URI(url.strip());
+        } catch (URISyntaxException e) {
+            return Optional.empty();
+        }
+        if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getRawUserInfo() != null || uri.getHost() == null || (uri.getPort() != -1 && uri.getPort() != 443)) {
+            return Optional.empty();
+        }
+        String host = uri.getHost().toLowerCase(Locale.ROOT);
+        String sufixo = "." + zona;
+        if (!host.endsWith(sufixo)) {
+            return Optional.empty();
+        }
+        String rotulo = host.substring(0, host.length() - sufixo.length());
+        return ROTULO_DNS.matcher(rotulo).matches() ? Optional.of(uri) : Optional.empty();
     }
 
     /** Atalho de {@link #validar}. */
