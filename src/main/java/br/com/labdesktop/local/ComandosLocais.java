@@ -101,6 +101,14 @@ public final class ComandosLocais {
         return List.of(DOCKER, "logs", "--tail", "40", p.container());
     }
 
+    /**
+     * O registro do agente local: as últimas 200 linhas do container, com a hora de cada uma. LEITURA. Mesma forma de {@link #lerLogs}, com o limite e a marca de hora
+     * fixos; o nome do container passa pela regra de nome (quem pede é o laboratório local, com o nome que o app mesmo gravou).
+     */
+    public static List<String> lerRegistroDoAgente(String container) {
+        return List.of(DOCKER, "logs", "--tail", "200", "--timestamps", exigirNome(container));
+    }
+
     /** O estado do container do agente ({@code running}, {@code exited}...); sai com status diferente de 0 se não existe. */
     public static List<String> lerEstadoDoContainer(String container) {
         return List.of(DOCKER, "inspect", "-f", "{{.State.Status}}", exigirNome(container));
@@ -277,7 +285,7 @@ public final class ComandosLocais {
     private static List<List<Pattern>> montarLeituras() {
         ParametrosDoLaboratorio p = new ParametrosDoLaboratorio("zzcontainer", 54321, "zzrede", "zzimagem", "/zzpasta");
         List<List<String>> modelos = List.of(versaoDoDocker(), versaoDoComposeDoDocker(), versaoDoGit(), estadoDoWsl(), virtualizacaoDoWindows(),
-            lerRede(p), lerContainersNaRede(p), lerContainer(p), lerVolume(p), lerImagensDoApp(p), lerImagem(p, "zzversao"), lerLogs(p), lerEstadoDoContainer("zzcontainer"),
+            lerRede(p), lerContainersNaRede(p), lerContainer(p), lerVolume(p), lerImagensDoApp(p), lerImagem(p, "zzversao"), lerLogs(p), lerRegistroDoAgente("zzcontainer"), lerEstadoDoContainer("zzcontainer"),
             lerContainersDosProjetos());
         List<List<Pattern>> moldes = new ArrayList<>();
         for (List<String> modelo : modelos) {
