@@ -125,6 +125,22 @@ class PublicadorPelaApiTest {
     }
 
     @Test
+    void seOutraPessoaMexeNaConfiguracaoDepoisDaGravacaoODesfazerNaoASobrescreve() throws Exception {
+        ObjectNode dele = (ObjectNode) Json.mapper().readTree("{\"ingress\":[{\"hostname\":\"externo-mexeu.example.com\",\"service\":\"http://x:1\"},{\"service\":\"http_status:404\"}]}");
+        PublicadorNaInternet.Resultado r;
+        ClienteCloudflare api = new ClienteCloudflare(cf.base(), token, ClienteCloudflare.Opcoes.rapida());
+        try (PublicadorNaInternet p = new PublicadorNaInternet(lab.ambiente(), api, cfg, new TunelPelaApi(api, cfg), projeto -> {
+            cf.tunel(CloudflareFalsa.TUNEL_API).configuracao = dele; // enquanto o app recria o projeto, outra pessoa grava as regras
+            throw new IllegalStateException("o docker compose up falhou");
+        }, (h, c) -> new TestadorDeUrl.Resultado(TestadorDeUrl.Estado.NO_AR, 200, "No ar"), RELOGIO)) {
+            r = p.executar(p.preparar(PublicadorPorArquivoTest.pedido()), (e, s, f) -> { }, Cancelamento.NUNCA);
+        }
+        assertEquals(PublicadorNaInternet.Desfecho.FALHOU, r.desfecho());
+        assertEquals(dele, cf.tunel(CloudflareFalsa.TUNEL_API).configuracao, "o que a outra pessoa gravou ficou");
+        assertTrue(r.naoConsegui().stream().anyMatch(t -> t.contains("NÃO a sobrescrevi")), r.naoConsegui().toString());
+    }
+
+    @Test
     void seAGravacaoPerdeARespostaMasGravouOAppConfereEDevolveAAnterior() throws Exception {
         ObjectNode antes = cf.tunel(CloudflareFalsa.TUNEL_API).configuracao.deepCopy();
         cf.executarEPerderAResposta("PUT .*/configurations", 1);

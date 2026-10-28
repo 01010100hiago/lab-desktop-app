@@ -116,6 +116,8 @@ public final class CloudflareFalsa implements AutoCloseable {
     public volatile Set<Permissao> permissoes = Set.of(Permissao.values());
     /** Quantos itens por página no máximo (para provar a paginação): 0 = o que o cliente pedir. */
     public volatile int paginaMaxima;
+    /** A resposta de lista não traz {@code total_pages} nem {@code total_count} (só a página e o tamanho dela): o cliente tem de seguir pela página cheia. */
+    public volatile boolean semTotais;
 
     public CloudflareFalsa() throws IOException {
         contas.add(new Conta(CONTA, "Conta de Teste"));
@@ -233,8 +235,10 @@ public final class CloudflareFalsa implements AutoCloseable {
             ObjectNode info = r.putObject("result_info");
             info.put("page", pagina);
             info.put("per_page", porPagina);
-            info.put("total_count", total);
-            info.put("total_pages", Math.max(1, (int) Math.ceil(total / (double) porPagina)));
+            if (!semTotais) {
+                info.put("total_count", total);
+                info.put("total_pages", Math.max(1, (int) Math.ceil(total / (double) porPagina)));
+            }
         }
         return r.toString();
     }

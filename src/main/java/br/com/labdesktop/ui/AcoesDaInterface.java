@@ -67,6 +67,11 @@ public final class AcoesDaInterface {
     private final Navegador navegador;
     private final ServicosDeArquivos servicosDeArquivos;
     private volatile EscolhedorLocal escolhedor = EscolhedorLocal.doSistema(() -> null);
+    /**
+     * A trava das ações de escrita ({@code -Dlabdesktop.acoes=true}), conferida AQUI também (defesa em profundidade): os botões já somem sem ela, mas Publicar e Remover escrevem
+     * no servidor e na Cloudflare e não podem depender só de a tela ter escondido o botão. A lista de projetos entrega a dela ({@link #usarTrava}); o padrão é a propriedade.
+     */
+    private volatile java.util.function.BooleanSupplier trava = br.com.labdesktop.ui.telas.FluxosDeProjeto::liberadasPorPropriedade;
 
     /**
      * @param aoSelecionar chamado na EDT depois de um servidor ser adicionado, para a janela mostrá-lo
@@ -118,6 +123,19 @@ public final class AcoesDaInterface {
 
         /** A sessão do Claude do projeto acabou de abrir: leva à aba Terminal, no Claude. */
         void abrirNoClaude(String projeto);
+    }
+
+    /** Troca quem diz se as ações de escrita estão liberadas (a lista de projetos passa a dela; os testes, a que querem). */
+    public void usarTrava(java.util.function.BooleanSupplier nova) {
+        this.trava = nova == null ? br.com.labdesktop.ui.telas.FluxosDeProjeto::liberadasPorPropriedade : nova;
+    }
+
+    private boolean recusarSemAsAcoes() {
+        if (trava.getAsBoolean()) {
+            return false;
+        }
+        avisos.atencao("As ações que escrevem no servidor estão desligadas nesta versão do app (são ligadas com -Plabdesktop.acoes=true). Nada foi feito.");
+        return true;
     }
 
     /** Quem escolhe a pasta do computador a importar (o seletor do sistema, sobre a janela do app). */
@@ -336,6 +354,9 @@ public final class AcoesDaInterface {
      * clique em "Publicar" lá dentro.
      */
     public void publicarNaInternet(ServidorLab lab, String projeto, Runnable depois) {
+        if (recusarSemAsAcoes()) {
+            return;
+        }
         br.com.labdesktop.cloudflare.ServicoCloudflare servico = lab.cloudflare();
         if (servico.ehLocal()) {
             avisos.atencao("Publicar na internet pede um servidor com o cloudflared (o túnel). Este computador não tem um túnel configurado pelo app.");
@@ -434,6 +455,9 @@ public final class AcoesDaInterface {
 
     /** "Remover" um endereço que o app criou: abre o diálogo (a prévia só lê; remover exige digitar o endereço). */
     public void removerEnderecoDaInternet(ServidorLab lab, String hostname, Runnable depois) {
+        if (recusarSemAsAcoes()) {
+            return;
+        }
         br.com.labdesktop.cloudflare.ServicoCloudflare servico = lab.cloudflare();
         br.com.labdesktop.cloudflare.RemovedorDeEndereco removedor;
         try {

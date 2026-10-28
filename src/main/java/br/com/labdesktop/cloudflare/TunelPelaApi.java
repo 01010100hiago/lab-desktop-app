@@ -181,6 +181,14 @@ public final class TunelPelaApi implements Tunel {
                     return naoDesfez;
                 }
                 try {
+                    ObjectNode atual = (ObjectNode) api.configuracaoDoTunel(cfg.contaId(), cfg.tunelId()).config();
+                    if (!atual.equals(depois)) {
+                        if (!atual.equals(antes)) {
+                            naoDesfez.add("A configuração do túnel \"" + cfg.tunelNome() + "\" mudou na Cloudflare depois que o app a gravou (outra pessoa mexeu): NÃO a sobrescrevi com a anterior. "
+                                + "Confira as regras no painel da Cloudflare.");
+                        }
+                        return naoDesfez; // já é a de antes (nada a fazer), ou é de outra pessoa (não mexe)
+                    }
                     api.gravarConfiguracaoDoTunel(cfg.contaId(), cfg.tunelId(), antes);
                 } catch (ErroCloudflare e) {
                     naoDesfez.add("Não consegui devolver a configuração anterior do túnel na Cloudflare (" + e.mensagem() + "): confira as regras do túnel \"" + cfg.tunelNome() + "\" no painel da Cloudflare.");

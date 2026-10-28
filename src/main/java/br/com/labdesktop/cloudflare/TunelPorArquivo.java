@@ -417,7 +417,7 @@ public final class TunelPorArquivo implements Tunel {
                     c.gravarNoLugar(cfg.caminhoDoConfig(), novo);
                 } catch (ErroSftp e) {
                     // pode ter gravado pela metade: devolve o que havia
-                    String sobrou = restaurar(c);
+                    String sobrou = restaurar(c, false);
                     throw erroDeGravacao(e, sobrou);
                 }
             } catch (ErroSftp e) {
@@ -536,13 +536,26 @@ public final class TunelPorArquivo implements Tunel {
             }
         }
 
-        /** Devolve o conteúdo de antes NO LUGAR; devolve uma frase do que não deu, ou vazio. */
-        private String restaurar(ClienteSftp c) {
+        /**
+         * Devolve o conteúdo de antes NO LUGAR; devolve uma frase do que não deu, ou vazio.
+         *
+         * @param conferirAntes {@code true} no desfazer de depois (o app já gravou tudo): só devolve se o arquivo ainda é o que o app gravou (ou já é o de antes); se outra
+         *                      pessoa mexeu nele nesse meio-tempo, NÃO sobrescreve. {@code false} quando a própria gravação falhou (pode ter ficado pela metade: devolve sempre).
+         */
+        private String restaurar(ClienteSftp c, boolean conferirAntes) {
             try {
+                if (conferirAntes) {
+                    byte[] agora = lerBytes(c, cfg.caminhoDoConfig());
+                    if (agora != null && !Arrays.equals(agora, novo) && !Arrays.equals(agora, original)) {
+                        return "O config.yml mudou depois que o app o gravou (outra pessoa mexeu): NÃO o sobrescrevi com a cópia. Confira o arquivo e, se quiser, copie a cópia datada de volta à mão.";
+                    }
+                }
                 c.gravarNoLugar(cfg.caminhoDoConfig(), original);
                 return "";
             } catch (ErroSftp e) {
                 return "Não consegui devolver o config.yml como estava (" + e.mensagemSimples() + "): copie a cópia datada de volta por cima dele.";
+            } catch (FalhaDoProjeto e) {
+                return "Não consegui conferir o config.yml antes de devolvê-lo (" + e.mensagem() + "): copie a cópia datada de volta à mão, se precisar.";
             }
         }
 
@@ -578,7 +591,7 @@ public final class TunelPorArquivo implements Tunel {
                     return naoDesfez; // não havia escrita
                 }
                 try (ClienteSftp c = ambiente.abrirArquivos()) {
-                    String s = restaurar(c);
+                    String s = restaurar(c, true);
                     if (!s.isEmpty()) {
                         naoDesfez.add(s);
                         return naoDesfez;

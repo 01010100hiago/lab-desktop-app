@@ -73,6 +73,9 @@ public interface TestadorDeUrl {
 
         @Override
         public Resultado testar(String hostname, Cancelamento cancelamento) {
+            if (cancelamento == null) {
+                cancelamento = Cancelamento.NUNCA;
+            }
             long limite = System.nanoTime() + prazoTotal.toNanos();
             Resultado ultimo = new Resultado(Estado.FORA_DO_AR, 0, "Ainda não consegui abrir o endereço.");
             HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).followRedirects(HttpClient.Redirect.NEVER)

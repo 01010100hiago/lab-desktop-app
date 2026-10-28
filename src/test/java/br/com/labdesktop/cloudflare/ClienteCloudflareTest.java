@@ -191,6 +191,33 @@ class ClienteCloudflareTest {
     }
 
     @Test
+    void semTotalPagesNemTotalCountOClienteSegueEnquantoAPaginaVierCheia() throws Exception {
+        cf.paginaMaxima = 5;
+        cf.semTotais = true;
+        for (int i = 0; i < 13; i++) {
+            cf.semear("lab-" + i + ".example.com", "CNAME", "x.cfargotunnel.com", "lab-desktop: demo");
+        }
+        try (ClienteCloudflare c = cliente()) {
+            assertEquals(13, c.registrosDnsComComentarioQueComecaCom(CloudflareFalsa.ZONA, "lab-desktop:").size(), "as 3 páginas (5 + 5 + 3), sem total para guiar");
+        }
+        assertEquals(3, cf.pedidos.stream().filter(p -> p.caminho().endsWith("/dns_records")).count());
+    }
+
+    @Test
+    void listaMaiorQueOTetoDePaginasDaErroEmVezDeCortarEmSilencio() throws Exception {
+        cf.paginaMaxima = 1;
+        cf.semTotais = true;
+        for (int i = 0; i < 25; i++) {
+            cf.semear("lab-" + i + ".example.com", "CNAME", "x.cfargotunnel.com", "lab-desktop: demo");
+        }
+        try (ClienteCloudflare c = cliente()) {
+            ErroCloudflare e = erro(() -> c.registrosDnsComComentarioQueComecaCom(CloudflareFalsa.ZONA, "lab-desktop:"));
+            assertEquals(Tipo.RESPOSTA_INVALIDA, e.tipo());
+            assertTrue(e.mensagem().contains("mais de 20 páginas"), e.mensagem());
+        }
+    }
+
+    @Test
     void identificadorComFormatoEstranhoNaoChegaARede() throws Exception {
         try (ClienteCloudflare c = cliente()) {
             assertEquals(Tipo.RECUSADO, erro(() -> c.tuneis("../../etc")).tipo());

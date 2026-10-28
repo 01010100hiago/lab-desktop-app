@@ -59,6 +59,7 @@ class PaginasDaCloudflareTest {
         c.prepararOServidorDoDono(PublicadorPorArquivoTestApoio.COMPOSE, PublicadorPorArquivoTestApoio.CONFIG);
         lab = c.servidorLab();
         acoes = new AcoesDaInterface(null, null, avisos, dialogos, s -> { }, navegador, ServicosDeArquivos.descartaveis());
+        acoes.usarTrava(() -> true); // os testes de tela ligam as ações; o teste da trava interna liga e desliga
     }
 
     @AfterEach
@@ -163,6 +164,23 @@ class PaginasDaCloudflareTest {
         DialogoRemoverEndereco d = dialogos.ultimoComo(DialogoRemoverEndereco.class);
         Visual.naEdt(() -> d.botaoCancelar().doClick());
         assertEquals(List.of(), c.cf.escritas(), "abrir e cancelar o diálogo não escreve nada");
+    }
+
+    @Test
+    void semATravaLiberadaAsAcoesRecusamPublicarERemoverPorDentroMesmoSeAlguemAsChamar() throws Exception {
+        c.conectarPorArquivo();
+        publicarDemo();
+        c.cf.pedidos.clear();
+        int dialogosAntes = dialogos.mostrados.size();
+        acoes.usarTrava(() -> false);
+        Visual.naEdt(() -> acoes.publicarNaInternet(lab, "demo", null));
+        Visual.naEdt(() -> acoes.removerEnderecoDaInternet(lab, "lab-demo.example.com", null));
+        assertEquals(dialogosAntes, dialogos.mostrados.size(), "nenhum diálogo abriu");
+        assertEquals(2, avisos.todos.stream().filter(a -> a.tipo().equals("atencao") && a.texto().contains("desligadas")).count(), avisos.textos().toString());
+        assertEquals(List.of(), c.cf.pedidos, "nem uma chamada à Cloudflare");
+        acoes.usarTrava(() -> true);
+        Visual.naEdt(() -> acoes.removerEnderecoDaInternet(lab, "lab-demo.example.com", null));
+        assertEquals(dialogosAntes + 1, dialogos.mostrados.size(), "com a trava liberada o diálogo abre");
     }
 
     @Test

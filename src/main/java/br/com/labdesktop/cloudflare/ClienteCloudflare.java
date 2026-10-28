@@ -307,9 +307,23 @@ public final class ClienteCloudflare implements ApiCloudflare {
                 throw new ErroCloudflare(Tipo.RESPOSTA_INVALIDA, "A Cloudflare respondeu algo que o app não entende ao " + oQue + ".");
             }
             resultado.forEach(todos::add);
-            int total = raiz.path("result_info").path("total_pages").asInt(1);
-            if (resultado.isEmpty() || pagina >= total) {
+            // Não depende só de total_pages (a Cloudflare nem sempre o manda): sem ele, vale total_count; sem os dois, continua enquanto a página vier CHEIA.
+            JsonNode info = raiz.path("result_info");
+            int porPagina = Math.max(1, info.path("per_page").asInt(PAGINA));
+            boolean temMais;
+            if (info.hasNonNull("total_pages")) {
+                temMais = pagina < info.path("total_pages").asInt(1);
+            } else if (info.hasNonNull("total_count")) {
+                temMais = info.path("total_count").asInt(0) > todos.size();
+            } else {
+                temMais = resultado.size() >= porPagina;
+            }
+            if (resultado.isEmpty() || !temMais) {
                 break;
+            }
+            if (pagina == MAXIMO_DE_PAGINAS) {
+                // cortar aqui em silêncio faria o app achar que "não existe" o que está na página 21 (um DNS que parece livre, uma zona que some da lista)
+                throw new ErroCloudflare(Tipo.RESPOSTA_INVALIDA, "A lista da Cloudflare ao " + oQue + " tem mais de " + MAXIMO_DE_PAGINAS + " páginas, mais do que o app lê. Não vou decidir com a lista cortada.");
             }
         }
         return todos;

@@ -133,6 +133,9 @@ public final class TelaProjetos extends Painel {
         this.fluxos = fluxos;
         this.navegador = navegador;
         this.acoesUi = acoesUi;
+        if (acoesUi != null) {
+            acoesUi.usarTrava(fluxos::liberadas); // Publicar e Remover conferem a trava também por dentro (defesa em profundidade)
+        }
         this.faixa = new FaixaAviso(new FaixaAviso.Ouvinte() {
             @Override
             public void aoAcionar(Acao acao) {

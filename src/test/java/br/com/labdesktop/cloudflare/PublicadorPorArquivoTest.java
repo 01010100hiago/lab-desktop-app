@@ -402,6 +402,65 @@ class PublicadorPorArquivoTest {
     }
 
     @Test
+    void dnsDeOutroProjetoDoAppOuDeQualquerOutroTipoNoMesmoNomeBloqueiaAPrevia() throws Exception {
+        cf.semear("lab-demo.example.com", "CNAME", LabSimulado.UUID + ".cfargotunnel.com", "lab-desktop: outro-projeto");
+        try (PublicadorNaInternet p = publicador()) {
+            PublicadorNaInternet.Previa previa = p.preparar(pedido());
+            assertFalse(previa.podePublicar());
+            assertTrue(previa.bloqueio().contains("do projeto outro-projeto") && previa.bloqueio().contains("e não de demo"), previa.bloqueio());
+        }
+        cf.registros.clear();
+        cf.semear("lab-demo.example.com", "TXT", "v=spf1 -all", "do usuário");
+        try (PublicadorNaInternet p = publicador()) {
+            PublicadorNaInternet.Previa previa = p.preparar(pedido());
+            assertFalse(previa.podePublicar(), "um CNAME não convive com um TXT no mesmo nome");
+            assertTrue(previa.bloqueio().contains("TXT"), previa.bloqueio());
+        }
+        cf.registros.clear();
+        cf.semear("lab-demo.example.com", "CNAME", LabSimulado.UUID + ".cfargotunnel.com", "lab-desktop: demo");
+        try (PublicadorNaInternet p = publicador()) {
+            assertTrue(p.preparar(pedido()).dnsJaEraDoApp(), "do MESMO projeto, o registro do app é reaproveitado");
+        }
+    }
+
+    @Test
+    void seARecriacaoDoProjetoFalhaODesfazerDevolveOComposeEDizQueOsContainersJaForamRecriados() throws Exception {
+        falhaAoRecriar = new IllegalStateException("o docker compose up falhou");
+        PublicadorNaInternet.Resultado r;
+        try (PublicadorNaInternet p = publicador()) {
+            r = p.executar(p.preparar(pedido()), observador(), Cancelamento.NUNCA);
+        }
+        assertEquals(PublicadorNaInternet.Desfecho.FALHOU, r.desfecho());
+        assertEquals(Etapa.PROJETO, r.etapaDaFalha());
+        assertEquals(COMPOSE, compose());
+        assertTrue(r.naoConsegui().stream().anyMatch(t -> t.contains("já tinham sido recriados") && t.contains("Iniciar")), r.naoConsegui().toString());
+    }
+
+    @Test
+    void seOutraPessoaMexeNoConfigDepoisDaGravacaoODesfazerNaoSobrescreveEDiz() throws Exception {
+        lab.validarSempreFalha = true;
+        boolean[] mexeu = {false};
+        ObservadorDaEtapa mexedor = (e, st, f) -> {
+            if (e == Etapa.CONFERIR_E_REINICIAR && st == ObservadorDaEtapa.Estado.ANDANDO && !mexeu[0]) {
+                mexeu[0] = true;
+                try {
+                    lab.escrever(LabSimulado.CONFIG, lab.ler(LabSimulado.CONFIG) + "# mexida do usuário agora\n");
+                } catch (java.io.IOException e2) {
+                    throw new java.io.UncheckedIOException(e2);
+                }
+            }
+        };
+        PublicadorNaInternet.Resultado r;
+        try (PublicadorNaInternet p = publicador()) {
+            r = p.executar(p.preparar(pedido()), mexedor, Cancelamento.NUNCA);
+        }
+        assertEquals(PublicadorNaInternet.Desfecho.FALHOU, r.desfecho());
+        assertTrue(config().endsWith("# mexida do usuário agora\n"), "a mudança do usuário ficou: o app não a apagou");
+        assertTrue(r.falha().contains("NÃO o sobrescrevi"), r.falha());
+        assertEquals(0, lab.reinicios.get(), "a conferência falhou antes de reiniciar: nada foi reiniciado");
+    }
+
+    @Test
     void seOCloudflaredRecusaAsRegrasODevolveOArquivoENadaEReiniciado() throws Exception {
         Object inode = arquivoDe(LabSimulado.CONFIG);
         lab.validarSempreFalha = true;

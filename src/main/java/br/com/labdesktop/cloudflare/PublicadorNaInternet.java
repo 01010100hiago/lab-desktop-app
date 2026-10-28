@@ -227,15 +227,18 @@ public final class PublicadorNaInternet implements AutoCloseable {
         String alvo = NomeDoEndereco.alvoDoTunel(cfg.tunelId());
         try {
             for (RegistroDnsCf r : api.registrosDnsComONome(cfg.zonaId(), hostname)) {
-                boolean conflita = List.of("A", "AAAA", "CNAME").contains(r.tipo());
-                if (!conflita) {
-                    continue;
-                }
-                if (r.tipo().equals("CNAME") && r.conteudo().equalsIgnoreCase(alvo) && NomeDoEndereco.projetoDoComentario(r.comentario()).isPresent()) {
-                    dnsDoApp = true;
+                // QUALQUER tipo no mesmo nome conta: um CNAME não convive com TXT, MX ou A no mesmo nome (a Cloudflare recusaria na hora de criar, no meio da publicação)
+                java.util.Optional<String> doProjeto = NomeDoEndereco.projetoDoComentario(r.comentario());
+                if (r.tipo().equals("CNAME") && r.conteudo().equalsIgnoreCase(alvo) && doProjeto.isPresent()) {
+                    if (doProjeto.get().equals(p.projeto())) {
+                        dnsDoApp = true;
+                    } else {
+                        bloqueios.add("O endereço " + hostname + " já é do app, mas do projeto " + doProjeto.get() + " (e não de " + p.projeto() + "): reaproveitá-lo tiraria o endereço de lá. "
+                            + "Escolha outro nome, ou remova o endereço antes na aba Cloudflare do servidor.");
+                    }
                 } else {
-                    bloqueios.add("Já existe um registro de DNS chamado " + hostname + " (" + r.tipo() + " para " + (r.conteudo().isEmpty() ? "outro lugar" : r.conteudo())
-                        + ") que não foi criado por este app. Escolha outro nome para o endereço.");
+                    bloqueios.add("Já existe um registro de DNS chamado " + hostname + " (" + r.tipo() + (r.conteudo().isEmpty() ? "" : " para " + r.conteudo()) + ") que não foi criado por este app. "
+                        + "Escolha outro nome para o endereço.");
                 }
             }
         } catch (ErroCloudflare e) {
@@ -370,6 +373,11 @@ public final class PublicadorNaInternet implements AutoCloseable {
                 naoConsegui.addAll(sobrou);
             }
         }
+        if (etapa == Etapa.PROJETO && previa.pedido().recriarProjeto() && pilha.stream().anyMatch(d -> d.etapa() == Etapa.COMPOSE)) {
+            // o compose voltou, mas o "docker compose up" do passo já mexeu nos containers (nome e rede novos): desfazer o arquivo não os recria como eram
+            naoConsegui.add("O docker-compose.yml voltou como era, mas os containers do projeto " + previa.pedido().projeto() + " já tinham sido recriados com o nome e a rede novos: "
+                + "use Iniciar no projeto para recriá-los como estavam.");
+        }
         boolean cancelou = f.tipo() == FalhaDoProjeto.Tipo.CANCELADO;
         return new Resultado(cancelou ? Desfecho.CANCELADO : Desfecho.FALHOU, previa.hostname(), previa.url(), null, f.mensagem(), etapa, desfeito, naoConsegui, copias, juntar(previa.avisos(), avisosDaExecucao));
     }
@@ -411,10 +419,16 @@ public final class PublicadorNaInternet implements AutoCloseable {
             byte[] original = previa.bytesDoCompose();
             pilha.add(new Desfazer(Etapa.COMPOSE, "o docker-compose.yml", () -> {
                 try (ClienteSftp d = ambiente.abrirArquivos()) {
+                    byte[] agora = lerBytes(d, arquivo);
+                    if (agora != null && !Arrays.equals(agora, novo) && !Arrays.equals(agora, original)) {
+                        // alguém mexeu no arquivo depois da gravação do app: devolver a cópia por cima apagaria a mudança dele
+                        return List.of("O docker-compose.yml mudou depois que o app o gravou (outra pessoa mexeu): NÃO o sobrescrevi com a cópia datada (" + copia
+                            + "). Confira o arquivo e, se quiser, copie a cópia de volta à mão.");
+                    }
                     d.gravarAtomico(arquivo, original, modo);
                     return List.of();
-                } catch (ErroSftp e) {
-                    return List.of("Não consegui devolver o docker-compose.yml como estava (" + e.mensagemSimples() + "): copie a cópia datada (" + copia + ") de volta por cima dele.");
+                } catch (ErroSftp | FalhaDoProjeto e) {
+                    return List.of("Não consegui devolver o docker-compose.yml como estava (" + (e instanceof ErroSftp es ? es.mensagemSimples() : ((FalhaDoProjeto) e).mensagem()) + "): copie a cópia datada (" + copia + ") de volta por cima dele.");
                 }
             }));
             obs.etapa(Etapa.COMPOSE, ObservadorDaEtapa.Estado.FEITO, "docker-compose.yml gravado (cópia: " + copia + ").");
