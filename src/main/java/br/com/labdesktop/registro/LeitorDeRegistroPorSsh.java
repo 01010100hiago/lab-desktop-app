@@ -21,10 +21,15 @@ import java.util.function.Supplier;
  */
 public final class LeitorDeRegistroPorSsh implements LeitorDeRegistro {
 
-    /** O diário do sistema, as últimas 200 linhas, com data ISO. */
-    public static final String COMANDO_JOURNAL = "journalctl -n 200 --no-pager -o short-iso";
-    public static final String COMANDO_SYSLOG = "tail -n 200 /var/log/syslog";
-    public static final String COMANDO_MESSAGES = "tail -n 200 /var/log/messages";
+    /**
+     * Quanto os arquivos de texto devolvem no máximo: os ÚLTIMOS bytes do arquivo, sempre abaixo do teto do {@code ExecRemoto} (64 KB). Com {@code tail -n 200} uma linha longa estourava o
+     * teto e o que se perdia eram as linhas MAIS NOVAS (o teto guarda o começo da saída); com {@code tail -c} o que pode faltar é só o começo, as mais antigas.
+     */
+    public static final int BYTES_DO_ARQUIVO = 60_000;
+    /** O diário do sistema, as últimas 200 linhas, com data ISO, da MAIS NOVA para a mais antiga ({@code -r}): se o teto cortar a saída, o que sai é o fim, as mais antigas. */
+    public static final String COMANDO_JOURNAL = "journalctl -r -n 200 --no-pager -o short-iso";
+    public static final String COMANDO_SYSLOG = "tail -c " + BYTES_DO_ARQUIVO + " /var/log/syslog";
+    public static final String COMANDO_MESSAGES = "tail -c " + BYTES_DO_ARQUIVO + " /var/log/messages";
 
     private static final Duration PRAZO = Duration.ofSeconds(20);
     private static final byte[] SEM_ENTRADA = new byte[0];
@@ -63,7 +68,9 @@ public final class LeitorDeRegistroPorSsh implements LeitorDeRegistro {
             if (pareceFaltaDePermissao(j.stderr())) {
                 semPermissao = true; // o journalctl só mostrou as mensagens do próprio usuário: tenta os arquivos antes de desistir
             } else {
-                return lido(InterpretadorDeRegistro.doSistema(j.stdout(), relogio.get(), fuso), "do diário do sistema (journalctl)", j);
+                // newest first: se o teto cortou a saída, a última linha pode estar pela metade e sai; o que faltou são as mais antigas
+                String texto = InterpretadorDeRegistro.semUltimaLinhaCortada(j.stdout(), j.truncado());
+                return lido(InterpretadorDeRegistro.doSistema(texto, relogio.get(), fuso), "do diário do sistema (journalctl)", j.truncado());
             }
         } else if (pareceFaltaDePermissao(j.stderr())) {
             semPermissao = true;
@@ -71,7 +78,11 @@ public final class LeitorDeRegistroPorSsh implements LeitorDeRegistro {
         for (String[] arquivo : List.of(new String[] {COMANDO_SYSLOG, "do arquivo /var/log/syslog"}, new String[] {COMANDO_MESSAGES, "do arquivo /var/log/messages"})) {
             ResultadoExec r = executor.executar(arquivo[0], SEM_ENTRADA, PRAZO);
             if (r.status() == 0) {
-                return lido(InterpretadorDeRegistro.doSistema(r.stdout(), relogio.get(), fuso), arquivo[1], r);
+                // tail -c: com o arquivo maior que o pedido a PRIMEIRA linha vem pela metade e sai; o que falta são as mais antigas
+                String saida = r.stdout();
+                boolean parcial = saida.getBytes(java.nio.charset.StandardCharsets.UTF_8).length >= BYTES_DO_ARQUIVO - 16;
+                String texto = parcial ? InterpretadorDeRegistro.semPrimeiraLinhaCortada(saida) : saida;
+                return lido(InterpretadorDeRegistro.doSistema(texto, relogio.get(), fuso), arquivo[1], parcial || r.truncado());
             }
             if (pareceFaltaDePermissao(r.stderr())) {
                 semPermissao = true;
@@ -83,8 +94,8 @@ public final class LeitorDeRegistroPorSsh implements LeitorDeRegistro {
         return new ResultadoDoRegistro.Indisponivel("Este servidor não tem o registro do sistema nos lugares que o app conhece (journalctl, /var/log/syslog e /var/log/messages).");
     }
 
-    private static ResultadoDoRegistro lido(InterpretadorDeRegistro.Leitura l, String fonte, ResultadoExec exec) {
-        return new ResultadoDoRegistro.Lido(InterpretadorDeRegistro.maisNovasEmCima(l.linhas()), fonte, l.cortada() || exec.truncado());
+    private static ResultadoDoRegistro lido(InterpretadorDeRegistro.Leitura l, String fonte, boolean faltamAsMaisAntigas) {
+        return new ResultadoDoRegistro.Lido(InterpretadorDeRegistro.maisNovasEmCima(l.linhas()), fonte, l.cortada() || faltamAsMaisAntigas);
     }
 
     /** O erro padrão fala de falta de permissão (de arquivo, de grupo do diário)? */

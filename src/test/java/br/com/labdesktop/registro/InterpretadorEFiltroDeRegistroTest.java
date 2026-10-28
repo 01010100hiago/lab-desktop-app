@@ -175,4 +175,33 @@ class InterpretadorEFiltroDeRegistroTest {
         assertTrue(new FiltroDeRegistro("x", null).ativo());
         assertEquals(List.of("Tudo", "Avisos", "Erros"), java.util.Arrays.stream(FiltroDeRegistro.Nivel.values()).map(FiltroDeRegistro.Nivel::rotulo).toList());
     }
+
+    @Test
+    void camposVaziosNomesDeServicoEEspacoEmDiscoSaemComASeveridadeCerta() {
+        // o app de verdade escreve "error=<nil>" em linha de info, e o systemd cita serviços com a palavra no nome: nada disso é erro
+        for (String info : new String[] {
+            "level=info msg=\"proxy ok\" error=<nil> took=3ms",
+            "{\"level\":\"info\",\"msg\":\"pronto\",\"error\":null}",
+            "{\"level\":\"info\",\"error\": null,\"code\":200}",
+            "Started error-pages.service.",
+            "Stopping failed-units-check.timer.",
+            "level=info errors=0 failed=0 retried=false",
+            "ts=2026-10-28 level=info err=<nil>"}) {
+            assertEquals(Severidade.INFO, ClassificadorDeSeveridade.de(info), info);
+        }
+        // e o que É problema continua sendo
+        for (String erro : new String[] {
+            "level=error msg=\"falhou\" error=\"connection reset\"",
+            "{\"level\":\"error\",\"error\":\"boom\"}",
+            "docker-proxy: Failed to start container",
+            "app: write /var/lib/x: No space left on device",
+            "kernel: Out of memory: Killed process 123 (node)",
+            "systemd[1]: foo.service: Failed with result 'exit-code'.",
+            "EXT4-fs error (device sda1): ext4_find_entry"}) {
+            assertEquals(Severidade.ERRO, ClassificadorDeSeveridade.de(erro), erro);
+        }
+        assertEquals(Severidade.AVISO, ClassificadorDeSeveridade.de("nginx: connection refused while connecting to upstream"));
+        assertEquals(Severidade.AVISO, ClassificadorDeSeveridade.de("Restarting app.service"));
+        assertEquals(Severidade.INFO, ClassificadorDeSeveridade.de("Started retry-timer.service"), "o hífen cola a palavra ao nome do serviço");
+    }
 }

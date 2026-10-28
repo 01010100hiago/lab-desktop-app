@@ -324,7 +324,7 @@ public final class AgenteDoLab implements AutoCloseable {
     /** O manipulador que o {@link ServidorSshDeTeste} usa para os comandos do agente. */
     public ServidorSshDeTeste.Manipulador comandosPorSsh() {
         return (linha, stdin, saida) -> {
-            if (linha.startsWith("journalctl -n 200 ") || linha.startsWith("tail -n 200 /var/log/")) {
+            if (linha.startsWith("journalctl -r -n 200 ") || linha.startsWith("tail -c 60000 /var/log/")) {
                 comandosDeRegistro.add(linha);
                 return responderRegistro(linha, saida);
             }

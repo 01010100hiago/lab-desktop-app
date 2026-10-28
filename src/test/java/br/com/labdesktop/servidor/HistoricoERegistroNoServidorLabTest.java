@@ -184,7 +184,7 @@ class HistoricoERegistroNoServidorLabTest {
         assertEquals(4, lido.linhas().size());
         assertTrue(lido.linhas().get(0).mensagem().startsWith("Failed password"), "a mais nova em cima");
         assertEquals("do diário do sistema (journalctl)", lido.fonte());
-        assertEquals(List.of("journalctl -n 200 --no-pager -o short-iso"), agente.comandosDeRegistro, "um comando fixo, sem sudo");
+        assertEquals(List.of("journalctl -r -n 200 --no-pager -o short-iso"), agente.comandosDeRegistro, "um comando fixo, sem sudo");
     }
 
     @Test

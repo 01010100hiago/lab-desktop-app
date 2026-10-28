@@ -61,14 +61,14 @@ class LeitoresDeRegistroTest {
         assertEquals("do diário do sistema (journalctl)", lido.fonte());
         assertEquals(2, lido.linhas().size());
         assertEquals("Failed password for root", lido.linhas().get(0).mensagem(), "a mais nova em cima");
-        assertEquals(List.of("journalctl -n 200 --no-pager -o short-iso"), s.comandos, "só o journalctl: deu certo de primeira");
+        assertEquals(List.of("journalctl -r -n 200 --no-pager -o short-iso"), s.comandos, "só o journalctl: deu certo de primeira");
     }
 
     @Test
     void osTresComandosSaoFixosSemSudoENadaDoUsuarioEntraNeles() throws Exception {
-        assertEquals("journalctl -n 200 --no-pager -o short-iso", LeitorDeRegistroPorSsh.COMANDO_JOURNAL);
-        assertEquals("tail -n 200 /var/log/syslog", LeitorDeRegistroPorSsh.COMANDO_SYSLOG);
-        assertEquals("tail -n 200 /var/log/messages", LeitorDeRegistroPorSsh.COMANDO_MESSAGES);
+        assertEquals("journalctl -r -n 200 --no-pager -o short-iso", LeitorDeRegistroPorSsh.COMANDO_JOURNAL);
+        assertEquals("tail -c 60000 /var/log/syslog", LeitorDeRegistroPorSsh.COMANDO_SYSLOG);
+        assertEquals("tail -c 60000 /var/log/messages", LeitorDeRegistroPorSsh.COMANDO_MESSAGES);
         Servidor s = new Servidor();
         s.resposta = c -> saiu(1, "", "permission denied");
         leitor(s, "x; rm -rf /").ler();
@@ -140,6 +140,88 @@ class LeitoresDeRegistroTest {
         Servidor s = new Servidor();
         s.resposta = c -> new ResultadoExec(0, JOURNAL.getBytes(StandardCharsets.UTF_8), new byte[0], true);
         assertTrue(assertInstanceOf(ResultadoDoRegistro.Lido.class, leitor(s, "labuser").ler()).cortada());
+    }
+
+    /** Como o ExecRemoto: guarda só os primeiros 64 KB da saída e marca truncado (o resto some, e a última linha fica pela metade). */
+    static ResultadoExec comOTetoDoExecRemoto(String saida) {
+        byte[] b = saida.getBytes(StandardCharsets.UTF_8);
+        int teto = br.com.labdesktop.ssh.ExecRemoto.TETO_DE_SAIDA;
+        if (b.length <= teto) {
+            return new ResultadoExec(0, b, new byte[0], false);
+        }
+        return new ResultadoExec(0, java.util.Arrays.copyOf(b, teto), new byte[0], true);
+    }
+
+    private static String linhaLonga(int minutosAtras, String marca) {
+        java.time.OffsetDateTime t = java.time.OffsetDateTime.of(2026, 10, 28, 11, 59, 0, 0, java.time.ZoneOffset.ofHours(-3)).minusMinutes(minutosAtras);
+        return t.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssxx")) + " lab app[1]: " + marca + " " + "x".repeat(360) + " FIM\n";
+    }
+
+    @Test
+    void registroGrandeNoJournalMantemAsMaisNovasEDizQueFaltamAsAntigasSemCortarLinhaNoMeio() throws Exception {
+        // 200 linhas de uns 400 bytes passam do teto de 64 KB: com -r o servidor manda a mais nova primeiro, e o que o teto corta é o fim (as antigas)
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 200; i++) {
+            sb.append(linhaLonga(i, "linha-" + i));
+        }
+        assertTrue(sb.length() > br.com.labdesktop.ssh.ExecRemoto.TETO_DE_SAIDA);
+        Servidor s = new Servidor();
+        s.resposta = c -> comOTetoDoExecRemoto(sb.toString());
+        ResultadoDoRegistro.Lido lido = assertInstanceOf(ResultadoDoRegistro.Lido.class, leitor(s, "labuser").ler());
+        assertTrue(lido.linhas().get(0).mensagem().startsWith("linha-0 "), "a mais nova está em cima: " + lido.linhas().get(0).mensagem().substring(0, 12));
+        assertTrue(lido.cortada(), "e a tela pode dizer que há linhas mais antigas que o app não lê");
+        for (var l : lido.linhas()) {
+            assertTrue(l.mensagem().endsWith("FIM"), "nenhuma linha vem pela metade: " + l.mensagem().substring(Math.max(0, l.mensagem().length() - 12)));
+        }
+        assertTrue(lido.linhas().size() >= 100 && lido.linhas().size() < 200, "só as que couberam inteiras: " + lido.linhas().size());
+    }
+
+    @Test
+    void arquivoDeLogGrandeUsaTailPorBytesEMantemAsMaisNovasSemALinhaPelaMetade() throws Exception {
+        // o tail -c devolve os últimos 60.000 bytes: começa no meio de uma linha, e a mais nova é a última
+        StringBuilder todo = new StringBuilder();
+        for (int i = 300; i >= 0; i--) {
+            todo.append(linhaLonga(i, "entrada-" + (300 - i)));
+        }
+        byte[] fim = todo.toString().getBytes(StandardCharsets.UTF_8);
+        byte[] ultimos = java.util.Arrays.copyOfRange(fim, fim.length - LeitorDeRegistroPorSsh.BYTES_DO_ARQUIVO, fim.length);
+        Servidor s = new Servidor();
+        s.resposta = c -> c.equals(LeitorDeRegistroPorSsh.COMANDO_SYSLOG) ? new ResultadoExec(0, ultimos, new byte[0], false) : saiu(127, "", "journalctl: not found");
+        ResultadoDoRegistro.Lido lido = assertInstanceOf(ResultadoDoRegistro.Lido.class, leitor(s, "labuser").ler());
+        assertTrue(lido.linhas().get(0).mensagem().startsWith("entrada-300 "), "a mais nova está em cima: " + lido.linhas().get(0).mensagem().substring(0, 14));
+        assertTrue(lido.cortada());
+        for (var l : lido.linhas()) {
+            assertTrue(l.mensagem().startsWith("entrada-") && l.mensagem().endsWith("FIM"), "a primeira linha, que vinha pela metade, saiu: " + l.mensagem().substring(0, 20));
+        }
+    }
+
+    @Test
+    void osTresComandosSaoFixosSemPipeNemInterpolacao() {
+        for (String c : List.of(LeitorDeRegistroPorSsh.COMANDO_JOURNAL, LeitorDeRegistroPorSsh.COMANDO_SYSLOG, LeitorDeRegistroPorSsh.COMANDO_MESSAGES)) {
+            assertTrue(ComandosDeRegistroSemPipe.ehFixoESemPipe(c), c);
+        }
+        assertTrue(LeitorDeRegistroPorSsh.COMANDO_JOURNAL.contains(" -r "), "a mais nova primeiro");
+        assertTrue(LeitorDeRegistroPorSsh.COMANDO_SYSLOG.contains("tail -c "), "só o fim do arquivo");
+    }
+
+    /** Regra dos comandos do registro: texto inteiro constante, sem pipe, ponto e vírgula, crase, cifrão nem redirecionamento. */
+    static final class ComandosDeRegistroSemPipe {
+        static boolean ehFixoESemPipe(String comando) {
+            return comando.chars().noneMatch(ch -> "|;&`$<>\\\"'".indexOf(ch) >= 0);
+        }
+    }
+
+    @Test
+    void localComSaidaCortadaGuardaSoOFimESemALinhaQueAMarcaDeixouPelaMetade() throws Exception {
+        String cabeca = "2026-10-28T13:00:00.000000000Z velha-1\n2026-10-28T13:00:01.000000000Z velha-2 meio da lin";
+        String marca = "\n[... saída cortada ...]\n";
+        String fim = "ha cortada no meio\n2026-10-28T14:00:01.000000000Z nova-1\n2026-10-28T14:00:02.000000000Z nova-2\n";
+        Processos p = new Processos();
+        p.resposta = a -> new ResultadoExec(0, (cabeca + marca + fim).getBytes(StandardCharsets.UTF_8), new byte[0], true);
+        ResultadoDoRegistro.Lido lido = assertInstanceOf(ResultadoDoRegistro.Lido.class, new LeitorDeRegistroLocal(p, () -> "painel-lab").ler());
+        assertEquals(2, lido.linhas().size(), lido.linhas().toString());
+        assertTrue(lido.linhas().get(0).mensagem().equals("nova-2") && lido.linhas().get(1).mensagem().equals("nova-1"));
+        assertTrue(lido.cortada());
     }
 
     // ---- local ----

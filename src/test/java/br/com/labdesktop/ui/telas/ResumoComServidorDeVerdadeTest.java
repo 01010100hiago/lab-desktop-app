@@ -167,7 +167,7 @@ class ResumoComServidorDeVerdadeTest {
         Visual.naEdt(() -> r.forcarVisivelParaTeste(true));
         Espera.ate(PRAZO, "linhas", () -> Visual.naEdt(() -> r.linhasQueAparecem().size()) == 4);
         assertTrue(Visual.naEdt(() -> r.linhasQueAparecem().get(0).mensagem()).startsWith("Failed password"));
-        assertEquals(List.of("journalctl -n 200 --no-pager -o short-iso"), agente.comandosDeRegistro);
+        assertEquals(List.of("journalctl -r -n 200 --no-pager -o short-iso"), agente.comandosDeRegistro);
         assertTrue(Visual.naEdt(r::textoDoStatus).contains("journalctl"), Visual.naEdt(r::textoDoStatus));
 
         Visual.naEdt(() -> r.botaoPausar().doClick());

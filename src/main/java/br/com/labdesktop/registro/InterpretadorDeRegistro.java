@@ -28,7 +28,7 @@ public final class InterpretadorDeRegistro {
 
     /** O tamanho máximo de uma linha (o resto vira reticências). */
     public static final int LIMITE_DA_LINHA = 2000;
-    /** O máximo de linhas que uma leitura devolve (o comando já pede 200; isto é a cerca de dentro). */
+    /** O máximo de linhas que uma leitura devolve (o diário pede 200; o {@code tail -c} dos arquivos pode trazer mais; isto é a cerca de dentro, e o que fica são as mais novas). */
     public static final int LIMITE_DE_LINHAS = 500;
 
     private static final Pattern ISO = Pattern.compile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:[.,]\\d+)?(?:Z|[+-]\\d{2}:?\\d{2}))\\s+(\\S+)\\s+(.*)$");
@@ -43,15 +43,13 @@ public final class InterpretadorDeRegistro {
     /** O retrato de uma leitura: as linhas na ordem em que o servidor as escreveu (a MAIS ANTIGA primeiro) e se havia mais do que o limite. */
     public record Leitura(List<LinhaDeRegistro> linhas, boolean cortada) { }
 
-    /** A saída de {@code journalctl -n 200 --no-pager -o short-iso} (ou de um {@code tail} de {@code /var/log/syslog}, de qualquer um dos dois jeitos de escrever a data). */
+    /**
+     * A saída de {@code journalctl -r -n 200 --no-pager -o short-iso} (mais nova primeiro) ou de um {@code tail -c} de {@code /var/log/syslog} (mais antiga primeiro), de qualquer um dos dois
+     * jeitos de escrever a data. A ordem do servidor não importa: as linhas saem ordenadas por hora, e passando de {@value #LIMITE_DE_LINHAS} ficam as MAIS NOVAS ({@code cortada}).
+     */
     public static Leitura doSistema(String saida, Instant agora, ZoneId fuso) {
         List<LinhaDeRegistro> l = new ArrayList<>();
-        boolean cortada = false;
         for (String bruta : linhas(saida)) {
-            if (l.size() >= LIMITE_DE_LINHAS) {
-                cortada = true;
-                break;
-            }
             String t = bruta.strip();
             if (t.isEmpty() || t.startsWith("-- ")) {
                 continue; // "-- No entries --", "-- Boot 0f1c... --", "-- Journal begins at ... --"
@@ -63,18 +61,36 @@ public final class InterpretadorDeRegistro {
             l.add(linha != null ? linha : semHora(bruta));
         }
         ordenarPorHora(l);
+        boolean cortada = false;
+        if (l.size() > LIMITE_DE_LINHAS) {
+            l = new ArrayList<>(l.subList(l.size() - LIMITE_DE_LINHAS, l.size())); // fica o FIM: as mais novas
+            cortada = true;
+        }
         return new Leitura(List.copyOf(l), cortada);
+    }
+
+    /** Tira a última linha se a saída foi cortada no teto (ela pode estar pela metade). Sem corte, devolve igual. */
+    public static String semUltimaLinhaCortada(String saida, boolean truncada) {
+        if (!truncada || saida == null) {
+            return saida;
+        }
+        int i = Math.max(saida.lastIndexOf('\n'), saida.lastIndexOf('\r'));
+        return i < 0 ? "" : saida.substring(0, i);
+    }
+
+    /** Tira a primeira linha (a de um {@code tail -c} costuma começar no meio dela). */
+    public static String semPrimeiraLinhaCortada(String saida) {
+        if (saida == null) {
+            return null;
+        }
+        int i = saida.indexOf('\n');
+        return i < 0 ? "" : saida.substring(i + 1);
     }
 
     /** A saída de {@code docker logs --tail 200 --timestamps <container>}: {@code AAAA-MM-DDTHH:MM:SS.nnnnnnnnnZ mensagem}; a origem é o nome do container. */
     public static Leitura doDocker(String saida, String container) {
         List<LinhaDeRegistro> l = new ArrayList<>();
-        boolean cortada = false;
         for (String bruta : linhas(saida)) {
-            if (l.size() >= LIMITE_DE_LINHAS) {
-                cortada = true;
-                break;
-            }
             if (bruta.isBlank()) {
                 continue;
             }
@@ -87,6 +103,11 @@ public final class InterpretadorDeRegistro {
             }
         }
         ordenarPorHora(l);
+        boolean cortada = false;
+        if (l.size() > LIMITE_DE_LINHAS) {
+            l = new ArrayList<>(l.subList(l.size() - LIMITE_DE_LINHAS, l.size()));
+            cortada = true;
+        }
         return new Leitura(List.copyOf(l), cortada);
     }
 
