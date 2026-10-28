@@ -407,6 +407,44 @@ class PublicadorPorArquivoTest {
     }
 
     @Test
+    void seOCloudflaredSobeECaiEmSeguidaNaoValeComoVoltouORestauraOArquivoEReiniciaDeNovo() throws Exception {
+        lab.sobeECaiEmSeguida = true;
+        PublicadorNaInternet.Resultado r = org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(15), () -> {
+            try (PublicadorNaInternet p = publicador()) {
+                return p.executar(p.preparar(pedido()), observador(), Cancelamento.NUNCA);
+            }
+        });
+        assertEquals(PublicadorNaInternet.Desfecho.FALHOU, r.desfecho());
+        assertTrue(r.falha().contains("não ficou de pé"), r.falha());
+        assertTrue(r.falha().contains("reiniciado de novo"), r.falha());
+        assertEquals(Etapa.REGRA, r.etapaDaFalha(), "a falha é da etapa que reinicia o cloudflared");
+        assertEquals(0, testes.get(), "nada de DNS nem de teste do endereço");
+        assertEquals(0, cf.registros.size(), "o DNS nem chegou a ser criado");
+        assertEquals(2, lab.reinicios.get(), "reiniciou para a regra nova e DE NOVO ao devolver o arquivo");
+        assertEquals(CONFIG, config(), "o config.yml voltou como estava");
+        assertEquals(CONFIG, lab.configNoUltimoReinicio, "o segundo reinício já leu o arquivo de antes");
+        assertEquals(List.of(), r.naoConsegui());
+    }
+
+    @Test
+    void seODockerReiniciaOCloudflaredSozinhoEmLoopNaoValeComoVoltouORestauraOArquivo() throws Exception {
+        lab.emCrashLoop = true;
+        PublicadorNaInternet.Resultado r = org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(15), () -> {
+            try (PublicadorNaInternet p = publicador()) {
+                return p.executar(p.preparar(pedido()), observador(), Cancelamento.NUNCA);
+            }
+        });
+        assertEquals(PublicadorNaInternet.Desfecho.FALHOU, r.desfecho());
+        assertTrue(r.falha().contains("não ficou de pé"), r.falha());
+        assertEquals(2, lab.reinicios.get());
+        assertEquals(CONFIG, config());
+        assertEquals(0, cf.registros.size());
+        assertEquals(0, testes.get());
+        // o segundo reinício (o do desfazer) já não está em loop: o app diz que devolveu tudo
+        assertEquals(List.of(), r.naoConsegui());
+    }
+
+    @Test
     void seODnsFalhaPorqueAlguemCriouOMesmoNomeNoMeioDesfazRegraEComposeSemTocarNoRegistroAlheio() throws Exception {
         try (PublicadorNaInternet p = publicador()) {
             PublicadorNaInternet.Previa previa = p.preparar(pedido());

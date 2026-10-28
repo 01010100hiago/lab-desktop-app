@@ -47,6 +47,8 @@ public final class TunelPorArquivo implements Tunel {
     private static final int PERMISSAO_DA_COPIA = 0644;
     private static final Duration PRAZO_DO_COMANDO = Duration.ofSeconds(60);
     private static final Duration ESPERA_DO_REINICIO = Duration.ofSeconds(25);
+    /** Quanto tempo o cloudflared tem de ficar de pé, sem cair nem reiniciar, para valer como "voltou". */
+    static final Duration ESTAVEL_POR = Duration.ofSeconds(5);
     private static final Duration PASSO_DA_ESPERA = Duration.ofSeconds(1);
     private static final DateTimeFormatter DATA_DA_COPIA = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
@@ -466,13 +468,32 @@ public final class TunelPorArquivo implements Tunel {
             }
         }
 
+        /**
+         * Espera o cloudflared voltar E FICAR de pé: "rodando" numa foto só não basta (um cloudflared que cai um segundo depois, por credencial, montagem ou rede,
+         * aparece como rodando logo depois do restart). Só vale quando ele está rodando, sem estar reiniciando sozinho, com a MESMA vida (mesmo instante de partida e
+         * mesmo número de reinícios do Docker) por {@link #ESTAVEL_POR}. Mudou de vida no meio, a contagem recomeça; a espera total é {@link #ESPERA_DO_REINICIO}.
+         * O relógio é a soma das pausas que o {@link Esperador} fez (nos testes, nada dorme).
+         */
         private void esperarOCloudflared() throws FalhaDoProjeto {
-            long limite = System.nanoTime() + ESPERA_DO_REINICIO.toNanos();
+            Duration decorrido = Duration.ZERO;
+            Duration estavelDesde = null;
+            String vida = null;
+            boolean chegouARodar = false;
             while (true) {
                 try {
                     ResultadoExec r = ambiente.executor().executar(ComandosCloudflared.inspecionar(comSudo, cfg.containerDoCloudflared()), PRAZO_DO_COMANDO);
-                    if (r.status() == 0 && MontagensDoContainer.ler(r.stdout(), cfg.caminhoDoConfig()).rodando()) {
-                        return;
+                    MontagensDoContainer m = r.status() == 0 ? MontagensDoContainer.ler(r.stdout(), cfg.caminhoDoConfig()) : MontagensDoContainer.NAO_EXISTE;
+                    if (m.deP()) {
+                        chegouARodar = true;
+                        if (!m.marcaDaVida().equals(vida)) {
+                            vida = m.marcaDaVida();
+                            estavelDesde = decorrido;
+                        } else if (decorrido.minus(estavelDesde).compareTo(ESTAVEL_POR) >= 0) {
+                            return;
+                        }
+                    } else {
+                        vida = null;
+                        estavelDesde = null;
                     }
                 } catch (IOException e) {
                     throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.SEM_CONEXAO, "A conexão com o servidor caiu enquanto o cloudflared reiniciava.", null, e);
@@ -480,8 +501,10 @@ public final class TunelPorArquivo implements Tunel {
                     Thread.currentThread().interrupt();
                     throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.CANCELADO, "Cancelado.", null, e);
                 }
-                if (System.nanoTime() > limite) {
-                    throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.OUTRO, "O cloudflared não voltou a rodar depois de reiniciar com a regra nova.");
+                if (decorrido.compareTo(ESPERA_DO_REINICIO) > 0) {
+                    throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.OUTRO, chegouARodar
+                        ? "O cloudflared subiu, mas não ficou de pé depois de reiniciar com a regra nova (ele caiu ou reiniciou sozinho de novo)."
+                        : "O cloudflared não voltou a rodar depois de reiniciar com a regra nova.");
                 }
                 try {
                     esperador.esperar(PASSO_DA_ESPERA);
@@ -489,6 +512,7 @@ public final class TunelPorArquivo implements Tunel {
                     Thread.currentThread().interrupt();
                     throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.CANCELADO, "Cancelado.", null, e);
                 }
+                decorrido = decorrido.plus(PASSO_DA_ESPERA);
             }
         }
 

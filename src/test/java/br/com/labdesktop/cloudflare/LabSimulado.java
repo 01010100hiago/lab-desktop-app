@@ -43,6 +43,12 @@ public final class LabSimulado implements AutoCloseable {
     public volatile boolean containerExiste = true;
     /** O primeiro reinício derruba o cloudflared (a regra nova não deixou ele subir); o seguinte o levanta. */
     public volatile boolean oPrimeiroReinicioNaoVolta;
+    /** Depois do primeiro reinício o cloudflared sobe (a primeira leitura o vê rodando) e CAI em seguida (as outras o veem parado): o que um crash-loop faz de verdade. */
+    public volatile boolean sobeECaiEmSeguida;
+    /** Depois do primeiro reinício o Docker o reinicia sozinho sem parar: cada leitura vê uma vida nova ({@code RestartCount} subindo). */
+    public volatile boolean emCrashLoop;
+    private volatile boolean problemaAtivo;
+    private final AtomicInteger leiturasDoProblema = new AtomicInteger();
     public volatile boolean validarSempreFalha;
     public volatile boolean semPermissaoNoDocker;
     public volatile String configNoUltimoReinicio = "";
@@ -115,7 +121,23 @@ public final class LabSimulado implements AutoCloseable {
                     saida.append(ServidorSshDeTeste.PREFIXO_STDERR).append("Error: No such object: ").append(p[i + 2]).append('\n');
                     return 1;
                 }
-                saida.append("[{\"State\":{\"Running\":").append(rodando).append("},\"Config\":{\"Image\":\"cloudflare/cloudflared:latest\"},")
+                boolean correndo = rodando;
+                boolean reiniciandoSozinho = false;
+                String iniciado = "2026-10-28T10:00:00Z";
+                int contagem = 0;
+                if (problemaAtivo) {
+                    int k = leiturasDoProblema.incrementAndGet();
+                    if (sobeECaiEmSeguida) {
+                        correndo = k == 1;
+                    } else {
+                        correndo = k % 2 == 1;
+                        reiniciandoSozinho = !correndo;
+                        iniciado = "2026-10-28T10:00:" + String.format("%02d", k % 60) + "Z";
+                        contagem = k / 2;
+                    }
+                }
+                saida.append("[{\"RestartCount\":").append(contagem).append(",\"State\":{\"Running\":").append(correndo).append(",\"Restarting\":").append(reiniciandoSozinho)
+                    .append(",\"StartedAt\":\"").append(iniciado).append("\"},\"Config\":{\"Image\":\"cloudflare/cloudflared:latest\"},")
                     .append("\"Mounts\":[{\"Type\":\"bind\",\"Source\":\"").append(CONFIG).append("\",\"Destination\":\"").append(CONFIG_NO_CONTAINER).append("\"}]}]\n");
                 return 0;
             }
@@ -153,6 +175,8 @@ public final class LabSimulado implements AutoCloseable {
                     configNoUltimoReinicio = "";
                 }
                 rodando = !(oPrimeiroReinicioNaoVolta && n == 1);
+                problemaAtivo = n == 1 && (sobeECaiEmSeguida || emCrashLoop);
+                leiturasDoProblema.set(0);
                 return 0;
             }
             case "compose" -> {

@@ -10,10 +10,24 @@ import java.util.Optional;
  * O que o {@code docker inspect} do container do cloudflared diz: se ele existe, se está rodando e ONDE ele enxerga o {@code config.yml} do servidor (o
  * caminho de dentro do container é outro, e o {@code ingress validate} precisa dele). Lê o JSON com Jackson; nada aqui roda comando.
  */
-public record MontagensDoContainer(boolean existe, boolean rodando, String imagem, Optional<String> caminhoDoConfigNoContainer) {
+public record MontagensDoContainer(boolean existe, boolean rodando, String imagem, Optional<String> caminhoDoConfigNoContainer, boolean reiniciando, int reinicios,
+                                   String iniciadoEm) {
 
     /** O container não existe (ou o JSON não é de um container). */
-    public static final MontagensDoContainer NAO_EXISTE = new MontagensDoContainer(false, false, "", Optional.empty());
+    public static final MontagensDoContainer NAO_EXISTE = new MontagensDoContainer(false, false, "", Optional.empty(), false, 0, "");
+
+    /**
+     * "Está de pé de verdade": rodando e não no meio de uma reinicialização automática. É só uma foto; quem quer saber se ele FICOU de pé compara fotos
+     * ({@link #marcaDaVida()} muda se ele caiu e subiu de novo entre duas leituras).
+     */
+    public boolean deP() {
+        return rodando && !reiniciando;
+    }
+
+    /** O que identifica esta "vida" do container: quando ele subiu e quantas vezes o Docker já o reiniciou sozinho. Mudou entre duas leituras = caiu e subiu. */
+    public String marcaDaVida() {
+        return iniciadoEm + "|" + reinicios;
+    }
 
     /**
      * @param json              a saída de {@code docker inspect <container>} (uma lista com um objeto)
@@ -31,6 +45,9 @@ public record MontagensDoContainer(boolean existe, boolean rodando, String image
             return NAO_EXISTE;
         }
         boolean rodando = c.path("State").path("Running").asBoolean(false);
+        boolean reiniciando = c.path("State").path("Restarting").asBoolean(false);
+        int reinicios = c.path("RestartCount").asInt(0);
+        String iniciadoEm = c.path("State").path("StartedAt").asText("");
         String imagem = c.path("Config").path("Image").asText("");
         String melhor = null;
         int melhorTamanho = -1;
@@ -52,6 +69,6 @@ public record MontagensDoContainer(boolean existe, boolean rodando, String image
                 melhorTamanho = origem.length();
             }
         }
-        return new MontagensDoContainer(true, rodando, imagem, Optional.ofNullable(melhor));
+        return new MontagensDoContainer(true, rodando, imagem, Optional.ofNullable(melhor), reiniciando, reinicios, iniciadoEm);
     }
 }
