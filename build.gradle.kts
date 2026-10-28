@@ -120,6 +120,11 @@ tasks.test {
     val tmpDosTestes = layout.buildDirectory.dir("tmp/testes").get().asFile
     systemProperty("java.io.tmpdir", tmpDosTestes.absolutePath)
     systemProperty("file.encoding", "UTF-8")
+    // O teste do laboratório local com o Docker de VERDADE (containers e imagens `labteste-*`, removidos no fim) só roda com
+    // `./gradlew test -Plabdesktop.dockerReal=true --tests '*DockerDeVerdade*'`: o build normal nunca toca no Docker de quem o roda.
+    if (project.hasProperty("labdesktop.dockerReal")) {
+        systemProperty("labdesktop.dockerReal", project.property("labdesktop.dockerReal").toString())
+    }
     // Os testes de tela pintam componentes soltos numa imagem: sem janela, sem ícone saltando no Dock do Mac.
     systemProperty("java.awt.headless", "true")
     doFirst { tmpDosTestes.mkdirs() }

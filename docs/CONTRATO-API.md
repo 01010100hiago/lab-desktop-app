@@ -17,7 +17,7 @@ Legenda: "App" = o que o lab-desktop faz com a rota. "Web" = o que o front atual
 
 ### 1.1 Endereço e transporte
 
-O agente escuta só em `127.0.0.1:7000` dentro do servidor. O app chega nele por um forward do MINA SSHD (`127.0.0.1:<porta efêmera>` no Mac para `127.0.0.1:7000` no servidor). Todas as chamadas do app são `http://127.0.0.1:<porta>/...`.
+O agente escuta só em `127.0.0.1:7000` dentro do servidor. **"Este computador":** sem túnel nenhum; o app chama `http://127.0.0.1:<porta>` direto, porta que o Docker publica SÓ no loopback do computador (padrão 7070) e que o agente atende dentro do container (3.12). O app chega nele por um forward do MINA SSHD (`127.0.0.1:<porta efêmera>` no Mac para `127.0.0.1:7000` no servidor). Todas as chamadas do app são `http://127.0.0.1:<porta>/...`.
 
 Regras obrigatórias do cliente HTTP do app:
 
@@ -368,6 +368,8 @@ Web: botão "Tela em texto" da página da sessão (usa `fetch` direto). App: aç
 O agente no perfil `monitor` responde uma lista FECHADA de rotas, todas de leitura: `GET /api/versao`, `GET /api/servidor`, `GET /api/servidor/detalhe` (sem `consumo` por projeto: `[]`; processo de container fica sem dono de projeto), `GET /api/containers` e `GET /api/containers/:nome/logs?linhas=<50..2000>`. **Todo o resto responde `404`** em JSON, antes de tocar em Docker ou disco: `{"erro":"Esta rota não existe no perfil monitor do agente (só leitura do servidor).","perfil":"monitor"}`. Isso inclui projetos, sessões do Claude, consumo, limites, terminal web, páginas e TODA rota de escrita. No perfil `lab` (o padrão, e o do servidor) nada mudou: as duas rotas de containers abaixo NÃO existem lá (404 em texto puro, como qualquer rota desconhecida).
 
 `GET /api/containers` → `{"containers":[{"nome","estado","status","portas","imagem","criado"(ISO|null),"compose"(nome do projeto compose|null),"cpu","mem","memLimite","net","bloco","pids"}]}` (`cpu`...`pids` são `null` sem leitura do `docker stats`, que roda a cada 15 s). `GET /api/containers/:nome/logs` → texto puro; o nome da URL só vai ao Docker se o `docker ps -a` o lista agora (senão `404 {"erro":"Container não existe."}`). **O app ainda não consome estas duas rotas** (a aba Containers do servidor continua lendo o resumo de `/api/servidor`); elas existem para a tela de containers do perfil monitor.
+
+No container do laboratório local o agente atende em todas as interfaces DO CONTAINER, e o Docker publica a porta só no loopback do computador (`-p 127.0.0.1:<porta>:<porta>`).
 
 
 ## 4. Rotas de ação

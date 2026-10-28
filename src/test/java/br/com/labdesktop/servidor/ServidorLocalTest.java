@@ -116,7 +116,7 @@ class ServidorLocalTest {
         aguardar(EstadoConexao.SSH_OK_SEM_AGENTE);
         Espera.ate(PRAZO, () -> "situação=" + lab.estado().situacaoDoAgente(), () -> lab.estado().situacaoDoAgente() == SituacaoDoAgente.LOCAL_NAO_CRIADO);
         assertTrue(lab.estado().situacaoDoAgente().oferecerPreparar());
-        assertFalse(lab.estado().situacaoDoAgente().oferecerInstalar(), "o botão de Este computador é Preparar, não Instalar agente");
+        assertTrue(lab.estado().situacaoDoAgente().oferecerInstalar(), "o botão do aviso existe (o rótulo é Preparar este computador)");
         assertTrue(pc.escritas().isEmpty(), "só LEITURAS enquanto o usuário não clica: " + pc.escritas());
 
         pc.dockerParado = true;
