@@ -11,13 +11,24 @@ import java.nio.file.Path;
  *
  * @param memoria          último caminho por servidor e por projeto, e a raiz dos projetos
  * @param pastaDeBackups   onde ficam as cópias de segurança locais dos arquivos editados
+ * @param pastasDoApp      as pastas do próprio app neste computador (dados com o cofre, logs): o gerenciador de arquivos de "Este computador" as
+ *                         trata como intocáveis, com tudo o que há dentro
  */
-public record ServicosDeArquivos(MemoriaDeCaminhos memoria, Path pastaDeBackups) {
+public record ServicosDeArquivos(MemoriaDeCaminhos memoria, Path pastaDeBackups, java.util.List<Path> pastasDoApp) {
+
+    public ServicosDeArquivos {
+        pastasDoApp = pastasDoApp == null ? java.util.List.of() : java.util.List.copyOf(pastasDoApp);
+    }
+
+    /** Sem pastas do app a proteger (telas montadas sem o app inteiro, testes). */
+    public ServicosDeArquivos(MemoriaDeCaminhos memoria, Path pastaDeBackups) {
+        this(memoria, pastaDeBackups, java.util.List.of());
+    }
 
     /** Os de produção: tudo na pasta de dados do app. */
     public static ServicosDeArquivos de(CaminhosApp caminhos) {
         return new ServicosDeArquivos(MemoriaDeCaminhos.doArquivo(caminhos.arquivoMemoriaDeArquivos()),
-            caminhos.pastaBackupsDeArquivos());
+            caminhos.pastaBackupsDeArquivos(), java.util.List.of(caminhos.pastaDados(), caminhos.pastaLogs()));
     }
 
     /** A pasta onde o seletor de "Baixar" começa: Downloads, na pasta do usuário, ou a própria pasta do usuário se não houver Downloads. */

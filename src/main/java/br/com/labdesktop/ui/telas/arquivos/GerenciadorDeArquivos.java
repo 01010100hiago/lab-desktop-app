@@ -573,6 +573,7 @@ public final class GerenciadorDeArquivos extends Painel {
             lembrado = inicio != null ? inicio
                 : raizPedida != null ? null : memoria.ultimoCaminhoDoServidor(ctx.servidorId()).orElse(null);
         }
+        e = e.comBlindados(ctx.blindados()); // em Este computador: o cofre e os dados do app nunca se apagam nem se movem, em escopo nenhum
         ServicoDeArquivos s = new ServicoDeArquivos(c, e);
         String comeco = lembrado != null && e.contem(lembrado) ? lembrado : e.raiz();
         ListagemDePasta l;

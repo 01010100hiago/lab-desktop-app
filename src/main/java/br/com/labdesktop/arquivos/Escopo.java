@@ -20,8 +20,15 @@ import java.util.Set;
  * @param nome       como a raiz aparece na tela ("Projetos", "orbita", "Minha pasta", "Tudo (/)")
  * @param raiz       o teto, em forma canônica
  * @param intocaveis o que nunca se apaga nem se move
+ * @param blindados  pastas cujo CONTEÚDO inteiro também é intocável (em "Este computador": o cofre e os dados do próprio app, para o gerenciador de
+ *                   arquivos, até no modo "Tudo", nunca apagar nem mover o cofre, o token, as preferências nem os backups); vazio no servidor remoto
  */
-public record Escopo(String nome, String raiz, Set<String> intocaveis) {
+public record Escopo(String nome, String raiz, Set<String> intocaveis, Set<String> blindados) {
+
+    /** Sem blindados (o servidor remoto). */
+    public Escopo(String nome, String raiz, Set<String> intocaveis) {
+        this(nome, raiz, intocaveis, Set.of());
+    }
 
     public Escopo {
         try {
@@ -35,6 +42,13 @@ public record Escopo(String nome, String raiz, Set<String> intocaveis) {
                 }
             }
             intocaveis = Set.copyOf(limpos);
+            Set<String> b = new LinkedHashSet<>();
+            for (String i : blindados == null ? Set.<String>of() : blindados) {
+                if (i != null && !i.isBlank()) {
+                    b.add(CaminhoRemoto.normalizar(i));
+                }
+            }
+            blindados = Set.copyOf(b);
         } catch (ErroSftp e) {
             throw new IllegalArgumentException(e.getMessage(), e);
         }
@@ -64,6 +78,11 @@ public record Escopo(String nome, String raiz, Set<String> intocaveis) {
             s.add(home);
         }
         return s;
+    }
+
+    /** O mesmo escopo, com estas pastas (e tudo dentro delas) também intocáveis. */
+    public Escopo comBlindados(Set<String> pastas) {
+        return new Escopo(nome, raiz, intocaveis, pastas);
     }
 
     /** {@code true} se a raiz é {@code /} (o modo "Tudo"). */
@@ -106,6 +125,27 @@ public record Escopo(String nome, String raiz, Set<String> intocaveis) {
         }
         for (String i : intocaveis) {
             if (CaminhoRemoto.dentroDe(n, i)) { // n == i, ou n é ancestral de i
+                return true;
+            }
+        }
+        for (String b : blindados) {
+            if (CaminhoRemoto.dentroDe(n, b) || CaminhoRemoto.dentroDe(b, n)) { // n é a pasta blindada, uma acima dela, ou algo DENTRO dela
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** O caminho é uma pasta do próprio app (cofre, dados, logs) ou está dentro de uma: o motivo da proteção é outro. */
+    public boolean blindado(String caminho) {
+        String n;
+        try {
+            n = CaminhoRemoto.normalizar(caminho);
+        } catch (ErroSftp e) {
+            return false;
+        }
+        for (String b : blindados) {
+            if (CaminhoRemoto.dentroDe(b, n)) {
                 return true;
             }
         }

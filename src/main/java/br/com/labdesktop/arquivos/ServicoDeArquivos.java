@@ -268,6 +268,10 @@ public final class ServicoDeArquivos {
     }
 
     private void exigirNaoProtegido(String caminho, String verbo) throws ErroSftp {
+        if (escopo.blindado(caminho)) {
+            throw new ErroSftp(ErroSftp.Tipo.PROTEGIDO, "Isto é do próprio Lab Desktop (o cofre, o token, as preferências ou os backups): "
+                + "por segurança não deixo " + verbo + ".");
+        }
         if (escopo.protegido(caminho)) {
             throw new ErroSftp(ErroSftp.Tipo.PROTEGIDO, "Esta pasta sustenta o gerenciador de arquivos (é a raiz, a pasta dos projetos "
                 + "ou a pasta pessoal), por isso não deixo " + verbo + ".");

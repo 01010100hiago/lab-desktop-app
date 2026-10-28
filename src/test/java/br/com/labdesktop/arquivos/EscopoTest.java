@@ -86,4 +86,23 @@ class EscopoTest {
         assertEquals(List.of("src", "app"), e.trechosAPartirDaRaiz("/srv/lab/projects/orbita/src/app"));
         assertEquals(Set.of("/srv/lab/projects/orbita", "/", "/srv/lab/projects", "/home/labuser"), e.intocaveis());
     }
+
+    @Test
+    void emEsteComputadorOCofreEOsDadosDoAppSaoIntocaveisATeNoModoTudoComTudoDentro() throws ErroSftp {
+        Escopo tudo = Escopo.servidor("Tudo (/)", "/", "/Users/ana/LabLocal/projects", "/Users/ana")
+            .comBlindados(Set.of("/Users/ana/Library/Application Support/LabDesktop", "/Users/ana/Library/Logs/LabDesktop"));
+        assertTrue(tudo.protegido("/Users/ana/Library/Application Support/LabDesktop"), "a pasta de dados");
+        assertTrue(tudo.protegido("/Users/ana/Library/Application Support/LabDesktop/cofre.labcofre"), "o cofre, que está DENTRO");
+        assertTrue(tudo.protegido("/Users/ana/Library/Application Support/LabDesktop/backups-arquivos/x/y.txt"), "e qualquer coisa dentro");
+        assertTrue(tudo.protegido("/Users/ana/Library/Logs/LabDesktop/lab-desktop.log"));
+        assertTrue(tudo.protegido("/Users/ana/Library/Application Support"), "uma pasta acima também (apagá-la levaria os dados junto)");
+        assertFalse(tudo.protegido("/Users/ana/Library/Application Support/OutroApp"), "o vizinho continua livre");
+        assertFalse(tudo.protegido("/Users/ana/LabLocal/projects/orbita/src"), "os projetos continuam livres");
+        assertTrue(tudo.blindado("/Users/ana/Library/Application Support/LabDesktop/cofre.labcofre"));
+        assertFalse(tudo.blindado("/Users/ana/Library/Application Support"), "acima é protegido, mas não é do app");
+        // sem blindados (servidor remoto) nada muda
+        Escopo remoto = Escopo.servidor("Tudo (/)", "/", "/srv/lab/projects", "/home/x");
+        assertFalse(remoto.protegido("/Users/ana/Library/Application Support/LabDesktop/cofre.labcofre"));
+        assertEquals(Set.of(), remoto.blindados());
+    }
 }

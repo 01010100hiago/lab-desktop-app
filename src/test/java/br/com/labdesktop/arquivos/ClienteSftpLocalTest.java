@@ -311,4 +311,28 @@ class ClienteSftpLocalTest {
         assertEquals("rw-r--r--", PosixFilePermissions.toString(Files.getPosixFilePermissions(raiz.resolve("novo.txt"))));
         assertEquals("oi", Files.readString(raiz.resolve("novo.txt")));
     }
+
+    @Test
+    void oServicoDeArquivosLocalNaoApagaNemMoveNemRenomeiaOCofreNoModoTudo() throws Exception {
+        Path dados = Files.createDirectories(raiz.resolve("AppDados"));
+        Files.writeString(dados.resolve("cofre.labcofre"), "segredo");
+        Files.createDirectories(raiz.resolve("outra"));
+        Escopo tudo = Escopo.servidor("Tudo (/)", "/", raiz.resolve("projects").toString(), raiz.toString()).comBlindados(java.util.Set.of(dados.toString()));
+        ServicoDeArquivos s = new ServicoDeArquivos(c, tudo);
+        EntradaRemota cofre = s.estatisticas(dados.resolve("cofre.labcofre").toString());
+
+        ErroSftp erro = assertThrows(ErroSftp.class, () -> s.apagar(cofre));
+        assertEquals(ErroSftp.Tipo.PROTEGIDO, erro.tipo());
+        assertTrue(erro.getMessage().contains("do próprio Lab Desktop"), erro.getMessage());
+        assertEquals(ErroSftp.Tipo.PROTEGIDO, tipoDe(() -> s.renomear(cofre, "outro-nome")));
+        var lote = s.mover(List.of(cofre), raiz.resolve("outra").toString());
+        assertEquals(0, lote.feitos());
+        assertEquals(1, lote.falhas().size());
+        assertEquals(ErroSftp.Tipo.PROTEGIDO, tipoDe(() -> s.resumirParaApagar(cofre, Cancelamento.NUNCA)));
+        assertEquals("segredo", Files.readString(dados.resolve("cofre.labcofre")), "o cofre ficou como estava");
+        // o resto do computador continua livre
+        Files.writeString(raiz.resolve("qualquer.txt"), "x");
+        s.apagar(s.estatisticas(raiz.resolve("qualquer.txt").toString()));
+        assertFalse(Files.exists(raiz.resolve("qualquer.txt")));
+    }
 }
