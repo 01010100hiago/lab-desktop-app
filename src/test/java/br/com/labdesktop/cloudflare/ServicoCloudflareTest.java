@@ -144,14 +144,37 @@ class ServicoCloudflareTest {
         assertEquals("Bearer " + CloudflareFalsa.TOKEN_CERTO, doCofre.cabecalhoAuthorization(), "o cofre ficou com uma cópia, e fechar a descoberta não a zerou");
         assertEquals(CloudflareFalsa.TOKEN_CERTO.length(), doCofre.tamanho());
         assertTrue(s.conferirToken().status().equals("active"));
-        s.salvarEscolha(escolhaPelaApi().comPrefixo("site"));
-        assertEquals("site", s.escolha().orElseThrow().prefixo());
-        assertFalse(doCofre.estaZerado(), "trocar a escolha não mexe no token");
+        assertFalse(doCofre.estaZerado(), "conferir o token não o zera");
         s.desconectar();
         assertFalse(s.conectado());
         assertTrue(doCofre.estaZerado(), "desconectar zera o token na memória");
         assertTrue(cofre.tokenCloudflare(servidorId).isEmpty());
         assertTrue(s.escolha().isEmpty());
+    }
+
+    @Test
+    void umPublicarOuRemoverPorVezNoServidorETravaSoSoltaNoFimDaExecucao() throws Exception {
+        ServicoCloudflare s = servico(false);
+        java.util.concurrent.CountDownLatch dentro = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch soltar = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CompletableFuture<String> primeiro = java.util.concurrent.CompletableFuture.supplyAsync(() -> s.comTravaDeEscrita(() -> {
+            dentro.countDown();
+            try {
+                soltar.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return "primeiro terminou";
+        }, () -> "ocupado"));
+        dentro.await();
+        assertEquals("ocupado", s.comTravaDeEscrita(() -> "NÃO deveria rodar", () -> "ocupado"), "enquanto a primeira não termina, a segunda é recusada sem rodar");
+        soltar.countDown();
+        assertEquals("primeiro terminou", primeiro.get());
+        assertEquals("rodou", s.comTravaDeEscrita(() -> "rodou", () -> "ocupado"), "terminou: a trava soltou");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> s.comTravaDeEscrita(() -> {
+            throw new IllegalStateException("falhou");
+        }, () -> "ocupado"));
+        assertEquals("rodou de novo", s.comTravaDeEscrita(() -> "rodou de novo", () -> "ocupado"), "mesmo uma execução que lançou solta a trava");
     }
 
     @Test

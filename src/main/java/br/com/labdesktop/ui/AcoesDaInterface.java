@@ -381,6 +381,8 @@ public final class AcoesDaInterface {
             depois == null ? () -> { } : depois));
     }
 
+    private static final String OCUPADO = "Já há uma publicação ou remoção de endereço em andamento neste servidor. Espere ela terminar e tente de novo.";
+
     /** O que o diálogo "Publicar na internet" usa do domínio, sobre o servidor de verdade. */
     private final class MotorDaPublicacao implements br.com.labdesktop.ui.dialogos.DialogoPublicar.Motor {
         private final ServidorLab lab;
@@ -434,7 +436,9 @@ public final class AcoesDaInterface {
         public br.com.labdesktop.cloudflare.PublicadorNaInternet.Resultado executar(br.com.labdesktop.cloudflare.PublicadorNaInternet.Previa previa,
                                                                                          br.com.labdesktop.cloudflare.ObservadorDaEtapa observador,
                                                                                          br.com.labdesktop.arquivos.Cancelamento cancelamento) {
-            return publicador.executar(previa, observador, cancelamento);
+            return servico.comTravaDeEscrita(() -> publicador.executar(previa, observador, cancelamento),
+                () -> new br.com.labdesktop.cloudflare.PublicadorNaInternet.Resultado(br.com.labdesktop.cloudflare.PublicadorNaInternet.Desfecho.FALHOU, previa.hostname(),
+                    previa.url(), null, OCUPADO, null, List.of(), List.of(), List.of(), previa.avisos()));
         }
 
         @Override
@@ -476,7 +480,8 @@ public final class AcoesDaInterface {
             public br.com.labdesktop.cloudflare.RemovedorDeEndereco.Resultado executar(br.com.labdesktop.cloudflare.RemovedorDeEndereco.Previa previa,
                                                                                             br.com.labdesktop.cloudflare.ObservadorDaEtapa observador,
                                                                                             br.com.labdesktop.arquivos.Cancelamento cancelamento) {
-                return removedor.executar(previa, observador, cancelamento);
+                return servico.comTravaDeEscrita(() -> removedor.executar(previa, observador, cancelamento),
+                    () -> new br.com.labdesktop.cloudflare.RemovedorDeEndereco.Resultado(false, OCUPADO, List.of(), List.of(), List.of()));
             }
 
             @Override

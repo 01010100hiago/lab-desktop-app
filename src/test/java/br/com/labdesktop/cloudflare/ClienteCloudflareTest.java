@@ -238,6 +238,27 @@ class ClienteCloudflareTest {
     }
 
     @Test
+    void tokenNuncaApareceNaURLDeNenhumPedido() throws Exception {
+        cf.semear("lab-demo.example.com", "CNAME", "x.cfargotunnel.com", "lab-desktop: demo");
+        try (ClienteCloudflare c = cliente()) {
+            c.verificarToken();
+            c.contas();
+            c.zonas();
+            c.tuneis(CloudflareFalsa.CONTA);
+            c.registrosDnsComONome(CloudflareFalsa.ZONA, "lab-demo.example.com");
+            c.registrosDnsComComentarioQueComecaCom(CloudflareFalsa.ZONA, "lab-desktop:");
+            c.criarCname(CloudflareFalsa.ZONA, "lab-novo.example.com", "x.cfargotunnel.com", true, "lab-desktop: demo");
+            c.removerDns(CloudflareFalsa.ZONA, cf.registro("lab-novo.example.com").id);
+        }
+        assertTrue(cf.pedidos.size() >= 8);
+        for (CloudflareFalsa.Pedido p : cf.pedidos) {
+            assertFalse((p.caminho() + "?" + p.query()).contains(CloudflareFalsa.TOKEN_CERTO), "o token na URL de " + p.metodo() + " " + p.caminho());
+            assertFalse(p.corpo().contains(CloudflareFalsa.TOKEN_CERTO), "o token no corpo de " + p.metodo() + " " + p.caminho());
+            assertEquals("Bearer " + CloudflareFalsa.TOKEN_CERTO, p.autorizacao(), "só o cabeçalho Authorization leva o token");
+        }
+    }
+
+    @Test
     void identificadorComFormatoEstranhoNaoChegaARede() throws Exception {
         try (ClienteCloudflare c = cliente()) {
             assertEquals(Tipo.RECUSADO, erro(() -> c.tuneis("../../etc")).tipo());

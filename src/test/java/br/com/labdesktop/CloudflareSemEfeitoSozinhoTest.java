@@ -192,17 +192,7 @@ class CloudflareSemEfeitoSozinhoTest {
         assertEquals(List.of(), quemUsa(Pattern.compile("\\.removerEnderecoDaInternet\\("), Set.of(ACOES, "ui/telas/TelaProjetos.java", "ui/telas/PaginaCloudflare.java")),
             "e o botão Remover da aba Cloudflare do servidor");
         assertEquals(List.of(), quemUsa(Pattern.compile("\\.(publicarDe|removerEnderecoDe)\\("), Set.of("ui/telas/TelaServidor.java")));
-        // as ações de escrita só valem com a trava das ações
-        String t = codigo("ui/telas/TelaProjetos.java");
-        for (String metodo : List.of("void publicarDe(", "void removerEnderecoDe(")) {
-            int i = t.indexOf(metodo);
-            assertTrue(i > 0 && t.substring(i, t.indexOf("\n    }\n", i)).contains("!fluxos.liberadas()"), metodo + " recusa sem as ações liberadas");
-        }
-        // as páginas: botão de publicar e de remover só existem com as ações liberadas
-        assertTrue(codigo("ui/telas/PaginaInternet.java").contains("if (ctx.acoesLiberadas()) {\n            caixa.linha(Caixa.linha(8, publicar, atualizar"));
-        assertTrue(codigo("ui/telas/PaginaCloudflare.java").contains("new ListaDeEnderecos(true, acoesLiberadas,"));
-        assertTrue(codigo("ui/telas/PaginaInternet.java").contains("new ListaDeEnderecos(false, ctx.acoesLiberadas(),"));
-        assertTrue(codigo("ui/telas/ListaDeEnderecos.java").contains("if (comRemover) {"));
+        // (a trava das ações e os botões escondidos sem ela são provados por COMPORTAMENTO: PaginasDaCloudflareTest, semATravaLiberadaAsAcoesRecusam... e semAsAcoesLiberadasNaoHaPublicarNemRemover)
     }
 
     @Test
@@ -249,7 +239,7 @@ class CloudflareSemEfeitoSozinhoTest {
         // o token de Cloudflare vai só no cabeçalho
         String c = codigo("cloudflare/ClienteCloudflare.java");
         assertEquals(1, Pattern.compile("cabecalhoAuthorization\\(\\)").matcher(c).results().count(), "o token entra num lugar só: o cabeçalho Authorization");
-        assertFalse(c.contains("valorParaFiltro") && c.contains("uri") && Pattern.compile("query[^;]*valorParaFiltro").matcher(c).find(), "nem em query string");
+        // (que o token não vai em query string é provado por comportamento: ClienteCloudflareTest.tokenNuncaApareceNaURLDeNenhumPedido)
         // nunca ao servidor: nenhum comando do cloudflared recebe token
         String comandos = codigo("cloudflare/ComandosCloudflared.java");
         assertFalse(Pattern.compile("(?i)token").matcher(comandos).find(), "os comandos do servidor não levam token");

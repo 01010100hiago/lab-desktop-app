@@ -109,7 +109,8 @@ class CofreCloudflareTest {
             assertThrows(IllegalArgumentException.class, () -> cofre.gravarConfiguracaoCloudflare(cfg.id(), porArquivo()), "sem token não há o que ajustar");
             cofre.gravarCloudflare(cfg.id(), token(), porArquivo());
             TokenCloudflare t = cofre.tokenCloudflare(cfg.id()).orElseThrow();
-            cofre.gravarConfiguracaoCloudflare(cfg.id(), porArquivo().comCaminhoNoContainer("/etc/cloudflared/config.yml"));
+            cofre.gravarConfiguracaoCloudflare(cfg.id(), new ConfiguracaoCloudflare(CONTA, "Conta de Teste", ZONA, "example.com", TUNEL, "lab", ConfiguracaoCloudflare.Tipo.ARQUIVO, "lab",
+                "/srv/lab/infra/cloudflared/config.yml", "cloudflared", "/etc/cloudflared/config.yml"));
             assertSame(t, cofre.tokenCloudflare(cfg.id()).orElseThrow());
             assertEquals("/etc/cloudflared/config.yml", cofre.configuracaoCloudflare(cfg.id()).orElseThrow().caminhoNoContainer());
         }

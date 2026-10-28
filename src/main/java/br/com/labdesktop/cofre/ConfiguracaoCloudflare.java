@@ -84,14 +84,4 @@ public record ConfiguracaoCloudflare(String contaId, String contaNome, String zo
     public boolean porArquivo() {
         return tipo == Tipo.ARQUIVO;
     }
-
-    public ConfiguracaoCloudflare comCaminhoNoContainer(String caminho) {
-        return new ConfiguracaoCloudflare(contaId, contaNome, zonaId, zonaNome, tunelId, tunelNome, tipo, prefixo, caminhoDoConfig, containerDoCloudflared,
-            caminho);
-    }
-
-    public ConfiguracaoCloudflare comPrefixo(String novo) {
-        return new ConfiguracaoCloudflare(contaId, contaNome, zonaId, zonaNome, tunelId, tunelNome, tipo, novo, caminhoDoConfig, containerDoCloudflared,
-            caminhoNoContainer);
-    }
 }

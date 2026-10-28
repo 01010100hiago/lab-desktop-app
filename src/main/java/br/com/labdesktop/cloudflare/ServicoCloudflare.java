@@ -38,6 +38,8 @@ public final class ServicoCloudflare {
     private final Supplier<TestadorDeUrl> testador;
     private final Clock relogio;
     private final TunelPorArquivo.Esperador esperador;
+    /** Um Publicar ou Remover por vez neste servidor (os dois mexem no mesmo config.yml, compose e DNS): fechar o diálogo no meio NÃO solta, só o fim da execução. */
+    private final java.util.concurrent.Semaphore travaDeEscrita = new java.util.concurrent.Semaphore(1);
 
     /**
      * @param ambientes devolve o ambiente (arquivos e comandos) do servidor, dado o caminho da pasta dos projetos
@@ -54,6 +56,21 @@ public final class ServicoCloudflare {
         this.testador = testador;
         this.relogio = relogio;
         this.esperador = esperador;
+    }
+
+    /**
+     * Roda {@code acao} (uma publicação ou uma remoção) só se nenhuma outra está em andamento neste servidor; senão devolve {@code ocupado.get()} sem fazer nada. A trava só
+     * solta quando a execução TERMINA, mesmo que o diálogo já tenha sido fechado.
+     */
+    public <T> T comTravaDeEscrita(java.util.function.Supplier<T> acao, java.util.function.Supplier<T> ocupado) {
+        if (!travaDeEscrita.tryAcquire()) {
+            return ocupado.get();
+        }
+        try {
+            return acao.get();
+        } finally {
+            travaDeEscrita.release();
+        }
     }
 
     /** A raiz dos projetos que o agente do lab usa. */
@@ -220,11 +237,6 @@ public final class ServicoCloudflare {
      */
     public void salvar(Descoberta d, ConfiguracaoCloudflare escolha) throws CofreException {
         cofre.gravarCloudflare(servidorId, d.token().copia(), escolha);
-    }
-
-    /** Troca só a escolha (por exemplo, o prefixo); o token fica. */
-    public void salvarEscolha(ConfiguracaoCloudflare escolha) throws CofreException {
-        cofre.gravarConfiguracaoCloudflare(servidorId, escolha);
     }
 
     /** Desconecta: apaga o token (zerado) e a escolha do cofre. Não mexe na Cloudflare nem no servidor. */
