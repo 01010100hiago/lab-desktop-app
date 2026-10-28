@@ -24,7 +24,8 @@ import javax.swing.JScrollPane;
 
 /**
  * "Instalar o Git" num servidor: lê o que há (só leitura) e MOSTRA o sistema, o gerenciador de pacotes e o comando EXATO que será executado; só roda depois do clique em "Instalar o Git". Se o usuário
- * não é root nem tem {@code sudo} sem senha, o app não executa nada: mostra o comando para o usuário rodar no Terminal (com Copiar) e o botão "Já instalei, conferir de novo". No fim confere
+ * não é root nem tem {@code sudo} sem senha PARA ESSE comando, ou se as ações de escrita estão desligadas ({@code labdesktop.acoes}), o app não executa nada: mostra o comando para o usuário rodar no
+ * Terminal (com Copiar) e o botão "Já instalei, conferir de novo" (conferir e copiar valem sempre; só EXECUTAR depende da trava). No fim confere
  * {@code git --version} e mostra o resultado. Não mexe na configuração do git. Nunca fica preso: Esc, o X e o botão primeiro PEDEM para parar de esperar; o segundo clique fecha e a instalação termina
  * em segundo plano, com o resultado nos avisos. Nada de rede na EDT.
  */
@@ -42,13 +43,14 @@ public final class DialogoInstalarGit extends Dialogo {
     private static final int LARGURA = 520;
 
     private final Motor motor;
+    private final boolean podeExecutar;
     private final String servidor;
     private final Notificacoes avisos;
     private final Runnable aoMudar;
     private final Rotulo situacao = new Rotulo("").corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     private final TextoCorrido explicacao = new TextoCorrido("", LARGURA).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     private final Rotulo tituloDosComandos = new Rotulo("").negrito();
-    private final AreaMonoespacada areaDosComandos = new AreaMonoespacada("Os comandos", false);
+    private final AreaMonoespacada areaDosComandos = new AreaMonoespacada("Os comandos", true);
     private final JScrollPane rolagemDosComandos = AreaMonoespacada.emRolagem(areaDosComandos);
     private final Botao copiar;
     private final JProgressBar progresso = new JProgressBar();
@@ -71,7 +73,13 @@ public final class DialogoInstalarGit extends Dialogo {
      * @param aoMudar  roda (na EDT) quando algo mudou: o git agora está lá (a tela que abriu relê o estado)
      */
     public DialogoInstalarGit(String servidor, Motor motor, CopiadorDeTexto copiador, Notificacoes avisos, Runnable aoMudar) {
+        this(servidor, true, motor, copiador, avisos, aoMudar);
+    }
+
+    /** @param podeExecutar {@code false}: as ações de escrita estão desligadas; o diálogo confere e mostra o comando para o usuário rodar, mas o botão de instalar nem existe */
+    public DialogoInstalarGit(String servidor, boolean podeExecutar, Motor motor, CopiadorDeTexto copiador, Notificacoes avisos, Runnable aoMudar) {
         super("Instalar o Git");
+        this.podeExecutar = podeExecutar;
         this.motor = motor;
         this.servidor = servidor;
         this.avisos = avisos;
@@ -83,7 +91,8 @@ public final class DialogoInstalarGit extends Dialogo {
         for (JComponent c : List.of(explicacao, tituloDosComandos, rolagemDosComandos, copiar, progresso, textoDoProgresso, instalar, conferirDeNovo)) {
             c.setVisible(false);
         }
-        rolagemDosComandos.setPreferredSize(new java.awt.Dimension(LARGURA, 74));
+        rolagemDosComandos.setPreferredSize(new java.awt.Dimension(LARGURA, 104));
+        rolagemDosComandos.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER); // a linha comprida quebra dentro da caixa, nunca é cortada
         progresso.setIndeterminate(true);
         blocoDoResultado = Caixa.coluna(6, Caixa.linha(8, selo, Caixa.mola()), textoDoResultado);
         blocoDoResultado.setVisible(false);
@@ -129,9 +138,19 @@ public final class DialogoInstalarGit extends Dialogo {
                 fechar.setText("Fechar");
             }
             case PODE_INSTALAR -> {
+                String quem = p.root() ? "como administrador (você entrou como root)" : "com sudo sem senha (o app nunca digita senha)";
+                if (!podeExecutar) {
+                    explicacao.setText("O git não está instalado em " + servidor + (p.sistema().isEmpty() ? "" : " (" + p.sistema() + ")") + ". As ações de escrita estão desligadas nesta versão do app, "
+                        + "então o app não instala por você. Rode os comandos abaixo no Terminal (aba Terminal do servidor), na ordem" + notasEmFrase(p) + ", e depois clique em "
+                        + "\"Já instalei, conferir de novo\".");
+                    explicacao.setVisible(true);
+                    mostrarComandos("Rode no Terminal", p.comandosParaODono());
+                    conferirDeNovo.setVisible(true);
+                    fechar.setText("Fechar");
+                    return;
+                }
                 explicacao.setText("O git não está instalado em " + servidor + (p.sistema().isEmpty() ? "" : " (" + p.sistema() + ")") + ". O app usa o " + p.gerenciador().programa()
-                    + " e roda os comandos abaixo, na ordem, " + (p.root() ? "como administrador (você entrou como root)" : "com sudo sem senha (o app nunca digita senha)")
-                    + ". Nada muda na configuração do git.");
+                    + " e roda os comandos abaixo, na ordem, " + quem + "." + notasEmFrase(p) + " Nada muda na configuração do git.");
                 explicacao.setVisible(true);
                 mostrarComandos("O app vai rodar", p.comandos());
                 instalar.setVisible(true);
@@ -153,6 +172,11 @@ public final class DialogoInstalarGit extends Dialogo {
                 fechar.setText("Fechar");
             }
         }
+    }
+
+    /** O que explicar sobre os comandos (para que serve o update, o que é DEBIAN_FRONTEND), em frases curtas depois da explicação. */
+    private static String notasEmFrase(InstaladorDeGit.Previa p) {
+        return p.notas().isEmpty() ? "" : " " + String.join(". ", p.notas().stream().map(n -> n.substring(0, 1).toUpperCase(java.util.Locale.ROOT) + n.substring(1)).toList()) + ".";
     }
 
     private void mostrarComandos(String titulo, List<String> comandos) {
@@ -215,7 +239,7 @@ public final class DialogoInstalarGit extends Dialogo {
     // =====================================================================================================
 
     private void instalar() {
-        if (ocupado || previa == null || !previa.podeExecutar() || jaFechou()) {
+        if (ocupado || previa == null || !previa.podeExecutar() || !podeExecutar || jaFechou()) {
             return;
         }
         InstaladorDeGit.Previa p = previa;
@@ -247,7 +271,7 @@ public final class DialogoInstalarGit extends Dialogo {
         }
         if (jaFechou()) {
             if (r.instalou()) {
-                avisos.ok(r.mensagem());
+                avisos.ok(r.mensagem() + (r.aviso().isEmpty() ? "" : " Aviso: " + r.aviso()));
             } else {
                 avisos.atencao("Instalar o git em " + servidor + " não terminou: " + r.mensagem());
             }
@@ -258,7 +282,7 @@ public final class DialogoInstalarGit extends Dialogo {
         textoDoProgresso.setVisible(false);
         blocoDoResultado.setVisible(true);
         selo.atualizar(r.instalou() ? "INSTALADO" : "NÃO INSTALOU", r.instalou() ? Gravidade.OK : Gravidade.PERIGO, null);
-        textoDoResultado.setText(r.mensagem() + (r.passoQueFalhou().isEmpty() ? "" : "\nO passo que falhou: " + r.passoQueFalhou()));
+        textoDoResultado.setText(r.mensagem() + (r.aviso().isEmpty() ? "" : "\nAviso: " + r.aviso()) + (r.passoQueFalhou().isEmpty() ? "" : "\nO passo que falhou: " + r.passoQueFalhou()));
         fechar.setText("Fechar");
         if (r.instalou()) {
             instalar.setVisible(false);
@@ -335,6 +359,11 @@ public final class DialogoInstalarGit extends Dialogo {
 
     public String textoDosComandos() {
         return rolagemDosComandos.isVisible() ? areaDosComandos.getText() : "";
+    }
+
+    /** A caixa dos comandos quebra a linha comprida dentro dela (nunca corta o fim nem põe barra horizontal)? */
+    public boolean comandosQuebramLinha() {
+        return areaDosComandos.getLineWrap() && rolagemDosComandos.getHorizontalScrollBarPolicy() == javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER;
     }
 
     public String tituloDosComandos() {

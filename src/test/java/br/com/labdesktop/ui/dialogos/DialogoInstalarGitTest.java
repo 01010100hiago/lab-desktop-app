@@ -59,12 +59,20 @@ class DialogoInstalarGitTest {
         Visual.tema(Tema.CLARO);
     }
 
+    private static final String UPDATE = "env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=60 update";
+    private static final String INSTALL = "env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=60 install -y git";
+
     private static Previa pode() {
         return new Previa(SEM_GIT, Situacao.PODE_INSTALAR, GerenciadorDePacotes.APT_GET, "Debian GNU/Linux 13 (trixie)", false, true,
-            List.of("sudo -n env DEBIAN_FRONTEND=noninteractive apt-get update", "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y git"), List.of());
+            List.of("sudo -n " + UPDATE, "sudo -n " + INSTALL), List.of("sudo " + UPDATE, "sudo " + INSTALL), java.util.Set.of("sudo -n " + UPDATE),
+            GerenciadorDePacotes.APT_GET.passosDeInstalar().stream().map(GerenciadorDePacotes.Passo::porQue).filter(n -> !n.isEmpty()).toList());
     }
 
     private DialogoInstalarGit abrir(Previa p) {
+        return abrir(p, true);
+    }
+
+    private DialogoInstalarGit abrir(Previa p, boolean podeExecutar) {
         Visual.tema(Tema.CLARO);
         previa = p;
         DialogoInstalarGit.Motor motor = new DialogoInstalarGit.Motor() {
@@ -91,7 +99,7 @@ class DialogoInstalarGitTest {
                 return estadoDaConferencia;
             }
         };
-        DialogoInstalarGit d = Visual.naEdt(() -> new DialogoInstalarGit("lab", motor, new CopiadorDeTexto(() -> area), avisos, mudou::incrementAndGet));
+        DialogoInstalarGit d = Visual.naEdt(() -> new DialogoInstalarGit("lab", podeExecutar, motor, new CopiadorDeTexto(() -> area), avisos, mudou::incrementAndGet));
         Espera.ate(PRAZO, () -> "lido: " + chamadas, () -> chamadas.contains("conferir"));
         Espera.ate(PRAZO, "aparece", () -> !ed(d::textoDaExplicacao).isEmpty() || !ed(d::textoDaSituacao).isEmpty() && !ed(d::textoDaSituacao).startsWith("Conferindo"));
         return d;
@@ -117,7 +125,10 @@ class DialogoInstalarGitTest {
         assertTrue(e.contains("Debian GNU/Linux 13 (trixie)") && e.contains("apt-get") && e.contains("com sudo sem senha"), e);
         assertTrue(e.contains("Nada muda na configuração do git"));
         assertEquals("O app vai rodar", ed(d::tituloDosComandos));
-        assertEquals("sudo -n env DEBIAN_FRONTEND=noninteractive apt-get update\nsudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y git", ed(d::textoDosComandos));
+        assertEquals("sudo -n " + UPDATE + "\nsudo -n " + INSTALL, ed(d::textoDosComandos));
+        assertTrue(e.contains("DEBIAN_FRONTEND=noninteractive faz o apt-get não parar para perguntar"), "o app explica o que é o DEBIAN_FRONTEND: " + e);
+        assertTrue(e.contains("só atualiza a lista de pacotes"), e);
+        assertTrue(ed(d::comandosQuebramLinha), "a linha comprida quebra dentro da caixa, sem barra horizontal e sem cortar o fim");
         assertTrue(ed(() -> d.botaoInstalar().isVisible()));
         assertSame(d.botaoFechar(), d.botaoDoEnter(), "o Enter aciona o seguro");
         assertEquals(List.of("conferir"), chamadas, "abrir só lê");
@@ -162,7 +173,7 @@ class DialogoInstalarGitTest {
     @Test
     void semRootNemSudoNaoTemBotaoInstalarMostraOComandoParaODonoComCopiar() throws Exception {
         Previa p = new Previa(SEM_GIT, Situacao.PRECISA_DO_DONO, GerenciadorDePacotes.APT_GET, "Debian GNU/Linux 13 (trixie)", false, false, List.of(),
-            List.of("sudo env DEBIAN_FRONTEND=noninteractive apt-get update", "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y git"));
+            List.of("sudo " + UPDATE, "sudo " + INSTALL));
         DialogoInstalarGit d = abrir(p);
         assertFalse(ed(() -> d.botaoInstalar().isVisible()), "o app não instala sem permissão");
         assertEquals("Rode no Terminal", ed(d::tituloDosComandos));
@@ -180,6 +191,33 @@ class DialogoInstalarGitTest {
         assertEquals(List.of("conferir", "conferir-de-novo"), chamadas);
         Visual.naEdt(() -> d.botaoFechar().doClick(0));
         assertEquals(1, mudou.get());
+    }
+
+    @Test
+    void comAsAcoesDeEscritaDesligadasOAppSoMostraOComandoENuncaExecuta() throws Exception {
+        DialogoInstalarGit d = abrir(pode(), false);
+        assertFalse(ed(() -> d.botaoInstalar().isVisible()), "executar depende da trava");
+        assertEquals("Rode no Terminal", ed(d::tituloDosComandos));
+        assertTrue(ed(d::textoDaExplicacao).contains("ações de escrita estão desligadas nesta versão"), ed(d::textoDaExplicacao));
+        assertEquals("sudo " + UPDATE + "\nsudo " + INSTALL, ed(d::textoDosComandos), "o usuário roda com o sudo dele");
+        assertTrue(ed(() -> d.botaoConferirDeNovo().isVisible()), "conferir de novo continua livre");
+        Visual.naEdt(() -> d.botaoInstalar().doClick(0));
+        assertEquals(List.of("conferir"), chamadas, "nada foi instalado");
+        Visual.naEdt(() -> d.botaoCopiar().doClick(0));
+        assertEquals(ed(d::textoDosComandos), area.getContents(null).getTransferData(DataFlavor.stringFlavor), "copiar também é livre");
+        estadoDaConferencia = COM_GIT;
+        Visual.naEdt(() -> d.botaoConferirDeNovo().doClick(0));
+        Espera.ate(PRAZO, "achou", () -> ed(d::seloDoResultado).equals("INSTALADO"));
+        CenarioDeCloudflare.fotografar(abrir(pode(), false), "dialogo-git-7-acoes-desligadas");
+    }
+
+    @Test
+    void oAvisoDoUpdateAparecePertoDoResultadoQueDeuCerto() {
+        resultado = new Resultado(true, COM_GIT, "O git foi instalado: git version 2.43.0.", "", "O passo 1 (atualizar a lista de pacotes) falhou, e o app seguiu para instalar mesmo assim.");
+        DialogoInstalarGit d = abrir(pode());
+        Visual.naEdt(() -> d.botaoInstalar().doClick(0));
+        Espera.ate(PRAZO, "instalado", () -> ed(d::seloDoResultado).equals("INSTALADO"));
+        assertTrue(ed(d::textoDoResultado).contains("Aviso: O passo 1"), ed(d::textoDoResultado));
     }
 
     @Test

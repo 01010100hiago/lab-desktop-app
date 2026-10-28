@@ -47,17 +47,35 @@ public enum GerenciadorDePacotes {
         return Optional.empty();
     }
 
+    /**
+     * Um passo da instalação: as palavras do comando (sem o prefixo de permissão), se uma falha dele é só um AVISO (o app segue para o próximo) e, para a tela, por que o passo existe.
+     *
+     * @param tolerante a falha vira aviso: atualizar a lista de pacotes pode falhar (um repositório fora do ar) e o git ainda assim estar nos pacotes que o servidor já conhece
+     */
+    public record Passo(List<String> palavras, boolean tolerante, String porQue) { }
+
+    /** Espera do bloqueio do {@code dpkg}/{@code apt}: outro instalador rodando (o {@code unattended-upgrades}) é comum em servidor novo, e esperar até um minuto evita falhar à toa. */
+    private static final String ESPERA_DO_TRAVAMENTO = "DPkg::Lock::Timeout=60";
+
+    /** Os passos que instalam o git, na ordem. */
+    public List<Passo> passosDeInstalar() {
+        return switch (this) {
+            case APT_GET -> List.of(
+                new Passo(List.of("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "-o", ESPERA_DO_TRAVAMENTO, "update"), true,
+                    "update só atualiza a lista de pacotes que o servidor conhece, não instala nada; se falhar, o app avisa e tenta instalar mesmo assim"),
+                new Passo(List.of("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "-o", ESPERA_DO_TRAVAMENTO, "install", "-y", "git"), false,
+                    "DEBIAN_FRONTEND=noninteractive faz o apt-get não parar para perguntar nada; -o DPkg::Lock::Timeout=60 espera até um minuto se outro instalador estiver rodando"));
+            case DNF -> List.of(new Passo(List.of("dnf", "install", "-y", "git"), false, ""));
+            case YUM -> List.of(new Passo(List.of("yum", "install", "-y", "git"), false, ""));
+            case APK -> List.of(new Passo(List.of("apk", "add", "git"), false, ""));
+            case PACMAN -> List.of(new Passo(List.of("pacman", "-S", "--noconfirm", "git"), false, ""));
+            case ZYPPER -> List.of(new Passo(List.of("zypper", "--non-interactive", "install", "git"), false, ""));
+        };
+    }
+
     /** As linhas de comando que instalam o git, SEM o prefixo de permissão (cada uma é uma lista de palavras seguras, sem aspas). */
     public List<List<String>> comandosDeInstalar() {
-        return switch (this) {
-            case APT_GET -> List.of(List.of("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "update"),
-                List.of("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "git"));
-            case DNF -> List.of(List.of("dnf", "install", "-y", "git"));
-            case YUM -> List.of(List.of("yum", "install", "-y", "git"));
-            case APK -> List.of(List.of("apk", "add", "git"));
-            case PACMAN -> List.of(List.of("pacman", "-S", "--noconfirm", "git"));
-            case ZYPPER -> List.of(List.of("zypper", "--non-interactive", "install", "git"));
-        };
+        return passosDeInstalar().stream().map(Passo::palavras).toList();
     }
 
     private static final Set<String> DEBIAN = Set.of("debian", "ubuntu", "linuxmint", "raspbian", "pop", "kali", "devuan", "elementary", "zorin");

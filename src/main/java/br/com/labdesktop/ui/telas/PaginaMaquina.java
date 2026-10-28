@@ -5,7 +5,8 @@ import javax.swing.JComponent;
 
 /**
  * A aba "Máquina": versões, hardware, discos por montagem, sensores, energia, núcleos, carga, rede e memória, em duas
- * colunas e sem recolher. Usa {@code /api/servidor} e o detalhe do servidor (sensores, energia e hardware).
+ * colunas e sem recolher. Usa {@code /api/servidor} e o detalhe do servidor (sensores, energia e hardware). O bloco do Git vem PRIMEIRO: ele é pequeno e é o que tem
+ * botão, e embaixo dos detalhes ficava fora da janela de 1100 por 700.
  */
 public final class PaginaMaquina extends PaginaDoServidor {
 
@@ -42,7 +43,7 @@ public final class PaginaMaquina extends PaginaDoServidor {
 
     @Override
     JComponent montarConteudo() {
-        return br.com.labdesktop.ui.componentes.Caixa.coluna(12, detalhes, git);
+        return br.com.labdesktop.ui.componentes.Caixa.coluna(12, git, detalhes);
     }
 
     /** A aba apareceu: confere o git neste servidor (só leitura). */

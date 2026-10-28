@@ -687,7 +687,8 @@ public final class AcoesDaInterface {
      * "Instalar o Git" num servidor: abre a confirmação, que só LÊ ao abrir e mostra os comandos exatos; só roda depois do clique em "Instalar o Git" (e só se o usuário é root ou tem sudo sem
      * senha; senão mostra o comando para o usuário rodar no Terminal). Em "Este computador" leva a "Preparar este computador", que já confere o git e propõe como instalar.
      *
-     * <p>Fora da trava {@code labdesktop.acoes}, como o instalador do agente (que também instala pacotes): a confirmação já mostra o que vai rodar e nada roda sem o clique.
+     * <p>CONFERIR e COPIAR o comando valem sempre; EXECUTAR a instalação é uma ação de escrita no servidor e fica atrás da trava {@code labdesktop.acoes}, como as outras: sem ela o diálogo
+     * mostra o comando para o usuário rodar no Terminal, e o motor recusa mesmo que alguém o chame.
      *
      * @param depois roda (na EDT) quando o git passou a estar lá (a tela que abriu relê o estado)
      */
@@ -701,7 +702,7 @@ public final class AcoesDaInterface {
             return;
         }
         br.com.labdesktop.instalador.InstaladorDeGit git = lab.instaladorDeGit();
-        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoInstalarGit(lab.estado().nome(), new br.com.labdesktop.ui.dialogos.DialogoInstalarGit.Motor() {
+        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoInstalarGit(lab.estado().nome(), trava.getAsBoolean(), new br.com.labdesktop.ui.dialogos.DialogoInstalarGit.Motor() {
             @Override
             public br.com.labdesktop.instalador.InstaladorDeGit.Previa conferir() throws Exception {
                 return git.conferir();
@@ -711,6 +712,10 @@ public final class AcoesDaInterface {
             public br.com.labdesktop.instalador.InstaladorDeGit.Resultado rodar(br.com.labdesktop.instalador.InstaladorDeGit.Previa previa,
                                                                                          br.com.labdesktop.instalador.InstaladorDeGit.Observador observador,
                                                                                          br.com.labdesktop.arquivos.Cancelamento cancelamento) throws InterruptedException {
+                if (!trava.getAsBoolean()) {
+                    return new br.com.labdesktop.instalador.InstaladorDeGit.Resultado(false, previa.estado(),
+                        "As ações de escrita estão desligadas nesta versão do app. Nada foi instalado: rode o comando no Terminal.", "");
+                }
                 return git.instalar(previa, observador, cancelamento);
             }
 

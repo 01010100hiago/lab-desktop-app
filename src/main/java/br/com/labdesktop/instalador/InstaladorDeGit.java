@@ -50,13 +50,22 @@ public final class InstaladorDeGit {
      * @param comandos          o que o app EXECUTA se o usuário confirmar (com o prefixo {@code sudo -n} se não é root)
      * @param comandosParaODono o que o usuário roda no Terminal quando o app não pode (com {@code sudo}, que ele mesmo responde); vazio se o app pode
      * @param sistema           o nome do sistema, para a tela dizer
+     * @param tolerantes        quais dos {@code comandos} só dão AVISO se falharem (o app segue para o próximo)
+     * @param notas             o que explicar na tela sobre os comandos (para que serve o {@code update}, o que é {@code DEBIAN_FRONTEND}); vazio se não há
      */
     public record Previa(Estado estado, Situacao situacao, GerenciadorDePacotes gerenciador, String sistema, boolean root, boolean sudoSemSenha, List<String> comandos,
-                         List<String> comandosParaODono) {
+                         List<String> comandosParaODono, Set<String> tolerantes, List<String> notas) {
         public Previa {
             comandos = List.copyOf(comandos);
             comandosParaODono = List.copyOf(comandosParaODono);
             sistema = sistema == null ? "" : sistema;
+            tolerantes = tolerantes == null ? Set.of() : Set.copyOf(tolerantes);
+            notas = notas == null ? List.of() : List.copyOf(notas);
+        }
+
+        public Previa(Estado estado, Situacao situacao, GerenciadorDePacotes gerenciador, String sistema, boolean root, boolean sudoSemSenha, List<String> comandos,
+                      List<String> comandosParaODono) {
+            this(estado, situacao, gerenciador, sistema, root, sudoSemSenha, comandos, comandosParaODono, Set.of(), List.of());
         }
 
         public boolean podeExecutar() {
@@ -65,10 +74,15 @@ public final class InstaladorDeGit {
     }
 
     /** Como terminou. */
-    public record Resultado(boolean instalou, Estado estado, String mensagem, String passoQueFalhou) {
+    public record Resultado(boolean instalou, Estado estado, String mensagem, String passoQueFalhou, String aviso) {
         public Resultado {
             mensagem = mensagem == null ? "" : mensagem;
             passoQueFalhou = passoQueFalhou == null ? "" : passoQueFalhou;
+            aviso = aviso == null ? "" : aviso;
+        }
+
+        public Resultado(boolean instalou, Estado estado, String mensagem, String passoQueFalhou) {
+            this(instalou, estado, mensagem, passoQueFalhou, "");
         }
     }
 
@@ -109,9 +123,17 @@ public final class InstaladorDeGit {
         return "sh -c 'for g in apt-get dnf yum apk pacman zypper; do if command -v $g >/dev/null 2>&1; then echo gerenciador=$g; fi; done'";
     }
 
-    /** O número do usuário e se ele tem {@code sudo -n} (sem senha). */
-    public static String lerPermissoes() {
-        return "sh -c 'echo \"uid=$(id -u)\"; if sudo -n true >/dev/null 2>&1; then echo sudo=sim; else echo sudo=nao; fi'";
+    /** O número do usuário. */
+    public static String lerUid() {
+        return "id -u";
+    }
+
+    /**
+     * O usuário pode rodar ESTE comando com {@code sudo} sem senha? {@code sudo -n true} só prova que algum comando passa, não este: a regra do sudoers pode liberar só o
+     * {@code apt-get} (ou nada além de um programa). {@code sudo -n -l <comando>} pergunta ao sudo, sem rodar nada e sem pedir senha, se ESTE comando é permitido.
+     */
+    public static String lerSePodeComSudo(List<String> palavras) {
+        return "sh -c 'if " + linha(palavras, "sudo -n -l ") + " >/dev/null 2>&1; then echo sudo=sim; else echo sudo=nao; fi'";
     }
 
     private static final java.util.regex.Pattern PALAVRA = java.util.regex.Pattern.compile("^[A-Za-z0-9_@%+=:.,/~-]{1,100}$");
@@ -158,26 +180,39 @@ public final class InstaladorDeGit {
                 disponiveis.add(t.substring("gerenciador=".length()));
             }
         }
-        boolean root = false;
-        boolean sudo = false;
-        for (String l : saida(lerPermissoes()).split("\n")) {
-            String t = l.strip();
-            root = root || t.equals("uid=0");
-            sudo = sudo || t.equals("sudo=sim");
-        }
+        boolean root = saida(lerUid()).strip().equals("0");
         String sistema = GerenciadorDePacotes.nomeDoSistema(os);
         java.util.Optional<GerenciadorDePacotes> g = GerenciadorDePacotes.escolher(os, disponiveis);
         if (g.isEmpty()) {
-            return new Previa(estado, Situacao.GERENCIADOR_NAO_ACHADO, null, sistema, root, sudo, List.of(), List.of());
+            return new Previa(estado, Situacao.GERENCIADOR_NAO_ACHADO, null, sistema, root, false, List.of(), List.of());
+        }
+        List<GerenciadorDePacotes.Passo> passos = g.get().passosDeInstalar();
+        boolean sudo = false;
+        if (!root) {
+            // o comando que importa é o que instala: o app só executa se o sudo diz que ESTE comando passa sem senha
+            List<String> instala = passos.get(passos.size() - 1).palavras();
+            for (String l : saida(lerSePodeComSudo(instala)).split("\n")) {
+                sudo = sudo || l.strip().equals("sudo=sim");
+            }
         }
         List<String> doApp = new ArrayList<>();
         List<String> doDono = new ArrayList<>();
-        for (List<String> c : g.get().comandosDeInstalar()) {
-            doApp.add(linha(c, root ? "" : "sudo -n "));
-            doDono.add(linha(c, root ? "" : "sudo "));
+        Set<String> tolerantes = new HashSet<>();
+        List<String> notas = new ArrayList<>();
+        for (GerenciadorDePacotes.Passo passo : passos) {
+            String comando = linha(passo.palavras(), root ? "" : "sudo -n ");
+            doApp.add(comando);
+            // o usuário pode rodar o mesmo comando no Terminal mesmo quando o app pode executar (por exemplo, com as ações de escrita desligadas)
+            doDono.add(linha(passo.palavras(), root ? "" : "sudo "));
+            if (passo.tolerante()) {
+                tolerantes.add(comando);
+            }
+            if (!passo.porQue().isEmpty()) {
+                notas.add(passo.porQue());
+            }
         }
         boolean pode = root || sudo;
-        return new Previa(estado, pode ? Situacao.PODE_INSTALAR : Situacao.PRECISA_DO_DONO, g.get(), sistema, root, sudo, doApp, pode ? List.of() : doDono);
+        return new Previa(estado, pode ? Situacao.PODE_INSTALAR : Situacao.PRECISA_DO_DONO, g.get(), sistema, root, sudo, doApp, doDono, tolerantes, notas);
     }
 
     private String saida(String comando) throws IOException, InterruptedException {
@@ -198,6 +233,7 @@ public final class InstaladorDeGit {
             return new Resultado(false, previa.estado(), "O app não pode instalar sozinho neste servidor (sem root nem sudo sem senha). Rode o comando que a tela mostra no Terminal.", "");
         }
         int n = 0;
+        List<String> avisos = new ArrayList<>();
         for (String comando : previa.comandos()) {
             n++;
             if (cancelamento.cancelado()) {
@@ -205,38 +241,52 @@ public final class InstaladorDeGit {
             }
             String passo = "Passo " + n + " de " + previa.comandos().size() + ": " + comando;
             obs.passo(passo);
+            boolean tolerante = previa.tolerantes().contains(comando);
             ResultadoExec r;
             try {
-                r = executor.executar(comando, new byte[0], comando.contains(" update") ? PRAZO_DA_ATUALIZACAO : PRAZO_DA_INSTALACAO);
+                r = executor.executar(comando, new byte[0], tolerante ? PRAZO_DA_ATUALIZACAO : PRAZO_DA_INSTALACAO);
             } catch (ComandoDemorouException e) {
+                if (tolerante) {
+                    avisos.add("O passo " + n + " demorou demais e o app parou de esperar por ele.");
+                    continue;
+                }
                 return new Resultado(false, previa.estado(), "O servidor demorou demais neste passo e o app parou de esperar. Confira com Já instalei, conferir de novo; se ainda falta, rode o comando no Terminal.", passo);
             } catch (IOException e) {
                 return new Resultado(false, previa.estado(), "A conexão caiu no meio. Confira com Já instalei, conferir de novo antes de tentar outra vez.", passo);
             }
             if (r.status() != 0) {
-                return new Resultado(false, previa.estado(), explicar(r.stderr() + "\n" + r.stdout()), passo);
+                if (tolerante) {
+                    String motivo = explicar(r.stderr() + "\n" + r.stdout(), previa.gerenciador());
+                    avisos.add("O passo " + n + " (atualizar a lista de pacotes) falhou, e o app seguiu para instalar mesmo assim: " + motivo);
+                    obs.passo("Aviso: o passo " + n + " falhou; seguindo para instalar o git.");
+                    continue;
+                }
+                return new Resultado(false, previa.estado(), explicar(r.stderr() + "\n" + r.stdout(), previa.gerenciador()), passo, String.join(" ", avisos));
             }
         }
+        String aviso = String.join(" ", avisos);
         obs.passo("Conferindo o git (git --version)…");
         try {
             Estado agora = conferirOGit();
             if (agora.instalado()) {
-                return new Resultado(true, agora, "O git foi instalado: " + agora.versao() + ".", "");
+                return new Resultado(true, agora, "O git foi instalado: " + agora.versao() + ".", "", aviso);
             }
-            return new Resultado(false, agora, "Os comandos terminaram bem, mas o git ainda não responde (git --version). Talvez o programa esteja fora do caminho do seu usuário: abra o Terminal e confira.", "");
+            return new Resultado(false, agora, "Os comandos terminaram bem, mas o git ainda não responde (git --version). Talvez o programa esteja fora do caminho do seu usuário: abra o Terminal e confira.", "", aviso);
         } catch (IOException e) {
-            return new Resultado(false, previa.estado(), "Instalei, mas a conexão caiu antes de conferir. Use Já instalei, conferir de novo.", "");
+            return new Resultado(false, previa.estado(), "Instalei, mas a conexão caiu antes de conferir. Use Já instalei, conferir de novo.", "", aviso);
         }
     }
 
     /** Traduz o que o gerenciador disse para uma frase simples; o que não se conhece sai limpo, redigido e curto. */
-    static String explicar(String erro) {
+    static String explicar(String erro, GerenciadorDePacotes gerenciador) {
         String m = erro == null ? "" : erro.toLowerCase(Locale.ROOT);
         if (m.contains("could not get lock") || m.contains("unable to acquire the dpkg") || m.contains("another app is currently holding the yum lock") || m.contains("waiting for process")) {
             return "Outro instalador está rodando neste servidor (o gerenciador de pacotes está ocupado). Espere ele terminar e tente de novo.";
         }
         if (m.contains("unable to locate package") || m.contains("no match for argument") || m.contains("no package git") || m.contains("target not found") || m.contains("no provider of")) {
-            return "O gerenciador não achou o pacote git. Se for Debian ou Ubuntu, a lista de pacotes pode estar velha: rode apt-get update no Terminal e tente de novo.";
+            String atualizar = gerenciador == GerenciadorDePacotes.APT_GET ? " A lista de pacotes pode estar velha: rode apt-get update no Terminal e tente de novo."
+                : gerenciador == GerenciadorDePacotes.ZYPPER ? " A lista de pacotes pode estar velha: rode zypper refresh no Terminal e tente de novo." : "";
+            return "O gerenciador não achou o pacote git." + atualizar;
         }
         if (m.contains("permission denied") || m.contains("a password is required") || m.contains("sudo: a terminal is required")) {
             return "O servidor recusou por falta de permissão (o sudo pediu senha). Rode o comando no Terminal, onde você pode responder.";

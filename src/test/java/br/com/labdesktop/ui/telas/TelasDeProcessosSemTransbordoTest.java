@@ -116,6 +116,8 @@ class TelasDeProcessosSemTransbordoTest {
                 java.util.Map.entry(BlocoDoGit.Modo.SEM_CONEXAO, ""))) {
                 Visual.naEdt(() -> p.git().definir(par.getKey(), par.getValue()));
                 assertEquals(List.of(), Visual.naEdt(() -> SemTransbordo.achados(prepararLargura(p, 1100, 700))), par.getKey() + " " + t);
+                int fundoDoBloco = Visual.naEdt(() -> javax.swing.SwingUtilities.convertPoint(p.git(), 0, 0, p).y + p.git().getHeight());
+                assertTrue(fundoDoBloco <= 700, "o bloco do Git aparece sem rolar na janela de 1100 por 700 (termina em " + fundoDoBloco + ") " + par.getKey() + " " + t);
                 Visual.salvar(Visual.renderizar(p, 1100, 700), nome("servidor-maquina-git-" + par.getKey().name().toLowerCase().replace('_', '-'), t));
             }
             assertEquals("SEM CONEXÃO", Visual.naEdt(() -> p.git().textoDoSelo()));

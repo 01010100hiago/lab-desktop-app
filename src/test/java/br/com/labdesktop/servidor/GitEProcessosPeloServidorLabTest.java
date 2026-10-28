@@ -95,8 +95,12 @@ class GitEProcessosPeloServidorLabTest {
                 saida.append("gerenciador=apt-get\n");
                 return 0;
             }
-            if (linha.equals(InstaladorDeGit.lerPermissoes())) {
-                saida.append("uid=").append(root ? 0 : 1000).append("\nsudo=").append(sudoSemSenha ? "sim" : "nao").append('\n');
+            if (linha.equals(InstaladorDeGit.lerUid())) {
+                saida.append(root ? 0 : 1000).append('\n');
+                return 0;
+            }
+            if (linha.startsWith("sh -c 'if sudo -n -l ")) {
+                saida.append("sudo=").append(sudoSemSenha ? "sim" : "nao").append('\n');
                 return 0;
             }
             if (linha.contains("apt-get")) {
@@ -129,7 +133,7 @@ class GitEProcessosPeloServidorLabTest {
         ssh.comandos.clear();
         InstaladorDeGit.Resultado r = instalador.instalar(p, InstaladorDeGit.Observador.NENHUM, new Cancelamento());
         assertTrue(r.instalou(), r.mensagem());
-        assertEquals(java.util.List.of("sudo -n env DEBIAN_FRONTEND=noninteractive apt-get update", "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y git", "git --version"),
+        assertEquals(java.util.List.of("sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=60 update", "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=60 install -y git", "git --version"),
             ssh.comandos.stream().toList(), "exatamente o que a confirmação mostrou, e depois a conferência");
         assertTrue(ssh.comandos.stream().noneMatch(c -> c.contains("git config")));
     }
@@ -141,7 +145,7 @@ class GitEProcessosPeloServidorLabTest {
         InstaladorDeGit instalador = lab.instaladorDeGit();
         InstaladorDeGit.Previa p = instalador.conferir();
         assertEquals(InstaladorDeGit.Situacao.PRECISA_DO_DONO, p.situacao());
-        assertEquals("sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y git", p.comandosParaODono().get(1));
+        assertEquals("sudo env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=60 install -y git", p.comandosParaODono().get(1));
         ssh.comandos.clear();
         assertFalse(instalador.instalar(p, InstaladorDeGit.Observador.NENHUM, new Cancelamento()).instalou());
         assertTrue(ssh.comandos.isEmpty(), "nada foi enviado ao servidor");

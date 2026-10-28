@@ -61,7 +61,7 @@ class GerenciadorDePacotesTest {
 
     @Test
     void osComandosDeInstalarSaoOsEsperados() {
-        assertEquals(List.of(List.of("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "update"), List.of("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "git")),
+        assertEquals(List.of(List.of("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "-o", "DPkg::Lock::Timeout=60", "update"), List.of("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "-o", "DPkg::Lock::Timeout=60", "install", "-y", "git")),
             GerenciadorDePacotes.APT_GET.comandosDeInstalar());
         assertEquals(List.of(List.of("dnf", "install", "-y", "git")), GerenciadorDePacotes.DNF.comandosDeInstalar());
         assertEquals(List.of(List.of("yum", "install", "-y", "git")), GerenciadorDePacotes.YUM.comandosDeInstalar());
