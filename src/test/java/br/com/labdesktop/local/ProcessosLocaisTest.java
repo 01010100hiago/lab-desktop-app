@@ -25,7 +25,8 @@ import br.com.labdesktop.plataforma.SistemaOperacional;
  */
 class ProcessosLocaisTest {
 
-    private static final String JAVA = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+    private static final boolean WINDOWS = System.getProperty("os.name").toLowerCase().contains("win");
+    private static final String JAVA = Path.of(System.getProperty("java.home"), "bin", WINDOWS ? "java.exe" : "java").toString();
 
     @TempDir
     Path tmp;
@@ -49,7 +50,8 @@ class ProcessosLocaisTest {
     @Test
     void argumentoComEspacoAspasEDolarChegaIntactoSemShell() throws Exception {
         Path f = programa("Ecoa", "for (String s : a) System.out.println(\"[\" + s + \"]\");");
-        String estranho = "a b \"c\" $HOME ; rm -rf / `x` *";
+        // no Windows o argumento com aspas dentro nunca chega inteiro a um programa (ArgumentosDoWindows recusa antes): lá o teste usa o mesmo texto sem as aspas
+        String estranho = WINDOWS ? "a b c $HOME ; rm -rf / `x` *" : "a b \"c\" $HOME ; rm -rf / `x` *";
         ResultadoExec x = processos.executar(List.of(JAVA, f.toString(), estranho, "dois"), Duration.ofSeconds(60));
         assertEquals(0, x.status(), x.stderr());
         assertEquals("[" + estranho + "]\n[dois]\n", x.stdout());

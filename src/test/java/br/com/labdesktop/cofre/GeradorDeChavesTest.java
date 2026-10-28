@@ -23,6 +23,8 @@ import org.apache.sshd.common.config.keys.PublicKeyEntry;
 import org.apache.sshd.common.util.security.SecurityUtils;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 class GeradorDeChavesTest {
@@ -130,6 +132,7 @@ class GeradorDeChavesTest {
         assertTrue(chave.publica().startsWith("ssh-ed25519 "));
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void ssh_keygenDoSistemaAceitaAChaveEConfereAImpressao(@TempDir Path tmp) throws Exception {
         Assumptions.assumeTrue(Files.isExecutable(Path.of("/usr/bin/ssh-keygen")), "ssh-keygen ausente");

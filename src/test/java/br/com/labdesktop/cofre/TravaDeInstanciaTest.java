@@ -64,7 +64,7 @@ class TravaDeInstanciaTest {
     @Test
     void outroProcessoNaoConsegueAMesmaTrava(@TempDir Path tmp) throws Exception {
         CaminhosApp c = Fixtures.caminhos(tmp);
-        Path java = Path.of(System.getProperty("java.home"), "bin", "java");
+        Path java = Path.of(System.getProperty("java.home"), "bin", System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java");
         // O filho só precisa das classes do app e do teste e do slf4j (a proteção de arquivos registra avisos); nenhuma outra biblioteca de terceiros.
         String cp = caminhoDoFilho();
         Process filho = new ProcessBuilder(java.toString(), "-cp", cp, Filho.class.getName(), c.pastaDados().toString())
@@ -87,7 +87,7 @@ class TravaDeInstanciaTest {
     @Test
     void travaSoltaQuandoOProcessoMorreSemFechar(@TempDir Path tmp) throws Exception {
         CaminhosApp c = Fixtures.caminhos(tmp);
-        Path java = Path.of(System.getProperty("java.home"), "bin", "java");
+        Path java = Path.of(System.getProperty("java.home"), "bin", System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java");
         String cp = caminhoDoFilho();
         Process filho = new ProcessBuilder(java.toString(), "-cp", cp, Filho.class.getName(), c.pastaDados().toString())
             .redirectErrorStream(true).start();

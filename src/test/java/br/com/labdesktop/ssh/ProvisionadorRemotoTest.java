@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 /** CONTRATO-API seção 6: o que o app roda por SSH exec, e que nada sensível vai na linha de comando. */
 class ProvisionadorRemotoTest {
@@ -155,6 +157,7 @@ class ProvisionadorRemotoTest {
         assertEquals(ErroProvisionamento.SEM_SESSAO, semSessao.codigo());
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void removerChaveAutorizadaRecusaTextoQueNaoParecaChaveEd25519SemExecutarNada() {
         Fake fake = new Fake();

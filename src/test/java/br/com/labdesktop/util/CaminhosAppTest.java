@@ -9,6 +9,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 class CaminhosAppTest {
@@ -52,6 +54,7 @@ class CaminhosAppTest {
         assertThrows(IllegalArgumentException.class, () -> CaminhosApp.deArgumentos(new String[] {"--pasta="}));
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void prepararPastasCriaComZeroSeteZeroZero(@TempDir Path tmp) throws Exception {
         CaminhosApp c = CaminhosApp.de(tmp.resolve("dados"), tmp.resolve("logs"));
@@ -59,6 +62,7 @@ class CaminhosAppTest {
         assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(c.pastaDados())));
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void prepararPastasCorrigePastaAberta(@TempDir Path tmp) throws Exception {
         Path dados = tmp.resolve("dados");

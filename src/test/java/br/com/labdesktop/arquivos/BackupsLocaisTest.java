@@ -17,6 +17,8 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /** As cópias de segurança locais: onde ficam, quem lê, quantas sobram. */
@@ -37,6 +39,7 @@ class BackupsLocaisTest {
         assertEquals(Instant.parse("2026-10-24T21:05:09.123Z"), bk.quando());
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void cadaCopiaSoPodeSerLidaPeloDono(@TempDir Path tmp) throws IOException {
         BackupsLocais backups = new BackupsLocais(tmp, "lab");

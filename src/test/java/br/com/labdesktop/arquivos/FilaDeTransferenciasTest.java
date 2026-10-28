@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /** Enviar e baixar (arquivo e pasta), progresso, cancelamento e as quatro respostas ao "já existe". */
@@ -302,6 +304,7 @@ class FilaDeTransferenciasTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void umArquivoSemPermissaoNaoDerrubaOsOutros(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp); FilaDeTransferencias f = fila(c, x -> sempre(Escolha.CANCELAR, false))) {

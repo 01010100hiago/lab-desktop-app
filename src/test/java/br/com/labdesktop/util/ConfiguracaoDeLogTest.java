@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 class ConfiguracaoDeLogTest {
@@ -25,6 +27,7 @@ class ConfiguracaoDeLogTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void criaPastaEArquivoPrivadosEApontaOSlf4j(@TempDir Path tmp) throws Exception {
         logFileAntes = System.getProperty("org.slf4j.simpleLogger.logFile");
@@ -68,6 +71,7 @@ class ConfiguracaoDeLogTest {
         assertEquals(0, Files.size(c.arquivoLog()));
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void naoRotacionaArquivoPequenoECorrigePermissao(@TempDir Path tmp) throws Exception {
         logFileAntes = System.getProperty("org.slf4j.simpleLogger.logFile");

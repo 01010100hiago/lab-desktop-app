@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
@@ -141,6 +143,7 @@ class EscritorDeComposeTest {
         assertEquals(0, a.abertos.get());
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void postgresGeraSenhaNoEnvENuncaNoCompose() throws Exception {
         montar(GabaritoDoProjeto.composeVazio("demo"));

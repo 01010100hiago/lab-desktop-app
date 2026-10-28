@@ -24,6 +24,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.apache.sshd.sftp.client.SftpClient.Attributes;
 import org.apache.sshd.sftp.client.SftpClient.DirEntry;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /** O cliente SFTP contra o servidor SFTP do MINA embutido (RootedFileSystem sobre uma pasta temporária). */
@@ -37,6 +39,7 @@ class ClienteSftpMinaTest {
     // Listar
     // ---------------------------------------------------------------------------------------------
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void listaOsItensComTipoTamanhoPermissaoEDonoESemPontoEPontoPonto(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
@@ -119,6 +122,7 @@ class ClienteSftpMinaTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void pastaSemPermissaoDizSemPermissaoEmPortugues(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
@@ -144,6 +148,7 @@ class ClienteSftpMinaTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void entradasHostisDeUmServidorMauSaoDescartadas() {
         for (String nome : new String[] {"../../etc/passwd", "a/b", "/abs", "", ".", "..", "x\0y"}) {
@@ -203,6 +208,7 @@ class ClienteSftpMinaTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void gravarAtomicoTrocaOConteudoMantemAsPermissoesENaoDeixaTemporario(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
@@ -217,6 +223,7 @@ class ClienteSftpMinaTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void gravarAtomicoEmArquivoNovoCriaComAsPermissoesPedidas(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
@@ -226,6 +233,7 @@ class ClienteSftpMinaTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void semPermissoesPedidasUmArquivoNovoNasceFechadoEUmQueJaExistiaMantemAsDele(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
@@ -239,6 +247,7 @@ class ClienteSftpMinaTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void gravarNoLugarMantemOMesmoArquivoPermissoesEDonoENuncaCria(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
@@ -262,6 +271,7 @@ class ClienteSftpMinaTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void gravarAtomicoSemOExtensaoDoOpensshUsaOCaminhoDeReservaSemPerderODado(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
@@ -277,6 +287,7 @@ class ClienteSftpMinaTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void pastaSomenteLeituraDizSemPermissaoENaoTocaNoArquivo(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
@@ -469,6 +480,7 @@ class ClienteSftpMinaTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void enviarSubstituiOArquivoMantendoAsPermissoesDoExistente(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {

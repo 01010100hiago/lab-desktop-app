@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.swing.KeyStroke;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -185,6 +187,7 @@ class EdicaoNoGerenciadorTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void salvarMantemAsPermissoesEAQuebraDeLinhaDoWindows(@TempDir Path tmp) throws Exception {
         try (CenaDeArquivos c = cena(tmp, true)) {
@@ -276,6 +279,7 @@ class EdicaoNoGerenciadorTest {
     // Sudo
     // ---------------------------------------------------------------------------------------------
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void semPermissaoOfereceSalvarComSudoSemPerguntarSenhaECancelarEOPadrao(@TempDir Path tmp) throws Exception {
         try (CenaDeArquivos c = cena(tmp, true)) {
@@ -322,6 +326,7 @@ class EdicaoNoGerenciadorTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void sudoRecusadoMostraAFraseSimplesNoEditor(@TempDir Path tmp) throws Exception {
         try (CenaDeArquivos c = cena(tmp, true)) {

@@ -35,6 +35,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.sshd.common.config.keys.KeyUtils;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 class CofreDeChavesTest {
@@ -285,6 +287,7 @@ class CofreDeChavesTest {
     // Arquivos no disco
     // ------------------------------------------------------------------------------------------
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void permissoesSaoZeroSeteZeroZeroEZeroSeisZeroZero(@TempDir Path tmp) throws Exception {
         CaminhosApp c = caminhos(tmp);
@@ -295,6 +298,7 @@ class CofreDeChavesTest {
         assertFalse(Files.exists(c.arquivoCofreTmp()), "o .tmp só existe durante a gravação");
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void permissoesAbertasDemaisSaoCorrigidasNaAberturaComAviso(@TempDir Path tmp) throws Exception {
         CaminhosApp c = caminhos(tmp);
@@ -806,6 +810,7 @@ class CofreDeChavesTest {
     // Escritas
     // ------------------------------------------------------------------------------------------
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void falhaDeGravacaoNaoMudaANemoriaEDepoisFunciona(@TempDir Path tmp) throws Exception {
         Assumptions.assumeFalse("root".equals(System.getProperty("user.name")), "root ignora permissões");

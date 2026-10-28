@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /** A linha do authorized_keys e o comando de colar (ARQUITETURA 5.8): conferidos rodando o comando de verdade. */
@@ -55,6 +57,7 @@ class InfoChaveTest {
         assertTrue(texto.contains("token") && texto.contains("2FA") && texto.contains("terminal"), "e por que o app precisa do shell: " + texto);
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void oComandoColadoNoShellAcrescentaExatamenteALinhaComPermissoesFechadas(@TempDir Path casa) throws Exception {
         String comando = chave(PUBLICA).comandoDeInstalacao(7000);
@@ -69,6 +72,7 @@ class InfoChaveTest {
             Files.getPosixFilePermissions(casa.resolve(".ssh")));
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void aspaSimplesOuCifraoNoComentarioNaoEscapamDoComandoNemExecutamNada(@TempDir Path casa) throws Exception {
         String hostil = "ssh-ed25519 AAAAC3Nza lab-desktop@mac'; touch " + casa.resolve("invadido") + "; echo '$(touch " + casa.resolve("invadido2") + ")";

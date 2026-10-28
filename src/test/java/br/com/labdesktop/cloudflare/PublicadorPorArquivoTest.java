@@ -24,6 +24,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
@@ -368,6 +370,7 @@ class PublicadorPorArquivoTest {
         assertTrue(lab.rodando, "e termina de pé");
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void asCopiasDatadasTemOsModosDosOriginaisEACopiaDoComposeFicaForaDoGit() throws Exception {
         Path compose = lab.arquivo(LabSimulado.PROJETOS + "/demo/docker-compose.yml");
@@ -665,6 +668,7 @@ class PublicadorPorArquivoTest {
         assertEquals(List.of(), r.desfeito());
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void semPermissaoParaEscreverNoConfigODizEDevolveTudo() throws Exception {
         Path config = lab.arquivo(LabSimulado.CONFIG);

@@ -23,6 +23,8 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -128,6 +130,7 @@ class EstadosDoGerenciadorTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void semPermissaoParaAbrirAPastaTemVoltar(@TempDir Path tmp) throws Exception {
         Path[] fechada = new Path[1];

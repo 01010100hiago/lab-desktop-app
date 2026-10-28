@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 class MemoriaDeCaminhosTest {
@@ -21,6 +23,7 @@ class MemoriaDeCaminhosTest {
         assertTrue(MemoriaDeCaminhos.emMemoria().ultimoCaminhoDoServidor("s1").isEmpty());
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void lembraPorServidorEPorProjetoEGravaEmDisco(@TempDir Path tmp) throws Exception {
         Path arquivo = tmp.resolve("memoria-arquivos.json");

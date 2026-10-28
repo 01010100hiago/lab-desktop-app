@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /** Os arquivos de "Este computador": o {@link ClienteSftp} sobre {@code java.nio}, com as mesmas regras do cliente do SFTP. */
@@ -41,6 +43,7 @@ class ClienteSftpLocalTest {
         return assertThrows(ErroSftp.class, e).tipo();
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void listaComTipoTamanhoPermissaoEOrdemQueATelaEsperaEEscondeNadaAlemDePontoEPontoPonto() throws Exception {
         Files.createDirectories(raiz.resolve("pasta"));
@@ -108,6 +111,7 @@ class ClienteSftpLocalTest {
         assertFalse(c.existe(t("nada")));
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void gravarNoLugarMantemOMesmoArquivoEAsPermissoesENuncaCria() throws Exception {
         Path f = raiz.resolve("config.yml");
@@ -131,6 +135,7 @@ class ClienteSftpLocalTest {
         assertEquals(ErroSftp.Tipo.OUTRO, tipoDe(() -> c.gravarNoLugar(t("pasta"), new byte[] {1})));
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void gravarAtomicoTrocaPorCimaSemDeixarTemporarioEMantemAsPermissoes() throws Exception {
         Path f = raiz.resolve("conf.txt");
@@ -148,6 +153,7 @@ class ClienteSftpLocalTest {
         assertEquals(0600, ClienteSftpLocal.bitsDe(Files.getPosixFilePermissions(raiz.resolve("novo.txt"))));
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void gravarEmPastaSemPermissaoDizSemPermissaoESemLixo() throws Exception {
         Path ro = raiz.resolve("somente-leitura");
@@ -323,6 +329,7 @@ class ClienteSftpLocalTest {
         assertTrue(Files.exists(alvo.resolve("a.txt")), "o destino do link intacto");
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void oTemporarioDeGravarNasceComPermissao0600ENaoSoDepois() throws Exception {
         Path t = raiz.resolve(".temporario.tmp");

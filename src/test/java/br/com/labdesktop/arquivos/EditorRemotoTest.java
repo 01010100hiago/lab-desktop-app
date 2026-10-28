@@ -19,6 +19,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /** Abrir, salvar com segurança (conflito, backup local, atômico, permissões), desfazer e salvar com sudo. */
@@ -67,6 +69,7 @@ class EditorRemotoTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void salvaPreservandoPermissoesGuardaBackupELiberaOTemporario(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
@@ -172,6 +175,7 @@ class EditorRemotoTest {
         }
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void pastaSemPermissaoDeGravacaoDizSemPermissaoEOArquivoFicaIntacto(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {

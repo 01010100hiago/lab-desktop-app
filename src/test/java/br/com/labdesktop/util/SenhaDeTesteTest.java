@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /** A abertura automática do cofre de teste só pode valer em condições estreitas (nunca no cofre de verdade). */
@@ -32,6 +34,7 @@ class SenhaDeTesteTest {
         assertFalse(SenhaDeTeste.pedida(null));
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void aceitaArquivoComumDoUsuarioComPermissao0600() throws Exception {
         Files.writeString(arquivo(), "senha\n");
@@ -54,6 +57,7 @@ class SenhaDeTesteTest {
         assertTrue(motivo.toString().contains("não existe"), motivo.toString());
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void recusaPermissaoMaisAbertaQue0600() throws Exception {
         Files.writeString(arquivo(), "senha\n");
@@ -63,6 +67,7 @@ class SenhaDeTesteTest {
         assertTrue(motivo.toString().contains("0600"), motivo.toString());
     }
 
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void recusaLinkSimbolico() throws Exception {
         Path alvo = Files.writeString(tmp.resolve("outro.txt"), "senha\n");
