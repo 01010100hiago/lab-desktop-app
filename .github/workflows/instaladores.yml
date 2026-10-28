@@ -108,7 +108,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # NUNCA roda sozinho: só no "Run workflow" com "publicar" marcado, e o ambiente "publicacao" (Settings > Environments) deve exigir a aprovação do usuário.
+  # NUNCA roda sozinho: só no "Run workflow" com "publicar" marcado.
+  # ATENÇÃO: crie o ambiente "publicacao" ANTES (Settings > Environments), com "Required reviewers" (o usuário) e restrito às branches "main" e às tags "v*".
+  # Um ambiente que NÃO existe é criado sozinho pelo GitHub, SEM revisores, e o job roda sem pedir aprovação a ninguém.
   # É o único lugar com permissão de escrita. Cria uma Release em RASCUNHO: quem mantém o projeto olha e publica à mão.
   publicar:
     name: publicar (rascunho de Release)
@@ -130,5 +132,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           ls -la instaladores
-          gh release create "manual-${{ github.run_number }}" instaladores/* --draft --title "Lab Desktop (execução ${{ github.run_number }})" \
+          gh release create "manual-${{ github.run_number }}" instaladores/* --draft --target "$GITHUB_SHA" --title "Lab Desktop (execução ${{ github.run_number }})" \
             --notes "Instaladores gerados pelo workflow instaladores. Rascunho: confira os arquivos (SHA256SUMS-*.txt) antes de publicar."
