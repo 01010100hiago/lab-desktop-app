@@ -204,6 +204,7 @@ val jlinkRuntime = tasks.register<Exec>("jlinkRuntime") {
     description = "Gera o runtime enxuto (jlink) em build/empacotamento/runtime."
     dependsOn("installDist")
     val saida = pastaDeEmpacotamento.map { it.dir("runtime") }
+    inputs.property("modulos", modulosDoRuntime)
     outputs.dir(saida)
     doFirst {
         delete(saida)
@@ -253,7 +254,12 @@ val jpackageImagem = tasks.register<Exec>("jpackageImagem") {
     dependsOn(jlinkRuntime)
     val lib = layout.buildDirectory.dir("install/lab-desktop/lib")
     val destino = pastaDeEmpacotamento.map { it.dir("imagem") }
+    // Sem declarar o que entra, o Gradle achava a imagem "em dia" depois de o código mudar e o instalador levava o app VELHO.
     inputs.file(iconeDoSistema)
+    inputs.dir(lib)
+    inputs.dir(pastaDeEmpacotamento.map { it.dir("runtime") })
+    inputs.property("versaoDoPacote", versaoDoPacote)
+    inputs.property("opcoesDaJvm", opcoesDaJvm().joinToString(" "))
     outputs.dir(destino)
     doFirst {
         delete(destino)
@@ -309,6 +315,8 @@ val jpackageInstalador = tasks.register<Exec>("jpackageInstalador") {
     onlyIf { ehMac || ehWindows }
     val imagem = pastaDeEmpacotamento.map { it.dir("imagem") }
     val destino = pastaDeEmpacotamento.map { it.dir("instalador") }
+    inputs.dir(imagem)
+    inputs.property("versaoDoPacote", versaoDoPacote)
     outputs.dir(destino)
     doFirst {
         delete(destino)
