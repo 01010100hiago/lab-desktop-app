@@ -128,6 +128,32 @@ class AdicionarDominioPelaInterfaceTest {
     }
 
     @Test
+    void oQueSeEditouNoUltimoPassoNaoSePerdeAoVoltarNemAoSeguirDeNovo() throws Exception {
+        c.conectarPorArquivo();
+        Visual.naEdt(() -> acoes.adicionarDominio(lab, "demo", null));
+        DialogoAdicionarDominio d = dialogos.ultimoComo(DialogoAdicionarDominio.class);
+        passarPelosQuatroPassos(d, "do-assistente");
+        Visual.naEdt(() -> d.botaoContinuar().doClick(0));
+        DialogoPublicar p = dialogos.ultimoComo(DialogoPublicar.class);
+        Espera.ate(PRAZO, "serviço", () -> ed(() -> p.caixaDeServicos().getItemCount()) == 1);
+        Visual.naEdt(() -> {
+            p.campoNome().setText("editado-no-ultimo");
+            p.campoPorta().setText("8081");
+        });
+        Visual.naEdt(() -> p.botaoVoltar().doClick(0));
+        DialogoAdicionarDominio de_novo = dialogos.ultimoComo(DialogoAdicionarDominio.class);
+        Espera.ate(PRAZO, "serviço", () -> ed(() -> de_novo.caixaDeServicos().getItemCount()) == 1);
+        assertEquals("SERVICO", ed(de_novo::passoAtual));
+        assertEquals("8081", ed(() -> de_novo.campoPorta().getText()), "a porta editada no último passo voltou");
+        assertEquals("editado-no-ultimo", ed(() -> de_novo.campoNome().getText()), "e o nome também");
+        Visual.naEdt(() -> de_novo.botaoContinuar().doClick(0));
+        DialogoPublicar outra = dialogos.ultimoComo(DialogoPublicar.class);
+        Espera.ate(PRAZO, "serviço", () -> ed(() -> outra.caixaDeServicos().getItemCount()) == 1);
+        Espera.ate(PRAZO, "preenchido", () -> ed(() -> outra.campoNome().getText()).equals("editado-no-ultimo"));
+        assertEquals("8081", ed(() -> outra.campoPorta().getText()));
+    }
+
+    @Test
     void semCloudflareConectadaAbreOConectarPrimeiroEDepoisVoltaAoAssistente() throws Exception {
         Visual.naEdt(() -> acoes.adicionarDominio(lab, "demo", null));
         DialogoConectarCloudflare conectar = dialogos.ultimoComo(DialogoConectarCloudflare.class);

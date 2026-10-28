@@ -404,6 +404,56 @@ class DialogoPublicarTest {
         assertEquals(0, c.cf.registros.size());
     }
 
+    /** Abre como o último passo do assistente: com a predefinição e o Voltar. */
+    private DialogoPublicar abrirComoUltimoPasso(java.util.List<DialogoPublicar.Predefinicao> voltou) throws Exception {
+        DialogoPublicar.Motor m = motor();
+        DialogoPublicar d = Visual.naEdt(() -> new DialogoPublicar(m, avisos, new CopiadorDeTexto(() -> area), depois::incrementAndGet,
+            new DialogoPublicar.Predefinicao("app", 3000, "demo-app", "do-assistente", false), voltou::add));
+        Espera.ate(PRAZO, "o serviço do compose", () -> ed(() -> d.caixaDeServicos().getItemCount()) == 1);
+        Espera.ate(PRAZO, "preenchido", () -> ed(() -> d.campoNome().getText()).equals("do-assistente"));
+        return d;
+    }
+
+    @Test
+    void voltarSoltaOMotorEEntregaOQueEstavaNosCamposComAsEdicoes() throws Exception {
+        java.util.List<DialogoPublicar.Predefinicao> voltou = new CopyOnWriteArrayList<>();
+        DialogoPublicar d = abrirComoUltimoPasso(voltou);
+        Visual.naEdt(() -> {
+            d.campoNome().setText("editado-aqui");
+            d.campoPorta().setText("8080");
+            d.campoContainer().setText("outro-container");
+        });
+        assertEquals(0, encerrados.get());
+        Visual.naEdt(() -> d.botaoVoltar().doClick(0));
+        assertTrue(ed(d::fechou));
+        assertEquals(1, encerrados.get(), "Voltar solta o motor: a cópia do token não fica viva à toa");
+        assertEquals(1, voltou.size());
+        assertEquals(new DialogoPublicar.Predefinicao("app", 8080, "outro-container", "editado-aqui", false), voltou.get(0), "o que o usuário editou aqui volta para o assistente");
+    }
+
+    @Test
+    void voltarComPortaInvalidaMantemAPortaDeAntes() throws Exception {
+        java.util.List<DialogoPublicar.Predefinicao> voltou = new CopyOnWriteArrayList<>();
+        DialogoPublicar d = abrirComoUltimoPasso(voltou);
+        Visual.naEdt(() -> d.campoPorta().setText("abc"));
+        Visual.naEdt(() -> d.botaoVoltar().doClick(0));
+        assertEquals(3000, voltou.get(0).porta());
+        assertEquals("do-assistente", voltou.get(0).nome());
+    }
+
+    @Test
+    void cadaSaidaSoltaOMotorUmaSoVez_VoltarCancelarEFecharPeloX() throws Exception {
+        DialogoPublicar a = abrirComoUltimoPasso(new CopyOnWriteArrayList<>());
+        Visual.naEdt(() -> a.botaoVoltar().doClick(0));
+        assertEquals(1, encerrados.get(), "Voltar");
+        DialogoPublicar b = abrirComoUltimoPasso(new CopyOnWriteArrayList<>());
+        Visual.naEdt(() -> b.botaoCancelar().doClick(0));
+        assertEquals(2, encerrados.get(), "Cancelar");
+        DialogoPublicar x = abrirComoUltimoPasso(new CopyOnWriteArrayList<>());
+        Visual.naEdt(x::aoCancelar);
+        assertEquals(3, encerrados.get(), "o X e o Esc");
+    }
+
     @Test
     void cancelarAntesDePublicarSoFechaESoltaOMotor() throws Exception {
         DialogoPublicar d = abrirComPrevia();

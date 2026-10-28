@@ -203,6 +203,9 @@ public final class DialogoAdicionarDominio extends Dialogo {
             return;
         }
         conexao = motor.conexao();
+        if (conexao.isEmpty() && passo != Passo.CONTA) {
+            irPara(Passo.CONTA); // a conta foi desconectada na janela de Conectar: sem ela os passos de depois não valem
+        }
         if (conexao.isPresent()) {
             Conexao c = conexao.get();
             seloDaConta.atualizar("CONECTADA", Gravidade.OK, null);

@@ -140,6 +140,39 @@ class DialogoAdicionarDominioTest {
     }
 
     @Test
+    void depoisDeConectarOuTrocarODominioOAssistenteFicaNoPassoOndeEstava() {
+        DialogoAdicionarDominio d = abrir(null);
+        continuar(d);
+        assertEquals("DOMINIO", ed(d::passoAtual));
+        Visual.naEdt(() -> d.botaoTrocarDominio().doClick(0));
+        Visual.naEdt(() -> motor.aoConectar.get(0).run()); // voltou da janela de conectar com a mesma conta
+        assertEquals("DOMINIO", ed(d::passoAtual), "voltou do Conectar no mesmo passo");
+        assertTrue(ed(() -> d.botaoContinuar().isEnabled()));
+        Visual.naEdt(() -> d.botaoTrocarConta().doClick(0));
+        Visual.naEdt(() -> motor.aoConectar.get(1).run());
+        assertEquals("DOMINIO", ed(d::passoAtual));
+        // o que o usuário já tinha digitado no passo 3 não se perde por ter passado pelo Conectar no passo 2
+        continuar(d);
+        Visual.naEdt(() -> d.campoNome().setText("meu-nome"));
+        Visual.naEdt(() -> d.botaoVoltar().doClick(0));
+        Visual.naEdt(() -> motor.aoConectar.get(0).run());
+        assertEquals("DOMINIO", ed(d::passoAtual));
+        continuar(d);
+        assertEquals("meu-nome", ed(() -> d.campoNome().getText()));
+    }
+
+    @Test
+    void contaDesconectadaNaJanelaDeConectarLevaDeVoltaAoPassoUm() {
+        DialogoAdicionarDominio d = abrir(null);
+        continuar(d);
+        Visual.naEdt(() -> d.botaoTrocarDominio().doClick(0));
+        motor.conectada = false; // o usuário desconectou a conta lá
+        Visual.naEdt(() -> motor.aoConectar.get(0).run());
+        assertEquals("CONTA", ed(d::passoAtual), "sem conta os passos de depois não valem");
+        assertFalse(ed(() -> d.botaoContinuar().isEnabled()));
+    }
+
+    @Test
     void passoTresValidaONomeEMostraOEnderecoFinal() {
         DialogoAdicionarDominio d = abrir(null);
         continuar(d);

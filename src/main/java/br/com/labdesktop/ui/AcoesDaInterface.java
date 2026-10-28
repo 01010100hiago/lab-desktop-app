@@ -471,11 +471,12 @@ public final class AcoesDaInterface {
             public boolean podeRecriar() {
                 return podeCriarProjeto(lab);
             }
-        }, inicial, pre -> abrirPublicacao(lab, projeto, depois, pre, () -> abrirAssistenteDeDominio(lab, projeto, pre, depois)), null));
+        }, inicial, pre -> abrirPublicacao(lab, projeto, depois, pre, atual -> abrirAssistenteDeDominio(lab, projeto, atual, depois)), null));
     }
 
     /** Abre o diálogo de publicar (a prévia e a confirmação), já preenchido pelo assistente, ou em branco no "Publicar na internet" de sempre. */
-    private void abrirPublicacao(ServidorLab lab, String projeto, Runnable depois, br.com.labdesktop.ui.dialogos.DialogoPublicar.Predefinicao pre, Runnable voltar) {
+    private void abrirPublicacao(ServidorLab lab, String projeto, Runnable depois, br.com.labdesktop.ui.dialogos.DialogoPublicar.Predefinicao pre,
+                                  java.util.function.Consumer<br.com.labdesktop.ui.dialogos.DialogoPublicar.Predefinicao> voltar) {
         br.com.labdesktop.cloudflare.ServicoCloudflare servico = lab.cloudflare();
         if (servico.ehLocal()) {
             avisos.atencao("Publicar na internet pede um servidor com o cloudflared (o túnel). Este computador não tem um túnel configurado pelo app.");

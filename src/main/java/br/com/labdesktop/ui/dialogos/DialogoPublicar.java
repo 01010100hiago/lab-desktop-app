@@ -136,21 +136,20 @@ public final class DialogoPublicar extends Dialogo {
     private String ultimoNomeSugerido = "";
     private String ultimoContainerSugerido = "";
     private final Predefinicao predefinicao;
-    private final Runnable aoVoltar;
-    private boolean voltando;
+    private final java.util.function.Consumer<Predefinicao> aoVoltar;
 
     public DialogoPublicar(Motor motor, Notificacoes avisos, CopiadorDeTexto copiador, Runnable aoPublicar) {
         this(motor, avisos, copiador, aoPublicar, null, null);
     }
 
     /**
-     * O último passo do assistente "Adicionar domínio": nasce com o que os passos de antes escolheram e, com {@code aoVoltar}, ganha o botão Voltar (fecha SEM soltar o motor e devolve a
-     * conversa ao assistente, que o passa adiante).
+     * O último passo do assistente "Adicionar domínio": nasce com o que os passos de antes escolheram e, com {@code aoVoltar}, ganha o botão Voltar. Voltar SOLTA o motor (zera a cópia do
+     * token: o assistente abre outro quando o usuário chegar de novo ao último passo) e entrega ao assistente o que está nos campos AGORA, com as edições que o usuário fez aqui.
      *
      * @param predefinicao o que os passos anteriores escolheram ({@code null}: o diálogo comum de "Publicar na internet")
-     * @param aoVoltar     o que o botão Voltar faz; {@code null}: sem o botão
+     * @param aoVoltar     o que o botão Voltar faz, recebendo o que está nos campos; {@code null}: sem o botão
      */
-    public DialogoPublicar(Motor motor, Notificacoes avisos, CopiadorDeTexto copiador, Runnable aoPublicar, Predefinicao predefinicao, Runnable aoVoltar) {
+    public DialogoPublicar(Motor motor, Notificacoes avisos, CopiadorDeTexto copiador, Runnable aoPublicar, Predefinicao predefinicao, java.util.function.Consumer<Predefinicao> aoVoltar) {
         super(predefinicao == null ? "Publicar na internet" : "Adicionar domínio: passo 5 de 5");
         this.predefinicao = predefinicao;
         this.aoVoltar = aoVoltar;
@@ -307,14 +306,32 @@ public final class DialogoPublicar extends Dialogo {
         aoMudarOsCampos();
     }
 
-    /** Voltar ao assistente: fecha sem soltar o motor (ele continua com o assistente). */
+    /** Voltar ao assistente: fecha (e solta o motor) e devolve o que está nos campos agora; o que o usuário editou aqui não se perde. */
     private void voltar() {
         if (ocupado || aoVoltar == null) {
             return;
         }
-        voltando = true;
+        Predefinicao agora = camposAgora();
         fechar();
-        aoVoltar.run();
+        aoVoltar.accept(agora);
+    }
+
+    /** O que está nos campos agora; o que não dá para ler (porta que não é número) fica como o assistente tinha mandado. */
+    private Predefinicao camposAgora() {
+        ComposeComEdge.Servico s = servicoEscolhido();
+        int porta = predefinicao == null ? 0 : predefinicao.porta();
+        try {
+            int n = Integer.parseInt(campoPorta.getText().strip());
+            if (n >= 1 && n <= 65535) {
+                porta = n;
+            }
+        } catch (NumberFormatException e) {
+            // fica a porta de antes
+        }
+        String container = campoContainer.getText().isBlank() && predefinicao != null ? predefinicao.container() : campoContainer.getText().strip();
+        String nome = campoNome.getText().isBlank() && predefinicao != null ? predefinicao.nome() : campoNome.getText().strip();
+        String servico = s != null ? s.nome() : predefinicao != null ? predefinicao.servico() : "";
+        return new Predefinicao(servico, porta, container, nome, recriar.isSelected() && recriar.isVisible());
     }
 
     private ComposeComEdge.Servico servicoEscolhido() {
@@ -690,8 +707,8 @@ public final class DialogoPublicar extends Dialogo {
     protected void aoFechar() {
         atrasoDaPrevia.stop();
         geracao.incrementAndGet();
-        if (!ocupado && !voltando) {
-            soltarOMotor();
+        if (!ocupado) {
+            soltarOMotor(); // Voltar, Cancelar, o X e Concluir: o motor (e a cópia do token) não sobra para trás
         } // com a execução em andamento o motor fica aberto: quem o solta é o fim dela (aoTerminar, já com a janela fechada)
     }
 
