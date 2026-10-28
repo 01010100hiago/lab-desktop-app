@@ -24,10 +24,10 @@ class TesteCamadas {
 
     /**
      * util, seguranca, cofre, ssh, api, servidor, arquivos (o domínio do gerenciador de arquivos, sobre SFTP), instalador (o instalador do agente:
-     * verificações, passos e pacote, atrás de uma interface de execução) e local (o servidor "Este computador": processos, verificações, laboratório local), projetos (criar, importar e completar projeto: modelos puros e operações sobre um ambiente), cloudflare (a API da Cloudflare, o túnel e o endereço público) tendencias (modelos puros das Tendências: períodos, estatística, estimativa, unidades, relatório e exportação), registro (o registro geral do servidor: parser, leitores e modelo) e terminal (o domínio do
+     * verificações, passos e pacote, atrás de uma interface de execução) e local (o servidor "Este computador": processos, verificações, laboratório local), projetos (criar, importar e completar projeto: modelos puros e operações sobre um ambiente), cloudflare (a API da Cloudflare, o túnel e o endereço público) tendencias (modelos puros das Tendências: períodos, estatística, estimativa, unidades, relatório e exportação), registro (o registro geral do servidor: parser, leitores e modelo), acesso (a primeira conexão com senha e o desligar a senha: comandos fixos, instalador da chave, análise e passos) e terminal (o domínio do
      * terminal: transporte, ciclo de vida, classificador e portão de entrada; o JediTerm e o Swing ficam em {@code ui.terminal}).
      */
-    private static final Set<String> DOMINIO = Set.of("plataforma", "util", "seguranca", "cofre", "ssh", "api", "servidor", "arquivos", "terminal", "instalador", "local", "projetos", "cloudflare", "tendencias", "registro");
+    private static final Set<String> DOMINIO = Set.of("plataforma", "util", "seguranca", "cofre", "ssh", "api", "servidor", "arquivos", "terminal", "instalador", "local", "projetos", "cloudflare", "tendencias", "registro", "acesso");
 
     private static final Pattern GRAFICOS = Pattern.compile(
         "\\b(javax\\.swing|java\\.awt|com\\.formdev|com\\.jediterm)\\b");
@@ -95,7 +95,7 @@ class TesteCamadas {
     @Test
     void cofreSshEApiNaoImportamUi() throws IOException {
         List<String> violacoes = new ArrayList<>();
-        for (String pacote : List.of("plataforma", "cofre", "ssh", "api", "util", "seguranca", "servidor", "arquivos", "terminal", "instalador", "local", "projetos", "cloudflare")) {
+        for (String pacote : List.of("plataforma", "cofre", "ssh", "api", "util", "seguranca", "servidor", "arquivos", "terminal", "instalador", "local", "projetos", "cloudflare", "acesso")) {
             for (Path fonte : fontesDe(pacote)) {
                 for (String linha : codigoDe(fonte)) {
                     if (UI.matcher(linha).find()) {

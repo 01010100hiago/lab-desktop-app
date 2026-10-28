@@ -1,5 +1,7 @@
 package br.com.labdesktop.servidor;
 
+import br.com.labdesktop.acesso.InstaladorDeChave;
+import br.com.labdesktop.acesso.LimiteDeTentativas;
 import br.com.labdesktop.cofre.ChaveSsh;
 import br.com.labdesktop.cofre.CofreDeChaves;
 import br.com.labdesktop.cofre.CofreException;
@@ -11,16 +13,22 @@ import br.com.labdesktop.cofre.InfoChave;
 import br.com.labdesktop.cofre.Pin;
 import br.com.labdesktop.cofre.Transporte;
 import br.com.labdesktop.seguranca.TextoSeguro;
+import br.com.labdesktop.seguranca.Zeragem;
 import br.com.labdesktop.seguranca.ValidadorDeNomes;
 import br.com.labdesktop.ssh.ConfigSsh;
 import br.com.labdesktop.ssh.ErroProvisionamento;
 import br.com.labdesktop.ssh.EstadoConexao;
 import br.com.labdesktop.ssh.Falha;
+import br.com.labdesktop.ssh.FalhaDeEntradaPorSenha;
+import br.com.labdesktop.ssh.ProvaPorChave;
+import br.com.labdesktop.ssh.SessaoComSenha;
 import br.com.labdesktop.ssh.SondagemDeHost;
 import br.com.labdesktop.ssh.SondagemException;
 import br.com.labdesktop.util.NomeDoComputador;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
@@ -126,14 +134,25 @@ public final class AssistenteDeServidor {
         }
     }
 
+    /** Quantas senhas recusadas seguidas o app aceita antes da pausa, e quanto dura a pausa. */
+    public static final int MAXIMO_DE_SENHAS_RECUSADAS = 3;
+    public static final Duration PAUSA_DEPOIS_DAS_TENTATIVAS = Duration.ofSeconds(30);
+
     private final CofreDeChaves cofre;
     private final GerenciadorServidores gerenciador;
     private final ConfigSsh cfgSsh;
+    private final LimiteDeTentativas limiteDeSenha;
 
     public AssistenteDeServidor(CofreDeChaves cofre, GerenciadorServidores gerenciador, ConfigSsh cfgSsh) {
+        this(cofre, gerenciador, cfgSsh, new LimiteDeTentativas(MAXIMO_DE_SENHAS_RECUSADAS, PAUSA_DEPOIS_DAS_TENTATIVAS, Instant::now));
+    }
+
+    /** Com o freio das senhas trocável (os testes controlam o relógio). */
+    public AssistenteDeServidor(CofreDeChaves cofre, GerenciadorServidores gerenciador, ConfigSsh cfgSsh, LimiteDeTentativas limiteDeSenha) {
         this.cofre = cofre;
         this.gerenciador = gerenciador;
         this.cfgSsh = cfgSsh;
+        this.limiteDeSenha = limiteDeSenha;
     }
 
     // =====================================================================================================
@@ -258,6 +277,89 @@ public final class AssistenteDeServidor {
     public void confiarNoHost(ServidorLab lab, Pin pin) throws CofreException {
         cofre.gravarPin(lab.id(), pin);
         lab.tentarAgora();
+    }
+
+    // =====================================================================================================
+    // Primeira conexão com senha: entrar uma vez, instalar a chave e PROVAR
+    // =====================================================================================================
+
+    /** Os passos do primeiro acesso, para a tela mostrar o andamento. */
+    public enum EtapaDoPrimeiroAcesso {
+        ENTRANDO("Entrando no servidor com a senha"),
+        INSTALANDO("Instalando a chave deste app"),
+        PROVANDO("Provando que a chave entra, numa conexão nova");
+
+        private final String rotulo;
+
+        EtapaDoPrimeiroAcesso(String rotulo) {
+            this.rotulo = rotulo;
+        }
+
+        public String rotulo() {
+            return rotulo;
+        }
+    }
+
+    /**
+     * O primeiro acesso: entra com a SENHA uma única vez (num cliente separado, DEPOIS de o usuário ter confirmado a impressão digital do servidor
+     * e só com ela), instala a chave pública no {@code authorized_keys} por um comando fixo e sem {@code sudo}, fecha a sessão da senha e PROVA,
+     * numa conexão nova só com a chave do cofre, que o servidor a aceita. Só se a prova passar o chamador segue (cadastrar, token, agente). Se
+     * a prova falhar, NADA mais é mexido: o servidor nem entra no cofre.
+     *
+     * <p>A senha é um {@code char[]} que passa a ser DESTE método: é zerada ao terminar, deu certo, deu errado ou foi interrompido. Nunca vira
+     * {@code String}, nunca vai a log, a mensagem ou a disco. {@link FalhaDeEntradaPorSenha} diz, em palavras simples, o que houve (senha errada,
+     * conta bloqueada, servidor sem senha, host que mudou, servidor sem login por chave, pausa depois de {@value #MAXIMO_DE_SENHAS_RECUSADAS}
+     * recusas seguidas). Bloqueia (rede): fora da EDT.
+     *
+     * @param pin a impressão digital que o usuário acabou de confirmar (o host não confirmado nunca recebe a senha)
+     * @return se a chave foi acrescentada agora ou já estava lá
+     */
+    public InstaladorDeChave.Resultado instalarAChaveComSenha(Dados dados, InfoChave chave, Pin pin, char[] senha,
+                                                              Consumer<EtapaDoPrimeiroAcesso> progresso)
+        throws FalhaDeEntradaPorSenha, CofreException, InterruptedException {
+        try {
+            dados.validar();
+            if (senha == null || senha.length == 0) {
+                throw new IllegalArgumentException("Digite a senha do usuário no servidor.");
+            }
+            String conta = LimiteDeTentativas.chave(dados.host(), dados.porta(), dados.usuario());
+            var pausa = limiteDeSenha.pausaRestante(conta);
+            if (pausa.isPresent()) {
+                throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.MUITAS_TENTATIVAS,
+                    "Foram " + MAXIMO_DE_SENHAS_RECUSADAS + " senhas recusadas seguidas. Espere " + Math.max(1, pausa.get().toSeconds() + 1)
+                        + " s antes de tentar de novo, para não bloquear a conta no servidor.");
+            }
+            ChaveSsh daVez = cofre.chaveSsh(chave.id()).orElseThrow(() -> new CofreException("A chave deste servidor não está no cofre."));
+            InstaladorDeChave.Resultado instalada;
+            progresso.accept(EtapaDoPrimeiroAcesso.ENTRANDO);
+            try (SessaoComSenha sessao = abrirComSenha(dados, pin, senha, conta)) {
+                progresso.accept(EtapaDoPrimeiroAcesso.INSTALANDO);
+                instalada = InstaladorDeChave.instalar(sessao::executar, daVez.publica(), dados.portaDoAgente());
+            } catch (IOException e) {
+                throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO,
+                    "A conexão com o servidor caiu antes de a chave ser instalada. Confira a rede e tente de novo.", e);
+            }
+            progresso.accept(EtapaDoPrimeiroAcesso.PROVANDO);
+            new ProvaPorChave(dados.host().strip(), dados.porta(), dados.usuario().strip(), daVez.paraKeyPair(), List.of(pin), cfgSsh).provar();
+            LOG.debug("Primeiro acesso: chave {} ({}).", chave.id(), instalada);
+            return instalada;
+        } finally {
+            Zeragem.zerar(senha);
+        }
+    }
+
+    private SessaoComSenha abrirComSenha(Dados dados, Pin pin, char[] senha, String conta) throws FalhaDeEntradaPorSenha {
+        try {
+            SessaoComSenha s = SessaoComSenha.abrir(dados.host().strip(), dados.porta(), dados.usuario().strip(), pin, senha, cfgSsh);
+            limiteDeSenha.registrarSucesso(conta);
+            return s;
+        } catch (FalhaDeEntradaPorSenha f) {
+            switch (f.motivo()) {
+                case SENHA_INCORRETA, CONTA_BLOQUEADA, SENHA_EXPIRADA -> limiteDeSenha.registrarFalha(conta);
+                default -> { /* sem senha enviada: não conta para a pausa */ }
+            }
+            throw f;
+        }
     }
 
     // =====================================================================================================
