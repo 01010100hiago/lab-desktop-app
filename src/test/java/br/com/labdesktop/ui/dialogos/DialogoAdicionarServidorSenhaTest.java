@@ -291,6 +291,43 @@ class DialogoAdicionarServidorSenhaTest {
     }
 
     @Test
+    void voltarApagaASenhaEMudarODestinoTambemEOCampoNuncaLevaASenhaParaOutroServidor() throws Exception {
+        DialogoAdicionarServidor d = assistenteNaTela();
+        noPassoDaChave(d);
+        Visual.naEdt(() -> d.campoDaSenhaDoServidor().setText("senha-do-servidor-A"));
+        Visual.naEdt(() -> d.botaoVoltar().doClick());
+        assertEquals("dados", Visual.naEdt(d::paginaAtual));
+        assertEquals("", new String(Visual.naEdt(() -> d.campoDaSenhaDoServidor().getPassword())), "Voltar apaga a senha");
+        Visual.naEdt(() -> d.campoDoHost().setText("outro.example.com"));
+        Visual.naEdt(() -> d.botaoContinuar().doClick());
+        esperarPagina(d, "chave");
+        assertEquals("", new String(Visual.naEdt(() -> d.campoDaSenhaDoServidor().getPassword())), "o outro servidor começa com o campo vazio");
+        assertEquals(List.of(), ssh.senhasVistas);
+    }
+
+    @Test
+    void fecharEnquantoOAppFalaComOServidorNaoFechaEASenhaSaiDoCampo() throws Exception {
+        java.util.concurrent.CountDownLatch trinco = new java.util.concurrent.CountDownLatch(1);
+        shell.segurarAInstalacao(trinco);
+        try {
+            DialogoAdicionarServidor d = assistenteNaTela();
+            noPassoDaChave(d);
+            digitarEEntrar(d, SENHA_DO_SERVIDOR);
+            assertTrue(shell.instalacaoChegou.await(20, java.util.concurrent.TimeUnit.SECONDS), "a instalação chegou ao servidor");
+            assertTrue(Visual.naEdt(d::ocupado));
+            assertEquals("", new String(Visual.naEdt(() -> d.campoDaSenhaDoServidor().getPassword())), "o campo já foi apagado ao clicar");
+            Visual.naEdt(() -> d.botaoCancelar().doClick());
+            Visual.naEdt(() -> d.botaoVoltar().doClick());
+            assertEquals("chave", Visual.naEdt(d::paginaAtual), "não volta nem fecha no meio");
+            assertTrue(avisos.disse("info", "Espere terminar"), "diz por quê");
+            trinco.countDown();
+            esperarPagina(d, "conexao");
+        } finally {
+            trinco.countDown();
+        }
+    }
+
+    @Test
     void hostNaoConfirmadoNuncaRecebeASenha() throws Exception {
         confirmaHost = false;
         DialogoAdicionarServidor d = assistenteNaTela();

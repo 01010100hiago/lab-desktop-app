@@ -351,6 +351,7 @@ public final class AssistenteDeServidor {
     private SessaoComSenha abrirComSenha(Dados dados, Pin pin, char[] senha, String conta) throws FalhaDeEntradaPorSenha {
         try {
             SessaoComSenha s = SessaoComSenha.abrir(dados.host().strip(), dados.porta(), dados.usuario().strip(), pin, senha, cfgSsh);
+            Zeragem.zerar(senha); // já autenticou: a senha não serve mais a ninguém, nem ao resto da operação
             limiteDeSenha.registrarSucesso(conta);
             return s;
         } catch (FalhaDeEntradaPorSenha f) {

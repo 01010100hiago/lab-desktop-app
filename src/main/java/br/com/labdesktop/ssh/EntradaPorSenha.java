@@ -41,6 +41,8 @@ final class EntradaPorSenha {
         final AtomicBoolean senhaEnviada = new AtomicBoolean();
         /** O servidor respondeu "falhou" à senha. */
         final AtomicBoolean recusada = new AtomicBoolean();
+        /** A conexão já acabou (deu certo ou falhou) e o usuário da senha pode tê-la zerado: nada mais deve sair. */
+        final AtomicBoolean encerrada = new AtomicBoolean();
         /** O servidor pediu para trocar a senha. */
         final AtomicBoolean expirada = new AtomicBoolean();
     }
@@ -85,6 +87,9 @@ final class EntradaPorSenha {
                 return false; // uma tentativa por conexão
             }
             tentou = true;
+            if (relato.encerrada.get() || todoZero(senha)) {
+                return false; // a espera já estourou e a senha já foi zerada: nunca manda uma senha de zeros
+            }
             if (!UserAuthMethodFactory.isSecureAuthenticationTransport(sessao)) {
                 throw new IOException("A conexão não está cifrada: a senha não foi enviada.");
             }
@@ -124,6 +129,15 @@ final class EntradaPorSenha {
         public String toString() {
             return "EntradaPorSenha[redigida]";
         }
+    }
+
+    static boolean todoZero(char[] senha) {
+        for (char c : senha) {
+            if (c != '\0') {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** UTF-8 do {@code char[]}, sem passar por {@code String}; os temporários do codificador são zerados aqui. */

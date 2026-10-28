@@ -160,6 +160,18 @@ class SessaoComSenhaTest {
     }
 
     @Test
+    void senhaJaZeradaNuncaEEnviadaComoZeros() throws Exception {
+        try (ServidorSshDeTeste servidor = ServidorSshDeTeste.ed25519()) {
+            servidor.aceitarSenha(USUARIO, SENHA);
+            char[] zerada = new char[SENHA.length()];
+            assertThrows(FalhaDeEntradaPorSenha.class,
+                () -> SessaoComSenha.abrir("127.0.0.1", servidor.porta(), USUARIO, servidor.pin(), zerada, ConfigSsh.rapida()));
+            assertTrue(servidor.senhasVistas.isEmpty(), "uma senha de zeros não sai do app");
+            assertTrue(EntradaPorSenha.todoZero(zerada) && !EntradaPorSenha.todoZero("a".toCharArray()));
+        }
+    }
+
+    @Test
     void asSenhasComAcentoViajamEmUtf8() {
         byte[] bytes = EntradaPorSenha.emBytes("sénha-ção".toCharArray());
         assertEquals("sénha-ção", new String(bytes, StandardCharsets.UTF_8));

@@ -114,7 +114,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     /** A frase sob o campo da senha: o que o app faz com ela. */
     public static final String TEXTO_DA_SENHA = "O app entra uma vez com a senha, instala a chave deste computador no servidor e passa a entrar só pela chave. "
-        + "A senha não é guardada em lugar nenhum e é apagada da memória logo depois.";
+        + "A senha não é guardada em lugar nenhum e é apagada do campo assim que você clica.";
 
     /** A pergunta do último passo, depois de a chave estar provada (sem urgência e sem vermelho). */
     public static final String TEXTO_DA_PERGUNTA_DA_SENHA = "A chave já funciona. Quer desligar o login por senha neste servidor? É mais seguro: ninguém "
@@ -194,6 +194,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
     /** A impressão digital que o usuário confirmou, para o endereço e a porta de agora (tentar a senha de novo não pergunta outra vez). */
     private ConfirmacaoDeHost hostConfirmado;
     private boolean senhaUsada;
+    /** Endereço, porta e usuário para os quais a senha do campo vale (se mudarem, o campo é apagado). */
+    private String destinoDaSenhaDigitada = "";
 
     private record ConfirmacaoDeHost(String endereco, int porta, Pin pin) { }
 
@@ -442,6 +444,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         continuar.addActionListener(e -> continuar());
         voltar.addActionListener(e -> {
             if (!ocupado) {
+                Campos.apagarSenha(senhaDoServidor); // a senha digitada para um servidor nunca fica esperando para ir a OUTRO
                 mostrarPagina(PAGINA_DADOS);
             }
         });
@@ -474,6 +477,9 @@ public final class DialogoAdicionarServidor extends Dialogo {
     }
 
     private void mostrarPagina(String nomeDaPagina) {
+        if (PAGINA_CHAVE.equals(paginaAtual) && !PAGINA_CHAVE.equals(nomeDaPagina)) {
+            Campos.apagarSenha(senhaDoServidor); // saiu da página da senha: o campo não guarda mais nada
+        }
         paginaAtual = nomeDaPagina;
         paginas.show(pilha, nomeDaPagina);
         cartoesDosRodapes.show(pilhaDeRodapes, nomeDaPagina);
@@ -754,6 +760,12 @@ public final class DialogoAdicionarServidor extends Dialogo {
             return;
         }
         dizerErro(erroDosDados, "");
+        String agoraDestino = destinoDaSenha();
+        if (!agoraDestino.equals(destinoDaSenhaDigitada)) {
+            Campos.apagarSenha(senhaDoServidor); // endereço, porta ou usuário mudaram: a senha era de outro destino
+            hostConfirmado = null;
+        }
+        destinoDaSenhaDigitada = agoraDestino;
         rotuloDaSenha.setText("Senha do usuário " + usuarioAtual() + " no servidor (usada só agora, não fica guardada)");
         mostrarPagina(PAGINA_CHAVE);
         garantirChaveGerada();
@@ -774,6 +786,10 @@ public final class DialogoAdicionarServidor extends Dialogo {
             case EXISTENTE -> chavesDoCofre.getSelectedItem() instanceof InfoChave k ? k : null;
             case IMPORTADA -> chaveImportada;
         };
+    }
+
+    private String destinoDaSenha() {
+        return (host.getText().strip().toLowerCase(java.util.Locale.ROOT) + "|" + porta.getText().strip() + "|" + usuario.getText().strip());
     }
 
     private String nomeAtual() {
@@ -1365,6 +1381,11 @@ public final class DialogoAdicionarServidor extends Dialogo {
     /** Esc e o X na pergunta do fim valem "Manter a senha": o servidor já está pronto e precisa ser entregue à janela. */
     @Override
     protected void aoCancelar() {
+        if (ocupado) {
+            // Fechar no meio deixaria a operação (sondar, entrar com a senha, instalar a chave) rodando sem ninguém olhando: espera terminar.
+            avisos.info("Espere terminar: o app está falando com o servidor. Leva só alguns segundos.");
+            return;
+        }
         if (PAGINA_SENHA.equals(paginaAtual)) {
             manterASenha();
             return;

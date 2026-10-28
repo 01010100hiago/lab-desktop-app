@@ -70,6 +70,14 @@ public final class Campos {
         } catch (javax.swing.text.BadLocationException e) {
             c.setText("");
         }
+        // O buffer interno do documento (a "folga" do GapContent) pode reter pedaços do que foi digitado: troca por um documento novo, mantendo quem o ouve.
+        if (d instanceof javax.swing.text.AbstractDocument velho) {
+            javax.swing.text.PlainDocument novo = new javax.swing.text.PlainDocument();
+            for (javax.swing.event.DocumentListener l : velho.getDocumentListeners()) {
+                novo.addDocumentListener(l);
+            }
+            c.setDocument(novo);
+        }
     }
 
     /** Os seis dígitos do autenticador: só números e o espaço do meio, até 7 caracteres, grande e centralizado. */

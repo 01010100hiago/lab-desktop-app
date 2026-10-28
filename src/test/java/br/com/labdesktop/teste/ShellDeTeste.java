@@ -31,6 +31,9 @@ public final class ShellDeTeste implements ProvisionadorRemoto.Executor {
     public final List<String> recebidos = new java.util.concurrent.CopyOnWriteArrayList<>();
     private volatile boolean honrarAuthorizedKeys = true;
     private volatile ServidorSshDeTeste.Manipulador outros;
+    private volatile java.util.concurrent.CountDownLatch segurarAInstalacao;
+    /** Fica avisado quando a instalação da chave chegou ao servidor (antes de ser liberada). */
+    public final java.util.concurrent.CountDownLatch instalacaoChegou = new java.util.concurrent.CountDownLatch(1);
 
     /** Sem servidor SSH: só o shell (para testar o comando sozinho). */
     public ShellDeTeste(Path home) {
@@ -49,6 +52,11 @@ public final class ShellDeTeste implements ProvisionadorRemoto.Executor {
     public ShellDeTeste outrosComandos(ServidorSshDeTeste.Manipulador m) {
         this.outros = m;
         return this;
+    }
+
+    /** A instalação da chave espera até este trinco abrir (o teste mexe no diálogo enquanto o app está no meio). */
+    public void segurarAInstalacao(java.util.concurrent.CountDownLatch trinco) {
+        this.segurarAInstalacao = trinco;
     }
 
     /** {@code false}: as chaves escritas no arquivo NÃO passam a valer no servidor (o servidor "não permite login por chave"). */
@@ -87,6 +95,14 @@ public final class ShellDeTeste implements ProvisionadorRemoto.Executor {
     }
 
     private int executarParaOServidor(String linha, String stdin, StringBuilder saida) {
+        if (linha.equals(br.com.labdesktop.acesso.ComandosDoAcesso.instalarChave()) && segurarAInstalacao != null) {
+            instalacaoChegou.countDown();
+            try {
+                segurarAInstalacao.await(20, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         if (outros != null && !linha.equals(br.com.labdesktop.acesso.ComandosDoAcesso.instalarChave())
             && !linha.equals(br.com.labdesktop.ssh.ProvaPorChave.COMANDO_DA_PROVA)) {
             recebidos.add(linha);

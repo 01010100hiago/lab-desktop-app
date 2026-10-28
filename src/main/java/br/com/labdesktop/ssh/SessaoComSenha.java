@@ -55,8 +55,10 @@ public final class SessaoComSenha implements AutoCloseable {
         try {
             s = cliente.connect(usuario, host, porta).verify(cfg.conectar()).getSession();
             s.auth().verify(cfg.autenticar());
+            relato.encerrada.set(true);
             return new SessaoComSenha(cliente, s, cfg);
         } catch (IOException | RuntimeException e) {
+            relato.encerrada.set(true); // o prazo pode ter estourado com o pedido ainda na fila: depois disto nenhuma senha sai
             fecharQuieto(cliente, s);
             if (e instanceof InterruptedIOException) {
                 Thread.currentThread().interrupt();
