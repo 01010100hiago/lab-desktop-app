@@ -256,7 +256,7 @@ final class VistaDoTopico {
                 return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
             }
         };
-        rolagem.setBorder(javax.swing.BorderFactory.createLineBorder(Tokens.cor(Tokens.BORDA)));
+        rolagem.setBorder(br.com.labdesktop.ui.componentes.Bordas.contorno(Tokens.BORDA));
         rolagem.getVerticalScrollBar().setUnitIncrement(18);
         rolagem.getAccessibleContext().setAccessibleName("Tabela de atalhos de teclado");
         return rolagem;

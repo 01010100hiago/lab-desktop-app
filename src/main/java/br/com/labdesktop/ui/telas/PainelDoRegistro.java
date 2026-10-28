@@ -203,22 +203,15 @@ public final class PainelDoRegistro extends Painel {
                 copiarSelecionadas();
             }
         });
-        JPopupMenu menu = new JPopupMenu();
-        JMenuItem copiarSel = new JMenuItem("Copiar as linhas selecionadas");
-        copiarSel.addActionListener(e -> copiarSelecionadas());
-        JMenuItem copiarTudo = new JMenuItem("Copiar todas as linhas que aparecem");
-        copiarTudo.addActionListener(e -> copiarTudo());
-        menu.add(copiarSel);
-        menu.add(copiarTudo);
         lista.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
-                aoClicar(e, menu, copiarSel);
+                aoClicar(e);
             }
 
             @Override
             public void mouseReleased(MouseEvent e) {
-                aoClicar(e, menu, copiarSel);
+                aoClicar(e);
             }
         });
         rolagem = new JScrollPane(lista, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
@@ -538,7 +531,23 @@ public final class PainelDoRegistro extends Painel {
     // Seleção e cópia
     // ---------------------------------------------------------------------------------------------
 
-    private void aoClicar(MouseEvent e, JPopupMenu menu, JMenuItem copiarSel) {
+    /**
+     * O menu de contexto da lista, montado NA HORA de abrir (nunca guardado): um menu criado uma vez e escondido não está em janela nenhuma, então a troca de tema
+     * não o atualizava e ele voltava com as cores de antes.
+     */
+    JPopupMenu menuDeContexto() {
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem copiarSel = new JMenuItem("Copiar as linhas selecionadas");
+        copiarSel.addActionListener(e -> copiarSelecionadas());
+        copiarSel.setEnabled(!lista.isSelectionEmpty());
+        JMenuItem copiarTudo = new JMenuItem("Copiar todas as linhas que aparecem");
+        copiarTudo.addActionListener(e -> copiarTudo());
+        menu.add(copiarSel);
+        menu.add(copiarTudo);
+        return menu;
+    }
+
+    private void aoClicar(MouseEvent e) {
         if (!e.isPopupTrigger()) {
             return;
         }
@@ -546,8 +555,7 @@ public final class PainelDoRegistro extends Painel {
         if (i >= 0 && !lista.isSelectedIndex(i)) {
             lista.setSelectedIndex(i);
         }
-        copiarSel.setEnabled(!lista.isSelectionEmpty());
-        menu.show(lista, e.getX(), e.getY());
+        menuDeContexto().show(lista, e.getX(), e.getY());
     }
 
     /** Copia as linhas selecionadas (ou, sem seleção, nenhuma), uma por linha: {@code HH:mm:ss  origem  mensagem}. */

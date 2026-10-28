@@ -92,7 +92,17 @@ public final class AreaMonoespacada extends JTextArea {
      * O {@code JScrollPane} que a segura, com a moldura e o fundo de console, rolagem horizontal quando a linha não quebra.
      */
     public static javax.swing.JScrollPane emRolagem(AreaMonoespacada area) {
-        javax.swing.JScrollPane r = new javax.swing.JScrollPane(area);
+        javax.swing.JScrollPane r = new javax.swing.JScrollPane();
+        r.setViewport(new javax.swing.JViewport() {
+            private static final long serialVersionUID = 1L;
+
+            /** O fundo de console é lido do token na pintura: um fundo guardado ficava com a cor do tema de antes da troca. */
+            @Override
+            public Color getBackground() {
+                return Tokens.cor(Tokens.LOGS_BG);
+            }
+        });
+        r.setViewportView(area);
         r.setBorder(new javax.swing.border.AbstractBorder() {
             private static final long serialVersionUID = 1L;
 
@@ -108,7 +118,6 @@ public final class AreaMonoespacada extends JTextArea {
             }
         });
         r.getViewport().setOpaque(true);
-        r.getViewport().setBackground(Tokens.cor(Tokens.LOGS_BG));
         r.getVerticalScrollBar().setUnitIncrement(24);
         return r;
     }

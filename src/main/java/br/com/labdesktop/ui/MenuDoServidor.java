@@ -145,10 +145,10 @@ public final class MenuDoServidor {
     }
 
     private static JMenuItem itemSwing(Item i, Runnable acao) {
-        JMenuItem m = new JMenuItem(i.rotulo());
+        JMenuItem m = new br.com.labdesktop.ui.componentes.ItemDeMenuPerigo(i.rotulo(),
+            i == Item.REMOVER || i == Item.REMOVER_AGENTE || i == Item.REMOVER_LABORATORIO ? Tokens.PERIGO : Tokens.TEXTO);
         m.putClientProperty("html.disable", Boolean.TRUE);
         m.setIcon(Icones.de(i.icone(), 14));
-        m.setForeground(Tokens.cor(i == Item.REMOVER || i == Item.REMOVER_AGENTE || i == Item.REMOVER_LABORATORIO ? Tokens.PERIGO : Tokens.TEXTO));
         m.addActionListener(e -> acao.run());
         return m;
     }

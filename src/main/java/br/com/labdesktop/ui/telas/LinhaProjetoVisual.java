@@ -544,12 +544,9 @@ final class LinhaProjetoVisual extends Painel {
     }
 
     private static JMenuItem item(String texto, String icone, boolean perigo, Runnable acao) {
-        JMenuItem i = new JMenuItem(texto);
+        JMenuItem i = perigo ? new br.com.labdesktop.ui.componentes.ItemDeMenuPerigo(texto, Tokens.PERIGO) : new JMenuItem(texto);
         i.putClientProperty("html.disable", Boolean.TRUE);
         i.setIcon(Icones.de(icone, 14));
-        if (perigo) {
-            i.setForeground(Tokens.cor(Tokens.PERIGO));
-        }
         i.addActionListener(e -> acao.run());
         return i;
     }

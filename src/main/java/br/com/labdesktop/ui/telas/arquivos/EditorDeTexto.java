@@ -101,7 +101,7 @@ final class EditorDeTexto extends Painel {
         rolagem = new RTextScrollPane(area, true);
         rolagem.setLineNumbersEnabled(true);
         rolagem.setFoldIndicatorEnabled(false);
-        rolagem.setBorder(BorderFactory.createLineBorder(Tokens.cor(Tokens.BORDA)));
+        rolagem.setBorder(br.com.labdesktop.ui.componentes.Bordas.contorno(Tokens.BORDA));
         area.aoMudarAparencia(a -> aplicarCoresDaCalha());
         aplicarCoresDaCalha();
 
@@ -231,7 +231,7 @@ final class EditorDeTexto extends Painel {
         calha.setLineNumberColor(Tokens.cor(Tokens.TEXTO3));
         calha.setBorderColor(Tokens.cor(Tokens.BORDA));
         calha.setLineNumberFont(area.getFont());
-        rolagem.setBorder(BorderFactory.createLineBorder(Tokens.cor(Tokens.BORDA)));
+        rolagem.setBorder(br.com.labdesktop.ui.componentes.Bordas.contorno(Tokens.BORDA));
     }
 
     // ---------------------------------------------------------------------------------------------

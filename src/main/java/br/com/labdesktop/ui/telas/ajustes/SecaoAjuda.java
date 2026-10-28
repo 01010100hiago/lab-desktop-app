@@ -174,7 +174,7 @@ final class SecaoAjuda extends Painel {
             }
         });
         rolagemDaArvore = new JScrollPane(arvore, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        rolagemDaArvore.setBorder(javax.swing.BorderFactory.createMatteBorder(0, 0, 0, 1, Tokens.cor(Tokens.BORDA)));
+        rolagemDaArvore.setBorder(br.com.labdesktop.ui.componentes.Bordas.lados(0, 0, 0, 1, Tokens.BORDA));
         rolagemDaArvore.setPreferredSize(new Dimension(LARGURA_DA_ARVORE, 100));
         rolagemDaArvore.setMinimumSize(new Dimension(LARGURA_DA_ARVORE, 60));
 

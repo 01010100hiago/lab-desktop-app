@@ -58,7 +58,7 @@ final class DialogoEscolherPasta extends Dialogo {
         });
         arvore.definirRaiz(raiz, nomeDaRaiz);
         JScrollPane rolagem = new JScrollPane(arvore);
-        rolagem.setBorder(BorderFactory.createLineBorder(Tokens.cor(Tokens.BORDA)));
+        rolagem.setBorder(br.com.labdesktop.ui.componentes.Bordas.contorno(Tokens.BORDA));
         rolagem.setPreferredSize(new Dimension(420, 260));
         JComponent corpo = Caixa.coluna(12, cabecalho("mover", "Mover para…"), paragrafo("Escolha a pasta para onde mover " + TextoSeguro.limparLinha(oQue) + "."),
             rolagem, escolhida, rodape(null, cancelar, mover));

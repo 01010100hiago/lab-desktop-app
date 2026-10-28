@@ -33,7 +33,6 @@ import javax.swing.JTable;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
-import javax.swing.UIManager;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
@@ -452,7 +451,7 @@ final class TabelaDeEntradas extends JTable {
 
         CabecalhoDeColuna() {
             rotulo.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")),
+                br.com.labdesktop.ui.componentes.Bordas.lados(0, 0, 1, 0, Tokens.BORDA),
                 BorderFactory.createEmptyBorder(0, 8, 0, 8)));
             rotulo.setOpaque(false);
         }
@@ -468,7 +467,7 @@ final class TabelaDeEntradas extends JTable {
             rotulo.setIconTextGap(4);
             rotulo.setIcon(ativa ? Icones.colorido(ordem.crescente() ? "seta-cima" : "seta-baixo", 12, Tokens.TEXTO) : null);
             rotulo.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, Tokens.cor(Tokens.BORDA)),
+                br.com.labdesktop.ui.componentes.Bordas.lados(0, 0, 1, 0, Tokens.BORDA),
                 BorderFactory.createEmptyBorder(0, 8, 0, 8)));
             rotulo.setOpaque(true);
             rotulo.setBackground(Tokens.cor(Tokens.BG));

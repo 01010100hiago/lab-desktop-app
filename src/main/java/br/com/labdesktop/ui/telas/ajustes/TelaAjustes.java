@@ -139,6 +139,12 @@ public final class TelaAjustes extends Painel {
         corpo.repaint();
     }
 
+    /** Abre a seção Ajuda já num tópico (um link de outra tela e os testes). */
+    public void abrirTopicoDeAjuda(String id) {
+        mostrarSecao(Secao.AJUDA);
+        ajuda.abrir(id);
+    }
+
     public Secao secaoAtual() {
         return atual;
     }
