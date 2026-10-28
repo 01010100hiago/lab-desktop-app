@@ -96,9 +96,13 @@ public final class ImportadorDeProjeto {
         } catch (InterruptedException e) {
             limparQuieto(pasta);
             throw e;
+        } catch (br.com.labdesktop.local.ProgramaNaoEncontradoException e) {
+            limparQuieto(pasta);
+            throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.OUTRO, "O git não está instalado neste computador. Veja \"Preparar este computador\" (o git aparece como aviso, "
+                + "com o jeito de instalar) e tente de novo.", null, e);
         } catch (IOException e) {
             limparQuieto(pasta);
-            throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.OUTRO, "Não consegui rodar o git: " + ExplicadorDeErrosDeGit.explicar(e.getMessage()), null, e);
+            throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.OUTRO, "Não consegui rodar o git (a conexão caiu ou o servidor não respondeu).", null, e);
         } catch (IllegalArgumentException e) {
             throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.RECUSADO, "O endereço ou o caminho tem algo que o app não passa ao servidor.", null, e);
         }

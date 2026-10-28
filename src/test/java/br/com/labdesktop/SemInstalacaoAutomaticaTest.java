@@ -112,6 +112,19 @@ class SemInstalacaoAutomaticaTest {
     }
 
     @Test
+    void criarImportarEAcrescentarAoComposeSoNascemDoCliqueEmAcoesDaInterface() throws IOException {
+        // novo projeto: o ServidorLab (que conecta sozinho) só MONTA o ambiente (nada roda ao montar), e quem o pede é a ação do clique
+        assertEquals(List.of(), quemUsa(Pattern.compile("\\.ambienteDeProjetos\\("), Set.of("ui/AcoesDaInterface.java", "servidor/ServidorLab.java")));
+        assertEquals(List.of(), quemUsa(Pattern.compile("\\bComandosDeProjeto\\."),
+            Set.of("projetos/CriadorNoAmbiente.java", "projetos/ImportadorDeProjeto.java", "projetos/EscritorDeCompose.java", "ui/dialogos/DialogoNovoProjeto.java")),
+            "clonar, mover, copiar, criar rede e conferir compose só nascem nas operações do Novo projeto");
+        String lab = semComentarios(RAIZ.resolve("servidor/ServidorLab.java"));
+        assertTrue(!lab.contains("new CriadorNoAmbiente(") && !lab.contains("new ImportadorDeProjeto(") && !lab.contains("new EscritorDeCompose("),
+            "o ServidorLab não cria, não importa e não escreve compose");
+        // o resto da fronteira (cada ponto de entrada é um botão) está em NovoProjetoSemEfeitoSozinhoTest
+    }
+
+    @Test
     void aLeituraQueDizSeOAgenteExisteEAunicaCoisaDoInstaladorQueRodaSemClique() throws IOException {
         // O ServidorLab (que conecta sozinho) só usa a LEITURA do diagnóstico: nenhuma outra chamada a ComandosRemotos, nenhum executor de escrita.
         String lab = semComentarios(RAIZ.resolve("servidor/ServidorLab.java"));

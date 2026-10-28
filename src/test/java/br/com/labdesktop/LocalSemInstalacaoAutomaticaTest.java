@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.labdesktop.local.ComandosLocais;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -112,6 +113,20 @@ class LocalSemInstalacaoAutomaticaTest {
             + "pararContainer|iniciarContainer|criarVolume|removerVolume|removerImagem)\\(");
         assertEquals(List.of(), quemUsa(escrita, Set.of("local/LaboratorioLocal.java")),
             "comando de escrita do Docker local só nasce no laboratório (que só roda a pedido)");
+    }
+
+    @Test
+    void osComandosDeEscritaDosProjetosLocaisSoSaoMontadosEmProjetosLocais() throws IOException {
+        // novo projeto: Iniciar, Parar e Reiniciar (docker compose) e reiniciar container do projeto local, só pelos botões
+        assertEquals(List.of(), quemUsa(Pattern.compile("ComandosLocais\\.(comporProjeto|reiniciarContainerDoProjeto)\\("), Set.of("local/ProjetosLocais.java")));
+        // a única leitura nova (a lista de containers dos projetos) roda sozinha, e só pelo executor que impõe a leitura
+        assertTrue(codigo("local/ProjetosLocais.java").contains("this.leitura = new ExecutorSoDeLeitura(executor);"));
+        assertTrue(ComandosLocais.ehLeitura(ComandosLocais.lerContainersDosProjetos()));
+        assertFalse(ComandosLocais.ehLeitura(ComandosLocais.comporProjeto("meu-app", "/x/docker-compose.yml", ComandosLocais.AcaoDeProjeto.INICIAR)));
+        // a conexão local e o leitor de situação (que rodam sozinhos) não enxergam os projetos locais
+        for (String nome : List.of("local/ConexaoLocal.java", "servidor/LeitorDaSituacaoLocal.java")) {
+            assertFalse(codigo(nome).contains("ProjetosLocais"), nome);
+        }
     }
 
     @Test

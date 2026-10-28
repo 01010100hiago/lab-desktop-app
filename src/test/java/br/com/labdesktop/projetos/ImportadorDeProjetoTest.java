@@ -146,6 +146,29 @@ class ImportadorDeProjetoTest {
     }
 
     @Test
+    void semGitNoComputadorDizOQueFazer() throws Exception {
+        AmbienteFalso a = new AmbienteFalso(tmp);
+        a.roteiro = c -> {
+            throw new br.com.labdesktop.local.ProgramaNaoEncontradoException("git");
+        };
+        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.local()).clonar(URL, "repo", ImportadorDeProjeto.Observador.NENHUM));
+        assertTrue(f.mensagem().contains("O git não está instalado neste computador"), f.mensagem());
+        assertTrue(f.mensagem().contains("Preparar este computador"), f.mensagem());
+        assertFalse(Files.exists(a.raiz.resolve("repo")));
+    }
+
+    @Test
+    void conexaoQueCaiNoCloneEUmaFraseSemDetalheTecnico() throws Exception {
+        AmbienteFalso a = new AmbienteFalso(tmp);
+        a.roteiro = c -> {
+            throw new IOException("Connection reset by peer 10.0.0.5");
+        };
+        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).clonar(URL, "repo", ImportadorDeProjeto.Observador.NENHUM));
+        assertTrue(f.mensagem().contains("a conexão caiu"), f.mensagem());
+        assertFalse(f.mensagem().contains("10.0.0.5"));
+    }
+
+    @Test
     void cloneInterrompidoApagaEPropagaAInterrupcao() throws Exception {
         AmbienteFalso a = new AmbienteFalso(tmp);
         a.roteiro = c -> {
