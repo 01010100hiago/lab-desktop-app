@@ -1,5 +1,6 @@
 package br.com.labdesktop.ui.dialogos;
 
+import br.com.labdesktop.arquivos.GravadorDeArquivoNovo;
 import br.com.labdesktop.tendencias.DadosDeTendencia;
 import br.com.labdesktop.tendencias.EstatisticaDeSerie;
 import br.com.labdesktop.tendencias.ExportadorDeRelatorio;
@@ -21,9 +22,7 @@ import br.com.labdesktop.ui.tema.Tokens;
 import java.awt.Component;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -259,7 +258,7 @@ public final class DialogoRelatorio extends Dialogo {
         byte[] bytes = conteudo.getBytes(StandardCharsets.UTF_8);
         Path pedido = escolhido.get();
         Tarefas.rodar(() -> {
-            Path destino = livre(pedido);
+            Path destino = GravadorDeArquivoNovo.livre(pedido);
             gravador.gravar(destino, bytes);
             return destino;
         }, destino -> {
@@ -268,27 +267,9 @@ public final class DialogoRelatorio extends Dialogo {
         }, falha -> avisos.erro("Não consegui salvar o relatório: " + MensagensDeErro.de(falha)));
     }
 
-    /** O destino sem sobrescrever nada: se o nome existe, vira {@code nome-2.ext}, {@code nome-3.ext}... */
-    static Path livre(Path pedido) {
-        if (!Files.exists(pedido)) {
-            return pedido;
-        }
-        String nome = pedido.getFileName().toString();
-        int ponto = nome.lastIndexOf('.');
-        String base = ponto > 0 ? nome.substring(0, ponto) : nome;
-        String ext = ponto > 0 ? nome.substring(ponto) : "";
-        for (int i = 2; i < 1000; i++) {
-            Path p = pedido.resolveSibling(base + "-" + i + ext);
-            if (!Files.exists(p)) {
-                return p;
-            }
-        }
-        return pedido.resolveSibling(base + "-" + System.currentTimeMillis() + ext);
-    }
-
     /** A gravação de produção: arquivo novo (nunca sobrescreve), só do usuário. */
     public static Gravador gravadorDoSistema() {
-        return (destino, bytes) -> Files.write(destino, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        return GravadorDeArquivoNovo::gravar;
     }
 
     // ---- para os testes ----

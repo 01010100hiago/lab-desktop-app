@@ -238,13 +238,11 @@ class DialogoRelatorioTest {
         Path a = tmp.resolve("relatorio.csv");
         Files.writeString(a, "do usuário");
         // o nome "livre" acrescenta -2, -3...
-        java.lang.reflect.Method livre = DialogoRelatorio.class.getDeclaredMethod("livre", Path.class);
-        livre.setAccessible(true);
-        Path segundo = (Path) livre.invoke(null, a);
+        Path segundo = br.com.labdesktop.arquivos.GravadorDeArquivoNovo.livre(a);
         assertEquals("relatorio-2.csv", segundo.getFileName().toString());
         Files.writeString(segundo, "x");
-        assertEquals("relatorio-3.csv", ((Path) livre.invoke(null, a)).getFileName().toString());
-        assertEquals(tmp.resolve("outro.csv"), livre.invoke(null, tmp.resolve("outro.csv")), "nome que não existe fica como está");
+        assertEquals("relatorio-3.csv", br.com.labdesktop.arquivos.GravadorDeArquivoNovo.livre(a).getFileName().toString());
+        assertEquals(tmp.resolve("outro.csv"), br.com.labdesktop.arquivos.GravadorDeArquivoNovo.livre(tmp.resolve("outro.csv")), "nome que não existe fica como está");
         // e, mesmo que alguém tente gravar por cima, o gravador de produção não deixa
         org.junit.jupiter.api.Assertions.assertThrows(java.nio.file.FileAlreadyExistsException.class, () -> DialogoRelatorio.gravadorDoSistema().gravar(a, new byte[] {1}));
         assertEquals("do usuário", Files.readString(a));
