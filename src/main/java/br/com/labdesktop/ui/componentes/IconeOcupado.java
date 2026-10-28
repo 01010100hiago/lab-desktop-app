@@ -58,13 +58,29 @@ public final class IconeOcupado implements Icon {
     }
 
     /**
-     * Mantém o componente repintando (cerca de 20 quadros por segundo) enquanto a ação dura.
+     * Mantém o componente repintando (cerca de 20 quadros por segundo) enquanto a ação dura E o componente está na tela: se o botão sai da tela (a aba foi trocada, a janela
+     * escondida) o relógio para, e volta quando ele reaparece. Antes ele rodava até a ação terminar, repintando o que ninguém via.
      *
-     * @return o que para a animação; chame na EDT quando a ação terminar
+     * @return o que para a animação de vez; chame na EDT quando a ação terminar
      */
     public static Runnable animar(JComponent c) {
         Timer t = new Timer(50, e -> c.repaint());
-        t.start();
-        return t::stop;
+        java.awt.event.HierarchyListener ouvinte = e -> {
+            if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0) {
+                if (c.isShowing()) {
+                    t.start();
+                } else {
+                    t.stop();
+                }
+            }
+        };
+        c.addHierarchyListener(ouvinte);
+        if (c.isShowing()) {
+            t.start();
+        }
+        return () -> {
+            t.stop();
+            c.removeHierarchyListener(ouvinte);
+        };
     }
 }

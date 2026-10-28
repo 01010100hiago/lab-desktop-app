@@ -24,16 +24,19 @@ public final class Tarefas {
      * O cursor de espera nas janelas enquanto alguma ação do usuário demora mais de 300 ms (uma que responde logo não faz o cursor piscar). Na EDT. Os botões
      * que têm o próprio cursor (a mãozinha) o mantêm; o resto da janela mostra que o app está trabalhando.
      */
-    private static synchronized void acompanharEspera() {
-        ESPERA.comecou(Instant.now());
+    private static synchronized EsperaLonga.Acao acompanharEspera() {
+        EsperaLonga.Acao acao = ESPERA.comecou(Instant.now());
         if (vigia == null) {
             vigia = new javax.swing.Timer(100, e -> conferirOCursor());
+            // uma janela que reaparece (esconder e mostrar de novo, um diálogo novo) nasce sem o cursor de espera: o vigia o põe de volta enquanto a espera dura
+            vigia.setInitialDelay(100);
         }
         vigia.start();
+        return acao;
     }
 
-    private static synchronized void esperaTerminou() {
-        ESPERA.terminou();
+    private static synchronized void esperaTerminou(EsperaLonga.Acao acao) {
+        ESPERA.terminou(acao);
         conferirOCursor();
         if (!ESPERA.haAcaoRodando() && vigia != null) {
             vigia.stop();
@@ -42,15 +45,33 @@ public final class Tarefas {
 
     private static void conferirOCursor() {
         boolean querer = ESPERA.cursorDeEsperaAgora(Instant.now());
-        if (querer == cursorLigado) {
-            return;
-        }
+        boolean mudou = querer != cursorLigado;
         cursorLigado = querer;
         for (Window w : Window.getWindows()) {
-            if (w.isShowing()) {
-                w.setCursor(querer ? Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR) : null);
+            boolean temEspera = w.isCursorSet() && w.getCursor().getType() == Cursor.WAIT_CURSOR;
+            switch (decidir(querer, temEspera, w.isShowing(), mudou)) {
+                case POR_ESPERA -> w.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR)); // inclusive a janela que apareceu depois de a espera começar
+                case TIRAR_ESPERA -> w.setCursor(null); // inclusive a que estava escondida quando a espera acabou: ela não reaparece com o cursor de espera
+                case NADA -> { }
             }
         }
+    }
+
+    /** O que fazer com o cursor de UMA janela. */
+    enum Decisao { POR_ESPERA, TIRAR_ESPERA, NADA }
+
+    /**
+     * A regra, pura: com espera, toda janela À VISTA que ainda não tem o cursor de espera o recebe (também a que apareceu depois: o vigia confere a cada 100 ms); sem espera, a que tem o
+     * cursor de espera o perde, à vista ou não (quando a espera acabou ou quando a janela reaparece).
+     */
+    static Decisao decidir(boolean esperaAgora, boolean janelaTemEspera, boolean janelaAVista, boolean esperaMudou) {
+        if (esperaAgora && !janelaTemEspera && janelaAVista) {
+            return Decisao.POR_ESPERA;
+        }
+        if (!esperaAgora && janelaTemEspera && (esperaMudou || janelaAVista)) {
+            return Decisao.TIRAR_ESPERA;
+        }
+        return Decisao.NADA;
     }
 
     /**
@@ -58,9 +79,9 @@ public final class Tarefas {
      * Quem chama é a EDT (um clique), então a interface nunca espera pela rede.
      */
     public static <T> void rodar(Callable<T> trabalho, Consumer<T> aoConcluir, Consumer<Throwable> aoFalhar) {
-        acompanharEspera();
+        EsperaLonga.Acao acao = acompanharEspera();
         Fundo.emFundoComResultado(trabalho).whenComplete((resultado, falha) -> Fundo.naEdt(() -> {
-            esperaTerminou();
+            esperaTerminou(acao);
             if (falha == null) {
                 aoConcluir.accept(resultado);
             } else {

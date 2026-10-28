@@ -51,6 +51,19 @@ class InformacoesDoAppTest {
         assertFalse(i.comoTexto().contains("maria"));
     }
 
+    /** {@code --pasta ./dados} (relativo) não casava com a pasta do usuário e o caminho com o nome dela saía no Sobre e na cópia. */
+    @Test
+    void redigirPastaNormalizaAntesDeComparar() {
+        String casa = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize().toString();
+        String sep = Path.of(casa).getFileSystem().getSeparator();
+        assertEquals("~" + sep + "dados", InformacoesDoApp.redigirPasta(Path.of("dados"), casa), "relativo à pasta atual, que é a do usuário");
+        assertEquals("~" + sep + "dados", InformacoesDoApp.redigirPasta(Path.of("a", "..", "dados"), casa), "com ponto-ponto no meio");
+        assertEquals("~", InformacoesDoApp.redigirPasta(Path.of("."), casa));
+        assertEquals("~", InformacoesDoApp.redigirPasta(Path.of(casa, "x", ".."), casa));
+        String fora = InformacoesDoApp.redigirPasta(Path.of(casa, "..", "outra"), casa);
+        assertTrue(!fora.startsWith("~") && !fora.contains(".."), "fora da pasta do usuário: o caminho absoluto limpo: " + fora);
+    }
+
     @Test
     void redigirPastaTrataOsCasosDeBorda() {
         assertEquals("~", InformacoesDoApp.redigirPasta(Path.of("/Users/maria"), "/Users/maria"));

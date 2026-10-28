@@ -48,17 +48,18 @@ public record InformacoesDoApp(String nome, String versao, String agenteVersao, 
 
     /** O caminho com a pasta do usuário trocada por {@code ~} (o nome da pessoa no disco não precisa sair numa cópia colada num chamado). */
     public static String redigirPasta(Path pasta, String pastaDoUsuario) {
-        String texto = pasta.toString();
+        // absoluto e normalizado ANTES de comparar: com {@code --pasta ./dados} ou {@code ../x/dados} o caminho relativo não casava com a pasta do usuário e o nome dela saía no Sobre
+        Path absoluta = pasta.toAbsolutePath().normalize();
         if (pastaDoUsuario != null && !pastaDoUsuario.isBlank()) {
             Path casa = Path.of(pastaDoUsuario).toAbsolutePath().normalize();
-            if (pasta.equals(casa)) {
+            if (absoluta.equals(casa)) {
                 return "~";
             }
-            if (pasta.startsWith(casa)) { // por pastas inteiras: /Users/mariana não começa por /Users/maria
-                return "~" + pasta.getFileSystem().getSeparator() + casa.relativize(pasta);
+            if (absoluta.startsWith(casa)) { // por pastas inteiras: /Users/mariana não começa por /Users/maria
+                return "~" + absoluta.getFileSystem().getSeparator() + casa.relativize(absoluta);
             }
         }
-        return texto;
+        return absoluta.toString();
     }
 
     /** O bloco que o botão "Copiar informações" copia: versão, sistema, Java e agente. */
