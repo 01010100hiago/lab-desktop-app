@@ -227,6 +227,19 @@ class ClienteSftpMinaTest {
     }
 
     @Test
+    void semPermissoesPedidasUmArquivoNovoNasceFechadoEUmQueJaExistiaMantemAsDele(@TempDir Path tmp) throws Exception {
+        try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
+            // o temporário nasce vazio e 0600, ANTES de receber qualquer byte (um .env com senha nunca fica legível por outros, nem por um instante)
+            c.cliente.gravarAtomico(CenarioDeSftp.ORBITA + "/segredo.env", "SENHA=1".getBytes(StandardCharsets.UTF_8), -1);
+            assertEquals("rw-------", perms(c.orbita().resolve("segredo.env")));
+            Path antigo = c.escrever(CenarioDeSftp.ORBITA + "/leitura.txt", "a");
+            Files.setPosixFilePermissions(antigo, PosixFilePermissions.fromString("rw-r--r--"));
+            c.cliente.gravarAtomico(CenarioDeSftp.ORBITA + "/leitura.txt", "b".getBytes(StandardCharsets.UTF_8), -1);
+            assertEquals("rw-r--r--", perms(antigo), "quem já existia mantém as permissões que tinha");
+        }
+    }
+
+    @Test
     void gravarAtomicoSemOExtensaoDoOpensshUsaOCaminhoDeReservaSemPerderODado(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
             Path arquivo = c.escrever(CenarioDeSftp.ORBITA + "/conf.ini", "antigo");

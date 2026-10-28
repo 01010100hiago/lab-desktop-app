@@ -370,8 +370,9 @@ public final class ClienteSftpMina implements ClienteSftp {
         usar("gravar este arquivo", false, cli -> {
             boolean criouTemporario = false;
             try {
-                try (OutputStream out = cli.write(temporario, OpenMode.Create, OpenMode.Write, OpenMode.Exclusive)) {
-                    criouTemporario = true;
+                criarTemporarioPrivado(cli, temporario);
+                criouTemporario = true;
+                try (OutputStream out = cli.write(temporario, OpenMode.Write, OpenMode.Truncate)) {
                     out.write(conteudo);
                 }
                 if (permissoes >= 0) {
@@ -380,6 +381,11 @@ public final class ClienteSftpMina implements ClienteSftp {
                     cli.setStat(temporario, p);
                 }
                 Attributes atual = existente(cli, destino);
+                if (permissoes < 0 && atual != null && atual.getFlags().contains(Attribute.Perms)) {
+                    Attributes iguais = new Attributes(); // "padrão": quem já existe mantém as permissões que tinha
+                    iguais.setPermissions(atual.getPermissions() & 07777);
+                    cli.setStat(temporario, iguais);
+                }
                 if (atual != null) {
                     // O arquivo novo nasce do usuário do app: se o antigo era de outro, a troca mudaria o usuário sem ninguém pedir.
                     String donoDoNovo = cli.stat(temporario).getOwner();
@@ -400,6 +406,19 @@ public final class ClienteSftpMina implements ClienteSftp {
                 }
             }
         });
+    }
+
+    /**
+     * Cria o temporário VAZIO e já com 0600, antes de qualquer byte entrar: o servidor cria arquivo novo com a máscara dele (em geral 0644), e um
+     * {@code .env} com senha não pode ficar legível por outros nem por um instante.
+     */
+    private static void criarTemporarioPrivado(SftpClient cli, String temporario) throws IOException {
+        try (OutputStream vazio = cli.write(temporario, OpenMode.Create, OpenMode.Write, OpenMode.Exclusive)) {
+            vazio.flush();
+        }
+        Attributes privado = new Attributes();
+        privado.setPermissions(0600);
+        cli.setStat(temporario, privado);
     }
 
     /** {@code true} se trocar o arquivo por um novo entregaria a outro dono (os dois donos são conhecidos e diferentes). */
@@ -616,9 +635,10 @@ public final class ClienteSftpMina implements ClienteSftp {
         usar("gravar nesta pasta", false, cli -> {
             boolean criou = false;
             try {
+                criarTemporarioPrivado(cli, temporario);
+                criou = true;
                 try (InputStream in = Files.newInputStream(local);
-                     OutputStream out = cli.write(temporario, OpenMode.Create, OpenMode.Write, OpenMode.Exclusive)) {
-                    criou = true;
+                     OutputStream out = cli.write(temporario, OpenMode.Write, OpenMode.Truncate)) {
                     copiar(in, out, total, progresso, cancelamento);
                 }
                 long noServidor = cli.stat(temporario).getSize();
