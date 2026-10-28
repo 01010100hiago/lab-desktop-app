@@ -1,7 +1,6 @@
 package br.com.labdesktop;
 
 import br.com.labdesktop.cofre.CofreDeChaves;
-import br.com.labdesktop.cofre.CofreEmUsoException;
 import br.com.labdesktop.cofre.TravaDeInstancia;
 import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.ui.GerenciadorTema;
@@ -69,8 +68,6 @@ public final class Principal {
             System.exit(2);
             return;
         }
-        // A janelinha de abertura: só se a partida da última vez passou de 1 s (ou ainda não há medida). Vai na frente de todo o resto, que é o que demora.
-        JanelaDeAbertura abertura = MedidaDaPartida.passaDoLimite(MedidaDaPartida.ler(caminhos)) ? JanelaDeAbertura.mostrar() : null;
         long inicioDaPartida = ProcessHandle.current().info().startInstant().map(java.time.Instant::toEpochMilli).orElse(entrada);
         try {
             ConfiguracaoDeLog.configurar(caminhos); // o PRIMEIRO passo: o slf4j-simple lê o destino do log uma vez, quando o primeiro logger nasce
@@ -83,21 +80,17 @@ public final class Principal {
             System.err.println("Não consegui preparar a pasta dos nativos: " + e.getMessage()); // o app abre mesmo assim, com a pasta temporária do sistema
         }
         Logger log = LoggerFactory.getLogger(Principal.class);
-        Thread.setDefaultUncaughtExceptionHandler((t, e) -> log.error("Erro não tratado na thread {}", t.getName(), e));
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            JanelaDeAbertura.fecharAAtual();
+            log.error("Erro não tratado na thread {}", t.getName(), e);
+        });
 
         // O domínio não importa Swing: é aqui que a EDT é ligada ao Fundo.
         Fundo.definirEdt(SwingUtilities::invokeLater);
 
-        TravaDeInstancia trava;
-        try {
-            trava = TravaDeInstancia.adquirir(caminhos);
-        } catch (CofreEmUsoException e) {
-            avisoFatal("O " + Versao.NOME + " já está aberto. Esta segunda cópia vai fechar.");
-            System.exit(1);
-            return;
-        } catch (IOException e) {
-            log.error("Não consegui criar a pasta de dados", e);
-            avisoFatal("Não consegui preparar a pasta de dados do app: " + e.getMessage());
+        // A trava de instância ANTES da janelinha de abertura: a segunda cópia do app nunca a mostra e o aviso de "já está aberto" não fica por baixo dela.
+        TravaDeInstancia trava = PartidaDoApp.adquirirOuAvisar(caminhos, Principal::avisoFatal, e -> log.error("Não consegui criar a pasta de dados", e)).orElse(null);
+        if (trava == null) {
             System.exit(1);
             return;
         }
@@ -107,12 +100,16 @@ public final class Principal {
         Preferencias lidas = Preferencias.carregar(caminhos);
         boolean cofreExiste = CofreDeChaves.existe(caminhos);
         PreferenciasAtuais preferencias = new PreferenciasAtuais(caminhos, lidas);
+        // O claro ou escuro do sistema (um processo): lido UMA vez, aqui, e usado pela janelinha de abertura e pelo tema.
+        boolean sistemaEscuro = preferencias.get().tema() == Preferencias.Tema.SISTEMA && AparenciaDoSistema.escuro();
+        boolean temaEscuro = preferencias.get().tema() == Preferencias.Tema.ESCURO || sistemaEscuro;
+        // A janelinha de abertura: só se a partida da última vez passou de 1 s (ou ainda não há medida), com as cores do tema que vai valer. Vai na frente do que demora.
+        JanelaDeAbertura abertura = MedidaDaPartida.passaDoLimite(MedidaDaPartida.ler(caminhos)) ? JanelaDeAbertura.mostrar(temaEscuro) : null;
 
         // Tudo o que daria um engasgo na EDT na partida sai daqui: fontes, biblioteca nativa do FlatLaf e a consulta de
         // claro ou escuro do macOS (um processo).
         Fundo.emFundo(Icones::preAquecer); // em paralelo com o resto da partida; o primeiro ícone na EDT custava 500 ms
         GerenciadorTema.preAquecer();
-        boolean sistemaEscuro = preferencias.get().tema() == Preferencias.Tema.SISTEMA && AparenciaDoSistema.escuro();
 
         if (Boolean.getBoolean("labdesktop.dev")) {
             EdtWatchdog.emDesenvolvimento().iniciar();
@@ -155,7 +152,7 @@ public final class Principal {
                     }
                 });
             });
-            app.iniciar();
+            PartidaDoApp.protegendo(app::iniciar); // um erro antes da primeira janela fecha a janelinha de abertura (ela nunca fica presa)
         });
     }
 
@@ -172,6 +169,7 @@ public final class Principal {
 
     /** Antes de o tema existir: uma caixa simples, que não depende de nada do app. */
     private static void avisoFatal(String texto) {
+        JanelaDeAbertura.fecharAAtual();
         try {
             SwingUtilities.invokeAndWait(() -> JOptionPane.showMessageDialog(null, texto, Versao.NOME, JOptionPane.WARNING_MESSAGE));
         } catch (Exception e) {
