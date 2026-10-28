@@ -92,8 +92,8 @@ public final class PainelSobre extends Painel {
         c.gridx = 1;
         c.weightx = 1;
         c.fill = GridBagConstraints.HORIZONTAL;
-        Rotulo v = new Rotulo(valor).tamanho(13f).truncavel();
-        v.setToolTipText(valor);
+        // o valor QUEBRA em linhas (uma pasta de dados comprida, o nome do sistema): nunca é cortado com reticências, e dá para selecionar e copiar
+        TextoCorrido v = new TextoCorrido(valor, 320).corDoToken(Tokens.TEXTO).tamanho(13f);
         ficha.add(v, c);
         c.gridx = 2;
         c.weightx = 0;
@@ -115,13 +115,11 @@ public final class PainelSobre extends Painel {
         }
         int linha = 1;
         for (Licenca l : licencas) {
-            Rotulo nome = new Rotulo(l.nome()).tamanho(13f).truncavel();
-            nome.setToolTipText(l.nome() + ": " + l.uso());
+            // as três colunas QUEBRAM em linhas (nome e licença compridos): nada é cortado com reticências
+            TextoCorrido nome = new TextoCorrido(l.nome(), 190).corDoToken(Tokens.TEXTO).tamanho(13f);
             grade.add(nome, coluna(0, linha));
-            grade.add(new Rotulo(l.versao()).corDoToken(Tokens.TEXTO2).tamanho(13f).truncavel(), coluna(1, linha));
-            Rotulo lic = new Rotulo(l.licenca()).tamanho(13f).truncavel();
-            lic.setToolTipText(l.licenca());
-            grade.add(lic, coluna(2, linha));
+            grade.add(new TextoCorrido(l.versao(), 90).corDoToken(Tokens.TEXTO2).tamanho(13f), coluna(1, linha));
+            grade.add(new TextoCorrido(l.licenca(), 260).corDoToken(Tokens.TEXTO).tamanho(13f), coluna(2, linha));
             linha++;
         }
         return grade;

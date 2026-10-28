@@ -4,8 +4,9 @@ O Lab Desktop foi criado por Thiago Bezerra e é software livre sob a licença M
 seção "Licenças de terceiros" da tela Ajustes > Sobre (o app a lê do jar) e um teste confere que, para cada biblioteca do `gradle/verification-metadata.xml`, existe uma linha com o nome e a versão certos (a licença de cada linha vem da conferência dos POMs, abaixo).
 
 Como foi conferida: a licença de cada linha vem do campo `<licenses>` do POM da própria biblioteca (quando o POM não traz, do POM pai: `org.apache:apache:37` para o
-Apache MINA SSHD, `jackson-base` para o `jackson-datatype-jsr310`, `slf4j-bom` para o SLF4J e `zxing-parent` para o ZXing `core` e `javase`). As notas veio de memória; o que não deu
-para conferir nesta máquina diz "verificar".
+Apache MINA SSHD, `jackson-base` para o `jackson-datatype-jsr310`, `slf4j-bom` para o SLF4J e `zxing-parent` para o ZXing `core` e `javase`). As notas técnicas de cada caso ficam na seção "Notas técnicas" mais abaixo.
+
+A tabela é o que o app MOSTRA ao usuário (colunas que quebram linha, sem texto de desenvolvedor); as notas técnicas ficam só neste arquivo.
 
 | Biblioteca | Versão | Licença | Para que serve no app |
 |---|---|---|---|
@@ -37,8 +38,49 @@ para conferir nesta máquina diz "verificar".
 | JCL over SLF4J | 1.7.36 | Apache-2.0 | registro (log) das bibliotecas |
 | Kotlin Stdlib | 2.4.0 | Apache-2.0 | usada pelo JediTerm |
 | JetBrains Annotations | 24.0.1 | Apache-2.0 | usada pelo JediTerm e pelo Kotlin |
-| Lista de senhas comuns (dados) | zxcvbn do Dropbox, jar 1.9.0 | MIT (declarada no cabeçalho de `senhas-comuns.txt`; o jar de origem não está nesta máquina: verificar) | recusa senha de dicionário na senha-mestra; vem das listas do zxcvbn, mais um complemento em português escrito pelo autor |
-| OpenJDK (o Java que vai dentro do app empacotado) | o do `jpackage` (verificar o arquivo `release` do runtime) | GPL-2.0 com a exceção Classpath (verificar na distribuição usada) | roda o app |
+| Lista de senhas comuns (derivada do zxcvbn, Dropbox) | 1.9.0 | MIT | recusa senha de dicionário na senha-mestra; vem das listas do zxcvbn, mais um complemento em português escrito pelo autor |
+| OpenJDK (o Java que vai dentro do app) | o do pacote | GPL-2.0 com a exceção Classpath | roda o app |
+| Ícones da interface (Feather e Lucide) | o do app | MIT (Feather) e ISC (Lucide) | ícones desenhados pelo autor; parte das formas é muito próxima das desses dois conjuntos |
+
+## Endereço oficial de cada componente
+
+Os endereços são os dos projetos de origem (código ou página oficial); as versões são as do `build.gradle.kts` e do `./gradlew dependencies` (classpath de execução), e as licenças são as da tabela acima.
+
+| Componente | Endereço oficial |
+|---|---|
+| FlatLaf, FlatLaf Extras e os pacotes de fontes do FlatLaf | https://www.formdev.com/flatlaf/ e https://github.com/JFormDesigner/FlatLaf |
+| Fonte Inter | https://rsms.me/inter/ |
+| Fonte JetBrains Mono | https://www.jetbrains.com/lp/mono/ |
+| JSVG | https://github.com/weisj/jsvg |
+| Apache MINA SSHD | https://github.com/apache/mina-sshd |
+| Bouncy Castle | https://www.bouncycastle.org/ |
+| JediTerm | https://github.com/JetBrains/jediterm |
+| pty4j | https://github.com/JetBrains/pty4j |
+| JNA e JNA Platform | https://github.com/java-native-access/jna |
+| RSyntaxTextArea | https://github.com/bobbylight/RSyntaxTextArea |
+| ZXing | https://github.com/zxing/zxing |
+| Jackson | https://github.com/FasterXML/jackson |
+| SLF4J e JCL over SLF4J | https://www.slf4j.org/ |
+| Kotlin | https://kotlinlang.org/ |
+| JetBrains Annotations | https://github.com/JetBrains/java-annotations |
+| Lista de senhas comuns (zxcvbn) | https://github.com/dropbox/zxcvbn (as listas vieram do jar `com.nulab-inc:zxcvbn:1.9.0`, do Maven Central) |
+| Ícones (Feather e Lucide) | https://github.com/feathericons/feather e https://github.com/lucide-icons/lucide |
+| OpenJDK (o Java do instalador) | https://openjdk.org/ |
+
+## Ferramentas de construção e de teste (não vão dentro do app)
+
+| Ferramenta | Versão | Licença | Para que serve | Endereço oficial |
+|---|---|---|---|---|
+| Gradle (wrapper) | 9.8.0 | Apache-2.0 | compila, testa e empacota | https://gradle.org/ |
+| JUnit | 5.14.4 | EPL-2.0 | testes automáticos | https://junit.org/ |
+| WiX Toolset | 3.x | MS-RL | gera o instalador `.msi` no Windows (`jpackage`) | https://wixtoolset.org/ |
+| Temurin (OpenJDK 21) | 21 | GPL-2.0 com a exceção Classpath | Java usado no CI e para compilar | https://adoptium.net/ |
+
+## Notas técnicas (só neste arquivo; o app não as mostra)
+
+- Lista de senhas comuns: derivada das listas do zxcvbn (Dropbox, licença MIT; o copyright das listas é da Dropbox) do jar `com.nulab-inc:zxcvbn:1.9.0`, mais um complemento em português escrito pelo autor (`scripts/senhas-ptbr.txt`). O texto completo da licença MIT do zxcvbn ainda não foi copiado para `licencas/`: o jar não está no cache do Gradle deste build (não é dependência do app, só a origem da lista).
+- OpenJDK: o runtime que o `jpackage` leva é o do JDK usado na compilação e vem com a pasta `legal/` de cada módulo (os textos da GPL-2.0, da exceção Classpath e das licenças de componentes como ICU, ASM e CLDR); a licença é GPL-2.0 com a exceção Classpath.
+- Ícones SVG: ver o último parágrafo deste arquivo.
 
 Os textos das licenças, de forma honesta:
 

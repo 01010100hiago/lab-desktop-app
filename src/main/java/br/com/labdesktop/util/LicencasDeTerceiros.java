@@ -15,6 +15,9 @@ public final class LicencasDeTerceiros {
 
     private static final String PASTA = "/br/com/labdesktop/sobre/";
 
+    /** O que a tabela diz onde a licença ainda não foi conferida (a nota técnica de cada caso fica só no arquivo, fora da tabela). */
+    public static final String A_CONFIRMAR = "Licença a confirmar";
+
     /** Uma linha da tabela de terceiros. */
     public record Licenca(String nome, String versao, String licenca, String uso) { }
 

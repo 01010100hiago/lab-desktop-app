@@ -128,7 +128,20 @@ class LicencasDeTerceirosTest {
         assertEquals("MIT", licencaDe(l, "Lista de senhas comuns (derivada do zxcvbn, Dropbox)"));
         assertEquals("GPL-2.0 com a exceção Classpath", licencaDe(l, "OpenJDK (o Java que vai dentro do app)"));
         assertEquals("MIT (Feather) e ISC (Lucide)", licencaDe(l, "Ícones da interface (Feather e Lucide)"));
-        assertTrue(l.stream().noneMatch(x -> x.licenca().contains("verificar")), "nenhuma licença não deu para conferir nesta máquina diz \"verificar\": " + l);
+        assertTrue(l.stream().noneMatch(x -> x.licenca().equals(LicencasDeTerceiros.A_CONFIRMAR)), "nenhuma licença ficou \"a confirmar\": " + l);
+    }
+
+    /** O que a tabela MOSTRA é para o usuário: nada de nota de desenvolvedor, crase de markdown nem reticências. */
+    @Test
+    void aTabelaMostradaNaoTemNotaDeDesenvolvedorNemMarcaDeMarkdown() {
+        for (Licenca x : LicencasDeTerceiros.doJar()) {
+            for (String campo : new String[] {x.nome(), x.versao(), x.licenca(), x.uso()}) {
+                String minusculo = campo.toLowerCase(java.util.Locale.ROOT);
+                assertFalse(minusculo.contains("verificar") || minusculo.contains("nesta máquina") || minusculo.contains("jpackage") || campo.contains("`") || campo.contains("…"),
+                    "texto de desenvolvedor na tabela mostrada ao usuário: " + x);
+            }
+        }
+        assertTrue(LicencasDeTerceiros.avisosDeTerceiros().contains("## Notas técnicas"), "a nota técnica fica no arquivo, fora da tabela");
     }
 
     private static String licencaDe(List<Licenca> l, String nome) {
