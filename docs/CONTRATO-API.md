@@ -500,7 +500,7 @@ A Cloudflare dentro do app (ARQUITETURA 7.11) **não acrescenta rota, campo nem 
 
 Permissões mínimas do token: Zona > Zona > Ler, Zona > DNS > Editar (só na zona) e, só para o túnel pela API, Conta > Cloudflare Tunnel > Editar. Erros 429 esperam o `Retry-After`; 5xx e prazo estourado numa escrita NÃO são repetidos (o resultado é incerto e o app relê antes de concluir). Os testes usam uma Cloudflare FALSA em `HttpServer` do JDK (a URL base é a propriedade `labdesktop.cloudflare.url`); nenhuma chamada foi feita à Cloudflare real.
 
-### 7. Notas para quem implementa o cliente
+## 7. Notas para quem implementa o cliente
 
 - Fixtures: `scripts/capturar-fixtures.sh` grava em `src/test/resources/lab-real/` uma resposta real de cada rota de leitura (3.2 a 3.11, com um projeto comum, o `lab` e um projeto sem sessão). Contêm nomes e descrições reais de projetos do lab: por isso `usuario/lab-real/` está no `.gitignore` e não deve ser publicado.
 - 404 `Sessão não está aberta.` e 409 de pausa são fluxo normal, não erro de tela.
