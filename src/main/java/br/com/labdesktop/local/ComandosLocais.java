@@ -21,6 +21,9 @@ public final class ComandosLocais {
     /** Marca o que o laboratório local criou (rede, container): é como o app sabe que é dele e nunca mexe no que não é. */
     public static final String ROTULO_LOCAL = "br.com.labdesktop.local";
 
+    /** Guarda uma marca da pasta dos projetos que o container montou (para recriar o container se o usuário trocar a pasta). */
+    public static final String ROTULO_PASTA = "br.com.labdesktop.pasta";
+
     private static final String DOCKER = "docker";
 
     private ComandosLocais() { }
@@ -64,7 +67,7 @@ public final class ComandosLocais {
         return List.of(DOCKER, "network", "inspect", "-f", "{{len .Containers}}", p.rede());
     }
 
-    /** Os containers com este nome exato: {@code nome|rótulos|estado} (os rótulos do app dizem se foi ele que criou). */
+    /** Os containers com este nome exato: {@code nome|rótulos|estado|portas} (os rótulos do app dizem se foi ele que criou; as portas, onde ele escuta). */
     public static List<String> lerContainer(ParametrosDoLaboratorio p) {
         return lerContainerPeloNome(p.container());
     }
@@ -72,7 +75,7 @@ public final class ComandosLocais {
     /** O mesmo, para um nome só (o agente antigo guardado como {@code <nome>-anterior} numa atualização). */
     public static List<String> lerContainerPeloNome(String nome) {
         return List.of(DOCKER, "ps", "-a", "--filter", "name=^" + exigirNome(nome) + "$", "--format",
-            "{{.Names}}|{{.Labels}}|{{.State}}");
+            "{{.Names}}|{{.Labels}}|{{.State}}|{{.Ports}}");
     }
 
     /** Os volumes com este nome exato: {@code nome|rótulos}. */
@@ -136,12 +139,27 @@ public final class ComandosLocais {
         List<String> c = new ArrayList<>(List.of(DOCKER, "run", "-d", "--name", p.container(), "--restart", "unless-stopped",
             "-p", "127.0.0.1:" + p.porta() + ":" + p.porta(), "--pid", "host",
             "--label", ComandosRemotos.ROTULO_DO_AGENTE + "=" + pacote.versao(), "--label", ROTULO_LOCAL + "=1",
+            "--label", ROTULO_PASTA + "=" + marcaDaPasta(p.pastaDosProjetos()),
             "--log-opt", "max-size=10m", "--log-opt", "max-file=3",
             "-e", "PORT=" + p.porta(), "-e", "PAINEL_PERFIL=monitor", "-e", "PAINEL_EXIGE_TOKEN=1", "-e", "PAINEL_ESCUTA=todas",
             "-v", "/var/run/docker.sock:/var/run/docker.sock"));
         c.addAll(montagemDaMaquina);
         c.addAll(List.of("-v", p.volume() + ":" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + "", "-v", p.pastaDosProjetos() + ":" + pastaNoContainer, p.imagem(pacote.versao())));
         return List.copyOf(c);
+    }
+
+    /** Uma marca curta e estável da pasta (16 hexadecimais de um hash do texto): o rótulo não leva o caminho, que pode ter vírgula e acento. */
+    public static String marcaDaPasta(String pasta) {
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(pasta.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                sb.append(String.format("%02x", h[i]));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     public static List<String> removerContainer(String container) {

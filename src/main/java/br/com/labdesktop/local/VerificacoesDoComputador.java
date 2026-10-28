@@ -47,6 +47,11 @@ public final class VerificacoesDoComputador {
      * @throws InterruptedException cancelado
      */
     public RelatorioDoComputador executar(String pastaDoLaboratorio, int portaDoAgente) throws InterruptedException {
+        return executar(pastaDoLaboratorio, portaDoAgente, ParametrosDoLaboratorio.CONTAINER_PADRAO);
+    }
+
+    /** O mesmo, para o agente com este nome de container (o que já existe dele neste computador entra no relatório). */
+    public RelatorioDoComputador executar(String pastaDoLaboratorio, int portaDoAgente, String container) throws InterruptedException {
         List<ResultadoDoComputador> r = new ArrayList<>();
         SistemaOperacional so = plataforma.sistema();
         boolean temBrew = sonda.localizarPrograma("brew").isPresent();
@@ -62,10 +67,13 @@ public final class VerificacoesDoComputador {
         if (plataforma.exigeVirtualizacao()) {
             r.add(virtualizacao());
         }
-        int sugerida = portaSugerida(portaDoAgente);
-        r.add(porta(portaDoAgente, sugerida));
+        RelatorioDoComputador.LaboratorioDoApp lab = docker.estado == Docker.OK ? laboratorioDoApp(container) : RelatorioDoComputador.LaboratorioDoApp.NENHUM;
+        // A porta que o agente do app já usa não está "em uso por outro programa": é o laboratório que o usuário quer criar de novo
+        boolean eDoLaboratorio = lab.existe() && lab.rodando() && lab.portaPublicada() == portaDoAgente;
+        int sugerida = eDoLaboratorio ? portaDoAgente : portaSugerida(portaDoAgente);
+        r.add(porta(portaDoAgente, sugerida, eDoLaboratorio));
         r.add(git(so, temBrew, temWinget));
-        return new RelatorioDoComputador(r, so, docker.estado == Docker.OK, sugerida);
+        return new RelatorioDoComputador(r, so, docker.estado == Docker.OK, sugerida, lab);
     }
 
     // =====================================================================================================
@@ -225,7 +233,27 @@ public final class VerificacoesDoComputador {
         return 0;
     }
 
-    private ResultadoDoComputador porta(int pedida, int sugerida) {
+    /** O container do agente que o app criou (só leitura); uma leitura que falha vale "não sei", nunca "não existe". */
+    private RelatorioDoComputador.LaboratorioDoApp laboratorioDoApp(String container) throws InterruptedException {
+        try {
+            ResultadoExec x = executor.executar(ComandosLocais.lerContainerPeloNome(container), LEITURA);
+            if (x.status() == 0) {
+                for (LeituraDoDocker.Container c : LeituraDoDocker.containers(x.stdout())) {
+                    if (c.nome().equals(container) && c.doApp()) {
+                        return new RelatorioDoComputador.LaboratorioDoApp(true, c.rodando(), c.portaNoLoopback(), c.rotuloDoAgente());
+                    }
+                }
+            }
+        } catch (IOException | IllegalArgumentException e) {
+            // sem leitura: segue como se não houvesse
+        }
+        return RelatorioDoComputador.LaboratorioDoApp.NENHUM;
+    }
+
+    private ResultadoDoComputador porta(int pedida, int sugerida, boolean eDoLaboratorio) {
+        if (eDoLaboratorio) {
+            return ResultadoDoComputador.ok(ItemDoComputador.PORTA, "A porta " + pedida + " é a do seu laboratório local, que já está rodando.");
+        }
         if (sugerida == pedida) {
             return ResultadoDoComputador.ok(ItemDoComputador.PORTA, "A porta " + pedida + " está livre (o agente escuta só em 127.0.0.1, neste computador).");
         }

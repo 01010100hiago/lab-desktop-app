@@ -48,12 +48,18 @@ class ComandosLocaisTest {
         assertEquals("", LeituraDoDocker.rotulo("a=b,xbr.com.labdesktop.local=1", ComandosLocais.ROTULO_LOCAL), "a chave tem de casar inteira");
         assertEquals("", LeituraDoDocker.rotulo("", ComandosLocais.ROTULO_LOCAL));
         List<LeituraDoDocker.Container> l = LeituraDoDocker.containers(
-            "painel-lab|org.x=a|b,br.com.labdesktop.agente=0.1.0,br.com.labdesktop.local=1|running\n");
+            "painel-lab|org.x=a|b,br.com.labdesktop.agente=0.1.0,br.com.labdesktop.local=1,br.com.labdesktop.pasta=ab12|running|127.0.0.1:7070->7070/tcp\n");
         assertEquals(1, l.size());
         assertEquals("painel-lab", l.get(0).nome());
         assertEquals("0.1.0", l.get(0).rotuloDoAgente());
         assertEquals("1", l.get(0).rotuloLocal());
         assertEquals("running", l.get(0).estado());
+        assertEquals("ab12", l.get(0).marcaDaPasta());
+        assertTrue(l.get(0).publicaNoLoopback(7070));
+        assertFalse(l.get(0).publicaNoLoopback(7071));
+        assertEquals(7070, l.get(0).portaNoLoopback());
+        assertFalse(LeituraDoDocker.containers("x|a=b|running|0.0.0.0:7070->7070/tcp, :::7070->7070/tcp\n").get(0).publicaNoLoopback(7070),
+            "publicada em todas as interfaces não é só no loopback");
         assertTrue(LeituraDoDocker.containers("").isEmpty());
         assertTrue(LeituraDoDocker.redes("edge|\n").get(0).rotuloLocal().isEmpty());
     }
@@ -94,6 +100,7 @@ class ComandosLocaisTest {
         List<String> r = ComandosLocais.subirContainer(p, PACOTE, List.of("-v", "/:/host:ro"), "/Users/ana/LabLocal/projects");
         assertEquals(List.of("docker", "run", "-d", "--name", "painel-lab", "--restart", "unless-stopped", "-p", "127.0.0.1:7070:7070", "--pid", "host",
             "--label", "br.com.labdesktop.agente=0.1.0-abc1234", "--label", "br.com.labdesktop.local=1",
+            "--label", "br.com.labdesktop.pasta=" + ComandosLocais.marcaDaPasta("/Users/ana/LabLocal/projects"),
             "--log-opt", "max-size=10m", "--log-opt", "max-file=3", "-e", "PORT=7070", "-e", "PAINEL_PERFIL=monitor", "-e", "PAINEL_EXIGE_TOKEN=1",
             "-e", "PAINEL_ESCUTA=todas", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", "/:/host:ro", "-v", "painel-lab-dados:" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + "",
             "-v", "/Users/ana/LabLocal/projects:/Users/ana/LabLocal/projects", "labdesktop-agente:0.1.0-abc1234"), r);

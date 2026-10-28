@@ -1037,7 +1037,22 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         if (!local) {
             throw new IllegalStateException("O laboratório local é só do servidor Este computador.");
         }
-        return new LaboratorioLocal(locais.executor(), parametros, locais.plataforma(), pacote, ganchosDeInstalacao());
+        return new LaboratorioLocal(locais.executor(), parametros, locais.plataforma(), pacote, ganchosDeInstalacao()).comSondaDaPorta(this::sondarPortaLocal);
+    }
+
+    /**
+     * Pergunta ao agente local, na porta PEDIDA, se ele responde (o cofre ainda guarda a porta de antes: só se grava a nova depois que ele
+     * responde). Sem token: o agente local já exige o token, então "token recusado" também quer dizer que ele está de pé.
+     */
+    private GanchosDaInstalacao.Sonda sondarPortaLocal(int porta) {
+        try (ClienteApi a = new ClienteApi(estado.nome(), porta, null, PedidoDeCodigo2fa.NUNCA)) {
+            a.versao();
+            return GanchosDaInstalacao.Sonda.RESPONDE;
+        } catch (NaoAutorizado e) {
+            return e.totpRequerido() ? GanchosDaInstalacao.Sonda.RESPONDE : GanchosDaInstalacao.Sonda.TOKEN_RECUSADO;
+        } catch (ErroApi e) {
+            return GanchosDaInstalacao.Sonda.NAO_RESPONDE;
+        }
     }
 
     /** O provisionador de comandos do agente (para a casca e os testes). */

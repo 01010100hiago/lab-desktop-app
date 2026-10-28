@@ -280,6 +280,45 @@ class VerificacoesDoComputadorTest {
             .localizar("git").orElseThrow().toString());
     }
 
+    private ComputadorSimulado.Cont laboratorioDoAppRodandoNa(int porta) {
+        ComputadorSimulado.Cont c = new ComputadorSimulado.Cont();
+        c.rotulo = "0.1.0-abc1234";
+        c.rotuloLocal = "1";
+        c.portaPublicada = porta;
+        pc.containers.put("painel-lab", c);
+        sonda.portasOcupadas.add(porta); // quem atende é o container do próprio app
+        return c;
+    }
+
+    @Test
+    void comOLaboratorioDoAppJaRodandoAPortaEDeleENaoDeOutroProgramaEPodeCriarDeNovo() throws Exception {
+        laboratorioDoAppRodandoNa(7070);
+        RelatorioDoComputador r = verificar();
+        assertEquals(Estado.OK, r.de(ItemDoComputador.PORTA).estado(), r.de(ItemDoComputador.PORTA).frase());
+        assertTrue(r.de(ItemDoComputador.PORTA).frase().contains("seu laboratório local, que já está rodando"));
+        assertTrue(r.laboratorio().existe() && r.laboratorio().rodando());
+        assertEquals(7070, r.laboratorio().portaPublicada());
+        assertEquals("0.1.0-abc1234", r.laboratorio().versao());
+        assertEquals(7070, r.portaLivreSugerida());
+        assertTrue(r.pronto(), "dá para rodar o Criar de novo: " + r.problemas());
+        assertTrue(pc.escritas().isEmpty());
+    }
+
+    @Test
+    void aPortaOcupadaPorOutroProgramaOuPorUmPainelQueNaoEDoAppContinuaSendoProblema() throws Exception {
+        sonda.portasOcupadas.add(7070);
+        assertEquals(Estado.PROBLEMA, verificar().de(ItemDoComputador.PORTA).estado(), "outro programa");
+        ComputadorSimulado.Cont c = laboratorioDoAppRodandoNa(7070);
+        c.rotuloLocal = ""; // instalado por SSH: não é deste laboratório
+        RelatorioDoComputador r = verificar();
+        assertEquals(Estado.PROBLEMA, r.de(ItemDoComputador.PORTA).estado());
+        assertFalse(r.laboratorio().existe());
+        ComputadorSimulado.Cont d = laboratorioDoAppRodandoNa(7071);
+        pc.containers.put("painel-lab", d); // do app, mas na 7071: a 7070 é de outro programa
+        d.rotuloLocal = "1";
+        assertEquals(Estado.PROBLEMA, verificar().de(ItemDoComputador.PORTA).estado());
+    }
+
     @Test
     void composeAusenteEAvisoEDependeDoDocker() throws Exception {
         pc.composeInstalado = false;

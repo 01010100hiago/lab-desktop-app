@@ -16,7 +16,7 @@ final class LeituraDoDocker {
     private LeituraDoDocker() { }
 
     /** Um container lido por {@link ComandosLocais#lerContainerPeloNome}. */
-    record Container(String nome, String rotuloDoAgente, String rotuloLocal, String estado) {
+    record Container(String nome, String rotuloDoAgente, String rotuloLocal, String estado, String portas, String marcaDaPasta) {
         /**
          * Foi o laboratório local que o criou: tem o rótulo do agente do app E o rótulo local. O instalador por SSH grava só o primeiro:
          * num Debian usado como "Este computador", o painel instalado por SSH NÃO é deste laboratório e nunca é trocado nem removido.
@@ -27,6 +27,17 @@ final class LeituraDoDocker {
 
         boolean rodando() {
             return "running".equals(estado);
+        }
+
+        /** Publica esta porta SÓ no loopback ({@code 127.0.0.1:porta->porta/tcp}). */
+        boolean publicaNoLoopback(int porta) {
+            return portas.contains("127.0.0.1:" + porta + "->");
+        }
+
+        /** A porta que o container publica no loopback; 0 se nenhuma. */
+        int portaNoLoopback() {
+            Matcher m = Pattern.compile("127\\.0\\.0\\.1:(\\d+)->").matcher(portas);
+            return m.find() ? Integer.parseInt(m.group(1)) : 0;
         }
     }
 
@@ -50,18 +61,23 @@ final class LeituraDoDocker {
         return m.find() ? m.group(1).strip() : "";
     }
 
-    /** {@code nome|rótulos|estado}: o nome é o que vem antes do primeiro {@code |} e o estado o que vem depois do último. */
+    /**
+     * {@code nome|rótulos|estado|portas}: o nome é o que vem antes do primeiro {@code |}, as portas o que vem depois do último e o estado o
+     * trecho anterior; os rótulos (que podem ter {@code |} em valores alheios) ficam no meio.
+     */
     static List<Container> containers(String saida) {
         List<Container> l = new ArrayList<>();
         for (String linha : saida.split("\\R")) {
             int a = linha.indexOf('|');
             int z = linha.lastIndexOf('|');
-            if (a < 0 || z <= a) {
+            int y = z <= 0 ? -1 : linha.lastIndexOf('|', z - 1);
+            if (a < 0 || y <= a) {
                 continue;
             }
-            String rotulos = linha.substring(a + 1, z);
+            String rotulos = linha.substring(a + 1, y);
             l.add(new Container(linha.substring(0, a).strip(), rotulo(rotulos, ComandosRemotos.ROTULO_DO_AGENTE),
-                rotulo(rotulos, ComandosLocais.ROTULO_LOCAL), linha.substring(z + 1).strip()));
+                rotulo(rotulos, ComandosLocais.ROTULO_LOCAL), linha.substring(y + 1, z).strip(), linha.substring(z + 1).strip(),
+                rotulo(rotulos, ComandosLocais.ROTULO_PASTA)));
         }
         return l;
     }

@@ -55,6 +55,10 @@ public final class LaboratorioLocal {
     private final PacoteDoAgente pacote;
     private final GanchosDaInstalacao ganchos;
 
+    private EscolhasDoLaboratorio escolhas = EscolhasDoLaboratorio.NENHUMAS;
+    private SondaDaPorta sondaDaPorta;
+    private boolean gravouEscolhas;
+
     private Duration prazoDaSonda = Duration.ofSeconds(60);
     private Duration intervaloDaSonda = Duration.ofSeconds(1);
 
@@ -88,6 +92,26 @@ public final class LaboratorioLocal {
         return this;
     }
 
+    /** A porta e a pasta escolhidas, gravadas só depois que o agente responde e restauradas se a criação falhar ou for cancelada. */
+    public LaboratorioLocal comEscolhas(EscolhasDoLaboratorio e) {
+        this.escolhas = e == null ? EscolhasDoLaboratorio.NENHUMAS : e;
+        return this;
+    }
+
+    /**
+     * Sonda o agente na PORTA PEDIDA (o cofre ainda guarda a de antes): sem isto, a sonda usa {@link GanchosDaInstalacao#sondar} (a porta do cofre).
+     */
+    public LaboratorioLocal comSondaDaPorta(SondaDaPorta s) {
+        this.sondaDaPorta = s;
+        return this;
+    }
+
+    /** Pergunta ao agente, na porta dada, se ele responde. */
+    @FunctionalInterface
+    public interface SondaDaPorta {
+        GanchosDaInstalacao.Sonda sondar(int porta);
+    }
+
     public ParametrosDoLaboratorio parametros() {
         return parametros;
     }
@@ -106,6 +130,7 @@ public final class LaboratorioLocal {
         criouVolume = false;
         guardouOAnterior = false;
         anteriorRodava = false;
+        gravouEscolhas = false;
         PassoDoLaboratorio atual = null;
         try {
             if (rodar(ComandosLocais.versaoDoDocker(), LEITURA).status() != 0) {
@@ -227,8 +252,13 @@ public final class LaboratorioLocal {
             throw new FalhaDePasso("Já existe um container chamado " + parametros.container() + " que não foi criado por este app: não mexi nele. "
                 + "Escolha outro nome nas opções avançadas.");
         }
+        if (atual != null && atual.rotuloDoAgente().equals(pacote.versao()) && atual.rodando()
+            && atual.publicaNoLoopback(parametros.porta())
+            && atual.marcaDaPasta().equals(ComandosLocais.marcaDaPasta(parametros.pastaDosProjetos()))) {
+            return false; // o laboratório já está de pé, na porta e com a pasta pedidas
+        }
         if (atual != null && atual.rotuloDoAgente().equals(pacote.versao()) && atual.rodando()) {
-            return false;
+            registrar("[o agente já roda, mas publicado em outra porta ou com outra pasta: o app o recria na porta " + parametros.porta() + "]");
         }
         if (anterior != null) {
             if (!anterior.doApp()) {
@@ -275,7 +305,8 @@ public final class LaboratorioLocal {
         long limite = System.nanoTime() + prazoDaSonda.toNanos();
         while (true) {
             conferirCancelamento();
-            if (ganchos.sondar() != GanchosDaInstalacao.Sonda.NAO_RESPONDE) {
+            if ((sondaDaPorta != null ? sondaDaPorta.sondar(parametros.porta()) : ganchos.sondar()) != GanchosDaInstalacao.Sonda.NAO_RESPONDE) {
+                guardarAsEscolhas();
                 return true;
             }
             if (System.nanoTime() > limite) {
@@ -289,6 +320,16 @@ public final class LaboratorioLocal {
                     + " s. O que o container disse:\n" + logs);
             }
             Thread.sleep(intervaloDaSonda.toMillis());
+        }
+    }
+
+    /** O agente respondeu na porta nova: só agora a porta e a pasta são guardadas (e voltam atrás se o resto falhar). */
+    private void guardarAsEscolhas() throws FalhaDePasso {
+        try {
+            escolhas.gravar();
+            gravouEscolhas = true;
+        } catch (Exception e) {
+            throw new FalhaDePasso("Não consegui guardar a porta e a pasta escolhidas: " + TextoSeguro.limparLinha(Redator.redigir(e)));
         }
     }
 
@@ -347,6 +388,16 @@ public final class LaboratorioLocal {
             feito.add(voltou ? "Devolvi o agente anterior ao ar (" + parametros.container() + "), como estava."
                 : "Não consegui devolver o agente anterior: ele está guardado como " + parametros.containerAnterior() + " (docker rename e docker start).");
             guardouOAnterior = false;
+        }
+        if (gravouEscolhas) {
+            try {
+                escolhas.restaurar();
+                feito.add("Voltei a porta e a pasta que estavam guardadas antes.");
+            } catch (Exception e) {
+                LOG.warn("Não consegui restaurar a porta e a pasta: {}", Redator.redigir(e));
+                feito.add("Não consegui voltar a porta e a pasta que estavam guardadas: confira as opções avançadas.");
+            }
+            gravouEscolhas = false;
         }
         if (criouVolume) {
             if (tentar(ComandosLocais.removerVolume(parametros))) {

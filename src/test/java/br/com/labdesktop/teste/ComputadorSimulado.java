@@ -30,6 +30,10 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
         public String rotulo = "";
         /** O rótulo do laboratório local ({@code br.com.labdesktop.local=1}); vazio se não foi ele. */
         public String rotuloLocal = "";
+        /** A marca da pasta dos projetos (rótulo {@code br.com.labdesktop.pasta}). */
+        public String marcaDaPasta = "";
+        /** As portas como o {@code docker ps} as mostra; se vazio, saem de {@link #portaPublicada}. */
+        public String portas = "";
         public String estado = "running";
         public int portaPublicada;
         public String imagem;
@@ -218,7 +222,7 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
             case "ps": {
                 String nome = filtro(a);
                 Cont c = containers.get(nome);
-                return ok(c == null ? "" : nome + "|" + rotulosDe(c) + "|" + c.estado + "\n");
+                return ok(c == null ? "" : nome + "|" + rotulosDe(c) + "|" + c.estado + "|" + portasDe(c) + "\n");
             }
             case "volume": {
                 if (a.get(2).equals("ls")) {
@@ -358,6 +362,9 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
             if (a.get(i).equals("--label") && a.get(i + 1).startsWith("br.com.labdesktop.agente=")) {
                 c.rotulo = a.get(i + 1).substring("br.com.labdesktop.agente=".length());
             }
+            if (a.get(i).equals("--label") && a.get(i + 1).startsWith("br.com.labdesktop.pasta=")) {
+                c.marcaDaPasta = a.get(i + 1).substring("br.com.labdesktop.pasta=".length());
+            }
             if (a.get(i).equals("--label") && a.get(i + 1).startsWith("br.com.labdesktop.local=")) {
                 c.rotuloLocal = a.get(i + 1).substring("br.com.labdesktop.local=".length());
             }
@@ -383,7 +390,17 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
         if (!c.rotuloLocal.isBlank()) {
             l.add("br.com.labdesktop.local=" + c.rotuloLocal);
         }
+        if (!c.marcaDaPasta.isBlank()) {
+            l.add("br.com.labdesktop.pasta=" + c.marcaDaPasta);
+        }
         return String.join(",", l);
+    }
+
+    private static String portasDe(Cont c) {
+        if (!c.portas.isBlank()) {
+            return c.portas;
+        }
+        return c.portaPublicada == 0 ? "" : "127.0.0.1:" + c.portaPublicada + "->" + c.portaPublicada + "/tcp";
     }
 
     private static String filtro(List<String> a) {

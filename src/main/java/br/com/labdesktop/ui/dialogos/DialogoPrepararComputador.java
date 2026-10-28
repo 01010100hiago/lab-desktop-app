@@ -84,7 +84,7 @@ public final class DialogoPrepararComputador extends Dialogo {
         /** Abre uma das páginas oficiais de download no navegador. */
         void abrirPagina(String url);
 
-        /** Guarda a porta e a pasta escolhidas (o servidor "Este computador" e a memória de pastas), antes de criar. */
+        /** Guarda a porta e a pasta escolhidas (o servidor "Este computador" e a memória de pastas); o laboratório pede depois que o agente responde. */
         void guardarEscolhas(int porta, String pastaDosProjetos) throws Exception;
     }
 
@@ -122,6 +122,7 @@ public final class DialogoPrepararComputador extends Dialogo {
     private final JPanel listaDeVerificacoes = new Painel();
     private final JPanel listaDoQueVaiAcontecer = new Painel();
     private final TextoCorrido avisoDeBloqueio = erroCorrido();
+    private final TextoCorrido avisoDoLaboratorioQueJaRoda = new TextoCorrido("", LARGURA_DO_TEXTO).corDoToken(Tokens.OK);
     private final JTextField campoDaPorta = Campos.mono(8, "7070");
     private final JTextField campoDaPasta = Campos.mono(32, "");
     private final TextoCorrido erroDasOpcoes = erroCorrido();
@@ -237,8 +238,9 @@ public final class DialogoPrepararComputador extends Dialogo {
         listaDoQueVaiAcontecer.setLayout(new javax.swing.BoxLayout(listaDoQueVaiAcontecer, javax.swing.BoxLayout.Y_AXIS));
         return Caixa.coluna(10,
             cabecalho("sistema", "Preparar este computador"),
-            paragrafo("O laboratório roda aqui, num container do Docker. NADA foi instalado nem criado ainda: confira abaixo. Cada instalação mostra "
+            paragrafo("O laboratório roda aqui, num container do Docker. NADA foi instalado nem criado agora: confira abaixo. Cada instalação mostra "
                 + "o que vai fazer e só roda depois do seu clique."),
+            avisoDoLaboratorioQueJaRoda,
             Rotulo.rotuloDeCampo("O que o app conferiu"), listaDeVerificacoes, avisoDeBloqueio,
             Rotulo.rotuloDeCampo("O que vai acontecer quando você criar o laboratório"), listaDoQueVaiAcontecer, opcoesAvancadas);
     }
@@ -373,6 +375,14 @@ public final class DialogoPrepararComputador extends Dialogo {
             aviso = "O Docker ainda não responde.";
         }
         dizerErro(avisoDeBloqueio, aviso);
+        boolean jaRoda = r.laboratorio().rodando() || alvo.laboratorioExiste();
+        avisoDoLaboratorioQueJaRoda.setName("laboratorio-ja-roda");
+        avisoDoLaboratorioQueJaRoda.setText(jaRoda
+            ? "Seu laboratório local já está rodando" + (r.laboratorio().rodando() && r.laboratorio().portaPublicada() > 0
+                ? " (agente " + r.laboratorio().versao() + ", porta " + r.laboratorio().portaPublicada() + ")" : "") + ". Se clicar em Criar de novo, o app só confere "
+            + "tudo: não estraga nada, e só recria o agente se a versão do app, a porta ou a pasta dos projetos mudou (os dados e o token ficam)."
+            : "");
+        avisoDoLaboratorioQueJaRoda.setVisible(jaRoda);
         montarOQueVaiAcontecer();
         reajustar();
     }
@@ -589,8 +599,18 @@ public final class DialogoPrepararComputador extends Dialogo {
         executarEmFundo(obs -> {
             ResultadoDaInstalacao r;
             try {
-                motor.guardarEscolhas(p.porta(), p.pastaDosProjetos());
-                r = motor.laboratorio(p).criar(obs, cancelado::get);
+                // A porta e a pasta só são guardadas depois que o agente responde na porta pedida, e voltam atrás se o resto falhar ou for cancelado
+                r = motor.laboratorio(p).comEscolhas(new br.com.labdesktop.local.EscolhasDoLaboratorio() {
+                    @Override
+                    public void gravar() throws Exception {
+                        motor.guardarEscolhas(p.porta(), p.pastaDosProjetos());
+                    }
+
+                    @Override
+                    public void restaurar() throws Exception {
+                        motor.guardarEscolhas(alvo.porta(), alvo.pastaDosProjetos());
+                    }
+                }).criar(obs, cancelado::get);
             } catch (Exception e) {
                 r = new ResultadoDaInstalacao(ResultadoDaInstalacao.Desfecho.FALHOU, null, MensagensDeErro.de(e), List.of());
             }
@@ -964,6 +984,10 @@ public final class DialogoPrepararComputador extends Dialogo {
 
     public String textoDaConferencia() {
         return erroDeConferir.getText();
+    }
+
+    public String textoDoLaboratorioQueJaRoda() {
+        return avisoDoLaboratorioQueJaRoda.isVisible() ? avisoDoLaboratorioQueJaRoda.getText() : "";
     }
 
     public String textoDoBloqueio() {

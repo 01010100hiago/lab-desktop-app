@@ -154,6 +154,14 @@ class DialogoPrepararComputadorTest {
         Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(d.raiz()));
     }
 
+    private static Botao botaoOuNulo(DialogoPrepararComputador d, String nome) {
+        try {
+            return Visual.naEdt(() -> d.botaoNomeado(nome));
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     private static Botao botao(DialogoPrepararComputador d, String nome) {
         return Visual.naEdt(() -> d.botaoNomeado(nome));
     }
@@ -335,6 +343,43 @@ class DialogoPrepararComputadorTest {
         esperarPagina(d, "resultado");
         Espera.ate(PRAZO, "re-verificou com a porta nova", () -> Visual.naEdt(() -> d.botaoCriar().isEnabled()));
         assertEquals("7071", Visual.naEdt(() -> d.campoDaPorta().getText()));
+    }
+
+    @Test
+    void comOLaboratorioJaRodandoODialogoDizIssoETrataAPortaComoDele() {
+        ComputadorSimulado.Cont c = new ComputadorSimulado.Cont();
+        c.rotulo = PACOTE.versao();
+        c.rotuloLocal = "1";
+        c.portaPublicada = 7070;
+        pc.containers.put("painel-lab", c);
+        sonda.portasOcupadas.add(7070); // quem atende é o container do app
+        DialogoPrepararComputador d = abrir(DialogoPrepararComputador.Acao.PREPARAR);
+        esperarPagina(d, "resultado");
+
+        String nota = Visual.naEdt(d::textoDoLaboratorioQueJaRoda);
+        assertTrue(nota.contains("Seu laboratório local já está rodando"), nota);
+        assertTrue(nota.contains("porta 7070"), nota);
+        assertTrue(Visual.naEdt(() -> d.botaoCriar().isEnabled()), "a porta é do laboratório do app: dá para criar de novo, sem 'porta em uso'");
+        assertFalse(Visual.naEdt(d::frasesDasVerificacoes).stream().anyMatch(f -> f.contains("em uso por outro programa")), Visual.naEdt(d::frasesDasVerificacoes).toString());
+        assertEquals(null, botaoOuNulo(d, "usar-porta-sugerida"));
+        fotografar(d, "dialogo-preparar-computador-ja-roda");
+    }
+
+    @Test
+    void semOLaboratorioNaoHaNotaDeQueJaRoda() {
+        DialogoPrepararComputador d = abrir(DialogoPrepararComputador.Acao.PREPARAR);
+        esperarPagina(d, "resultado");
+        assertEquals("", Visual.naEdt(d::textoDoLaboratorioQueJaRoda));
+    }
+
+    @Test
+    void falhaAoCriarNaoDeixaAPortaNemAPastaGravadas() {
+        pc.falharEm(ComputadorSimulado.contem(" run -d"), 125, "docker: Error response from daemon: port is already allocated");
+        DialogoPrepararComputador d = abrir(DialogoPrepararComputador.Acao.PREPARAR);
+        esperarPagina(d, "resultado");
+        Visual.naEdt(() -> d.botaoCriar().doClick());
+        esperarFim(d);
+        assertEquals(List.of(), escolhas, "o agente nunca respondeu: nada foi gravado");
     }
 
     // ---------------------------------------------------------------------------------------------

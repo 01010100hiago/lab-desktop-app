@@ -552,4 +552,115 @@ class LaboratorioLocalTest {
         assertTrue(r.removido());
         assertTrue(pc.escritas().isEmpty(), "nada a fazer: " + pc.escritas());
     }
+
+    // ----- A2: laboratório já rodando, outra porta, escolhas só depois da sonda -----
+
+    private final List<String> escolhasGravadas = new ArrayList<>();
+
+    private final EscolhasDoLaboratorio escolhas = new EscolhasDoLaboratorio() {
+        @Override
+        public void gravar() {
+            escolhasGravadas.add("gravou " + p.porta());
+        }
+
+        @Override
+        public void restaurar() {
+            escolhasGravadas.add("restaurou");
+        }
+    };
+
+    @Test
+    void containerDaMesmaVersaoMasPublicadoEmOutraPortaERecriadoNaPortaPedida() {
+        assertEquals(Desfecho.CONCLUIDA, criar().desfecho());
+        assertEquals(7070, pc.containers.get("painel-lab").portaPublicada);
+        pc.limparRegistro();
+        p = p.comPorta(7071);
+
+        ResultadoDaInstalacao r = lab().comEscolhas(escolhas).criar(obs, Cancelamento.NUNCA);
+
+        assertEquals(Desfecho.CONCLUIDA, r.desfecho(), r.erro());
+        assertEquals(7071, pc.containers.get("painel-lab").portaPublicada, "não ficou 'já estava feito' na 7070");
+        assertFalse(pc.containers.containsKey("painel-lab-anterior"), "o antigo saiu no fim");
+        assertEquals(List.of("gravou 7071"), escolhasGravadas);
+        assertTrue(pc.volumes.contains("painel-lab-dados"), "os dados ficam");
+    }
+
+    @Test
+    void containerDaMesmaVersaoMasComOutraPastaDosProjetosTambemERecriado() {
+        assertEquals(Desfecho.CONCLUIDA, criar().desfecho());
+        String antes = pc.containers.get("painel-lab").marcaDaPasta;
+        projetos = tmp.resolve("OutrosProjetos");
+        p = p.comPasta(projetos.toString());
+        assertEquals(Desfecho.CONCLUIDA, criar().desfecho());
+        assertFalse(antes.equals(pc.containers.get("painel-lab").marcaDaPasta));
+        assertTrue(pc.containers.get("painel-lab").argumentos.contains(projetos + ":" + projetos));
+    }
+
+    @Test
+    void naMesmaPortaEPastaRodarDeNovoNaoRecriaNada() {
+        assertEquals(Desfecho.CONCLUIDA, criar().desfecho());
+        pc.limparRegistro();
+        assertEquals(Desfecho.CONCLUIDA, lab().comEscolhas(escolhas).criar(obs, Cancelamento.NUNCA).desfecho());
+        assertTrue(pc.escritas().isEmpty(), pc.escritas().toString());
+    }
+
+    @Test
+    void aPortaEAPastaSoSaoGravadasDepoisQueOAgenteRespondeENuncaSeASondaFalha() {
+        sonda = Sonda.NAO_RESPONDE;
+        ResultadoDaInstalacao r = lab().comEscolhas(escolhas).criar(obs, Cancelamento.NUNCA);
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertEquals(List.of(), escolhasGravadas, "o agente não respondeu: nada foi gravado, e portanto nada a desfazer");
+    }
+
+    @Test
+    void seOTokenFalharDepoisDeGravarAsEscolhasVoltamAoQueEstava() {
+        GanchosDaInstalacao semToken = new GanchosDaInstalacao() {
+            @Override
+            public Sonda sondar() {
+                return Sonda.RESPONDE;
+            }
+
+            @Override
+            public boolean registrarToken(br.com.labdesktop.instalador.ParametrosDaInstalacao parametros, String docker) throws Exception {
+                throw new Exception("sem token");
+            }
+        };
+        ResultadoDaInstalacao r = new LaboratorioLocal(pc, p, plataforma, PACOTE, semToken).comSonda(Duration.ofMillis(300), Duration.ofMillis(10))
+            .comEscolhas(escolhas).criar(obs, Cancelamento.NUNCA);
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertEquals(List.of("gravou 7070", "restaurou"), escolhasGravadas);
+        assertTrue(pc.containers.isEmpty());
+    }
+
+    @Test
+    void cancelarDepoisDeGravarRestauraAsEscolhas() {
+        GanchosDaInstalacao cancelaNoToken = new GanchosDaInstalacao() {
+            @Override
+            public Sonda sondar() {
+                return Sonda.RESPONDE;
+            }
+
+            @Override
+            public boolean registrarToken(br.com.labdesktop.instalador.ParametrosDaInstalacao parametros, String docker) {
+                return true;
+            }
+        };
+        ResultadoDaInstalacao r = new LaboratorioLocal(pc, p, plataforma, PACOTE, cancelaNoToken).comSonda(Duration.ofMillis(300), Duration.ofMillis(10))
+            .comEscolhas(escolhas).criar(obs, () -> !escolhasGravadas.isEmpty());
+        assertEquals(Desfecho.CANCELADA, r.desfecho());
+        assertEquals(List.of("gravou 7070", "restaurou"), escolhasGravadas);
+    }
+
+    @Test
+    void aSondaDaPortaPedidaTemPrioridadeSobreAPortaDoCofre() {
+        List<Integer> portas = new ArrayList<>();
+        sonda = Sonda.NAO_RESPONDE; // a do cofre (ganchos) diria que não responde
+        p = p.comPorta(7099);
+        ResultadoDaInstalacao r = lab().comSondaDaPorta(porta -> {
+            portas.add(porta);
+            return Sonda.TOKEN_RECUSADO; // o agente local exige o token: de pé
+        }).criar(obs, Cancelamento.NUNCA);
+        assertEquals(Desfecho.CONCLUIDA, r.desfecho(), r.erro());
+        assertEquals(List.of(7099), portas);
+    }
 }
