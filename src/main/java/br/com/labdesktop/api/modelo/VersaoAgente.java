@@ -52,6 +52,11 @@ public record VersaoAgente(
         return recursos == null ? null : recursos.claude();
     }
 
+    /** O agente entende {@code guia_ia} ao criar projeto? Só {@code true} explícito conta: desconhecido vale como não. */
+    public boolean entendeGuiaIa() {
+        return recursos != null && Boolean.TRUE.equals(recursos.guiaIa());
+    }
+
     /** O servidor tem projetos? Desconhecido vale como SIM: o app só esconde a aba Projetos quando o agente diz que não. */
     public boolean temProjetos() {
         return recursos == null || recursos.projetos() == null || recursos.projetos();

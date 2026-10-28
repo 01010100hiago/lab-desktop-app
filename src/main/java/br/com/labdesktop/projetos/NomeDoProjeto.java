@@ -41,6 +41,12 @@ public final class NomeDoProjeto {
         return nome != null && RESERVADOS.contains(nome);
     }
 
+    /** A frase para uma recusa de verdade (nunca vazia, ao contrário de {@link #conferir} com o campo vazio). */
+    public static String fraseDeRecusa(String texto) {
+        String m = conferir(texto).mensagem();
+        return m.isEmpty() ? "Escreva o nome do projeto." : m;
+    }
+
     /**
      * Confere o texto como foi digitado (sem cortar espaço nem trocar maiúscula: o usuário vê o que será usado). Campo vazio não é erro de texto:
      * só não habilita o botão.

@@ -13,14 +13,24 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param claude   o servidor abre sessões do Claude (e tem consumo e limites do plano)
  * @param projetos o servidor tem projetos (pasta de projetos, compose, backups)
  * @param monitor  o servidor responde as leituras de máquina (CPU, memória, disco, processos, containers)
+ * @param guiaIa   o {@code POST /api/projetos/novo} entende {@code "guia_ia": false}: só então o app mostra a caixa "Incluir guia para o
+ *                 Claude" (um agente de antes ignoraria o {@code false} e criaria o {@code CLAUDE.md} mesmo assim); {@code null} = não diz
  */
 public record RecursosDoAgente(
     @JsonProperty("claude") Boolean claude,
     @JsonProperty("projetos") Boolean projetos,
-    @JsonProperty("monitor") Boolean monitor) {
+    @JsonProperty("monitor") Boolean monitor,
+    @JsonProperty("guia_ia") Boolean guiaIa) {
+
+    /** Sem o campo {@code guia_ia} (agente mais antigo, e os testes mais velhos). */
+    public RecursosDoAgente(Boolean claude, Boolean projetos, Boolean monitor) {
+        this(claude, projetos, monitor, null);
+    }
 
     /** O perfil {@code lab}: tudo. */
     public static final RecursosDoAgente TUDO = new RecursosDoAgente(true, true, true);
     /** O perfil {@code monitor}: só a leitura da máquina. */
     public static final RecursosDoAgente SO_MONITOR = new RecursosDoAgente(false, false, true);
+    /** O perfil {@code lab} de hoje, que entende {@code guia_ia} (o mais antigo é {@link #TUDO}, que não diz). */
+    public static final RecursosDoAgente TUDO_COM_GUIA_IA = new RecursosDoAgente(true, true, true, true);
 }

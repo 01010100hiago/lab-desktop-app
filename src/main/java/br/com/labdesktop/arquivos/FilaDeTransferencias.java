@@ -345,11 +345,23 @@ public final class FilaDeTransferencias implements AutoCloseable {
      * @return o id da transferência
      */
     public long enviar(List<Path> locais, String pastaRemota) {
+        return enviar(locais, pastaRemota, null, null);
+    }
+
+    /**
+     * Como {@link #enviar(List, String)}, com duas coisas a mais para importar um projeto: um filtro por NOME (o que não passa nem entra no plano;
+     * vale para tudo DENTRO das pastas escolhidas, nunca para a pasta escolhida em si) e um nome no destino para a PRIMEIRA pasta ou arquivo
+     * (a pasta {@code meu-codigo} do Mac vira {@code meu-projeto} no servidor).
+     *
+     * @param aceita         recebe o nome (de pasta ou de arquivo) e se é pasta; {@code false} deixa o item de fora (conta como ignorado); {@code null} aceita tudo
+     * @param nomeNoDestino  o nome que o primeiro item leva no destino; {@code null} mantém o do Mac
+     */
+    public long enviar(List<Path> locais, String pastaRemota, java.util.function.BiPredicate<String, Boolean> aceita, String nomeNoDestino) {
         String titulo = tituloDe(locais.size(), locais.isEmpty() ? "" : locais.get(0).getFileName().toString(),
             CaminhoRemoto.nome(pastaRemota).isEmpty() ? "o servidor" : CaminhoRemoto.nome(pastaRemota), "para");
         Trabalho t = novo(Tipo.ENVIO, titulo);
         ServicoDeArquivos servico = fornecedorDoServico.get();
-        executar(t, () -> rodarEnvio(t, servico, List.copyOf(locais), pastaRemota));
+        executar(t, () -> rodarEnvio(t, servico, List.copyOf(locais), pastaRemota, aceita, nomeNoDestino));
         return t.id;
     }
 
@@ -419,9 +431,10 @@ public final class FilaDeTransferencias implements AutoCloseable {
     // Envio
     // ---------------------------------------------------------------------------------------------
 
-    private void rodarEnvio(Trabalho t, ServicoDeArquivos servico, List<Path> locais, String pastaRemota) throws ErroSftp {
+    private void rodarEnvio(Trabalho t, ServicoDeArquivos servico, List<Path> locais, String pastaRemota,
+                            java.util.function.BiPredicate<String, Boolean> aceita, String nomeNoDestino) throws ErroSftp {
         String destinoReal = servico.resolverDentroDaRaiz(pastaRemota);
-        Plano<ItemDeEnvio> plano = planejarEnvio(locais, destinoReal);
+        Plano<ItemDeEnvio> plano = planejarEnvio(locais, destinoReal, aceita, nomeNoDestino);
         t.definirPlano(plano.bytes, plano.itens.size());
         publicar(t, true);
         List<String> problemas = new ArrayList<>();
@@ -447,8 +460,10 @@ public final class FilaDeTransferencias implements AutoCloseable {
         terminar(t, "enviado", "enviados", enviados, plano.ignorados, problemas);
     }
 
-    private Plano<ItemDeEnvio> planejarEnvio(List<Path> locais, String destinoReal) throws ErroSftp {
+    private Plano<ItemDeEnvio> planejarEnvio(List<Path> locais, String destinoReal, java.util.function.BiPredicate<String, Boolean> aceita,
+                                             String nomeNoDestino) throws ErroSftp {
         Plano<ItemDeEnvio> plano = new Plano<>();
+        boolean primeiro = true;
         for (Path raiz : locais) {
             Path nomeLocal = raiz.getFileName();
             if (nomeLocal == null) {
@@ -457,10 +472,12 @@ public final class FilaDeTransferencias implements AutoCloseable {
             }
             String nome;
             try {
-                nome = CaminhoRemoto.validarNome(nomeLocal.toString());
+                nome = CaminhoRemoto.validarNome(primeiro && nomeNoDestino != null ? nomeNoDestino : nomeLocal.toString());
             } catch (ErroSftp e) {
                 plano.ignorados++;
                 continue;
+            } finally {
+                primeiro = false;
             }
             String base = CaminhoRemoto.juntar(destinoReal, nome);
             try {
@@ -468,6 +485,10 @@ public final class FilaDeTransferencias implements AutoCloseable {
                     Files.walkFileTree(raiz, new SimpleFileVisitor<>() {
                         @Override
                         public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes a) {
+                            if (aceita != null && !dir.equals(raiz) && !aceita.test(dir.getFileName().toString(), true)) {
+                                plano.ignorados++;
+                                return FileVisitResult.SKIP_SUBTREE; // por exemplo node_modules, ou .git que o usuário não quis levar
+                            }
                             String r = remotoDe(base, raiz, dir);
                             if (r == null) {
                                 plano.ignorados++;
@@ -479,6 +500,10 @@ public final class FilaDeTransferencias implements AutoCloseable {
 
                         @Override
                         public FileVisitResult visitFile(Path arquivo, BasicFileAttributes a) {
+                            if (aceita != null && !aceita.test(arquivo.getFileName().toString(), false)) {
+                                plano.ignorados++; // por exemplo .env, que o usuário não quis levar
+                                return FileVisitResult.CONTINUE;
+                            }
                             String r = a.isRegularFile() ? remotoDe(base, raiz, arquivo) : null;
                             if (r == null) {
                                 plano.ignorados++; // link, socket, nome que o servidor não aceita

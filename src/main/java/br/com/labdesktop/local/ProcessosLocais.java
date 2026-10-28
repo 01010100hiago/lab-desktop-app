@@ -30,6 +30,12 @@ public final class ProcessosLocais implements ExecutorDeProcesso {
 
     @Override
     public ResultadoExec executar(List<String> argumentos, byte[] stdin, Duration prazo) throws IOException, InterruptedException {
+        return executar(argumentos, Map.of(), stdin, prazo);
+    }
+
+    @Override
+    public ResultadoExec executar(List<String> argumentos, Map<String, String> ambiente, byte[] stdin, Duration prazo)
+        throws IOException, InterruptedException {
         exigirArgumentosValidos(argumentos);
         String programa = argumentos.get(0);
         Optional<Path> achado;
@@ -56,6 +62,12 @@ public final class ProcessosLocais implements ExecutorDeProcesso {
             }
         }
         env.put("PATH", path);
+        ambiente.forEach((nome, valor) -> {
+            if (nome == null || !nome.matches("[A-Z][A-Z0-9_]{0,63}") || valor == null || valor.indexOf('\0') >= 0) {
+                throw new IllegalArgumentException("Variável de ambiente inválida no comando local.");
+            }
+            env.put(nome, valor);
+        });
         Process p = pb.start();
         CapturaDeSaida out = new CapturaDeSaida(p.getInputStream(), "processo-saida");
         CapturaDeSaida err = new CapturaDeSaida(p.getErrorStream(), "processo-erro");

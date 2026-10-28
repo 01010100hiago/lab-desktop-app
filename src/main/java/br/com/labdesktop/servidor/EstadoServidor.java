@@ -126,9 +126,25 @@ public record EstadoServidor(
         return versao == null ? null : versao.temClaude();
     }
 
-    /** O servidor tem projetos? Desconhecido vale como sim: a aba Projetos só some quando o agente diz que o servidor não os tem. */
+    /**
+     * O servidor tem projetos? Desconhecido vale como sim: a aba Projetos só some quando o agente diz que o servidor não os tem. Em "Este
+     * computador" sempre tem: os projetos são as pastas do laboratório local (o agente dele é do perfil monitor e não os conhece).
+     */
     public boolean temProjetos() {
-        return versao == null || versao.temProjetos();
+        return local || versao == null || versao.temProjetos();
+    }
+
+    /** O agente do lab entende {@code guia_ia} ao criar projeto (a caixa "Incluir guia para o Claude" só aparece com Claude e com isto). */
+    public boolean entendeGuiaIa() {
+        return versao != null && versao.entendeGuiaIa();
+    }
+
+    /**
+     * O agente deste servidor sabe criar projeto ({@code POST /api/projetos/novo}): respondeu, não é do perfil monitor e tem projetos (o do lab
+     * de produção, de antes dos {@code recursos}, também). Sem agente (ainda não respondeu, ou não está instalado): não.
+     */
+    public boolean agenteCriaProjetos() {
+        return !local && versao != null && !versao.perfilMonitor() && versao.temProjetos();
     }
 
     /** O agente é do perfil monitor (o que o app instala): é o único que o app atualiza e remove. */

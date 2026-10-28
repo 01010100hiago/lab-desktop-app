@@ -3,12 +3,15 @@ package br.com.labdesktop.servidor;
 import br.com.labdesktop.api.ClienteApi;
 import br.com.labdesktop.api.ErroApi;
 import br.com.labdesktop.api.ErroApi.ErroRede;
+import br.com.labdesktop.api.modelo.Projeto;
 import br.com.labdesktop.api.modelo.RespostaLimite;
+import br.com.labdesktop.api.modelo.RespostaNovoProjeto;
 import br.com.labdesktop.api.modelo.RespostaRetomar;
 import br.com.labdesktop.api.modelo.ResultadoAcao;
 import br.com.labdesktop.api.modelo.SessaoAberta;
 import br.com.labdesktop.api.modelo.TelaClaude;
 import br.com.labdesktop.api.modelo.TokensDoProjeto;
+import java.util.List;
 import java.util.function.Supplier;
 
 /**
@@ -44,6 +47,26 @@ public final class AcoesDoServidor {
         } finally {
             sondador.atualizarAgora(Topico.PROJETOS, Topico.detalhe(projeto), Topico.LIMITES);
         }
+    }
+
+    /** Há uma conexão com o agente agora? ({@code false}: nada seria enviado). */
+    public boolean conectado() {
+        return api.get() != null;
+    }
+
+    /**
+     * Cria um projeto novo pelo agente ({@code POST /api/projetos/novo}). Ao terminar, com sucesso ou não, a lista de projetos é consultada de
+     * novo: um prazo estourado deixa o resultado incerto, e a tela precisa olhar o que há de verdade. NUNCA é repetida sozinha.
+     *
+     * @param guiaIa {@code null} omite o campo (o agente cria com guia, como sempre); {@code false} pede sem {@code CLAUDE.md}
+     */
+    public RespostaNovoProjeto criarProjeto(String nome, Boolean guiaIa) throws ErroApi {
+        return rodar(nome, a -> a.criarProjeto(nome, guiaIa));
+    }
+
+    /** Os nomes dos projetos que o agente lista agora (releitura depois de um prazo estourado). */
+    public List<String> nomesDosProjetos() throws ErroApi {
+        return ler(a -> a.projetos().projetos().stream().map(Projeto::nome).toList());
     }
 
     public ResultadoAcao iniciar(String projeto) throws ErroApi {

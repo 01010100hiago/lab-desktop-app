@@ -16,6 +16,7 @@ import br.com.labdesktop.api.modelo.InfoServidor;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.ListaProjetos;
 import br.com.labdesktop.api.modelo.RespostaLimite;
+import br.com.labdesktop.api.modelo.RespostaNovoProjeto;
 import br.com.labdesktop.api.modelo.RespostaRetomar;
 import br.com.labdesktop.api.modelo.ResultadoAcao;
 import br.com.labdesktop.api.modelo.SessaoAberta;
@@ -246,6 +247,23 @@ public final class ClienteApi implements AutoCloseable {
     // =====================================================================================================
     // Ações (POST e PUT: nunca reenviadas sozinhas)
     // =====================================================================================================
+
+    /**
+     * {@code POST /api/projetos/novo}: cria a pasta, o esqueleto e a rede {@code <nome>_default} (até 60 s). O {@code nome} passa pela regra do
+     * agente antes de sair; {@code guiaIa} {@code null} omite o campo (o agente entende como "com guia", o comportamento de sempre), e
+     * {@code false} pede um projeto sem {@code CLAUDE.md}. 400 traz a frase do agente (nome já existe, reservado). Nunca reenviada sozinha.
+     */
+    public RespostaNovoProjeto criarProjeto(String nome, Boolean guiaIa) throws ErroApi {
+        ValidadorDeNomes.exigirProjeto(nome);
+        ObjectNode corpo = json.createObjectNode();
+        corpo.put("nome", nome);
+        if (guiaIa != null) {
+            corpo.put("guia_ia", guiaIa.booleanValue());
+        }
+        Resposta r = executar("POST", "/api/projetos/novo", corpo.toString(), Rota.NOVO_PROJETO);
+        exigirSucesso(r);
+        return converter(lerJson(r), r.status, RespostaNovoProjeto.class);
+    }
 
     /** {@code POST /api/projetos/:p/iniciar}: compose up em cada arquivo (até 12 min). */
     public ResultadoAcao iniciar(String projeto) throws ErroApi {

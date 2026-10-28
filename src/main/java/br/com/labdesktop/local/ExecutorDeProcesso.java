@@ -23,4 +23,14 @@ public interface ExecutorDeProcesso {
     default ResultadoExec executar(List<String> argumentos, Duration prazo) throws IOException, InterruptedException {
         return executar(argumentos, new byte[0], prazo);
     }
+
+    /**
+     * Como {@link #executar(List, byte[], Duration)}, com variáveis de ambiente a mais para ESTE processo (por exemplo
+     * {@code GIT_TERMINAL_PROMPT=0}, que impede o {@code git} de ficar esperando uma senha que ninguém vai digitar). O padrão (executores falsos
+     * dos testes, que só anotam o comando) ignora o ambiente; {@link ProcessosLocais} o aplica de verdade.
+     */
+    default ResultadoExec executar(List<String> argumentos, java.util.Map<String, String> ambiente, byte[] stdin, Duration prazo)
+        throws IOException, InterruptedException {
+        return executar(argumentos, stdin, prazo);
+    }
 }
