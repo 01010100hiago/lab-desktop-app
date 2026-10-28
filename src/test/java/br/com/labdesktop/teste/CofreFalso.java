@@ -62,6 +62,14 @@ public final class CofreFalso implements AcessoAoCofre {
         return this;
     }
 
+    /** O servidor passa a ser "Este computador" (sem SSH, sem chave), com o agente nesta porta de 127.0.0.1. */
+    public CofreFalso comoLocal(int portaAgente) {
+        ConfigServidor c = config;
+        config = new ConfigServidor(c.id(), c.nome(), ConfigServidor.HOST_LOCAL, 0, "", null, portaAgente, List.of(), Transporte.LOCAL,
+            c.nomeDoDispositivo(), c.estado2fa());
+        return this;
+    }
+
     /** Quem criou a chave do servidor (o padrão é o app): decide se a remoção a tira do servidor. */
     public CofreFalso comOrigemDaChave(InfoChave.Origem origem) {
         this.origemDaChave = origem;

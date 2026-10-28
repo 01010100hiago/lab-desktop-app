@@ -229,6 +229,29 @@ public final class AssistenteDeServidor {
     }
 
     /**
+     * Cadastra "Este computador" (sem SSH, sem chave, sem pin) e passa a acompanhá-lo, ainda sem conectar. Um só: se já existe, devolve o que há.
+     *
+     * @param portaDoAgente a porta que o Docker publica em 127.0.0.1 para o agente
+     */
+    public ServidorLab cadastrarLocal(String nome, int portaDoAgente) throws CofreException {
+        for (ConfigServidor c : cofre.servidores()) {
+            if (c.ehLocal()) {
+                return gerenciador.servidor(c.id()).orElseGet(() -> gerenciador.adicionar(c.id()));
+            }
+        }
+        ConfigServidor config = ConfigServidor.novoLocal(nome, portaDaPorta(portaDoAgente));
+        cofre.adicionarServidor(config, null);
+        return gerenciador.adicionar(config.id());
+    }
+
+    private static int portaDaPorta(int porta) {
+        if (porta < 1024 || porta > 65_535) {
+            throw new IllegalArgumentException("A porta do agente vai de 1024 a 65535.");
+        }
+        return porta;
+    }
+
+    /**
      * Confiar no host de um servidor que já existe (a conexão parou em {@code ERRO_CHAVE_HOST} por falta de pin):
      * grava o pin que o usuário confirmou e repete a conexão.
      */

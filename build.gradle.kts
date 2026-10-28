@@ -42,6 +42,9 @@ dependencies {
     // Terminal nativo.
     implementation("org.jetbrains.jediterm:jediterm-core:3.76")
     implementation("org.jetbrains.jediterm:jediterm-ui:3.76")
+    // PTY local do terminal de "Este computador": o mesmo que o JediTerm usa nas IDEs da JetBrains (EPL-1.0). Traz o forkpty do
+    // Mac e do Linux e o ConPTY do Windows num só jar, então o código do terminal local é o mesmo nos três sistemas. No Maven Central.
+    implementation("org.jetbrains.pty4j:pty4j:0.13.13")
     // Tema, ícones SVG e fontes.
     implementation("com.formdev:flatlaf:3.7.2")
     implementation("com.formdev:flatlaf-extras:3.7.2")

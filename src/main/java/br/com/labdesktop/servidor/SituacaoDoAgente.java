@@ -13,7 +13,18 @@ public enum SituacaoDoAgente {
     /** O container do agente existe e não responde pelo túnel. */
     INSTALADO_SEM_RESPOSTA,
     /** Há Docker, mas o usuário do app não pode usá-lo (falta o grupo docker): não dá para saber se o agente existe. */
-    SEM_PERMISSAO_NO_DOCKER;
+    SEM_PERMISSAO_NO_DOCKER,
+    /** "Este computador": o Docker não está instalado (o botão é "Preparar este computador"). */
+    LOCAL_SEM_DOCKER,
+    /** "Este computador": o Docker está instalado e parado. */
+    LOCAL_DOCKER_PARADO,
+    /** "Este computador": o Docker roda, mas o laboratório local ainda não foi criado (não há o container do agente). */
+    LOCAL_NAO_CRIADO;
+
+    /** Em "Este computador" falta preparar algo (Docker, laboratório): o botão é "Preparar este computador". */
+    public boolean oferecerPreparar() {
+        return this == LOCAL_SEM_DOCKER || this == LOCAL_DOCKER_PARADO || this == LOCAL_NAO_CRIADO;
+    }
 
     /** O app deve oferecer "Instalar agente" (o verbo é do usuário: nunca se instala sozinho). */
     public boolean oferecerInstalar() {

@@ -1,0 +1,109 @@
+package br.com.labdesktop.local;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import br.com.labdesktop.instalador.PacoteDoAgente;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+/** Os comandos do laboratório local: listas de argumentos (nunca texto de shell), a fronteira leitura x escrita e o que o {@code docker run} leva. */
+class ComandosLocaisTest {
+
+    private static final PacoteDoAgente PACOTE = PacoteDoAgente.de("0.1.0-abc1234", "abc1234def", new byte[] {1, 2, 3});
+    private final ParametrosDoLaboratorio p = ParametrosDoLaboratorio.padrao(7070, "/Users/ana/LabLocal/projects");
+
+    private List<List<String>> leituras() {
+        return List.of(ComandosLocais.versaoDoDocker(), ComandosLocais.versaoDoComposeDoDocker(), ComandosLocais.versaoDoGit(), ComandosLocais.estadoDoWsl(),
+            ComandosLocais.virtualizacaoDoWindows(), ComandosLocais.lerRede(p), ComandosLocais.lerContainersNaRede(p), ComandosLocais.lerContainer(p),
+            ComandosLocais.lerContainerPeloNome(p.containerAnterior()), ComandosLocais.lerVolume(p), ComandosLocais.lerImagem(p, PACOTE.versao()),
+            ComandosLocais.lerLogs(p), ComandosLocais.lerEstadoDoContainer("painel-lab"));
+    }
+
+    private List<List<String>> escritas() {
+        return List.of(ComandosLocais.criarRede(p), ComandosLocais.removerRede(p), ComandosLocais.construirImagem(p, PACOTE),
+            ComandosLocais.subirContainer(p, PACOTE, List.of("-v", "/:/host:ro"), "/Users/ana/LabLocal/projects"),
+            ComandosLocais.removerContainer("painel-lab"), ComandosLocais.renomearContainer("painel-lab", "painel-lab-anterior"),
+            ComandosLocais.pararContainer("painel-lab"), ComandosLocais.iniciarContainer("painel-lab"), ComandosLocais.removerVolume(p),
+            ComandosLocais.removerImagem(p, PACOTE.versao()));
+    }
+
+    @Test
+    void todaLeituraELeituraEToda_escritaNao() {
+        for (List<String> c : leituras()) {
+            assertTrue(ComandosLocais.ehLeitura(c), "devia ser leitura: " + c);
+        }
+        for (List<String> c : escritas()) {
+            assertFalse(ComandosLocais.ehLeitura(c), "NÃO pode contar como leitura: " + c);
+        }
+        for (List<String> c : List.of(List.of("brew", "install", "--cask", "docker-desktop"), List.of("winget", "install", "x"), List.of("open", "-a", "Docker"),
+            List.of("docker", "exec", "-i", "painel-lab", "node", "acesso.js", "token-registrar"), List.of("rm", "-rf", "/"))) {
+            assertFalse(ComandosLocais.ehLeitura(c), c.toString());
+        }
+        assertFalse(ComandosLocais.ehLeitura(null));
+        assertFalse(ComandosLocais.ehLeitura(List.of()));
+    }
+
+    @Test
+    void leituraComUmArgumentoAMaisOuForaDaRegraNaoELeitura() {
+        for (List<String> c : leituras()) {
+            List<String> mais = new ArrayList<>(c);
+            mais.add("--force");
+            assertFalse(ComandosLocais.ehLeitura(mais), "um argumento a mais: " + mais);
+            List<String> concatenado = new ArrayList<>(c);
+            concatenado.set(concatenado.size() - 1, concatenado.get(concatenado.size() - 1) + "; rm -rf /");
+            assertFalse(ComandosLocais.ehLeitura(concatenado), "texto de shell colado ao último argumento: " + concatenado);
+        }
+        assertFalse(ComandosLocais.ehLeitura(List.of("docker", "ps", "-a", "--filter", "name=^x$", "--format", "{{.Names}}")), "formato diferente");
+        assertFalse(ComandosLocais.ehLeitura(List.of("docker", "inspect", "-f", "{{.State.Status}}", "Nome Com Espaço")));
+        assertFalse(ComandosLocais.ehLeitura(List.of("docker", "logs", "--tail", "40", "../x")));
+    }
+
+    @Test
+    void oDockerRunPublicaSoNoLoopbackNaoUsaRedeDoHostExigeTokenEMontaAPastaNoMesmoCaminho() {
+        List<String> r = ComandosLocais.subirContainer(p, PACOTE, List.of("-v", "/:/host:ro"), "/Users/ana/LabLocal/projects");
+        assertEquals(List.of("docker", "run", "-d", "--name", "painel-lab", "--restart", "unless-stopped", "-p", "127.0.0.1:7070:7070", "--pid", "host",
+            "--label", "br.com.labdesktop.agente=0.1.0-abc1234", "--label", "br.com.labdesktop.local=1",
+            "--log-opt", "max-size=10m", "--log-opt", "max-file=3", "-e", "PORT=7070", "-e", "PAINEL_PERFIL=monitor", "-e", "PAINEL_EXIGE_TOKEN=1",
+            "-e", "PAINEL_ESCUTA=todas", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", "/:/host:ro", "-v", "painel-lab-dados:" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + "",
+            "-v", "/Users/ana/LabLocal/projects:/Users/ana/LabLocal/projects", "labdesktop-agente:0.1.0-abc1234"), r);
+        assertFalse(r.contains("--network"), "o Docker Desktop não tem rede de host de verdade");
+        assertTrue(r.contains("127.0.0.1:7070:7070"), "nunca 0.0.0.0");
+        assertFalse(r.stream().anyMatch(a -> a.startsWith("0.0.0.0")), r.toString());
+    }
+
+    @Test
+    void oBuildLevaOPacotePelaEntradaSemCaminhoDoSistema() {
+        assertEquals(List.of("docker", "build", "-f", "Dockerfile.monitor", "-t", "labdesktop-agente:0.1.0-abc1234", "-"), ComandosLocais.construirImagem(p, PACOTE));
+    }
+
+    @Test
+    void nenhumArgumentoTemControleENenhumaLinhaViraTextoDeShell() {
+        List<List<String>> todas = new ArrayList<>(leituras());
+        todas.addAll(escritas());
+        for (List<String> c : todas) {
+            assertFalse(c.isEmpty());
+            assertFalse(c.get(0).contains(" "), "o primeiro item é o programa, não uma linha: " + c);
+            for (String a : c) {
+                assertTrue(a.chars().noneMatch(ch -> ch < 0x20 || ch == 0x7F), "controle em: " + c);
+            }
+            assertFalse(c.get(0).equals("sh") || c.get(0).equals("bash") || c.get(0).equals("cmd"), "sem shell: " + c);
+        }
+    }
+
+    @Test
+    void nomesPassamPorRegexAntesDeEntrarEmUmComando() {
+        for (String ruim : List.of("Painel", "a b", "-x", "a;b", "a$(b)", "", "x".repeat(60))) {
+            assertThrows(IllegalArgumentException.class, () -> new ParametrosDoLaboratorio(ruim, 7070, "edge", "img", "/x"), ruim);
+            assertThrows(IllegalArgumentException.class, () -> new ParametrosDoLaboratorio("ok", 7070, ruim, "img", "/x"), ruim);
+            assertThrows(IllegalArgumentException.class, () -> new ParametrosDoLaboratorio("ok", 7070, "edge", ruim, "/x"), ruim);
+        }
+        assertThrows(IllegalArgumentException.class, () -> ComandosLocais.removerContainer("ruim; rm"));
+        assertThrows(IllegalArgumentException.class, () -> ComandosLocais.lerEstadoDoContainer("A b"));
+        assertThrows(IllegalArgumentException.class, () -> new ParametrosDoLaboratorio("ok", 80, "edge", "img", "/x"), "porta baixa");
+        assertThrows(IllegalArgumentException.class, () -> new ParametrosDoLaboratorio("ok", 7070, "edge", "img", " "));
+    }
+}

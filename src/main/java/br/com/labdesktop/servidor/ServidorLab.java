@@ -8,6 +8,7 @@ import br.com.labdesktop.api.ErroApi.NaoEncontrado;
 import br.com.labdesktop.api.PedidoDeCodigo2fa;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.VersaoAgente;
+import br.com.labdesktop.arquivos.ClienteSftpLocal;
 import br.com.labdesktop.arquivos.FabricaDeClienteSftp;
 import br.com.labdesktop.cofre.AcessoAoCofre;
 import br.com.labdesktop.cofre.AgenteInstalado;
@@ -16,6 +17,12 @@ import br.com.labdesktop.cofre.CofreException;
 import br.com.labdesktop.cofre.ConfigServidor;
 import br.com.labdesktop.cofre.Estado2fa;
 import br.com.labdesktop.cofre.InfoChave;
+import br.com.labdesktop.local.ConexaoLocal;
+import br.com.labdesktop.local.ExecutorDeLinhaFixa;
+import br.com.labdesktop.local.LaboratorioLocal;
+import br.com.labdesktop.local.ParametrosDoLaboratorio;
+import br.com.labdesktop.local.ServicosLocais;
+import br.com.labdesktop.servidor.ResumoDeSeguranca.Leitura;
 import br.com.labdesktop.cofre.TokenAgente;
 import br.com.labdesktop.instalador.ExecutorSsh;
 import br.com.labdesktop.instalador.GanchosDaInstalacao;
@@ -33,6 +40,7 @@ import br.com.labdesktop.ssh.ProvisionadorRemoto;
 import br.com.labdesktop.ssh.SegredoTotp;
 import br.com.labdesktop.ssh.SondaDoAgente;
 import br.com.labdesktop.terminal.TransporteDeTerminal;
+import br.com.labdesktop.terminal.TransporteLocal;
 import br.com.labdesktop.terminal.TransporteSsh;
 import br.com.labdesktop.ssh.PontaDoAgente;
 import br.com.labdesktop.ssh.ConexaoDoServidor;
@@ -90,6 +98,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private final ConexaoDoServidor conexao;
     /** A mesma conexão, quando é por SSH (terminal e arquivos do servidor remoto); {@code null} em "Este computador". */
     private final ConexaoSsh conexaoSsh;
+    /** "Este computador": sem SSH, sem túnel, o agente em 127.0.0.1. */
+    private final boolean local;
+    private final ServicosLocais locais;
     private final Sondador sondador;
     private final AcoesDoServidor acoes;
     /** A leitura de segurança (SSH exec, somente leitura) deste servidor, com o tópico que a entrega às telas. */
@@ -125,7 +136,14 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     /** Com tudo injetável (testes). */
     public ServidorLab(String servidorId, AcessoAoCofre cofre, PedidoDeCodigo2fa pedidoDeCodigo, ConfigSsh cfgSsh,
                        Agendador agendador, Executor entrega, Executor trabalho) {
+        this(servidorId, cofre, pedidoDeCodigo, cfgSsh, agendador, entrega, trabalho, ServicosLocais.padrao());
+    }
+
+    /** Com os serviços do computador local também injetáveis (testes do servidor "Este computador"). */
+    public ServidorLab(String servidorId, AcessoAoCofre cofre, PedidoDeCodigo2fa pedidoDeCodigo, ConfigSsh cfgSsh,
+                       Agendador agendador, Executor entrega, Executor trabalho, ServicosLocais locais) {
         this.id = servidorId;
+        this.locais = locais;
         this.cofre = cofre;
         this.pedidoDeCodigo = pedidoDeCodigo == null ? PedidoDeCodigo2fa.NUNCA : pedidoDeCodigo;
         this.entrega = entrega;
@@ -138,11 +156,21 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             config.estado2fa(), config.nomeDoDispositivo(), null, null);
 
         this.sondador = new Sondador(agendador, trabalho, entrega, this::aoErroDeConsulta);
-        this.conexaoSsh = new ConexaoSsh(servidorId, cofre, cfgSsh, t -> sondar(t), agendador,
-            new PoliticaDeBackoff(cfgSsh.escalaBackoff(), Math::random));
-        this.conexao = conexaoSsh;
+        this.local = config.ehLocal();
+        if (local) {
+            this.conexaoSsh = null;
+            this.conexao = new ConexaoLocal(servidorId, cofre, locais.config(), p -> sondarLocal(p), agendador,
+                new ExecutorDeLinhaFixa(locais.executor()));
+        } else {
+            this.conexaoSsh = new ConexaoSsh(servidorId, cofre, cfgSsh, t -> sondar(t), agendador,
+                new PoliticaDeBackoff(cfgSsh.escalaBackoff(), Math::random));
+            this.conexao = conexaoSsh;
+        }
         this.acoes = new AcoesDoServidor(this::apiAtual, sondador);
-        this.topicoDeSeguranca = Topico.seguranca(new LeitorDeSegurancaPorSsh(conexao::executar, Instant::now));
+        this.topicoDeSeguranca = Topico.seguranca(local
+            ? () -> new ResumoDeSeguranca(Instant.now(), Leitura.indisponivel(), Leitura.indisponivel(), Leitura.indisponivel(),
+                Leitura.indisponivel(), Leitura.indisponivel()) // a leitura de segurança é do SSH de um servidor remoto; a aba nem aparece aqui
+            : new LeitorDeSegurancaPorSsh(conexao::executar, Instant::now));
         this.desinscreverConexao = conexao.observar(this::aoMudarConexao);
         this.ouvinteDeLimites = new OuvinteDeTopico<LimitesConta>() {
             @Override
@@ -343,6 +371,11 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         }
     }
 
+    /** A sonda do agente local: a mesma de {@link #sondar}, sem túnel. */
+    private SondaDoAgente.Resultado sondarLocal(PontaDoAgente ponta) {
+        return sondar(ponta);
+    }
+
     private ClienteApi apiParaTunel(PontaDoAgente tunel) {
         synchronized (trava) {
             if (api != null && geracaoDaApi == tunel.geracao()) {
@@ -492,8 +525,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         trabalho.execute(() -> {
             try {
                 AgenteInstalado como = comoFalarComOAgente();
-                SituacaoDoAgente lida = new LeitorDaSituacaoDoAgente(conexao::executar, como.container(), como.docker()).ler();
-                if (lida == SituacaoDoAgente.NAO_INSTALADO) {
+                SituacaoDoAgente lida = local ? new LeitorDaSituacaoLocal(locais.executor(), como.container()).ler()
+                    : new LeitorDaSituacaoDoAgente(conexao::executar, como.container(), como.docker()).ler();
+                if (lida == SituacaoDoAgente.NAO_INSTALADO || lida == SituacaoDoAgente.LOCAL_NAO_CRIADO) {
                     esquecerComoFalarComOAgente(); // foi removido (ou nunca esteve): o que se lembrava dele não vale mais
                 }
                 atualizarEstado(e -> e.conexao() == br.com.labdesktop.ssh.EstadoConexao.CONECTADO
@@ -523,6 +557,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * Os ganchos ligam o instalador ao túnel (sondar o agente) e ao cofre (registrar o token deste Mac).
      */
     public InstaladorDeAgente instaladorDoAgente(ParametrosDaInstalacao parametros, PacoteDoAgente pacote) {
+        if (local) {
+            throw new IllegalStateException("Em Este computador o agente se cria por \"Preparar este computador\".");
+        }
         return new InstaladorDeAgente(new ExecutorSsh(conexaoSsh), parametros, pacote, ganchosDeInstalacao());
     }
 
@@ -967,17 +1004,38 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
 
     /** O transporte do terminal deste servidor: um canal SSH com PTY (remoto) ou um PTY do próprio computador (local). */
     public TransporteDeTerminal transporteDeTerminal(BooleanSupplier donoExclusivo) {
-        return new TransporteSsh(conexaoSsh, donoExclusivo);
+        return local ? TransporteLocal.doSistema(conexao) : new TransporteSsh(conexaoSsh, donoExclusivo);
     }
 
     /** Como o gerenciador de arquivos abre o cliente de arquivos deste servidor. */
     public FabricaDeClienteSftp fabricaDeArquivos() {
-        return FabricaDeClienteSftp.doSftp(conexaoSsh::abrirSftp);
+        return local ? ClienteSftpLocal::doSistema : FabricaDeClienteSftp.doSftp(conexaoSsh::abrirSftp);
     }
 
     /** Roda o comando do "Salvar com sudo" do editor de arquivos; {@code null} onde não existe sudo (o computador local). */
     public ProvisionadorRemoto.Executor executorDeSudo() {
-        return conexao::executar;
+        return local ? null : conexao::executar;
+    }
+
+    /** É o servidor "Este computador" (sem SSH)? */
+    public boolean ehLocal() {
+        return local;
+    }
+
+    /** Os serviços do computador (processos, plataforma, sonda): o que "Preparar este computador" usa. */
+    public ServicosLocais servicosLocais() {
+        return locais;
+    }
+
+    /**
+     * Monta "Criar meu laboratório local" (e "Remover"). NÃO cria nada: quem o aciona é a tela de confirmação, depois do clique do usuário. Os
+     * ganchos ligam os passos ao agente (sondar) e ao cofre (registrar o token deste app).
+     */
+    public LaboratorioLocal laboratorioLocal(ParametrosDoLaboratorio parametros, PacoteDoAgente pacote) {
+        if (!local) {
+            throw new IllegalStateException("O laboratório local é só do servidor Este computador.");
+        }
+        return new LaboratorioLocal(locais.executor(), parametros, locais.plataforma(), pacote, ganchosDeInstalacao());
     }
 
     /** O provisionador de comandos do agente (para a casca e os testes). */

@@ -5,7 +5,9 @@ import br.com.labdesktop.cofre.AcessoAoCofre;
 import br.com.labdesktop.cofre.CofreException;
 import br.com.labdesktop.cofre.ConfigServidor;
 import br.com.labdesktop.cofre.InfoChave;
+import br.com.labdesktop.local.ServicosLocais;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Dados;
+import br.com.labdesktop.util.Agendador;
 import br.com.labdesktop.ssh.ConfigSsh;
 import br.com.labdesktop.ssh.MonitorDeSono;
 import br.com.labdesktop.util.Fundo;
@@ -39,6 +41,7 @@ public final class GerenciadorServidores implements AutoCloseable {
     private final AcessoAoCofre cofre;
     private final PedidoDeCodigo2fa pedidoDeCodigo;
     private final ConfigSsh cfgSsh;
+    private final ServicosLocais locais;
     private final Map<String, ServidorLab> servidores = new LinkedHashMap<>();
     private final List<Consumer<List<ServidorLab>>> observadoresDaLista = new CopyOnWriteArrayList<>();
     private final List<Consumer<ServidorLab>> ligadoresDeSono = new ArrayList<>();
@@ -50,13 +53,23 @@ public final class GerenciadorServidores implements AutoCloseable {
 
     /** Cria um {@link ServidorLab} (ainda parado) para cada servidor que o cofre tem e liga o bloqueio. */
     public GerenciadorServidores(AcessoAoCofre cofre, PedidoDeCodigo2fa pedidoDeCodigo, ConfigSsh cfgSsh) {
+        this(cofre, pedidoDeCodigo, cfgSsh, ServicosLocais.padrao());
+    }
+
+    /** Com os serviços do computador local (processos, plataforma, sonda) injetáveis: os testes do servidor "Este computador". */
+    public GerenciadorServidores(AcessoAoCofre cofre, PedidoDeCodigo2fa pedidoDeCodigo, ConfigSsh cfgSsh, ServicosLocais locais) {
         this.cofre = cofre;
         this.pedidoDeCodigo = pedidoDeCodigo;
         this.cfgSsh = cfgSsh;
+        this.locais = locais;
         for (ConfigServidor c : cofre.servidores()) {
-            servidores.put(c.id(), new ServidorLab(c.id(), cofre, pedidoDeCodigo, cfgSsh));
+            servidores.put(c.id(), novoServidor(c.id()));
         }
         cofre.aoBloquear(this::aoBloquearOCofre);
+    }
+
+    private ServidorLab novoServidor(String id) {
+        return new ServidorLab(id, cofre, pedidoDeCodigo, cfgSsh, Agendador.doFundo(), Fundo::naEdt, Fundo.ioVirtual(), locais);
     }
 
     /** Os servidores, na ordem do cofre. */
@@ -106,7 +119,7 @@ public final class GerenciadorServidores implements AutoCloseable {
             if (existente != null) {
                 return existente;
             }
-            novo = new ServidorLab(servidorId, cofre, pedidoDeCodigo, cfgSsh);
+            novo = novoServidor(servidorId);
             servidores.put(servidorId, novo);
             for (Consumer<ServidorLab> ligar : ligadoresDeSono) {
                 ligar.accept(novo);

@@ -1,0 +1,253 @@
+package br.com.labdesktop.local;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import br.com.labdesktop.instalador.ResultadoDaVerificacao.Estado;
+import br.com.labdesktop.teste.ComputadorSimulado;
+import br.com.labdesktop.teste.SondaFalsa;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+/**
+ * "Preparar este computador": cada verificação com o executor falso (Docker ausente, parado, ok, pouco disco, sem WSL, porta ocupada,
+ * arquitetura...). Prova também que a conferência só LÊ: nenhum comando de instalação roda antes de um clique.
+ */
+class VerificacoesDoComputadorTest {
+
+    private final ComputadorSimulado pc = new ComputadorSimulado();
+    private final SondaFalsa sonda = new SondaFalsa();
+    private PlataformaLocal plataforma = new PlataformaLocal(SistemaOperacional.MAC, "/Users/ana", Map.of());
+
+    private RelatorioDoComputador verificar() throws Exception {
+        return new VerificacoesDoComputador(pc, sonda, plataforma).executar(plataforma.pastaDoLaboratorio(), 7070);
+    }
+
+    @Test
+    void tudoOkNaOrdemDaTelaEProntoParaCriar() throws Exception {
+        RelatorioDoComputador r = verificar();
+        assertFalse(r.bloqueado(), r.problemas().toString());
+        assertTrue(r.pronto());
+        assertEquals(List.of(ItemDoComputador.SISTEMA, ItemDoComputador.ARQUITETURA, ItemDoComputador.DOCKER, ItemDoComputador.COMPOSE, ItemDoComputador.DISCO,
+            ItemDoComputador.MEMORIA, ItemDoComputador.PORTA, ItemDoComputador.GIT), r.resultados().stream().map(ResultadoDoComputador::item).toList(),
+            "no Mac não há item de virtualização, e o node NÃO é requisito");
+        for (ResultadoDoComputador v : r.resultados()) {
+            assertEquals(Estado.OK, v.estado(), v.item() + ": " + v.frase());
+            assertFalse(v.frase().isBlank());
+        }
+        assertTrue(r.de(ItemDoComputador.DOCKER).frase().contains("29.6.2"));
+        assertEquals(7070, r.portaLivreSugerida());
+    }
+
+    @Test
+    void aConferenciaSoLeENuncaRodaInstalacaoNemAbreNada() throws Exception {
+        pc.dockerInstalado = false;
+        pc.gitInstalado = false;
+        verificar();
+        assertFalse(pc.comandos.isEmpty());
+        for (List<String> c : pc.comandos) {
+            assertTrue(ComandosLocais.ehLeitura(c), "a conferência só pode rodar leituras fixas: " + c);
+        }
+        assertTrue(pc.escritas().isEmpty());
+    }
+
+    @Test
+    void dockerAusenteNoMacComHomebrewOfereceDockerDesktopERecomendaEColimaComoAlternativa() throws Exception {
+        pc.dockerInstalado = false;
+        sonda.programas.add("brew");
+        RelatorioDoComputador r = verificar();
+        ResultadoDoComputador d = r.de(ItemDoComputador.DOCKER);
+        assertEquals(Estado.PROBLEMA, d.estado());
+        assertTrue(r.bloqueado());
+        assertFalse(r.pronto());
+        assertEquals(2, d.planos().size());
+        PlanoDeInstalacao docker = d.planos().get(0);
+        assertTrue(docker.recomendado());
+        assertEquals(List.of(List.of("brew", "install", "--cask", "docker-desktop")), docker.comandos());
+        assertEquals(List.of("brew install --cask docker-desktop"), docker.comandosParaTela());
+        assertTrue(docker.pedeSenhaDoSistema(), "o sistema pode pedir a senha: isso é do sistema");
+        PlanoDeInstalacao colima = d.planos().get(1);
+        assertFalse(colima.recomendado());
+        assertEquals(List.of(List.of("brew", "install", "colima", "docker")), colima.comandos());
+    }
+
+    @Test
+    void dockerAusenteNoMacSemHomebrewAbreAPaginaOficialENaoRodaNada() throws Exception {
+        pc.dockerInstalado = false;
+        sonda.programas.clear();
+        ResultadoDoComputador d = verificar().de(ItemDoComputador.DOCKER);
+        assertEquals(1, d.planos().size());
+        PlanoDeInstalacao p = d.planos().get(0);
+        assertFalse(p.executavelPeloApp());
+        assertEquals("https://www.docker.com/products/docker-desktop/", p.paginaParaAbrir());
+        assertFalse(p.passosManuais().isEmpty());
+        assertTrue(p.passosManuais().stream().anyMatch(s -> s.contains("senha de administrador") && s.contains("do sistema")));
+    }
+
+    @Test
+    void dockerAusenteNoWindowsComWingetOfereceWingetEAPagina() throws Exception {
+        plataforma = new PlataformaLocal(SistemaOperacional.WINDOWS, "C:\\Users\\ana", Map.of());
+        sonda.programas.clear();
+        sonda.programas.add("winget");
+        sonda.arquitetura = "amd64";
+        pc.dockerInstalado = false;
+        ResultadoDoComputador d = verificar().de(ItemDoComputador.DOCKER);
+        assertEquals(2, d.planos().size());
+        PlanoDeInstalacao winget = d.planos().get(0);
+        assertEquals("winget", winget.comandos().get(0).get(0));
+        assertTrue(winget.comandos().get(0).containsAll(List.of("install", "-e", "--id", "Docker.DockerDesktop")));
+        assertTrue(winget.resumo().contains("aceita os termos"), "o aceite dos termos está dito na confirmação, antes do clique");
+        assertTrue(winget.precisaReiniciar());
+        assertEquals("https://www.docker.com/products/docker-desktop/", d.planos().get(1).paginaParaAbrir());
+    }
+
+    @Test
+    void dockerAusenteNoLinuxSoMostraOGuiaEmTexto() throws Exception {
+        plataforma = new PlataformaLocal(SistemaOperacional.LINUX, "/home/ana", Map.of());
+        pc.dockerInstalado = false;
+        RelatorioDoComputador r = verificar();
+        assertEquals(Estado.AVISO, r.de(ItemDoComputador.SISTEMA).estado());
+        PlanoDeInstalacao p = r.de(ItemDoComputador.DOCKER).planos().get(0);
+        assertFalse(p.executavelPeloApp());
+        assertEquals("https://docs.docker.com/engine/install/", p.paginaParaAbrir());
+    }
+
+    @Test
+    void dockerInstaladoEParadoOfereceAbrirOODockerEIssoNaoEInstalar() throws Exception {
+        pc.dockerParado = true;
+        ResultadoDoComputador d = verificar().de(ItemDoComputador.DOCKER);
+        assertEquals(Estado.PROBLEMA, d.estado());
+        assertTrue(d.frase().contains("não está rodando"), d.frase());
+        assertTrue(d.planos().isEmpty(), "não há o que instalar");
+        sonda.caminhos.add("/Applications/Docker.app");
+        ResultadoDoComputador comApp = verificar().de(ItemDoComputador.DOCKER);
+        assertTrue(comApp.oferecerAbrirDocker(), "com o Docker Desktop instalado o app sabe abri-lo");
+        assertTrue(comApp.frase().contains("Abrir o Docker"));
+    }
+
+    @Test
+    void dockerDesktopInstaladoMasForaDoPathContaComoParado() throws Exception {
+        pc.semPrograma("docker");
+        sonda.caminhos.add("/Applications/Docker.app");
+        ResultadoDoComputador d = verificar().de(ItemDoComputador.DOCKER);
+        assertTrue(d.oferecerAbrirDocker());
+        assertTrue(d.planos().isEmpty());
+    }
+
+    @Test
+    void semPermissaoNoLinuxDizOComandoDoGrupoSemElevarPrivilegio() throws Exception {
+        plataforma = new PlataformaLocal(SistemaOperacional.LINUX, "/home/ana", Map.of());
+        pc.falharEm(c -> c.equals(ComandosLocais.versaoDoDocker()), 1, "permission denied while trying to connect to the Docker daemon socket");
+        ResultadoDoComputador d = verificar().de(ItemDoComputador.DOCKER);
+        assertEquals(Estado.PROBLEMA, d.estado());
+        assertEquals("sudo usermod -aG docker ana", d.comandoSugerido());
+    }
+
+    @Test
+    void poucoDiscoBloqueiaNoLimiteDeCincoGigas() throws Exception {
+        sonda.bytesLivres = 5L * 1024 * 1024 * 1024 - 1;
+        ResultadoDoComputador d = verificar().de(ItemDoComputador.DISCO);
+        assertEquals(Estado.PROBLEMA, d.estado());
+        assertTrue(d.frase().contains("5 GB"), d.frase());
+        sonda.bytesLivres = 5L * 1024 * 1024 * 1024;
+        assertEquals(Estado.OK, verificar().de(ItemDoComputador.DISCO).estado());
+        sonda.bytesLivres = -1;
+        assertEquals(Estado.AVISO, verificar().de(ItemDoComputador.DISCO).estado(), "não saber o espaço não impede");
+    }
+
+    @Test
+    void poucaMemoriaBloqueiaNoLimiteDeQuatroGigas() throws Exception {
+        sonda.memoriaTotal = 3L * 1024 * 1024 * 1024;
+        assertEquals(Estado.PROBLEMA, verificar().de(ItemDoComputador.MEMORIA).estado());
+        sonda.memoriaTotal = 4L * 1024 * 1024 * 1024;
+        assertEquals(Estado.OK, verificar().de(ItemDoComputador.MEMORIA).estado());
+    }
+
+    @Test
+    void arquiteturaQueOAgenteNaoSuportaBloqueia() throws Exception {
+        sonda.arquitetura = "amd64";
+        assertEquals(Estado.OK, verificar().de(ItemDoComputador.ARQUITETURA).estado());
+        sonda.arquitetura = "riscv64";
+        ResultadoDoComputador d = verificar().de(ItemDoComputador.ARQUITETURA);
+        assertEquals(Estado.PROBLEMA, d.estado());
+        assertTrue(d.frase().contains("riscv64"));
+    }
+
+    @Test
+    void portaOcupadaBloqueiaESugereUmaLivreEExplicaOAirPlayNoMac() throws Exception {
+        sonda.portasOcupadas.add(7000);
+        plataforma = new PlataformaLocal(SistemaOperacional.MAC, "/Users/ana", Map.of());
+        RelatorioDoComputador r = new VerificacoesDoComputador(pc, sonda, plataforma).executar(plataforma.pastaDoLaboratorio(), 7000);
+        ResultadoDoComputador d = r.de(ItemDoComputador.PORTA);
+        assertEquals(Estado.PROBLEMA, d.estado());
+        assertTrue(d.frase().contains("AirPlay"), d.frase());
+        assertEquals(7001, r.portaLivreSugerida());
+        assertTrue(d.frase().contains("7001"), d.frase());
+        assertTrue(r.bloqueado());
+    }
+
+    @Test
+    void semNenhumaPortaLivreAchadaPedeOutraPorta() throws Exception {
+        for (int p = 7070; p < 7070 + VerificacoesDoComputador.TENTATIVAS_DE_PORTA; p++) {
+            sonda.portasOcupadas.add(p);
+        }
+        RelatorioDoComputador r = verificar();
+        assertEquals(0, r.portaLivreSugerida());
+        assertTrue(r.de(ItemDoComputador.PORTA).frase().contains("Escolha outra porta"));
+    }
+
+    @Test
+    void windowsSemWslBloqueiaEMostraOComandoQueExigeAdministradorENuncaORoda() throws Exception {
+        plataforma = new PlataformaLocal(SistemaOperacional.WINDOWS, "C:\\Users\\ana", Map.of());
+        sonda.arquitetura = "amd64";
+        pc.wslInstalado = false;
+        RelatorioDoComputador r = verificar();
+        ResultadoDoComputador v = r.de(ItemDoComputador.VIRTUALIZACAO);
+        assertEquals(Estado.PROBLEMA, v.estado());
+        assertEquals("wsl --install", v.comandoSugerido());
+        PlanoDeInstalacao p = v.planos().get(0);
+        assertFalse(p.executavelPeloApp(), "o app NÃO eleva privilégio nem reinicia: só mostra o comando e espera");
+        assertTrue(p.precisaReiniciar());
+        assertTrue(p.passosManuais().stream().anyMatch(s -> s.contains("administrador")));
+        assertTrue(pc.escritas().isEmpty());
+    }
+
+    @Test
+    void windowsComVirtualizacaoDesligadaNaBiosBloqueia() throws Exception {
+        plataforma = new PlataformaLocal(SistemaOperacional.WINDOWS, "C:\\Users\\ana", Map.of());
+        pc.virtualizacaoLigada = false;
+        ResultadoDoComputador v = verificar().de(ItemDoComputador.VIRTUALIZACAO);
+        assertEquals(Estado.PROBLEMA, v.estado());
+        assertTrue(v.frase().contains("BIOS"), v.frase());
+        pc.virtualizacaoLigada = true;
+        assertEquals(Estado.OK, verificar().de(ItemDoComputador.VIRTUALIZACAO).estado());
+    }
+
+    @Test
+    void gitAusenteEAvisoComOPlanoDoXcodeSemHomebrewENaoImpede() throws Exception {
+        pc.gitInstalado = false;
+        sonda.programas.clear();
+        RelatorioDoComputador r = verificar();
+        ResultadoDoComputador g = r.de(ItemDoComputador.GIT);
+        assertEquals(Estado.AVISO, g.estado());
+        assertFalse(r.bloqueado(), "o git só é preciso para importar projetos");
+        assertEquals(List.of(List.of("xcode-select", "--install")), g.planos().get(0).comandos());
+        sonda.programas.add("brew");
+        List<PlanoDeInstalacao> comBrew = verificar().de(ItemDoComputador.GIT).planos();
+        assertEquals(List.of(List.of("brew", "install", "git")), comBrew.get(0).comandos());
+    }
+
+    @Test
+    void composeAusenteEAvisoEDependeDoDocker() throws Exception {
+        pc.composeInstalado = false;
+        assertEquals(Estado.AVISO, verificar().de(ItemDoComputador.COMPOSE).estado());
+        pc.dockerParado = true;
+        ResultadoDoComputador c = verificar().de(ItemDoComputador.COMPOSE);
+        assertEquals(Estado.AVISO, c.estado());
+        assertTrue(c.frase().contains("depende do Docker"));
+        assertNull(c.comandoSugerido());
+    }
+}
