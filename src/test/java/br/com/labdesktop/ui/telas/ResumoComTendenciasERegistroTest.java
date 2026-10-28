@@ -117,6 +117,72 @@ class ResumoComTendenciasERegistroTest {
         assertFalse(Visual.naEdt(b::temAviso));
     }
 
+    private static DadosDeTendencia umMes(java.util.Map<Metrica, Double> agora, Double disco) {
+        java.util.Map<Metrica, List<Double>> v = new java.util.EnumMap<>(Metrica.class);
+        v.put(Metrica.CPU, List.of(0.10, 0.10, 0.25));
+        v.put(Metrica.MEMORIA, List.of(0.5, 0.5, 0.5));
+        v.put(Metrica.DISCO, List.of(disco, disco + 0.001, disco + 0.004));
+        v.put(Metrica.ESCRITA_NO_DISCO, List.of(900.0, 1_048_576.0, 40.0 * 1024 * 1024));
+        v.put(Metrica.DOWNLOAD, List.of(500_000.0, 600_000.0, 900_000.0));
+        v.put(Metrica.UPLOAD, List.of(90_000.0, 100_000.0, 150_000.0));
+        return new DadosDeTendencia(JanelaDeTempo.UM_MES, AGORA.minus(java.time.Duration.ofHours(9)), java.time.Duration.ofHours(3), v, java.util.Map.of(), AGORA, true, agora, false);
+    }
+
+    private static BlocoDeTendencias blocoCom(DadosDeTendencia d, boolean local) {
+        Visual.tema(Tema.CLARO);
+        BlocoDeTendencias b = Visual.naEdt(BlocoDeTendencias::new);
+        Visual.naEdt(() -> {
+            b.definirLocal(local);
+            b.mostrar(new BlocoDeTendencias.Visao(JanelaDeTempo.UM_MES, d, BlocoDeTendencias.Situacao.OK, true, SP));
+        });
+        return b;
+    }
+
+    @Test
+    void oAgoraDoGraficoELeituraRealEnuncaAMediaDaUltimaCelulaDeTresHoras() {
+        // no período de 1 mês a última célula é uma média de 3 horas (25%), mas o indicador de cima diz 8,3%: o "agora" é a leitura real
+        BlocoDeTendencias com = blocoCom(umMes(java.util.Map.of(Metrica.CPU, 0.083), 0.60), false);
+        assertEquals("8,3%", Visual.naEdt(com::valoresDeAgora).get(0));
+        assertEquals("Agora: 8,3%", Visual.naEdt(com::dicasDeAgora).get(0));
+        // sem a leitura real (agente antigo) o número é o último da série e a dica o chama de "último", nunca de "agora"
+        BlocoDeTendencias sem = blocoCom(umMes(java.util.Map.of(), 0.60), false);
+        assertEquals("25%", Visual.naEdt(sem::valoresDeAgora).get(0));
+        assertEquals("Último valor do período: 25%", Visual.naEdt(sem::dicasDeAgora).get(0));
+    }
+
+    @Test
+    void emEsteComputadorSoQuatroGraficosESemRedeComAExplicacao() {
+        BlocoDeTendencias b = blocoCom(umMes(java.util.Map.of(), 0.60).semAsRedes(), true);
+        assertEquals(List.of("CPU", "Memória", "Disco", "Escrita no disco"), Visual.naEdt(b::nomes));
+        assertEquals(4, Visual.naEdt(b::graficos).size());
+        assertEquals(4, Visual.naEdt(() -> b.painelDaGrade().getComponentCount()), "a grade só tem as quatro células");
+        assertTrue(Visual.naEdt(() -> b.aviso().getText()).endsWith("sem rede aqui"), Visual.naEdt(() -> b.aviso().getText()));
+        assertTrue(Visual.naEdt(() -> b.aviso().getToolTipText()).contains("a rede que o agente mede é a do container dele"));
+        assertTrue(Visual.naEdt(() -> b.aviso().getToolTipText()).contains("máquina virtual do Docker"));
+        Visual.salvar(Visual.renderizar(b, 640, Visual.alturaPreferida(b, 640)), "tendencias-este-computador-claro");
+        // um servidor comum volta aos seis
+        BlocoDeTendencias seis = blocoCom(umMes(java.util.Map.of(), 0.60), false);
+        assertEquals(6, Visual.naEdt(seis::nomes).size());
+    }
+
+    @Test
+    void oDiscoSemVariacaoNaoEnchePorInteiroAAlturaDoGrafico() {
+        // 70,0% a 70,4%: a legenda diz mín = méd = máx, e a curva não pode subir da base ao topo
+        BlocoDeTendencias b = blocoCom(umMes(java.util.Map.of(), 0.700), false);
+        var pontos = Visual.naEdt(() -> b.graficos().get(2).pontos(100, 30));
+        double menor = pontos.stream().mapToDouble(java.awt.geom.Point2D.Double::getY).min().orElse(0);
+        double maior = pontos.stream().mapToDouble(java.awt.geom.Point2D.Double::getY).max().orElse(0);
+        assertTrue(maior - menor < 0.3 * 30, "0,4 ponto percentual ocupa " + (maior - menor) + " de 30 px");
+    }
+
+    @Test
+    void asLegendasSaemEmDuasLinhasEComOMaximoInteiro() {
+        var r = new br.com.labdesktop.tendencias.EstatisticaDeSerie.Resumo(10, 878.9, 1_100_000.0, 40_900_000.0, 1.0, null);
+        String[] l = BlocoDeTendencias.legendaEmDuasLinhas(Metrica.ESCRITA_NO_DISCO, r);
+        assertEquals("mín 879 B/s · méd 1,0 MB/s", l[0]);
+        assertEquals("máx 39,0 MB/s", l[1]);
+    }
+
     @Test
     void esqueletoAteOPrimeiroDadoDoPeriodoEDepoisOsGraficos() {
         PaginaResumo p = pagina();

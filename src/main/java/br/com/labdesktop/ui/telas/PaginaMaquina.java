@@ -40,6 +40,7 @@ public final class PaginaMaquina extends PaginaDoServidor {
 
     @Override
     void atualizarConteudo() {
+        detalhes.definirLocal(estado != null && estado.local());
         detalhes.atualizar(info, detalhe, detalheFalhou);
     }
 

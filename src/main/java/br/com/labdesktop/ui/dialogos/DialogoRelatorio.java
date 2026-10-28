@@ -151,8 +151,7 @@ public final class DialogoRelatorio extends Dialogo {
             tabela,
             new Rotulo("Resumo").negrito(),
             rolagemDoResumo,
-            dicaCorrida("Máximo e hora do pico: o maior valor visto (para CPU e Escrita no disco, o maior das leituras de 2 segundos). P95: em 95% do tempo o valor ficou abaixo dele. "
-                + "A estimativa do disco é só uma conta pela tendência do período, e não uma promessa."));
+            dicaCorrida(RelatorioDeTendencias.NOTA_DOS_NUMEROS + " A estimativa do disco é só uma conta pela tendência do período, e não uma promessa."));
         salvarCsv.addActionListener(e -> salvar("csv", "Planilha CSV", false));
         salvarTexto.addActionListener(e -> salvar("txt", "Texto", true));
         fechar.addActionListener(e -> fechar());

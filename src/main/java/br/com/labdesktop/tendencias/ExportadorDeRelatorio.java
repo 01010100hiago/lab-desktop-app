@@ -15,8 +15,8 @@ import java.util.Locale;
  *
  * <p><b>Formato do CSV :</b> UTF-8 COM marca BOM (o Excel e o LibreOffice abrem com os acentos certos), separador {@code ;}, vírgula decimal (o jeito pt-BR:
  * abre direto nas colunas do Excel brasileiro, sem assistente), fim de linha {@code \r\n}, data e hora {@code dd/MM/aaaa HH:mm:ss} no fuso do computador do usuário, uma linha por célula da
- * grade (célula sem dado = campo vazio). As unidades vão no título da coluna e os números saem SEM unidade e sem separador de milhar: porcentagem de 0 a 100 (uma casa), MB/s para a
- * escrita (três casas, MB de 1024 x 1024) e Mb/s para Download e Upload (três casas, megabit de 1.000.000). Campo com {@code ;}, aspas ou quebra de linha vai entre aspas (não há nenhum
+ * grade (célula sem dado = campo vazio; a primeira coluna é o INÍCIO do intervalo e o título diz o fuso). As unidades vão no título da coluna e os números saem SEM unidade e sem separador de milhar: porcentagem de 0 a 100 (uma casa), B/s inteiro
+ * para a escrita e kb/s para Download e Upload (três casas, quilobit de 1.000): unidades pequenas, para um tráfego baixo não virar 0,000. Campo com {@code ;}, aspas ou quebra de linha vai entre aspas (não há nenhum
  * hoje: os campos são números, datas e títulos fixos).
  */
 public final class ExportadorDeRelatorio {
@@ -30,21 +30,39 @@ public final class ExportadorDeRelatorio {
 
     private ExportadorDeRelatorio() { }
 
-    /** Os títulos das colunas do CSV, na ordem. */
+    /** Os títulos das colunas do CSV, na ordem, com a rede (um servidor comum). */
     public static List<String> titulosDoCsv() {
-        return List.of("Data e hora", "CPU (%)", "CPU máxima (%)", "Memória (%)", "Disco (%)", "Escrita no disco (MB/s)", "Escrita máxima (MB/s)", "Download (Mb/s)", "Upload (Mb/s)");
+        return titulosDoCsv(false, ZoneId.systemDefault());
     }
 
-    /** O CSV da série inteira (com o BOM no começo). */
+    /**
+     * Os títulos. A primeira coluna diz o que é e em que fuso: é o INÍCIO de cada intervalo (cada linha é a média de um intervalo, de 10 segundos a 3 horas). Escrita em bytes por segundo (inteiro)
+     * e rede em quilobits por segundo (três casas): números pequenos não viram 0,000.
+     */
+    public static List<String> titulosDoCsv(boolean semRede, ZoneId fuso) {
+        List<String> t = new ArrayList<>(List.of("Início do intervalo (" + fuso.getId() + ")", "CPU (%)", "CPU máxima (%)", "Memória (%)", "Disco (%)", "Escrita no disco (B/s)",
+            "Escrita máxima (B/s)"));
+        if (!semRede) {
+            t.add("Download (kb/s)");
+            t.add("Upload (kb/s)");
+        }
+        return t;
+    }
+
+    /** O CSV da série inteira (com o BOM no começo). Em "Este computador" não há as colunas de rede (a rede medida é a do container do agente). */
     public static String csv(DadosDeTendencia dados, ZoneId fuso) {
         StringBuilder sb = new StringBuilder(BOM);
-        sb.append(String.join(";", titulosDoCsv())).append("\r\n");
+        sb.append(String.join(";", titulosDoCsv(dados.semRede(), fuso))).append("\r\n");
         int n = 0;
-        for (Metrica m : Metrica.values()) {
+        for (Metrica m : dados.metricas()) {
             n = Math.max(n, dados.amostras(m).size());
         }
-        List<List<Amostra>> colunas = List.of(dados.amostras(Metrica.CPU), dados.amostrasDeMaximo(Metrica.CPU), dados.amostras(Metrica.MEMORIA), dados.amostras(Metrica.DISCO),
-            dados.amostras(Metrica.ESCRITA_NO_DISCO), dados.amostrasDeMaximo(Metrica.ESCRITA_NO_DISCO), dados.amostras(Metrica.DOWNLOAD), dados.amostras(Metrica.UPLOAD));
+        List<List<Amostra>> colunas = new ArrayList<>(List.of(dados.amostras(Metrica.CPU), dados.amostrasDeMaximo(Metrica.CPU), dados.amostras(Metrica.MEMORIA), dados.amostras(Metrica.DISCO),
+            dados.amostras(Metrica.ESCRITA_NO_DISCO), dados.amostrasDeMaximo(Metrica.ESCRITA_NO_DISCO)));
+        if (!dados.semRede()) {
+            colunas.add(dados.amostras(Metrica.DOWNLOAD));
+            colunas.add(dados.amostras(Metrica.UPLOAD));
+        }
         for (int i = 0; i < n; i++) {
             Instant quando = dados.inicio().plus(dados.passo().multipliedBy(i));
             List<String> campos = new ArrayList<>();
@@ -62,8 +80,8 @@ public final class ExportadorDeRelatorio {
     private static String celula(int coluna, double v) {
         return switch (coluna) {
             case 0, 1, 2, 3 -> numero(v * 100, 1);
-            case 4, 5 -> numero(UnidadesDeMedida.megabytesPorSegundo(v), 3);
-            default -> numero(UnidadesDeMedida.megabitsPorSegundo(v), 3);
+            case 4, 5 -> numero(Math.round(v), 0);
+            default -> numero(UnidadesDeMedida.quilobitsPorSegundo(v), 3);
         };
     }
 
@@ -109,8 +127,9 @@ public final class ExportadorDeRelatorio {
         for (String[] l : linhas) {
             sb.append(linhaDaTabela(l, largura)).append('\n');
         }
-        sb.append('\n').append("Máximo e hora do pico: o maior valor visto (para CPU e Escrita no disco, o maior das leituras de 2 segundos). P95: 95% do tempo ficou abaixo disto.\n");
-        sb.append("Download e Upload em bits por segundo; Escrita no disco em bytes por segundo.\n");
+        sb.append('\n').append(RelatorioDeTendencias.NOTA_DOS_NUMEROS).append('\n');
+        sb.append(r.dados().semRede() ? "Escrita no disco em bytes por segundo. Download e Upload não aparecem: neste computador a rede que o agente mede é a do container dele, não a do computador.\n"
+            : "Download e Upload em bits por segundo; Escrita no disco em bytes por segundo.\n");
         return sb.toString();
     }
 

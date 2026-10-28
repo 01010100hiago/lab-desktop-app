@@ -65,7 +65,12 @@ public final class UnidadesDeMedida {
         return bytesPorSegundo * 8 / 1_000_000d;
     }
 
-    /** Megabytes (1024 x 1024) por segundo como número puro, para a planilha. */
+    /** Quilobits por segundo como número puro, para a planilha: uma unidade pequena o bastante para um tráfego baixo não virar 0,000. */
+    public static double quilobitsPorSegundo(double bytesPorSegundo) {
+        return bytesPorSegundo * 8 / 1_000d;
+    }
+
+    /** Megabytes (1024 x 1024) por segundo como número puro. */
     public static double megabytesPorSegundo(double bytesPorSegundo) {
         return bytesPorSegundo / (1024d * 1024d);
     }

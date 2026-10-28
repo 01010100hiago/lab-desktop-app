@@ -236,6 +236,8 @@ class TelaServidorTest {
         BufferedImage img = Visual.renderizar(t, largura, altura);
         assertFalse(Visual.naEdt(() -> t.resumo().rolagem().getVerticalScrollBar().isVisible()), "o corpo do Resumo não rola");
         assertFalse(Visual.naEdt(() -> t.resumo().rolagem().getHorizontalScrollBar().isVisible()));
+        assertEquals(List.of(), Visual.naEdt(() -> t.resumo().blocoDeTendencias().textosCortados()),
+            "nenhum nome, valor, unidade ou legenda dos gráficos aparece cortado em " + larguraDaJanela + "x" + alturaDaJanela);
         Visual.naEdt(() -> {
             // a lista do registro rola POR DENTRO: as 200 linhas não cabem, e a barra da lista é a que aparece
             var caixa = t.resumo().caixaDoRegistro();

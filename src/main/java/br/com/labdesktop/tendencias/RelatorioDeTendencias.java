@@ -23,6 +23,14 @@ public final class RelatorioDeTendencias {
     private static final DateTimeFormatter DIA_MES = DateTimeFormatter.ofPattern("dd/MM");
     private static final String[] DIAS = {"na segunda", "na terça", "na quarta", "na quinta", "na sexta", "no sábado", "no domingo"};
 
+    /**
+     * Como ler os números (a mesma nota na tela e no texto copiado). Cada ponto do período é uma MÉDIA de um intervalo (10 s, 20 s, 5 min, 40 min e 3 horas nos cinco períodos); só a CPU e a
+     * Escrita no disco guardam também o maior valor de cada intervalo (o pico das leituras de 2 segundos).
+     */
+    public static final String NOTA_DOS_NUMEROS = "Máximo e hora do pico: para CPU e Escrita no disco, o maior valor das leituras de 2 segundos; para as outras métricas, o maior valor entre os intervalos "
+        + "do período (cada um é uma média: 10 s, 20 s, 5 min, 40 min e 3 horas, do período de 10 min ao de 1 mês), e a hora é o INÍCIO desse intervalo. "
+        + "P95: 95% dos intervalos do período ficaram abaixo desse valor.";
+
     /** Uma linha da tabela. */
     public record Linha(Metrica metrica, EstatisticaDeSerie.Resumo resumo) { }
 
@@ -37,14 +45,14 @@ public final class RelatorioDeTendencias {
         this.dados = dados;
         this.fuso = fuso;
         this.agora = agora;
-        for (Metrica m : Metrica.values()) {
+        for (Metrica m : dados.metricas()) {
             linhas.add(new Linha(m, EstatisticaDeSerie.de(dados.amostras(m), m.temMaximo() ? dados.amostrasDeMaximo(m) : null)));
         }
         this.estimativa = dados.janela().cobreTresDiasOuMais()
             ? EstimativaDeDisco.de(dados.amostras(Metrica.DISCO), dados.passo())
             : new EstimativaDeDisco.Resultado(EstimativaDeDisco.Tipo.POUCO_DADO, null, null, Duration.ZERO, null);
         double melhor = 0;
-        for (Metrica m : Metrica.values()) {
+        for (Metrica m : dados.metricas()) {
             List<Amostra> a = dados.amostras(m);
             if (!a.isEmpty()) {
                 melhor = Math.max(melhor, a.stream().filter(Amostra::valida).count() / (double) Math.max(a.size(), dados.janela().pontos()));
@@ -120,7 +128,7 @@ public final class RelatorioDeTendencias {
             if (r.vazio()) {
                 f.add(l.metrica().nome() + ": sem dado neste período.");
             } else {
-                f.add(l.metrica().nome() + " chegou a " + valorNaTabela(l.metrica(), r.maximo()) + " " + quandoFoi(r.instanteDoPico(), agora, fuso)
+                f.add(l.metrica().nome() + " chegou a " + valorNaTabela(l.metrica(), r.maximo()) + " " + quandoFoi(r.instanteDoPico(), agora, fuso) + notaDoIntervalo(l.metrica())
                     + " (média de " + valorNaTabela(l.metrica(), r.media()) + ").");
             }
         }
@@ -130,6 +138,19 @@ public final class RelatorioDeTendencias {
         }
         f.add(fraseDaEstimativa());
         return f;
+    }
+
+    /**
+     * Com intervalos longos, a "hora do pico" é o começo do intervalo onde ele aconteceu, e a frase diz isso (senão "às 14:10" pareceria o minuto exato). Métrica com máximo guardado (CPU e escrita) fala
+     * do pico das leituras de 2 segundos, mas só se sabe em que intervalo foi.
+     */
+    private String notaDoIntervalo(Metrica m) {
+        long s = dados.passo().toSeconds();
+        if (s < 300) {
+            return "";
+        }
+        String tamanho = s >= 3600 && s % 3600 == 0 ? (s / 3600 == 1 ? "1 hora" : (s / 3600) + " horas") : s >= 60 && s % 60 == 0 ? (s / 60) + " minutos" : s + " segundos";
+        return " (início de um intervalo de " + tamanho + ")";
     }
 
     /** A frase da estimativa do disco (sempre dita como estimativa). */

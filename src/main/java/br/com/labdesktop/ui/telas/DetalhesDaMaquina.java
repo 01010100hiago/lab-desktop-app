@@ -47,6 +47,10 @@ final class DetalhesDaMaquina extends Painel {
     private final CamposEmGrade rede = new CamposEmGrade();
     private final CamposEmGrade memoria = new CamposEmGrade();
     private final Rotulo cabecalhoDoDetalhe = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f);
+    /** "Este computador": o que o agente mede é a máquina virtual do Docker, e a rede é a do container dele. */
+    private final Rotulo notaDoLocal = new Rotulo("Este computador: CPU, memória, discos e sensores são os da máquina virtual do Docker (é nela que o agente roda). A rede é só a do agente, não a do computador.")
+        .corDoToken(Tokens.TEXTO2).tamanho(12f).truncavel();
+    private boolean local;
 
     DetalhesDaMaquina() {
         super(new java.awt.BorderLayout());
@@ -60,7 +64,11 @@ final class DetalhesDaMaquina extends Painel {
         JPanel miolo = new Painel(new GridLayout(1, 2, 32, 0));
         miolo.add(esquerda);
         miolo.add(direita);
-        add(cabecalhoDoDetalhe, java.awt.BorderLayout.NORTH);
+        notaDoLocal.setName("nota-do-computador-local");
+        notaDoLocal.setVisible(false);
+        notaDoLocal.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 8, 0));
+        JPanel topo = Caixa.coluna(0, notaDoLocal, cabecalhoDoDetalhe);
+        add(topo, java.awt.BorderLayout.NORTH);
         add(miolo, java.awt.BorderLayout.CENTER);
         setName("detalhes-da-maquina");
         atualizar(null, null, false);
@@ -82,6 +90,13 @@ final class DetalhesDaMaquina extends Painel {
      * @param detalheFalhou a consulta do detalhe falhou e ainda não há nenhum valor dele (sensores, energia e máquina
      *                      mostram "não consegui ler" em vez de ficarem para sempre em "carregando")
      */
+    /** "Este computador": diz que CPU, memória e disco são os da máquina virtual do Docker e que a rede é só a do agente. */
+    void definirLocal(boolean sim) {
+        this.local = sim;
+        notaDoLocal.setVisible(sim);
+        notaDoLocal.setToolTipText(sim ? notaDoLocal.getText() : null);
+    }
+
     void atualizar(InfoServidor info, DetalheServidor detalhe, boolean detalheFalhou) {
         cabecalhoDoDetalhe.setText(detalhe == null ? (detalheFalhou ? "Não consegui ler os sensores, a energia e o hardware agora."
             : "Lendo os sensores, a energia e o hardware…") : "");
@@ -237,9 +252,9 @@ final class DetalhesDaMaquina extends Painel {
     private void atualizarRedeEMemoria(InfoServidor info) {
         InfoServidor.Rede r = info == null ? null : info.rede();
         rede.definir(List.of(
-            new Campo("Placa de rede", r == null ? null : r.interfaceDeRede()),
-            new Campo("Descida (download)", r == null ? null : FormatosDoServidor.bitsPorSegundo(r.rxBps())),
-            new Campo("Subida (upload)", r == null ? null : FormatosDoServidor.bitsPorSegundo(r.txBps()))));
+            new Campo(local ? "Placa de rede (do container do agente)" : "Placa de rede", r == null ? null : r.interfaceDeRede()),
+            new Campo(local ? "Descida (só do agente)" : "Descida (download)", r == null ? null : FormatosDoServidor.bitsPorSegundo(r.rxBps())),
+            new Campo(local ? "Subida (só do agente)" : "Subida (upload)", r == null ? null : FormatosDoServidor.bitsPorSegundo(r.txBps()))));
         Memoria m = info == null ? null : info.memoria();
         InfoServidor.Swap s = m == null ? null : m.swap();
         memoria.definir(List.of(
@@ -253,6 +268,14 @@ final class DetalhesDaMaquina extends Painel {
 
     List<Campo> camposDeVersoes() {
         return versoes.campos();
+    }
+
+    List<Campo> camposDeRede() {
+        return rede.campos();
+    }
+
+    boolean notaDoLocalVisivel() {
+        return notaDoLocal.isVisible();
     }
 
     List<Campo> camposDaMaquina() {

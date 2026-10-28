@@ -178,13 +178,58 @@ class RelatorioEExportacaoTest {
                 Metrica.ESCRITA_NO_DISCO, Arrays.asList(1_572_864.0, null), Metrica.DOWNLOAD, Arrays.asList(125_000.0, 1_250_000.0), Metrica.UPLOAD, Arrays.asList(12_500.0, null)),
             java.util.Map.of(Metrica.CPU, Arrays.asList(0.5, null), Metrica.ESCRITA_NO_DISCO, Arrays.asList(2_097_152.0, null)), AGORA, true);
         String csv = ExportadorDeRelatorio.csv(d, SP);
-        assertTrue(csv.startsWith(ExportadorDeRelatorio.BOM + "Data e hora;CPU (%);CPU máxima (%);Memória (%);Disco (%);Escrita no disco (MB/s);Escrita máxima (MB/s);Download (Mb/s);Upload (Mb/s)\r\n"), csv);
+        assertTrue(csv.startsWith(ExportadorDeRelatorio.BOM + "Início do intervalo (America/Sao_Paulo);CPU (%);CPU máxima (%);Memória (%);Disco (%);Escrita no disco (B/s);Escrita máxima (B/s);Download (kb/s);Upload (kb/s)\r\n"), csv);
         String[] linhas = csv.split("\r\n");
         assertEquals(3, linhas.length);
-        assertEquals("28/10/2026 12:00:00;12,3;50,0;50,0;83,5;1,500;2,000;1,000;0,100", linhas[1]);
-        assertEquals("28/10/2026 12:00:10;;;51,0;83,5;;;10,000;", linhas[2], "sem dado = campo vazio, e a vírgula decimal sem separador de milhar");
+        assertEquals("28/10/2026 12:00:00;12,3;50,0;50,0;83,5;1572864;2097152;1000,000;100,000", linhas[1]);
+        assertEquals("28/10/2026 12:00:10;;;51,0;83,5;;;10000,000;", linhas[2], "sem dado = campo vazio, e a vírgula decimal sem separador de milhar");
         assertEquals(9, linhas[1].split(";", -1).length);
         assertFalse(linhas[1].contains("."), "nenhum ponto decimal: vírgula pt-BR");
+    }
+
+    @Test
+    void trafegoBaixoNaoViraZeroNaPlanilha() {
+        // 300 B/s de escrita e 100 B/s de rede: em MB/s e Mb/s com 3 casas virariam 0,000 (era o erro)
+        DadosDeTendencia d = new DadosDeTendencia(JanelaDeTempo.DEZ_MINUTOS, Instant.parse("2026-10-28T15:00:00Z"), Duration.ofSeconds(10),
+            java.util.Map.of(Metrica.CPU, Arrays.asList(0.1), Metrica.ESCRITA_NO_DISCO, Arrays.asList(300.0), Metrica.DOWNLOAD, Arrays.asList(100.0), Metrica.UPLOAD, Arrays.asList(1.0)),
+            java.util.Map.of(), AGORA, true);
+        String linha = ExportadorDeRelatorio.csv(d, SP).split("\r\n")[1];
+        assertEquals("28/10/2026 12:00:00;10,0;;;;300;;0,800;0,008", linha);
+    }
+
+    @Test
+    void emEsteComputadorOCsvEORelatorioNaoTemRede() {
+        DadosDeTendencia d = new DadosDeTendencia(JanelaDeTempo.UMA_SEMANA, Instant.parse("2026-10-28T15:00:00Z"), Duration.ofMinutes(40),
+            java.util.Map.of(Metrica.CPU, Arrays.asList(0.1, 0.2), Metrica.DISCO, Arrays.asList(0.5, 0.5), Metrica.DOWNLOAD, Arrays.asList(100.0, 200.0), Metrica.UPLOAD, Arrays.asList(1.0, 2.0)),
+            java.util.Map.of(), AGORA, true).semAsRedes();
+        assertEquals(List.of(Metrica.CPU, Metrica.MEMORIA, Metrica.DISCO, Metrica.ESCRITA_NO_DISCO), d.metricas());
+        String csv = ExportadorDeRelatorio.csv(d, SP);
+        String[] linhas = csv.split("\r\n");
+        assertFalse(linhas[0].contains("Download") || linhas[0].contains("Upload"), linhas[0]);
+        assertEquals(7, linhas[1].split(";", -1).length);
+        RelatorioDeTendencias r = RelatorioDeTendencias.de(d, SP, AGORA);
+        assertEquals(4, r.linhas().size());
+        assertTrue(r.frases().stream().noneMatch(f -> f.startsWith("Download") || f.startsWith("Upload")), r.frases().toString());
+        String texto = ExportadorDeRelatorio.texto(r, "Este computador", AGORA);
+        assertFalse(texto.contains("Download  ") || texto.contains("\nUpload"), texto);
+        assertTrue(texto.contains("a rede que o agente mede é a do container dele"), texto);
+    }
+
+    @Test
+    void aHoraDoPicoDeUmIntervaloLongoDizQueEOInicioDoIntervaloEANotaExplicaOQueECadaNumero() {
+        RelatorioDeTendencias r = RelatorioDeTendencias.de(DadosDeTendencia.deHistorico(JanelaDeTempo.UM_MES, umaSemana(), AGORA), SP, AGORA);
+        // a semana do teste tem passo de 40 minutos: o mês fecha em intervalos de 3 horas
+        String cpu = r.frases().stream().filter(x -> x.startsWith("CPU")).findFirst().orElseThrow();
+        assertTrue(cpu.contains("(início de um intervalo de "), cpu);
+        assertTrue(RelatorioDeTendencias.NOTA_DOS_NUMEROS.contains("é uma média"), RelatorioDeTendencias.NOTA_DOS_NUMEROS);
+        assertTrue(RelatorioDeTendencias.NOTA_DOS_NUMEROS.contains("INÍCIO desse intervalo"));
+        assertFalse(RelatorioDeTendencias.NOTA_DOS_NUMEROS.contains("o maior valor visto"));
+        String texto = ExportadorDeRelatorio.texto(r, "lab", AGORA);
+        assertTrue(texto.contains(RelatorioDeTendencias.NOTA_DOS_NUMEROS), texto);
+        // 10 s: nada a dizer, a hora já é a do segundo
+        HistoricoDoAgente dezMin = new HistoricoDoAgente("10m", 10, AGORA.minusSeconds(600), AGORA, AGORA, lista(60, i -> 0.1), null, lista(60, i -> 0.5), lista(60, i -> 0.7), null, null, null, null);
+        RelatorioDeTendencias curto = RelatorioDeTendencias.de(DadosDeTendencia.deHistorico(JanelaDeTempo.DEZ_MINUTOS, dezMin, AGORA), SP, AGORA);
+        assertFalse(curto.frases().stream().anyMatch(f -> f.contains("(início de um intervalo")), "10 s não leva a nota");
     }
 
     @Test

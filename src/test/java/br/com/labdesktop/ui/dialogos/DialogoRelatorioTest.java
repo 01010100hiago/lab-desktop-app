@@ -196,7 +196,7 @@ class DialogoRelatorioTest {
         Espera.ate(PRAZO, "gravou", () -> !gravados.isEmpty());
         assertEquals(List.of("tendencias-lab-1-dia-20261028-1200.csv"), nomesSugeridos);
         String g = gravados.get(0);
-        assertTrue(g.startsWith("/pasta/qualquer/tendencias-lab-1-dia-20261028-1200.csv|﻿Data e hora;CPU (%);"), g.substring(0, 120));
+        assertTrue(g.startsWith("/pasta/qualquer/tendencias-lab-1-dia-20261028-1200.csv|﻿Início do intervalo (America/Sao_Paulo);CPU (%);"), g.substring(0, 120));
         assertEquals(289, g.substring(g.indexOf('|') + 1).split("\r\n").length, "o cabeçalho e as 288 células do dia");
         Espera.ate(PRAZO, "avisou", () -> avisos.disse("ok", "Relatório salvo em"));
         assertFalse(Visual.naEdt(d::ultimoArquivoSalvo).isEmpty());

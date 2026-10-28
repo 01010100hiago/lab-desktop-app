@@ -21,9 +21,19 @@ import java.util.Map;
  * @param maximos  o maior valor de cada célula, só para as métricas com {@link Metrica#temMaximo()} (e só se o agente mandou)
  * @param quando   o instante da leitura
  * @param deLongoPrazo veio do histórico gravado pelo agente (e não dos 10 minutos antigos)
+ * @param agora    a ÚLTIMA leitura real de cada métrica (a que o agente acabou de gravar): é o "agora" de cada gráfico, igual aos indicadores da tela. Vazio num agente que não a manda:
+ *                 aí o gráfico mostra o último valor da série e o chama de "último", nunca de "agora"
+ * @param semRede  "Este computador": a rede que o agente mede é a do CONTAINER dele (o Docker não o liga à rede do computador), então Download e Upload NÃO são do computador e
+ *                 ficam de fora (nas telas, no relatório e no CSV)
  */
 public record DadosDeTendencia(JanelaDeTempo janela, Instant inicio, Duration passo, Map<Metrica, List<Double>> valores, Map<Metrica, List<Double>> maximos, Instant quando,
-                               boolean deLongoPrazo) {
+                               boolean deLongoPrazo, Map<Metrica, Double> agora, boolean semRede) {
+
+    /** Sem o "agora" real e com a rede (o que os dados de antes tinham). */
+    public DadosDeTendencia(JanelaDeTempo janela, Instant inicio, Duration passo, Map<Metrica, List<Double>> valores, Map<Metrica, List<Double>> maximos, Instant quando,
+                            boolean deLongoPrazo) {
+        this(janela, inicio, passo, valores, maximos, quando, deLongoPrazo, Map.of(), false);
+    }
 
     public DadosDeTendencia {
         Map<Metrica, List<Double>> v = new EnumMap<>(Metrica.class);
@@ -32,6 +42,50 @@ public record DadosDeTendencia(JanelaDeTempo janela, Instant inicio, Duration pa
         Map<Metrica, List<Double>> m = new EnumMap<>(Metrica.class);
         maximos.forEach((k, l) -> m.put(k, l == null ? List.of() : java.util.Collections.unmodifiableList(new ArrayList<>(l))));
         maximos = java.util.Collections.unmodifiableMap(m);
+        Map<Metrica, Double> a = new EnumMap<>(Metrica.class);
+        if (agora != null) {
+            agora.forEach((k, x) -> {
+                if (x != null && !x.isNaN() && !x.isInfinite()) {
+                    a.put(k, x);
+                }
+            });
+        }
+        agora = java.util.Collections.unmodifiableMap(a);
+    }
+
+    /** As métricas que este conjunto de dados mostra, na ordem da grade: as seis, ou as quatro da máquina quando {@code semRede}. */
+    public List<Metrica> metricas() {
+        List<Metrica> l = new ArrayList<>(List.of(Metrica.values()));
+        if (semRede) {
+            l.remove(Metrica.DOWNLOAD);
+            l.remove(Metrica.UPLOAD);
+        }
+        return List.copyOf(l);
+    }
+
+    /** O mesmo dado com o "agora" trocado por estes valores onde eles existem (a tela usa a leitura que alimenta os indicadores, para o número do gráfico nunca divergir do indicador). */
+    public DadosDeTendencia comAgora(Map<Metrica, Double> novos) {
+        Map<Metrica, Double> a = new EnumMap<>(Metrica.class);
+        a.putAll(agora);
+        novos.forEach((m, v) -> {
+            if (v != null && temDado(m)) { // métrica sem nenhuma leitura no período continua "sem dado ainda"
+                a.put(m, v);
+            }
+        });
+        return new DadosDeTendencia(janela, inicio, passo, valores, maximos, quando, deLongoPrazo, a, semRede);
+    }
+
+    /** O mesmo dado para "Este computador": Download e Upload (que seriam os do container do agente, não os do computador) saem. */
+    public DadosDeTendencia semAsRedes() {
+        Map<Metrica, List<Double>> v = new EnumMap<>(Metrica.class);
+        v.putAll(valores);
+        v.remove(Metrica.DOWNLOAD);
+        v.remove(Metrica.UPLOAD);
+        Map<Metrica, Double> a = new EnumMap<>(Metrica.class);
+        a.putAll(agora);
+        a.remove(Metrica.DOWNLOAD);
+        a.remove(Metrica.UPLOAD);
+        return new DadosDeTendencia(janela, inicio, passo, v, maximos, quando, deLongoPrazo, a, true);
     }
 
     /** Sem nada ainda (carregando): as seis séries vazias. */
@@ -58,7 +112,16 @@ public record DadosDeTendencia(JanelaDeTempo janela, Instant inicio, Duration pa
         Map<Metrica, List<Double>> m = new EnumMap<>(Metrica.class);
         m.put(Metrica.CPU, h.cpuMax());
         m.put(Metrica.ESCRITA_NO_DISCO, h.discoEscritaMaxBps());
-        return new DadosDeTendencia(janela, inicio, passo, v, m, quando, true);
+        Map<Metrica, Double> ag = new EnumMap<>(Metrica.class);
+        if (h.agora() != null) {
+            ag.put(Metrica.CPU, h.agora().cpu());
+            ag.put(Metrica.MEMORIA, h.agora().mem());
+            ag.put(Metrica.DISCO, h.agora().discoUso());
+            ag.put(Metrica.ESCRITA_NO_DISCO, h.agora().discoEscritaBps());
+            ag.put(Metrica.DOWNLOAD, h.agora().rxBps());
+            ag.put(Metrica.UPLOAD, h.agora().txBps());
+        }
+        return new DadosDeTendencia(janela, inicio, passo, v, m, quando, true, ag, false);
     }
 
     /**
@@ -75,7 +138,17 @@ public record DadosDeTendencia(JanelaDeTempo janela, Instant inicio, Duration pa
             v.put(Metrica.UPLOAD, h.txBps());
             n = Math.max(Math.max(h.cpu().size(), h.mem().size()), Math.max(h.rxBps().size(), h.txBps().size()));
         }
-        return new DadosDeTendencia(JanelaDeTempo.DEZ_MINUTOS, quando.minus(passo.multipliedBy(n)), passo, v, Map.of(), quando, false);
+        // nos 10 minutos antigos o último ponto É o de agora (o indicador da tela sai da mesma leitura)
+        Map<Metrica, Double> ag = new EnumMap<>(Metrica.class);
+        v.forEach((m, lista) -> {
+            for (int i = lista.size() - 1; i >= 0; i--) {
+                if (lista.get(i) != null) {
+                    ag.put(m, lista.get(i));
+                    break;
+                }
+            }
+        });
+        return new DadosDeTendencia(JanelaDeTempo.DEZ_MINUTOS, quando.minus(passo.multipliedBy(n)), passo, v, Map.of(), quando, false, ag, false);
     }
 
     /** A série como lista de {@link Amostra}, com o instante de cada célula (o INÍCIO dela). Vazia se a métrica não veio. */
@@ -107,7 +180,7 @@ public record DadosDeTendencia(JanelaDeTempo janela, Instant inicio, Duration pa
 
     /** Tem algum valor de alguma métrica? */
     public boolean temAlgumDado() {
-        for (Metrica m : Metrica.values()) {
+        for (Metrica m : metricas()) {
             if (amostras(m).stream().anyMatch(Amostra::valida)) {
                 return true;
             }

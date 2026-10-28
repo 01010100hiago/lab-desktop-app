@@ -23,7 +23,27 @@ public record HistoricoDoAgente(
     @JsonProperty("disco_escrita_bps") List<Double> discoEscritaBps,
     @JsonProperty("disco_escrita_max_bps") List<Double> discoEscritaMaxBps,
     @JsonProperty("rx_bps") List<Double> rxBps,
-    @JsonProperty("tx_bps") List<Double> txBps) {
+    @JsonProperty("tx_bps") List<Double> txBps,
+    @JsonProperty("agora") Agora agora) {
+
+    /**
+     * A ÚLTIMA leitura real que o agente gravou (não a média da última célula, que num período de um mês cobre 3 horas): é o "agora" dos gráficos, o mesmo valor dos indicadores.
+     * Agente de antes desta correção não manda o campo ({@code null}).
+     */
+    public record Agora(
+        @JsonProperty("t") Instant t,
+        @JsonProperty("cpu") Double cpu,
+        @JsonProperty("mem") Double mem,
+        @JsonProperty("disco_uso") Double discoUso,
+        @JsonProperty("disco_escrita_bps") Double discoEscritaBps,
+        @JsonProperty("rx_bps") Double rxBps,
+        @JsonProperty("tx_bps") Double txBps) { }
+
+    /** Sem o campo {@code agora} (agente anterior, e os testes de antes). */
+    public HistoricoDoAgente(String janela, Integer passoS, Instant inicio, Instant fim, Instant quando, List<Double> cpu, List<Double> cpuMax, List<Double> mem,
+                             List<Double> discoUso, List<Double> discoEscritaBps, List<Double> discoEscritaMaxBps, List<Double> rxBps, List<Double> txBps) {
+        this(janela, passoS, inicio, fim, quando, cpu, cpuMax, mem, discoUso, discoEscritaBps, discoEscritaMaxBps, rxBps, txBps, null);
+    }
 
     public HistoricoDoAgente {
         janela = Textos.linha(janela);

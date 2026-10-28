@@ -51,6 +51,9 @@ public final class PaginaResumo extends PaginaDoServidor {
 
     // o histórico de longo prazo: o período escolhido, o último dado de cada período e a assinatura do período que está na tela
     private JanelaDeTempo janela = JanelaDeTempo.padrao();
+    /** A largura que a coluna "Precisa de atenção" pede no máximo (o resto é das Tendências). */
+    static final int LARGURA_DA_ATENCAO = 215;
+
     private final Map<JanelaDeTempo, DadosDeTendencia> historicos = new EnumMap<>(JanelaDeTempo.class);
     private boolean historicoFalhou;
     private transient Inscricao inscricaoDoHistorico;
@@ -160,7 +163,25 @@ public final class PaginaResumo extends PaginaDoServidor {
         g.gridx = 1;
         g.weightx = 0.31;
         g.insets = new Insets(0, 7, 0, 0);
-        colunas.add(caixaDeAtencao, g);
+        // "Precisa de atenção" não pode empurrar as Tendências: os textos dela já vêm cortados com "…" (a frase inteira está na dica), e as seis células dos gráficos precisam
+        // de ~185 px cada para o nome, o valor e a legenda não se cortarem em 1100 px. A coluna pede no máximo LARGURA_DA_ATENCAO; o resto da largura é das Tendências.
+        JPanel direita = new Painel(new java.awt.BorderLayout()) {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Dimension getPreferredSize() {
+                Dimension d = super.getPreferredSize();
+                return new Dimension(Math.min(d.width, LARGURA_DA_ATENCAO), d.height);
+            }
+
+            @Override
+            public Dimension getMinimumSize() {
+                Dimension d = super.getMinimumSize();
+                return new Dimension(Math.min(d.width, LARGURA_DA_ATENCAO), d.height);
+            }
+        };
+        direita.add(caixaDeAtencao, java.awt.BorderLayout.CENTER);
+        colunas.add(direita, g);
         JPanel conteudo = new Painel(new java.awt.BorderLayout(0, 12)) {
             private static final long serialVersionUID = 1L;
 
@@ -188,7 +209,7 @@ public final class PaginaResumo extends PaginaDoServidor {
             itens.add(new ListaDeAtencao.Item(a.gravidade(), a.texto(), a.destino().rotulo(), () -> aoNavegar.accept(a.destino())));
         }
         atencao.definir(itens);
-        caixaDeAtencao.apoio(Rotulo.dica("clique para abrir"));
+        caixaDeAtencao.setToolTipText("Clique em um item para abrir a aba dele");
         caixaDeAtencao.terminar();
     }
 
@@ -222,18 +243,52 @@ public final class PaginaResumo extends PaginaDoServidor {
         return temHistoricoDeLongoPrazo() || janela == JanelaDeTempo.DEZ_MINUTOS ? janela : JanelaDeTempo.DEZ_MINUTOS;
     }
 
+    /** "Este computador": a rede que o agente mede é a do container dele, não a do computador (o Docker não o liga à rede do anfitrião), então Download e Upload ficam de fora. */
+    private boolean computadorLocal() {
+        EstadoServidor e = estado;
+        return e != null && e.local();
+    }
+
+    private DadosDeTendencia paraEsteServidor(DadosDeTendencia d) {
+        return d != null && computadorLocal() ? d.semAsRedes() : d;
+    }
+
+    /**
+     * O "agora" de CPU, Memória e Disco nos gráficos é a MESMA leitura dos indicadores de cima (de {@code /api/servidor}), então o número nunca diverge (no período de 1 mês a última célula é uma
+     * média de 3 horas e mostraria 25% enquanto o indicador diz 8,3%). Sem a leitura do servidor, vale o que o agente mandou.
+     */
+    private DadosDeTendencia comOAgoraDosIndicadores(DadosDeTendencia d) {
+        if (d == null || info == null) {
+            return d;
+        }
+        java.util.Map<br.com.labdesktop.tendencias.Metrica, Double> a = new java.util.EnumMap<>(br.com.labdesktop.tendencias.Metrica.class);
+        if (info.cpu() != null && info.cpu().uso() != null) {
+            a.put(br.com.labdesktop.tendencias.Metrica.CPU, info.cpu().uso());
+        }
+        Double disponivel = br.com.labdesktop.servidor.RegrasDeSaude.pctDisponivel(info.memoria());
+        if (disponivel != null) {
+            a.put(br.com.labdesktop.tendencias.Metrica.MEMORIA, (100 - disponivel) / 100);
+        }
+        Double usado = br.com.labdesktop.servidor.RegrasDeSaude.pctUsado(br.com.labdesktop.servidor.RegrasDeSaude.discoMaisCheio(info.discos()));
+        if (usado != null) {
+            a.put(br.com.labdesktop.tendencias.Metrica.DISCO, usado / 100);
+        }
+        return d.comAgora(a);
+    }
+
     private BlocoDeTendencias.Visao visaoDasTendencias() {
+        tendencias.definirLocal(computadorLocal());
         boolean longo = temHistoricoDeLongoPrazo();
         if (info == null) {
             // o corpo só aparece sem a leitura do agente quando o servidor é SSH sem ele
             return new BlocoDeTendencias.Visao(janela, null, BlocoDeTendencias.Situacao.SEM_AGENTE, false, fuso());
         }
         if (!longo) {
-            DadosDeTendencia d = DadosDeTendencia.dosDezMinutos(info.historico(), info.quando() != null ? info.quando() : agora());
+            DadosDeTendencia d = comOAgoraDosIndicadores(paraEsteServidor(DadosDeTendencia.dosDezMinutos(info.historico(), info.quando() != null ? info.quando() : agora())));
             return new BlocoDeTendencias.Visao(JanelaDeTempo.DEZ_MINUTOS, d,
                 janela == JanelaDeTempo.DEZ_MINUTOS ? BlocoDeTendencias.Situacao.OK : BlocoDeTendencias.Situacao.AGENTE_SO_DEZ_MINUTOS, false, fuso());
         }
-        DadosDeTendencia d = historicos.get(janela);
+        DadosDeTendencia d = comOAgoraDosIndicadores(historicos.get(janela));
         BlocoDeTendencias.Situacao s = d == null ? (historicoFalhou ? BlocoDeTendencias.Situacao.FALHOU_SEM_DADO : BlocoDeTendencias.Situacao.CARREGANDO)
             : historicoFalhou ? BlocoDeTendencias.Situacao.FALHOU_COM_DADO : BlocoDeTendencias.Situacao.OK;
         return new BlocoDeTendencias.Visao(janela, d, s, true, fuso());
@@ -287,7 +342,7 @@ public final class PaginaResumo extends PaginaDoServidor {
 
     /** Chegou o histórico de um período (o Sondador, ou o teste). */
     public void aoReceberHistorico(DadosDeTendencia novo) {
-        historicos.put(novo.janela(), novo);
+        historicos.put(novo.janela(), paraEsteServidor(novo));
         historicoFalhou = false;
         redesenhar();
     }
@@ -319,15 +374,15 @@ public final class PaginaResumo extends PaginaDoServidor {
     private void abrirRelatorio() {
         JanelaDeTempo inicial = janelaEfetiva();
         boolean longo = temHistoricoDeLongoPrazo();
-        DadosDeTendencia ja = longo ? historicos.get(inicial) : DadosDeTendencia.dosDezMinutos(info == null ? null : info.historico(), agora());
-        DialogoRelatorio.Fonte fonte = apoio.fonteDoRelatorio() != null ? apoio.fonteDoRelatorio() : janelaPedida -> {
+        DadosDeTendencia ja = longo ? historicos.get(inicial) : paraEsteServidor(DadosDeTendencia.dosDezMinutos(info == null ? null : info.historico(), agora()));
+        DialogoRelatorio.Fonte fonte = apoio.fonteDoRelatorio() != null ? janelaPedida -> paraEsteServidor(apoio.fonteDoRelatorio().carregar(janelaPedida)) : janelaPedida -> {
             if (!temHistoricoDeLongoPrazo()) {
                 if (janelaPedida != JanelaDeTempo.DEZ_MINUTOS) {
                     throw new IllegalStateException("Este agente só guarda os últimos 10 minutos.");
                 }
-                return DadosDeTendencia.dosDezMinutos(info == null ? null : info.historico(), Instant.now());
+                return paraEsteServidor(DadosDeTendencia.dosDezMinutos(info == null ? null : info.historico(), Instant.now()));
             }
-            return servidor().acoes().historico(janelaPedida);
+            return paraEsteServidor(servidor().acoes().historico(janelaPedida));
         };
         apoio.apresentador().mostrar(new DialogoRelatorio(fonte, inicial, ja, longo, servidor() == null ? "" : servidor().estado().nome(), apoio.fuso().get(), apoio.relogio(),
             apoio.escolhedor(), apoio.gravador(), apoio.copiador(), apoio.avisos()));

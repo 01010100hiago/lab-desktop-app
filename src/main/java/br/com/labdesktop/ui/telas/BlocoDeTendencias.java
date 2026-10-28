@@ -41,7 +41,7 @@ import javax.swing.JToggleButton;
 final class BlocoDeTendencias extends CaixaDoServidor {
 
     private static final long serialVersionUID = 1L;
-    private static final int ALTURA_DO_GRAFICO = 30;
+    private static final int ALTURA_DO_GRAFICO = 22;
     private static final DateTimeFormatter DIA_E_HORA = DateTimeFormatter.ofPattern("dd/MM HH:mm");
 
     /** O que o bloco mostra de cada vez. */
@@ -73,6 +73,8 @@ final class BlocoDeTendencias extends CaixaDoServidor {
     private final Botao relatorio = Botoes.mini("Relatório", "lista");
     private final Rotulo aviso = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f).truncavel();
     private final Map<Metrica, Celula> celulas = new EnumMap<>(Metrica.class);
+    private final JPanel grade = new Painel(new GridLayout(2, 3, 10, 0));
+    private boolean local;
     private Consumer<JanelaDeTempo> aoMudarJanela = j -> { };
     private Runnable aoAbrirRelatorio = () -> { };
     private JanelaDeTempo janela = JanelaDeTempo.padrao();
@@ -112,14 +114,37 @@ final class BlocoDeTendencias extends CaixaDoServidor {
         aviso.setName("aviso-das-tendencias");
         apoio(aviso); // o aviso mora na linha do título (à direita), no lugar de "últimos 10 minutos": nenhuma altura a mais, nunca empurra a página para a rolagem
 
-        JPanel grade = new Painel(new GridLayout(2, 3, 14, 4));
         for (Metrica m : Metrica.values()) {
-            Celula c = new Celula(m);
-            celulas.put(m, c);
-            grade.add(c.painel());
+            celulas.put(m, new Celula(m));
         }
+        montarGrade();
         linha(grade, 4);
         mostrar(new Visao(janela, null, Situacao.CARREGANDO, false, ZoneId.systemDefault()));
+    }
+
+    /** Os gráficos que a grade mostra: os seis, ou os quatro da máquina em "Este computador" (a rede que o agente mede é a do container dele, não a do computador). */
+    private void montarGrade() {
+        grade.removeAll();
+        grade.setLayout(new GridLayout(2, local ? 2 : 3, 10, 0));
+        for (Metrica m : Metrica.values()) {
+            if (!local || (m != Metrica.DOWNLOAD && m != Metrica.UPLOAD)) {
+                grade.add(celulas.get(m).painel());
+            }
+        }
+        grade.revalidate();
+        grade.repaint();
+    }
+
+    /** "Este computador": sem Download e Upload (a rede medida não é a do computador). Idempotente. */
+    void definirLocal(boolean sim) {
+        if (sim != local) {
+            local = sim;
+            montarGrade();
+        }
+    }
+
+    boolean local() {
+        return local;
     }
 
     void definirAoMudarJanela(Consumer<JanelaDeTempo> quem) {
@@ -172,8 +197,13 @@ final class BlocoDeTendencias extends CaixaDoServidor {
         };
         boolean temAviso = !texto.isEmpty();
         String mostrado = temAviso ? texto : v.situacao() == Situacao.SEM_AGENTE ? "" : v.janela().rotuloLongo();
+        String dica = mostrado;
+        if (local && !temAviso && !mostrado.isEmpty()) {
+            mostrado += " · sem rede aqui";
+            dica += ". Neste computador a rede que o agente mede é a do container dele, não a do computador: por isso Download e Upload não aparecem. CPU, Memória e Disco são os da máquina virtual do Docker.";
+        }
         aviso.setText(mostrado);
-        aviso.setToolTipText(mostrado.isEmpty() ? null : mostrado);
+        aviso.setToolTipText(dica.isEmpty() ? null : dica);
         aviso.corDoToken(v.situacao() == Situacao.FALHOU_COM_DADO || v.situacao() == Situacao.FALHOU_SEM_DADO ? Tokens.ATENCAO : temAviso ? Tokens.TEXTO2 : Tokens.TEXTO3);
         avisoComTexto = temAviso;
         relatorio.setEnabled(v.situacao() != Situacao.SEM_AGENTE);
@@ -217,6 +247,11 @@ final class BlocoDeTendencias extends CaixaDoServidor {
         return "mín " + menor + " · méd " + media + " · máx " + maior;
     }
 
+    /** A mesma legenda em duas linhas: {@code "mín 4 · méd 8"} e {@code "máx 12"}; cada valor com a sua unidade (cabe numa célula estreita sem cortar o pico). */
+    static String[] legendaEmDuasLinhas(Metrica m, EstatisticaDeSerie.Resumo r) {
+        return new String[] {"mín " + curto(m, r.minimo()) + " · méd " + curto(m, r.media()), "máx " + curto(m, r.maximo())};
+    }
+
     /** O valor da legenda: porcentagem sem casas (o número grande da célula já mostra a precisão), o resto como no relatório. */
     private static String curto(Metrica m, Double v) {
         return m.ehPorcentagem() ? UnidadesDeMedida.porcentagem(v, 0) : m.formatar(v);
@@ -256,13 +291,16 @@ final class BlocoDeTendencias extends CaixaDoServidor {
     private static final class Celula {
         private final Metrica metrica;
         private final Rotulo nome;
-        private final Rotulo numero = new Rotulo().mono(14f).negrito().aDireita();
-        private final Rotulo unidade = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f);
+        private final Rotulo numero = new Rotulo().mono(13f).negrito().aDireita();
+        private final Rotulo unidade = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(11f);
         private final Sparkline grafico = new Sparkline();
         private final Rotulo legenda = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(11f).truncavel();
+        /** A segunda linha da legenda: o máximo (a célula é estreita: "mín · méd" na primeira, "máx" na segunda, sem cortar o pico). */
+        private final Rotulo legendaDoMaximo = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(11f).truncavel();
         private final JPanel painel = new Painel();
         private String textoDaLegenda = "";
         private String valorAgora = "";
+        private boolean agoraReal;
 
         Celula(Metrica m) {
             this.metrica = m;
@@ -286,11 +324,11 @@ final class BlocoDeTendencias extends CaixaDoServidor {
             linha1.setAlignmentX(LEFT_ALIGNMENT);
             grafico.setAlignmentX(LEFT_ALIGNMENT);
             legenda.setAlignmentX(LEFT_ALIGNMENT);
+            legendaDoMaximo.setAlignmentX(LEFT_ALIGNMENT);
             painel.add(linha1);
-            painel.add(javax.swing.Box.createRigidArea(new Dimension(0, 1)));
             painel.add(grafico);
-            painel.add(javax.swing.Box.createRigidArea(new Dimension(0, 1)));
             painel.add(legenda);
+            painel.add(legendaDoMaximo);
             painel.setName("grafico-" + m.nome());
         }
 
@@ -310,18 +348,57 @@ final class BlocoDeTendencias extends CaixaDoServidor {
                 }
                 return DIA_E_HORA.format(amostras.get(i).quando().atZone(fuso)) + ": " + metrica.formatar(amostras.get(i).valor());
             });
-            Double agora = ultimoValido(amostras);
+            // o "agora" é a ÚLTIMA leitura real do agente (igual ao indicador de cima); sem ela (agente antigo) vale o último valor da série, e ele se chama "último"
+            Double agora = d == null ? null : d.agora().get(metrica);
+            agoraReal = agora != null;
+            if (agora == null) {
+                agora = ultimoValido(amostras);
+            }
             valorAgora = agora == null ? "—" : metrica.formatar(agora);
             int corte = corteDaUnidade(valorAgora);
             numero.setText(corte < 0 ? valorAgora : valorAgora.substring(0, corte).strip());
             unidade.setText(corte < 0 ? "" : valorAgora.substring(corte).strip());
             textoDaLegenda = carregando ? "carregando…" : legendaDe(metrica, r, corte < 0 ? "" : valorAgora.substring(corte).strip());
-            legenda.setText(textoDaLegenda);
-            String completo = r.vazio() ? "" : metrica.nome() + ": agora " + valorAgora + ", mínimo " + metrica.formatar(r.minimo()) + ", média " + metrica.formatar(r.media())
+            String[] partes = carregando || r.vazio() ? new String[] {textoDaLegenda, " "} : legendaEmDuasLinhas(metrica, r);
+            legenda.setText(partes[0]);
+            legendaDoMaximo.setText(partes[1]);
+            if (metrica == Metrica.DISCO) {
+                ajustarEscalaDoDisco(amostras);
+            }
+            String quando = agoraReal ? "agora " : "último valor ";
+            String completo = r.vazio() ? "" : metrica.nome() + ": " + quando + valorAgora + ", mínimo " + metrica.formatar(r.minimo()) + ", média " + metrica.formatar(r.media())
                 + ", máximo " + metrica.formatar(r.maximo());
             legenda.setToolTipText(completo.isEmpty() ? null : completo);
+            legendaDoMaximo.setToolTipText(completo.isEmpty() ? null : completo);
             painel.setToolTipText(null);
-            grafico.descrever(metrica.nome() + ": " + (r.vazio() ? "sem dado ainda" : "agora " + valorAgora + "; " + textoDaLegenda));
+            grafico.descrever(metrica.nome() + ": " + (r.vazio() ? "sem dado ainda" : quando + valorAgora + "; " + textoDaLegenda));
+            numero.setToolTipText(valorAgora.equals("—") ? null : (agoraReal ? "Agora: " : "Último valor do período: ") + valorAgora);
+        }
+
+        /**
+         * O Disco segue os dados (uma subida lenta aparece), mas com amplitude mínima de 4 pontos percentuais: uma variação de 0,4 ponto não pode encher a altura inteira enquanto a legenda
+         * diz mín = méd = máx.
+         */
+        private void ajustarEscalaDoDisco(List<Amostra> amostras) {
+            double menor = Double.POSITIVE_INFINITY;
+            double maior = Double.NEGATIVE_INFINITY;
+            for (Amostra a : amostras) {
+                if (a.valida()) {
+                    menor = Math.min(menor, a.valor());
+                    maior = Math.max(maior, a.valor());
+                }
+            }
+            if (menor > maior) {
+                grafico.escala(null, null);
+                return;
+            }
+            double amplitude = 0.04;
+            if (maior - menor < amplitude) {
+                double centro = (maior + menor) / 2;
+                menor = centro - amplitude / 2;
+                maior = centro + amplitude / 2;
+            }
+            grafico.escala(Math.max(0, menor - (maior - menor) * 0.08), Math.min(1, maior + (maior - menor) * 0.08));
         }
 
         /** Onde o número termina e a unidade começa ("12 kb/s" -> 2; "76%" -> 2); -1 sem unidade. */
@@ -347,10 +424,49 @@ final class BlocoDeTendencias extends CaixaDoServidor {
 
     // ---- para os testes ----
 
-    /** Os seis gráficos, na ordem: CPU, Memória, Disco, Escrita no disco, Download, Upload. */
+    /** Os textos das células que não cabem na largura que têm (nome, valor, unidade e legenda) depois do layout: o que a tela cortaria com "…". Vazio = tudo cabe. */
+    List<String> textosCortados() {
+        List<String> cortados = new ArrayList<>();
+        for (Metrica m : visiveis()) {
+            Celula c = celulas.get(m);
+            for (Rotulo r : List.of(c.nome, c.numero, c.unidade, c.legenda, c.legendaDoMaximo)) {
+                if (r.getWidth() > 0 && r.getPreferredSize().width > r.getWidth() + 1 && !r.getText().isBlank()) {
+                    cortados.add(m.nome() + ": \"" + r.getText() + "\" pede " + r.getPreferredSize().width + " px e tem " + r.getWidth());
+                }
+            }
+        }
+        return cortados;
+    }
+
+    /** Os textos do valor de agora (a dica do número grande) de cada gráfico visível. */
+    List<String> dicasDeAgora() {
+        List<String> l = new ArrayList<>();
+        for (Metrica m : visiveis()) {
+            l.add(celulas.get(m).numero.getToolTipText());
+        }
+        return l;
+    }
+
+    /** A grade das células (para os testes contarem o que aparece). */
+    JPanel painelDaGrade() {
+        return grade;
+    }
+
+    /** Os gráficos que a grade mostra agora (seis; quatro em "Este computador"). */
+    List<Metrica> visiveis() {
+        List<Metrica> l = new ArrayList<>();
+        for (Metrica m : Metrica.values()) {
+            if (!local || (m != Metrica.DOWNLOAD && m != Metrica.UPLOAD)) {
+                l.add(m);
+            }
+        }
+        return l;
+    }
+
+    /** Os gráficos, na ordem: CPU, Memória, Disco, Escrita no disco, Download, Upload. */
     List<Sparkline> graficos() {
         List<Sparkline> l = new ArrayList<>();
-        for (Metrica m : Metrica.values()) {
+        for (Metrica m : visiveis()) {
             l.add(celulas.get(m).grafico);
         }
         return l;
@@ -359,7 +475,7 @@ final class BlocoDeTendencias extends CaixaDoServidor {
     /** A legenda "mín · méd · máx" de cada gráfico. */
     List<String> legendas() {
         List<String> l = new ArrayList<>();
-        for (Metrica m : Metrica.values()) {
+        for (Metrica m : visiveis()) {
             l.add(celulas.get(m).textoDaLegenda);
         }
         return l;
@@ -368,7 +484,7 @@ final class BlocoDeTendencias extends CaixaDoServidor {
     /** O valor de agora de cada gráfico, com a unidade ("12 kb/s"). */
     List<String> valoresDeAgora() {
         List<String> l = new ArrayList<>();
-        for (Metrica m : Metrica.values()) {
+        for (Metrica m : visiveis()) {
             l.add(celulas.get(m).valorAgora);
         }
         return l;
@@ -377,7 +493,7 @@ final class BlocoDeTendencias extends CaixaDoServidor {
     /** Os nomes dos seis gráficos, na ordem em que a grade os mostra. */
     List<String> nomes() {
         List<String> l = new ArrayList<>();
-        for (Metrica m : Metrica.values()) {
+        for (Metrica m : visiveis()) {
             l.add(celulas.get(m).nome.getText());
         }
         return l;
