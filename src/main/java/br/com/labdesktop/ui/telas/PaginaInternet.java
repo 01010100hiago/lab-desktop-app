@@ -70,7 +70,7 @@ final class PaginaInternet extends PaginaDoProjeto {
 
     @Override
     JComponent montarConteudo() {
-        caixa.apoio(selo);
+        caixa.apoio(new AEsquerda(selo));
         JPanel conteudo = new Painel(new BorderLayout()) {
             private static final long serialVersionUID = 1L;
 

@@ -101,8 +101,8 @@ public final class PaginaCloudflare extends Painel {
         atualizar.addActionListener(e -> recarregar());
         atualizar.setToolTipText("Lê de novo os endereços na Cloudflare");
 
-        caixaDaConta.apoio(Caixa.linha(6, seloDaConta));
-        caixaDosEnderecos.apoio(atualizar);
+        caixaDaConta.apoio(new AEsquerda(seloDaConta));
+        caixaDosEnderecos.apoio(new AEsquerda(atualizar));
 
         JPanel coluna = new Painel();
         coluna.setLayout(new BoxLayout(coluna, BoxLayout.Y_AXIS));

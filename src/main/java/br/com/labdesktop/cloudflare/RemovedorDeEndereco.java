@@ -96,9 +96,9 @@ public final class RemovedorDeEndereco implements AutoCloseable {
         }
         List<String> passos = new ArrayList<>();
         if (!m.semEfeito() && m.bloqueio() == null) {
-            passos.add("Túnel: tirar de " + tunel.onde() + " a regra de " + h + (tunel.reiniciaOCloudflared() ? "; guardar uma cópia datada, conferir com o cloudflared e reiniciar SÓ o container " + cfg.containerDoCloudflared() : "") + ".");
+            passos.add("Túnel: tirar " + tunel.deOnde() + " a regra de " + h + (tunel.reiniciaOCloudflared() ? "; guardar uma cópia datada, conferir com o cloudflared e reiniciar SÓ o container " + cfg.containerDoCloudflared() : "") + ".");
         } else if (m.bloqueio() == null) {
-            passos.add("Túnel: a regra de " + h + " já não está em " + tunel.onde() + ".");
+            passos.add("Túnel: a regra de " + h + " já não está " + tunel.emOnde() + ".");
         }
         if (dns != null) {
             passos.add("DNS: apagar o registro CNAME " + h + " (marcado como do app, projeto " + projeto + ").");

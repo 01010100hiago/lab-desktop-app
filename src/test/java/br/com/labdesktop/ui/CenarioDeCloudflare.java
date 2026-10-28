@@ -57,6 +57,30 @@ public final class CenarioDeCloudflare implements AutoCloseable {
         return new ServicoCloudflare(cofre, servidorId, local, raiz -> lab.ambiente(), cf::base, ClienteCloudflare.Opcoes.rapida(), t, RELOGIO, d -> { });
     }
 
+    /** Conecta de verdade (token no cofre e escolha gravada), como o diálogo Conectar faria, mas sem tela. */
+    public void conectar(br.com.labdesktop.cofre.ConfiguracaoCloudflare escolha) throws Exception {
+        try (ServicoCloudflare.Descoberta d = servico.descobrir(CloudflareFalsa.TOKEN_CERTO.toCharArray())) {
+            servico.salvar(d, escolha);
+        }
+    }
+
+    public void conectarPorArquivo() throws Exception {
+        conectar(lab.configPorArquivo());
+    }
+
+    public br.com.labdesktop.cofre.ConfiguracaoCloudflare configDaApi() {
+        return new br.com.labdesktop.cofre.ConfiguracaoCloudflare(CloudflareFalsa.CONTA, "Conta de Teste", CloudflareFalsa.ZONA, "example.com", CloudflareFalsa.TUNEL_API, "site",
+            br.com.labdesktop.cofre.ConfiguracaoCloudflare.Tipo.API, "lab", null, null, null);
+    }
+
+    /** Um servidor de verdade (sem conectar ao SSH, nunca chama {@code iniciar}) cuja Cloudflare é a deste cenário. */
+    public br.com.labdesktop.servidor.ServidorLab servidorLab() {
+        br.com.labdesktop.servidor.ServidorLab s = new br.com.labdesktop.servidor.ServidorLab(servidorId, cofre, null, br.com.labdesktop.ssh.ConfigSsh.rapida(),
+            br.com.labdesktop.util.Agendador.doFundo(), Runnable::run, br.com.labdesktop.util.Fundo.ioVirtual());
+        s.definirCloudflare(servico);
+        return s;
+    }
+
     /** O estado de antes de alguém conectar: o compose do projeto demo e o config.yml do usuário no servidor. */
     public void prepararOServidorDoDono(String compose, String config) throws IOException {
         lab.escrever(LabSimulado.PROJETOS + "/demo/docker-compose.yml", compose);

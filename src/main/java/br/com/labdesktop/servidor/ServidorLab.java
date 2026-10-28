@@ -319,6 +319,13 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         return cloudflare;
     }
 
+    /**
+     * Troca a fachada da Cloudflare (só os testes de tela usam: ligam a Cloudflare FALSA e o servidor simulado, para nada falar com a conta nem com o lab de verdade).
+     */
+    public synchronized void definirCloudflare(br.com.labdesktop.cloudflare.ServicoCloudflare servico) {
+        this.cloudflare = servico;
+    }
+
     /** As ações (iniciar, parar, abrir sessão, limite...). */
     public AcoesDoServidor acoes() {
         return acoes;

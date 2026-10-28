@@ -14,6 +14,23 @@ public interface Tunel {
     /** Uma frase de onde estão as regras ("o config.yml em /srv/..." ou "a configuração do túnel na Cloudflare"). */
     String onde();
 
+    /** {@link #onde()} depois de "em" ("em o" vira "no", "em a" vira "na"). */
+    default String emOnde() {
+        return contrair("n", onde());
+    }
+
+    /** {@link #onde()} depois de "de" ("de o" vira "do", "de a" vira "da"). */
+    default String deOnde() {
+        return contrair("d", onde());
+    }
+
+    private static String contrair(String letra, String sintagma) {
+        if (sintagma.startsWith("o ") || sintagma.startsWith("a ")) {
+            return letra + sintagma;
+        }
+        return (letra.equals("n") ? "em " : "de ") + sintagma;
+    }
+
     /** Tem de reiniciar o cloudflared depois de mudar (o arquivo)? Senão a Cloudflare entrega as regras sozinha (a API). */
     boolean reiniciaOCloudflared();
 

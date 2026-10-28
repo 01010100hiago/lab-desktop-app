@@ -403,7 +403,7 @@ public final class DialogoPublicar extends Dialogo {
         tituloDoCompose.setVisible(temCompose);
         rolagemDoCompose.setVisible(temCompose);
         boolean temTunel = !previa.diferencaDoTunel().isEmpty();
-        tituloDoTunel.setText("Túnel: o que muda em " + previa.ondeEstaORegistro());
+        tituloDoTunel.setText("Túnel: o que muda " + previa.ondeEstaORegistro());
         areaDoTunel.setText(previa.diferencaDoTunel());
         areaDoTunel.setCaretPosition(0);
         tituloDoTunel.setVisible(temTunel);
@@ -477,7 +477,7 @@ public final class DialogoPublicar extends Dialogo {
             case DESFEITO -> Tokens.ATENCAO;
         };
         r.setIcon(Icones.colorido(icone, 14, token));
-        r.setText(nome + (frase == null || frase.isEmpty() ? "" : " — " + frase));
+        r.setText(nome + (frase == null || frase.isEmpty() ? "" : " — " + resumir(frase)));
         r.setToolTipText(frase);
         r.corDoToken(estado == ObservadorDaEtapa.Estado.FALHOU ? Tokens.PERIGO : estado == ObservadorDaEtapa.Estado.ANDANDO ? Tokens.TEXTO : Tokens.TEXTO2);
         reajustar();
@@ -548,7 +548,9 @@ public final class DialogoPublicar extends Dialogo {
 
     private void mostrarDesfeitoEPendencias(PublicadorNaInternet.Resultado r) {
         if (!r.desfeito().isEmpty()) {
-            desfeitoNoResultado.setText("Desfeito: " + String.join(" ", r.desfeito()).replace("Desfiz ", "").replace(".", ";").replaceAll(";$", "."));
+            // cada item é uma frase "Desfiz X.": tira o "Desfiz " e o ponto final de cada uma e junta com ponto e vírgula (sem mexer nos pontos de dentro, como o de docker-compose.yml)
+            List<String> itens = r.desfeito().stream().map(f -> f.startsWith("Desfiz ") ? f.substring("Desfiz ".length()) : f).map(f -> f.endsWith(".") ? f.substring(0, f.length() - 1) : f).toList();
+            desfeitoNoResultado.setText("Desfeito: " + String.join("; ", itens) + ".");
             desfeitoNoResultado.setVisible(true);
         }
         if (!r.naoConsegui().isEmpty()) {
@@ -594,6 +596,12 @@ public final class DialogoPublicar extends Dialogo {
     // =====================================================================================================
     // Fechar (nunca preso)
     // =====================================================================================================
+
+    /** A frase de um passo cabe numa linha (o texto inteiro vai na dica e, se falhou, no resultado): uma frase longa não alarga a janela. */
+    private static String resumir(String frase) {
+        String f = frase.replace('\n', ' ').strip();
+        return f.length() <= 90 ? f : f.substring(0, 89).stripTrailing() + "…";
+    }
 
     @Override
     protected void aoCancelar() {

@@ -215,9 +215,9 @@ public final class PublicadorNaInternet implements AutoCloseable {
         }
         avisos.addAll(mudanca.avisos());
         if (mudanca.semEfeito()) {
-            passos.add("Túnel: a regra " + hostname + " -> " + servicoDaRegra + " já está em " + tunel.onde() + ".");
+            passos.add("Túnel: a regra " + hostname + " -> " + servicoDaRegra + " já está " + tunel.emOnde() + ".");
         } else {
-            passos.add("Túnel: acrescentar em " + tunel.onde() + " a regra " + hostname + " -> " + servicoDaRegra + ", antes da regra final"
+            passos.add("Túnel: acrescentar " + tunel.emOnde() + " a regra " + hostname + " -> " + servicoDaRegra + ", antes da regra final"
                 + (tunel.reiniciaOCloudflared() ? "; guardar uma cópia datada, conferir com o cloudflared e reiniciar SÓ o container " + cfg.containerDoCloudflared() : "") + ".");
         }
 
@@ -248,7 +248,7 @@ public final class PublicadorNaInternet implements AutoCloseable {
             avisos.add("O projeto NÃO será recriado agora: o container só entra na rede edge quando for recriado (Iniciar o projeto). Até lá o endereço responde com erro.");
         }
         passos.add("Testar " + NomeDoEndereco.urlPublica(hostname) + " (o DNS novo pode levar alguns minutos).");
-        return new Previa(p, hostname, NomeDoEndereco.urlPublica(hostname), servicoDaRegra, situacaoDoCompose, diferencaDoCompose, bloco, tunel.onde(), mudanca.diferenca(), dnsDoApp, passos,
+        return new Previa(p, hostname, NomeDoEndereco.urlPublica(hostname), servicoDaRegra, situacaoDoCompose, diferencaDoCompose, bloco, tunel.emOnde(), mudanca.diferenca(), dnsDoApp, passos,
             avisos, bloqueios, bytes, proposta, mudanca);
     }
 

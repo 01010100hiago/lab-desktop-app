@@ -200,7 +200,8 @@ public final class DialogoRemoverEndereco extends Dialogo {
             case DESFEITO -> Tokens.ATENCAO;
         };
         r.setIcon(Icones.colorido(icone, 14, token));
-        r.setText(nome + (frase == null || frase.isEmpty() ? "" : " — " + frase));
+        r.setText(nome + (frase == null || frase.isEmpty() ? "" : " — " + resumir(frase)));
+        r.setToolTipText(frase);
         reajustar();
     }
 
@@ -235,6 +236,12 @@ public final class DialogoRemoverEndereco extends Dialogo {
             }
         }
         reajustar();
+    }
+
+    /** A frase de um passo cabe numa linha (o texto inteiro vai na dica e, se falhou, no resultado): uma frase longa não alarga a janela. */
+    private static String resumir(String frase) {
+        String f = frase.replace('\n', ' ').strip();
+        return f.length() <= 90 ? f : f.substring(0, 89).stripTrailing() + "…";
     }
 
     @Override
