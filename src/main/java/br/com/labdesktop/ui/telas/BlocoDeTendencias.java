@@ -278,11 +278,11 @@ final class BlocoDeTendencias extends CaixaDoServidor {
             case DISCO -> Tokens.SERIE7;
             case ESCRITA_NO_DISCO -> Tokens.SERIE5;
             case DOWNLOAD -> Tokens.SERIE8;
-            case UPLOAD -> Tokens.DESTAQUE;
+            case UPLOAD -> Tokens.SERIE8;
         };
     }
 
-    /** O Upload usa linha tracejada: acompanha o Download e não se confunde com ele (nem com a CPU, que tem a mesma cor) sem depender da cor. */
+    /** O Upload usa linha tracejada e a cor do Download (as duas são a rede, com a seta de cada uma no nome); a cor dele NÃO é a da CPU, que era o que só o traço separava. */
     static boolean tracejada(Metrica m) {
         return m == Metrica.UPLOAD;
     }

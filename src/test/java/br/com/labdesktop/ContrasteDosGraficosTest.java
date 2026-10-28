@@ -58,6 +58,34 @@ class ContrasteDosGraficosTest {
     }
 
     @Test
+    void aCorDeCadaGraficoEDeUmSoExcetoARedeEACpuNuncaDivideACorComNinguem() throws Exception {
+        // só o Download e o Upload (a rede, com a seta de cada um e o traço do Upload) dividem a cor; a CPU, o Disco, a Memória e a Escrita têm cada um a sua
+        for (Metrica m : Metrica.values()) {
+            for (Metrica o : Metrica.values()) {
+                if (m != o && GraficosParaTeste.token(m).equals(GraficosParaTeste.token(o))) {
+                    boolean eARede = (m == Metrica.DOWNLOAD && o == Metrica.UPLOAD) || (m == Metrica.UPLOAD && o == Metrica.DOWNLOAD);
+                    assertTrue(eARede, m.nome() + " e " + o.nome() + " dividem a cor e só um traço os separaria");
+                }
+            }
+        }
+        for (Tema tema : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
+            instalar(tema);
+            Metrica[] todas = Metrica.values();
+            for (int i = 0; i < todas.length; i++) {
+                for (int j = i + 1; j < todas.length; j++) {
+                    if (GraficosParaTeste.token(todas[i]).equals(GraficosParaTeste.token(todas[j]))) {
+                        continue;
+                    }
+                    Color a = Tokens.cor(GraficosParaTeste.token(todas[i]));
+                    Color b = Tokens.cor(GraficosParaTeste.token(todas[j]));
+                    double distancia = Math.sqrt(Math.pow(a.getRed() - b.getRed(), 2) + Math.pow(a.getGreen() - b.getGreen(), 2) + Math.pow(a.getBlue() - b.getBlue(), 2));
+                    assertTrue(distancia >= 25, tema + ": " + todas[i].nome() + " e " + todas[j].nome() + " têm cores quase iguais (distância " + String.format("%.0f", distancia) + ")");
+                }
+            }
+        }
+    }
+
+    @Test
     void asCoresDasLinhasNaoTemMatizAzulNosDoisTemas() throws Exception {
         for (Tema tema : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
             instalar(tema);

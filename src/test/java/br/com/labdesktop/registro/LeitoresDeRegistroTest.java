@@ -86,7 +86,7 @@ class LeitoresDeRegistroTest {
             default -> throw new AssertionError(c);
         };
         ResultadoDoRegistro.Lido lido = assertInstanceOf(ResultadoDoRegistro.Lido.class, leitor(s, "labuser").ler());
-        assertEquals("do arquivo /var/log/syslog", lido.fonte());
+        assertEquals("do arquivo /var/log/syslog (a hora vem sem fuso: lida no fuso deste computador)", lido.fonte());
         assertEquals("do arquivo syslog", lido.linhas().get(0).mensagem());
     }
 
@@ -99,7 +99,7 @@ class LeitoresDeRegistroTest {
             default -> saiu(0, "Oct 28 11:55:01 lab crond[1]: ok\n", "");
         };
         ResultadoDoRegistro.Lido lido = assertInstanceOf(ResultadoDoRegistro.Lido.class, leitor(s, "labuser").ler());
-        assertEquals("do arquivo /var/log/messages", lido.fonte());
+        assertEquals("do arquivo /var/log/messages (a hora vem sem fuso: lida no fuso deste computador)", lido.fonte());
     }
 
     @Test
@@ -155,6 +155,14 @@ class LeitoresDeRegistroTest {
     private static String linhaLonga(int minutosAtras, String marca) {
         java.time.OffsetDateTime t = java.time.OffsetDateTime.of(2026, 10, 28, 11, 59, 0, 0, java.time.ZoneOffset.ofHours(-3)).minusMinutes(minutosAtras);
         return t.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssxx")) + " lab app[1]: " + marca + " " + "x".repeat(360) + " FIM\n";
+    }
+
+    @Test
+    void syslogComDataIsoTemFusoENaoLevaANotaDeHoraSemFuso() throws Exception {
+        Servidor s = new Servidor();
+        s.resposta = c -> c.equals(LeitorDeRegistroPorSsh.COMANDO_SYSLOG) ? saiu(0, JOURNAL, "") : saiu(127, "", "journalctl: not found");
+        ResultadoDoRegistro.Lido lido = assertInstanceOf(ResultadoDoRegistro.Lido.class, leitor(s, "labuser").ler());
+        assertEquals("do arquivo /var/log/syslog", lido.fonte());
     }
 
     @Test

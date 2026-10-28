@@ -57,7 +57,8 @@ public final class LeitorDeRegistroPorSsh implements LeitorDeRegistro {
         return "sudo usermod -aG systemd-journal " + u;
     }
 
-    private static final String EXPLICACAO = "Este comando põe o seu usuário no grupo que lê o registro do sistema. Rode-o você mesmo no servidor (o app nunca pede nem usa senha de administrador). "
+    /** O que o app diz ao usuário, junto do comando, quando o usuário do SSH não lê o registro do sistema. */
+    public static final String EXPLICACAO_DO_ACESSO = "Este comando põe o seu usuário no grupo que lê o registro do sistema. Rode-o você mesmo no servidor (o app nunca pede nem usa senha de administrador). "
         + "Depois feche a conexão com o servidor e conecte de novo (ou saia e entre no servidor): o grupo novo só vale numa conexão nova.";
 
     @Override
@@ -82,14 +83,16 @@ public final class LeitorDeRegistroPorSsh implements LeitorDeRegistro {
                 String saida = r.stdout();
                 boolean parcial = saida.getBytes(java.nio.charset.StandardCharsets.UTF_8).length >= BYTES_DO_ARQUIVO - 16;
                 String texto = parcial ? InterpretadorDeRegistro.semPrimeiraLinhaCortada(saida) : saida;
-                return lido(InterpretadorDeRegistro.doSistema(texto, relogio.get(), fuso), arquivo[1], parcial || r.truncado());
+                InterpretadorDeRegistro.Leitura l = InterpretadorDeRegistro.doSistema(texto, relogio.get(), fuso);
+                // o syslog tradicional não traz o fuso (Oct 28 14:10:01): o app o lê no fuso DESTE computador e diz isso, para a hora não parecer exata
+                return lido(l, l.horaSemFuso() ? arquivo[1] + " (a hora vem sem fuso: lida no fuso deste computador)" : arquivo[1], parcial || r.truncado());
             }
             if (pareceFaltaDePermissao(r.stderr())) {
                 semPermissao = true;
             }
         }
         if (semPermissao) {
-            return new ResultadoDoRegistro.SemPermissao("Seu usuário não tem permissão para ler o registro do sistema.", comandoParaDarAcesso(usuario.get()), EXPLICACAO);
+            return new ResultadoDoRegistro.SemPermissao("Seu usuário não tem permissão para ler o registro do sistema.", comandoParaDarAcesso(usuario.get()), EXPLICACAO_DO_ACESSO);
         }
         return new ResultadoDoRegistro.Indisponivel("Este servidor não tem o registro do sistema nos lugares que o app conhece (journalctl, /var/log/syslog e /var/log/messages).");
     }

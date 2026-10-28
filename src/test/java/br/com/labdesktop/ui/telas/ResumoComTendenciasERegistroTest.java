@@ -423,7 +423,7 @@ class ResumoComTendenciasERegistroTest {
 
     @Test
     void semPermissaoMostraAFraseOComandoExatoEUmBotaoParaCopiar() throws Exception {
-        PainelDoRegistro p = novoPainel(null, true);
+        PainelDoRegistro p = novoPainel(null, false); // a janela grande (Ver tudo) tem o texto inteiro; a caixa compacta, só a frase curta e o comando (teste abaixo)
         Visual.naEdt(() -> p.aoReceber(new ResultadoDoRegistro.SemPermissao("Seu usuário não tem permissão para ler o registro do sistema.", "sudo usermod -aG systemd-journal labuser",
             "Este comando põe o seu usuário no grupo que lê o registro do sistema. Rode-o você mesmo no servidor (o app nunca pede nem usa senha de administrador).")));
         assertEquals("mensagem", p.cartaoAtual());
@@ -555,6 +555,39 @@ class ResumoComTendenciasERegistroTest {
         Visual.naEdt(() -> f.ouvinte.aoConfirmar());
         assertFalse(Visual.naEdt(p::assinada));
         assertTrue(Visual.naEdt(p::textoDoStatus).contains("Lido às " + br.com.labdesktop.util.Formato.fmtHora(AGORA.plusSeconds(600), SP)));
+    }
+
+    @Test
+    void duasLinhasIdenticasNaoSelecionamJuntasDepoisDeAtualizar() {
+        PainelDoRegistro p = novoPainel(null, false);
+        var igual = new LinhaDeRegistro(AGORA.minusSeconds(60), "app", "tentando de novo", br.com.labdesktop.registro.Severidade.AVISO);
+        var outra = new LinhaDeRegistro(AGORA.minusSeconds(120), "app", "começou", br.com.labdesktop.registro.Severidade.INFO);
+        Visual.naEdt(() -> p.aoReceber(new ResultadoDoRegistro.Lido(List.of(igual, igual, outra), "do diário do sistema (journalctl)", false)));
+        Visual.naEdt(() -> p.lista().setSelectedIndex(1)); // a SEGUNDA das iguais
+        var nova = new LinhaDeRegistro(AGORA, "app", "chegou agora", br.com.labdesktop.registro.Severidade.INFO);
+        Visual.naEdt(() -> p.aoReceber(new ResultadoDoRegistro.Lido(List.of(nova, igual, igual, outra), "do diário do sistema (journalctl)", false)));
+        assertEquals(List.of(2), Visual.naEdt(() -> java.util.Arrays.stream(p.lista().getSelectedIndices()).boxed().toList()),
+            "só a segunda das iguais continua selecionada, já deslocada pela linha nova");
+    }
+
+    @Test
+    void semPermissaoNaCaixaPequenaOComandoEOBotaoCopiarFicamAVistaComOTextoDeVerdade() {
+        // o texto REAL do leitor (e não uma frase de teste): na caixa compacta do Resumo a explicação inteira empurraria o comando para fora da vista
+        PainelDoRegistro p = novoPainel(null, true);
+        var sem = new ResultadoDoRegistro.SemPermissao("Seu usuário não tem permissão para ler o registro do sistema.",
+            br.com.labdesktop.registro.LeitorDeRegistroPorSsh.comandoParaDarAcesso("labuser"),
+            br.com.labdesktop.registro.LeitorDeRegistroPorSsh.EXPLICACAO_DO_ACESSO);
+        Visual.naEdt(() -> p.aoReceber(sem));
+        Visual.renderizar(p, 600, 190);
+        assertEquals("mensagem", p.cartaoAtual());
+        assertTrue(Visual.naEdt(p::comandoEstaNaVista), "o comando e o Copiar comando aparecem sem rolar, em 190 px de altura");
+        assertEquals("sudo usermod -aG systemd-journal labuser", Visual.naEdt(() -> p.comandoParaCopiar()));
+        assertEquals(sem.explicacao(), Visual.naEdt(() -> p.textoDaMensagemDica()), "a explicação inteira está na dica");
+        Visual.salvar(Visual.renderizar(p, 600, 190), "registro-sem-permissao-compacto-claro");
+        // na janela grande o texto é o inteiro
+        PainelDoRegistro grande = novoPainel(null, false);
+        Visual.naEdt(() -> grande.aoReceber(sem));
+        assertTrue(Visual.naEdt(grande::textoDaMensagem).contains("o app nunca pede nem usa senha de administrador"));
     }
 
     @Test

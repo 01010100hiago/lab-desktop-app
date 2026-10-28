@@ -107,6 +107,7 @@ public final class PainelDoRegistro extends Painel {
     private final TextoCorrido textoDaMensagem = new TextoCorrido("", 420).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     private final javax.swing.JTextArea comando = new javax.swing.JTextArea();
     private final Botao copiarComando;
+    private final JScrollPane rolagemDaMensagem;
     private final JPanel blocoDoComando = new Painel(new BorderLayout(0, 4));
     private final Rotulo status = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f).truncavel();
 
@@ -248,7 +249,7 @@ public final class PainelDoRegistro extends Painel {
             mensagem.add(c);
             mensagem.add(javax.swing.Box.createRigidArea(new Dimension(0, 6)));
         }
-        JScrollPane rolagemDaMensagem = new JScrollPane(mensagem, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        rolagemDaMensagem = new JScrollPane(mensagem, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         rolagemDaMensagem.setBorder(BorderFactory.createEmptyBorder());
         rolagemDaMensagem.setOpaque(false);
         rolagemDaMensagem.getViewport().setOpaque(false);
@@ -411,7 +412,9 @@ public final class PainelDoRegistro extends Painel {
             }
         } else if (ultimo instanceof ResultadoDoRegistro.SemPermissao p) {
             atualizarLista(List.of());
-            mensagem(p.frase(), p.explicacao() + " O comando é este:", p.comandoParaCopiar());
+            // na caixa pequena do Resumo cabem poucas linhas: o comando e o botão de copiar têm de ficar À VISTA, então o texto é a frase curta e a explicação inteira vai na dica (e na janela Ver tudo)
+            mensagem(p.frase(), compacto ? "Rode no servidor e conecte de novo (mais detalhes na dica e em Ver tudo):" : p.explicacao() + " O comando é este:", p.comandoParaCopiar());
+            textoDaMensagem.setToolTipText(p.explicacao());
         } else if (ultimo instanceof ResultadoDoRegistro.Indisponivel i) {
             atualizarLista(List.of());
             mensagem("Não há registro para mostrar.", i.frase(), null);
@@ -426,6 +429,7 @@ public final class PainelDoRegistro extends Painel {
     private void mensagem(String titulo, String texto, String comandoParaCopiar) {
         tituloDaMensagem.setText(titulo);
         textoDaMensagem.setText(texto);
+        textoDaMensagem.setToolTipText(null);
         blocoDoComando.setVisible(comandoParaCopiar != null);
         comando.setText(comandoParaCopiar == null ? "" : comandoParaCopiar);
         cartoes.show(corpo, CARTAO_MENSAGEM);
@@ -439,15 +443,37 @@ public final class PainelDoRegistro extends Painel {
         }
         int primeira = lista.getFirstVisibleIndex();
         LinhaDeRegistro doTopo = primeira > 0 && primeira < modelo.size() ? modelo.get(primeira) : null;
-        List<LinhaDeRegistro> selecionadas = lista.getSelectedValuesList();
+        // a seleção é guardada por (linha, ordem entre as IGUAIS): duas linhas idênticas no registro (mesma hora, origem e mensagem) são linhas diferentes, e selecionar uma não pode
+        // selecionar a outra depois da atualização
+        record Marca(LinhaDeRegistro linha, int ordem) { }
+        List<Marca> selecionadas = new ArrayList<>();
+        for (int i : lista.getSelectedIndices()) {
+            if (i < modelo.size()) {
+                LinhaDeRegistro l = modelo.get(i);
+                int ordem = 0;
+                for (int k = 0; k < i; k++) {
+                    if (modelo.get(k).equals(l)) {
+                        ordem++;
+                    }
+                }
+                selecionadas.add(new Marca(l, ordem));
+            }
+        }
         modelo.clear();
         modelo.addAll(novas);
         visiveis = List.copyOf(novas);
         if (!selecionadas.isEmpty()) {
             List<Integer> indices = new ArrayList<>();
-            for (int i = 0; i < modelo.size(); i++) {
-                if (selecionadas.contains(modelo.get(i))) {
-                    indices.add(i);
+            for (Marca m : selecionadas) {
+                int vistas = 0;
+                for (int i = 0; i < modelo.size(); i++) {
+                    if (modelo.get(i).equals(m.linha())) {
+                        if (vistas == m.ordem()) {
+                            indices.add(i);
+                            break;
+                        }
+                        vistas++;
+                    }
                 }
             }
             lista.setSelectedIndices(indices.stream().mapToInt(Integer::intValue).toArray());
@@ -745,6 +771,24 @@ public final class PainelDoRegistro extends Painel {
 
     String textoDoStatus() {
         return status.getText();
+    }
+
+    /** O comando e o botão Copiar comando aparecem inteiros na vista do cartão da mensagem (sem precisar rolar)? */
+    boolean comandoEstaNaVista() {
+        if (!blocoDoComando.isVisible() || blocoDoComando.getHeight() == 0) {
+            return false;
+        }
+        java.awt.Rectangle vista = rolagemDaMensagem.getViewport().getViewRect();
+        java.awt.Rectangle bloco = javax.swing.SwingUtilities.convertRectangle(blocoDoComando.getParent(), blocoDoComando.getBounds(), rolagemDaMensagem.getViewport().getView());
+        return vista.contains(bloco);
+    }
+
+    String textoDaMensagemDica() {
+        return textoDaMensagem.getToolTipText();
+    }
+
+    String comandoParaCopiar() {
+        return comando.getText();
     }
 
     String tituloDaMensagem() {

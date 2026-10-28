@@ -40,8 +40,13 @@ public final class InterpretadorDeRegistro {
 
     private InterpretadorDeRegistro() { }
 
-    /** O retrato de uma leitura: as linhas na ordem em que o servidor as escreveu (a MAIS ANTIGA primeiro) e se havia mais do que o limite. */
-    public record Leitura(List<LinhaDeRegistro> linhas, boolean cortada) { }
+    /** O retrato de uma leitura: as linhas ORDENADAS por hora (a MAIS ANTIGA primeiro), se havia mais do que o limite e se alguma hora veio SEM fuso (syslog tradicional: lida no fuso deste computador). */
+    public record Leitura(List<LinhaDeRegistro> linhas, boolean cortada, boolean horaSemFuso) {
+
+        public Leitura(List<LinhaDeRegistro> linhas, boolean cortada) {
+            this(linhas, cortada, false);
+        }
+    }
 
     /**
      * A saída de {@code journalctl -r -n 200 --no-pager -o short-iso} (mais nova primeiro) ou de um {@code tail -c} de {@code /var/log/syslog} (mais antiga primeiro), de qualquer um dos dois
@@ -49,6 +54,7 @@ public final class InterpretadorDeRegistro {
      */
     public static Leitura doSistema(String saida, Instant agora, ZoneId fuso) {
         List<LinhaDeRegistro> l = new ArrayList<>();
+        boolean semFuso = false;
         for (String bruta : linhas(saida)) {
             String t = bruta.strip();
             if (t.isEmpty() || t.startsWith("-- ")) {
@@ -57,6 +63,7 @@ public final class InterpretadorDeRegistro {
             LinhaDeRegistro linha = iso(bruta);
             if (linha == null) {
                 linha = tradicional(bruta, agora, fuso);
+                semFuso |= linha != null;
             }
             l.add(linha != null ? linha : semHora(bruta));
         }
@@ -66,7 +73,7 @@ public final class InterpretadorDeRegistro {
             l = new ArrayList<>(l.subList(l.size() - LIMITE_DE_LINHAS, l.size())); // fica o FIM: as mais novas
             cortada = true;
         }
-        return new Leitura(List.copyOf(l), cortada);
+        return new Leitura(List.copyOf(l), cortada, semFuso);
     }
 
     /** Tira a última linha se a saída foi cortada no teto (ela pode estar pela metade). Sem corte, devolve igual. */
