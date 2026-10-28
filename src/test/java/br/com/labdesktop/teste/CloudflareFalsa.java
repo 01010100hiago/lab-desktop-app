@@ -52,6 +52,8 @@ public final class CloudflareFalsa implements AutoCloseable {
         final Map<String, String> cabecalhos;
         final AtomicInteger restantes;
         final long atrasoMs;
+        /** Faz o que o pedido manda (cria o registro, grava a configuração) e SÓ DEPOIS devolve a falha: a resposta se perdeu no caminho. */
+        volatile boolean executarAntes;
 
         Falha(String alvo, int status, String corpo, Map<String, String> cabecalhos, int vezes, long atrasoMs) {
             this.alvo = Pattern.compile(alvo);
@@ -157,6 +159,14 @@ public final class CloudflareFalsa implements AutoCloseable {
     public CloudflareFalsa limitarTaxa(String metodoECaminho, int vezes, String retryAfter) {
         Map<String, String> c = retryAfter == null ? Map.of() : Map.of("Retry-After", retryAfter);
         falhas.add(new Falha(metodoECaminho, 429, erro(971, "Rate limited"), c, vezes, 0));
+        return this;
+    }
+
+    /** As próximas {@code vezes} chamadas fazem o que pedem e depois respondem 504: o pedido chegou, a resposta se perdeu (resultado incerto para quem pediu). */
+    public CloudflareFalsa executarEPerderAResposta(String metodoECaminho, int vezes) {
+        Falha f = new Falha(metodoECaminho, 504, erro(9999, "Gateway timeout"), Map.of(), vezes, 0);
+        f.executarAntes = true;
+        falhas.add(f);
         return this;
     }
 
@@ -271,6 +281,11 @@ public final class CloudflareFalsa implements AutoCloseable {
                             break; // só atrasou: segue o caminho normal depois
                         }
                     }
+                    if (f.executarAntes) {
+                        if (auth != null && auth.equals("Bearer " + tokenAceito)) {
+                            rotearSemResponder(metodo, caminho, query(query), corpo);
+                        }
+                    }
                     responder(x, f.status, f.corpo, f.cabecalhos);
                     return;
                 }
@@ -285,6 +300,26 @@ public final class CloudflareFalsa implements AutoCloseable {
             x.close();
         } catch (RuntimeException e) {
             responder(x, 500, erro(1, "falha da Cloudflare falsa: " + e), Map.of());
+        }
+    }
+
+    /** O efeito de um pedido de escrita, sem responder (para "executou e a resposta se perdeu"). */
+    private void rotearSemResponder(String metodo, String caminho, Map<String, String> q, String corpo) throws IOException {
+        Matcher m;
+        if (metodo.equals("POST") && (m = Pattern.compile("/zones/([^/]+)/dns_records").matcher(caminho)).matches()) {
+            JsonNode c = Json.mapper().readTree(corpo);
+            registros.add(new Registro("r" + sequencia.incrementAndGet(), c.path("name").asText("").toLowerCase(), c.path("type").asText(), c.path("content").asText(),
+                c.path("proxied").asBoolean(false), c.path("comment").isMissingNode() ? "" : c.path("comment").asText()));
+        } else if (metodo.equals("PUT") && (m = Pattern.compile("/accounts/([^/]+)/cfd_tunnel/([^/]+)/configurations").matcher(caminho)).matches()) {
+            String id = m.group(2);
+            tuneis.stream().filter(t -> t.id.equals(id)).findFirst().ifPresent(t -> {
+                try {
+                    t.configuracao = (ObjectNode) Json.mapper().readTree(corpo).path("config");
+                    t.versao++;
+                } catch (IOException e) {
+                    throw new java.io.UncheckedIOException(e);
+                }
+            });
         }
     }
 
