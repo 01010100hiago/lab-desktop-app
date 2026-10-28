@@ -60,7 +60,9 @@ public final class DialogoDesligarSenha extends Dialogo {
     private static final int LARGURA = 520;
 
     /** A segunda confirmação, além do nome do servidor: o usuário diz que tem como voltar a entrar se a chave deste app falhar. Desmarcada por padrão. */
-    public static final String TEXTO_DO_OUTRO_JEITO = "Tenho outro jeito de entrar neste servidor (outra chave instalada, painel do provedor ou acesso físico)";
+    public static final String TEXTO_DO_OUTRO_JEITO = "Tenho outro jeito de entrar neste servidor";
+    /** O que conta como "outro jeito": numa linha própria embaixo da caixa (a frase inteira numa caixa só passava da largura do diálogo e saía cortada). */
+    public static final String DICA_DO_OUTRO_JEITO = "Outra chave instalada, painel do provedor ou acesso físico.";
 
     private final String nomeDoServidor;
     private final Motor motor;
@@ -80,10 +82,11 @@ public final class DialogoDesligarSenha extends Dialogo {
     /** Os riscos ficam numa caixa em destaque (fundo âmbar suave): é o que o usuário precisa ler antes de confirmar. */
     private final JComponent blocoDosRiscos;
     private final JCheckBox outroJeitoDeEntrar = new JCheckBox(TEXTO_DO_OUTRO_JEITO);
+    private final TextoCorrido dicaDoOutroJeito = new TextoCorrido(DICA_DO_OUTRO_JEITO, LARGURA_DO_TEXTO).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     private final Rotulo tituloDoReverter = new Rotulo("Como reverter (guarde este comando)").negrito();
     private final TextoCorrido comandoDeReverter = new TextoCorrido("", LARGURA).mono(12f);
     private final Botao copiarComandoDeReverter;
-    private final Rotulo pedidoDeConfirmacao = new Rotulo("").corDoToken(Tokens.TEXTO2).tamanho(12.5f);
+    private final TextoCorrido pedidoDeConfirmacao = new TextoCorrido("", LARGURA_DO_TEXTO).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     private final JTextField campoDaConfirmacao = Campos.mono(30, "digite o nome do servidor");
     private final Botao desligar;
     private final Botao fechar = Botoes.primario("Cancelar", null);
@@ -131,12 +134,13 @@ public final class DialogoDesligarSenha extends Dialogo {
         outroJeitoDeEntrar.setOpaque(false);
         outroJeitoDeEntrar.setSelected(false);
         outroJeitoDeEntrar.getAccessibleContext().setAccessibleName(TEXTO_DO_OUTRO_JEITO);
+        outroJeitoDeEntrar.getAccessibleContext().setAccessibleDescription(DICA_DO_OUTRO_JEITO);
         comandoDeReverter.setText(ComandosDoAcesso.comandoParaReverter());
         blocoDoReverter = Caixa.coluna(6, tituloDoReverter, comandoDeReverter, Caixa.linha(0, copiarComandoDeReverter, Caixa.mola()));
         blocoDoComandoManual = Caixa.coluna(6, tituloDoComando, comandoManual, Caixa.linha(0, copiarComandoManual, Caixa.mola()));
         // O BoxLayout deixa o espaço de um componente escondido: em vez de "espaço entre" (que sobra quando um bloco some), cada bloco leva o seu recuo em cima.
         blocoDaPrevia = Caixa.coluna(0, recuo(tituloDoQueFaz, 0), recuo(oQueFaz, 4), recuo(tituloDoEncontrado, 12), recuo(encontrado, 4), recuo(avisosDaLeitura, 10),
-            recuo(blocoDosRiscos, 12), recuo(blocoDoReverter, 12), recuo(outroJeitoDeEntrar, 14), recuo(pedidoDeConfirmacao, 10),
+            recuo(blocoDosRiscos, 12), recuo(blocoDoReverter, 12), recuo(Caixa.coluna(0, outroJeitoDeEntrar, dicaDoOutroJeito), 14), recuo(pedidoDeConfirmacao, 10),
             recuo(Caixa.linha(0, campoDaConfirmacao, Caixa.mola()), 4));
         blocoDosPassos = Caixa.coluna(4);
         for (Passo p : Passo.values()) {
@@ -236,7 +240,7 @@ public final class DialogoDesligarSenha extends Dialogo {
                 encontrado.setVisible(false);
                 avisosDaLeitura.setVisible(false);
                 blocoDosRiscos.setVisible(true);
-                outroJeitoDeEntrar.setVisible(false);
+                mostrarOOutroJeito(false);
                 pedidoDeConfirmacao.setVisible(false);
                 campoDaConfirmacao.setVisible(false);
                 blocoDaPrevia.setVisible(true);
@@ -246,7 +250,7 @@ public final class DialogoDesligarSenha extends Dialogo {
                 tituloDoQueFaz.setVisible(false);
                 oQueFaz.setVisible(false);
                 blocoDosRiscos.setVisible(false);
-                outroJeitoDeEntrar.setVisible(false);
+                mostrarOOutroJeito(false);
                 blocoDoReverter.setVisible(false);
                 pedidoDeConfirmacao.setVisible(false);
                 campoDaConfirmacao.setVisible(false);
@@ -298,6 +302,12 @@ public final class DialogoDesligarSenha extends Dialogo {
             falha -> aoTerminar(new Resultado(Desfecho.PRECISA_DE_AJUDA, "Aconteceu um erro inesperado: " + MensagensDeErro.de(falha)
                 + " Confira no servidor se o arquivo " + ComandosDoAcesso.ARQUIVO_PROPRIO + " existe e, se não era para existir, apague-o.", List.of(),
                 null, ComandosDoAcesso.comandoParaReverter(), null)));
+    }
+
+    /** A caixa e a dica dela aparecem e somem juntas. */
+    private void mostrarOOutroJeito(boolean sim) {
+        outroJeitoDeEntrar.setVisible(sim);
+        dicaDoOutroJeito.setVisible(sim);
     }
 
     private void mostrarPasso(Passo passo, Estado estado, String frase) {
