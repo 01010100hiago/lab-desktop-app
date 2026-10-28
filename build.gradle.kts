@@ -181,11 +181,15 @@ val sistemaNoNome = if (ehMac) "mac" else if (ehWindows) "windows" else "linux"
 val arquiteturaNoNome = System.getProperty("os.arch").lowercase().let { if (it == "aarch64" || it == "arm64") "arm64" else "x64" }
 val nomeDoApp = "Lab Desktop"
 val versaoDoApp = project.version.toString()
-// O macOS não aceita um pacote cuja primeira parte da versão é 0 (o jpackage recusa: "The first number in an app-version cannot be zero"): no Mac, 0.1.0 vira 1.1.0 (soma 1 ao primeiro número).
-// No Windows (.msi) a versão do app vale como está. O nome dos arquivos e `--versao` do app continuam dizendo a versão de verdade (0.1.0).
-val versaoDoPacote: String = versaoDoApp.split(".").let { partes ->
-    if (ehMac && partes.firstOrNull() == "0") (listOf("1") + partes.drop(1)).joinToString(".") else versaoDoApp
+// O macOS não aceita um pacote cuja primeira parte da versão é 0 (o jpackage recusa: "The first number in an app-version cannot be zero"). No Mac a versão do BUNDLE é a do app com o
+// primeiro número SOMADO DE 1, SEMPRE (0.1.0 -> 1.1.0; a futura 1.0.0 -> 2.0.0): assim a versão do bundle nunca recua (se só o 0.x fosse mapeado, a 1.0.0 de verdade ficaria MENOR que a
+// 1.1.0 do bundle de 0.1.0 e o macOS trataria a atualização como retrocesso). No Windows (.msi) a versão do app vale como está. O nome dos arquivos e `--versao` do app dizem a versão de verdade.
+fun versaoDoBundleDoMac(versao: String): String {
+    val partes = versao.split(".")
+    val primeiro = partes.first().toIntOrNull() ?: throw GradleException("A versão do app precisa começar com um número: $versao")
+    return (listOf((primeiro + 1).toString()) + partes.drop(1)).joinToString(".")
 }
+val versaoDoPacote: String = if (ehMac) versaoDoBundleDoMac(versaoDoApp) else versaoDoApp
 
 // Os módulos do runtime. Os de `jdeps` mais o que o `jdeps` não vê (carregado por nome ou serviço): java.logging (JUL das bibliotecas), java.management e jdk.management (memória total em "Este
 // computador"), jdk.crypto.ec (ECDH/ECDSA do SSH, por ServiceLoader), jdk.unsupported (sun.misc.Unsafe de bibliotecas), jdk.localedata (pt-BR) e jdk.accessibility (leitor de tela).
@@ -296,6 +300,9 @@ val jpackageImagem = tasks.register<Exec>("jpackageImagem") {
             plutil("-replace", "NSLocalNetworkUsageDescription", "-string", "O Lab Desktop fala com os servidores da sua rede (por exemplo o do laboratório) por SSH.", plist)
             plutil("-replace", "NSAppSleepDisabled", "-bool", "true", plist)
             plutil("-replace", "LSApplicationCategoryType", "-string", "public.app-category.developer-tools", plist)
+            // o app não usa o microfone: o texto de permissão que o jpackage deixa no plist faria o macOS poder perguntar por ele; o Java 21 pede o macOS 11 ou mais novo
+            ProcessBuilder("plutil", "-remove", "NSMicrophoneUsageDescription", plist).redirectErrorStream(true).start().also { it.inputStream.readBytes(); it.waitFor() } // sem a chave: sem problema
+            plutil("-replace", "LSMinimumSystemVersion", "-string", "11.0", plist)
             // assinatura ad-hoc depois de mexer no Info.plist (sem Developer ID; o Gatekeeper avisa na primeira abertura: docs/INSTALAR.md)
             val app = destino.get().asFile.resolve("$nomeDoApp.app").absolutePath
             val p = ProcessBuilder("codesign", "--force", "--deep", "--sign", "-", app).redirectErrorStream(true).start()
