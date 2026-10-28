@@ -72,6 +72,12 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher") // obrigatório no Gradle 9
 }
 
+// A licença do app e a tabela de licenças de terceiros vão para dentro do jar: a tela Ajustes > Sobre as lê dali (nada de rede). Uma só fonte, na raiz.
+tasks.processResources {
+    from(layout.projectDirectory.file("LICENSE")) { into("br/com/labdesktop/sobre") }
+    from(layout.projectDirectory.file("THIRD-PARTY-NOTICES.md")) { into("br/com/labdesktop/sobre") }
+}
+
 application {
     mainClass = "br.com.labdesktop.Principal"
     // Estas flags valem para `./gradlew run` e para o script de instalação; o jpackage repete a lista.
