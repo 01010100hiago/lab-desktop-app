@@ -2,6 +2,7 @@ package br.com.labdesktop.ui.telas;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -99,6 +100,25 @@ class SegurancaDesligarSenhaTest {
             Visual.tema(tema);
             PaginaSeguranca nova = pagina(() -> { }, SaidasDeSeguranca.SSHD_SEGURO);
             Visual.salvar(Visual.renderizar(nova, 1000, Math.max(560, Visual.alturaPreferida(nova, 1000))), "seguranca-ssh-senha-desligada-" + tema.name().toLowerCase());
+        }
+        Visual.tema(Tema.CLARO);
+    }
+
+    @Test
+    void senhaDesligadaMasTecladoInterativoLigadoEParcialEAmareloEAindaTemOBotao() {
+        Visual.tema(Tema.CLARO);
+        String parcial = SaidasDeSeguranca.SSHD_SEGURO.replace("kbdinteractiveauthentication no", "kbdinteractiveauthentication yes") + "usepam yes\n";
+        PaginaSeguranca p = pagina(() -> { }, parcial);
+        String ssh = Visual.naEdt(() -> p.textoDoPainel(PaginaSeguranca.SUB_SSH));
+        assertTrue(ssh.contains("parcial: a senha ainda entra pelo teclado interativo"), ssh);
+        assertFalse(ssh.contains("desligada: só entra quem tem a chave"), "não diz que está desligada: " + ssh);
+        assertTrue(ssh.contains("Teclado interativo (PAM)") && ssh.contains("ligado"), ssh);
+        assertTrue(Visual.naEdt(() -> p.textosDoResumo()).get(3).contains("Parcial"), Visual.naEdt(() -> p.textosDoResumo()).toString());
+        assertNotNull(botaoDeDesligar(p), "dá para completar o desligar");
+        for (Tema tema : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
+            Visual.tema(tema);
+            PaginaSeguranca nova = pagina(() -> { }, parcial);
+            Visual.salvar(Visual.renderizar(nova, 1000, Math.max(560, Visual.alturaPreferida(nova, 1000))), "seguranca-ssh-senha-parcial-" + tema.name().toLowerCase());
         }
         Visual.tema(Tema.CLARO);
     }

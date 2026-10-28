@@ -490,6 +490,8 @@ public final class ParsersDeSeguranca {
         Integer max = null;
         Boolean senha = null;
         Boolean chave = null;
+        Boolean teclado = null;
+        Boolean pam = null;
         String root = null;
         boolean achou = false;
         for (String linha : saida == null ? new String[0] : saida.split("\\R")) {
@@ -513,6 +515,15 @@ public final class ParsersDeSeguranca {
                     chave = sim(valor);
                     achou = true;
                 }
+                case "kbdinteractiveauthentication", "challengeresponseauthentication" -> {
+                    Boolean v = sim(valor);
+                    teclado = teclado == null ? v : (Boolean.TRUE.equals(v) || Boolean.TRUE.equals(teclado));
+                    achou = true;
+                }
+                case "usepam" -> {
+                    pam = sim(valor);
+                    achou = true;
+                }
                 case "permitrootlogin" -> {
                     root = curto(valor);
                     achou = true;
@@ -524,7 +535,7 @@ public final class ParsersDeSeguranca {
                 default -> { }
             }
         }
-        return achou ? new ConfiguracaoDoSsh(porta, senha, root, chave, max) : null;
+        return achou ? new ConfiguracaoDoSsh(porta, senha, root, chave, max, teclado, pam) : null;
     }
 
     private static Integer inteiro(String s) {

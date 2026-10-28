@@ -313,4 +313,18 @@ class ParsersDeSegurancaTest {
         assertTrue(semStatus.ativo());
         assertNull(semStatus.banidosAgora());
     }
+
+    @Test
+    void sshdLeTecladoInterativoOuOSeuNomeAntigoEUsePamEMarcaParcial() {
+        var c = ParsersDeSeguranca.lerSshd("passwordauthentication no\nkbdinteractiveauthentication yes\nusepam yes\npubkeyauthentication yes\n");
+        assertEquals(Boolean.TRUE, c.tecladoLigado());
+        assertEquals(Boolean.TRUE, c.usaPam());
+        assertTrue(c.parcial());
+        assertFalse(c.soChave(), "com o teclado interativo ligado não é só chave");
+        var antigo = ParsersDeSeguranca.lerSshd("passwordauthentication no\nchallengeresponseauthentication yes\n");
+        assertTrue(antigo.parcial(), "o nome antigo vale igual");
+        var seguro = ParsersDeSeguranca.lerSshd("passwordauthentication no\nkbdinteractiveauthentication no\nusepam yes\n");
+        assertFalse(seguro.parcial());
+        assertTrue(seguro.soChave());
+    }
 }

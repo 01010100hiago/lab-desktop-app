@@ -107,13 +107,28 @@ public record ResumoDeSeguranca(
      */
     public record ResumoDoFirewall(boolean identificado, String motor, String politica, List<String> regras) { }
 
-    /** O que importa do {@code sshd -T}. Campos {@code null} = a diretiva não apareceu. */
-    public record ConfiguracaoDoSsh(Integer porta, Boolean senhaLigada, String loginDoRoot, Boolean chaveLigada,
-                                    Integer maxTentativas) {
+    /**
+     * O que importa do {@code sshd -T}. Campos {@code null} = a diretiva não apareceu.
+     *
+     * @param tecladoLigado {@code KbdInteractiveAuthentication} (ou o nome antigo {@code ChallengeResponseAuthentication}): com {@code UsePAM yes} ele deixa a senha entrar pelo PAM
+     * @param usaPam        {@code UsePAM}
+     */
+    public record ConfiguracaoDoSsh(Integer porta, Boolean senhaLigada, String loginDoRoot, Boolean chaveLigada, Integer maxTentativas, Boolean tecladoLigado,
+                                    Boolean usaPam) {
 
-        /** Só entra quem tem chave. */
+        /** Sem a leitura do teclado interativo e do PAM (quem monta a leitura só com os cinco primeiros). */
+        public ConfiguracaoDoSsh(Integer porta, Boolean senhaLigada, String loginDoRoot, Boolean chaveLigada, Integer maxTentativas) {
+            this(porta, senhaLigada, loginDoRoot, chaveLigada, maxTentativas, null, null);
+        }
+
+        /** Só entra quem tem chave: a senha e o teclado interativo estão desligados. */
         public boolean soChave() {
-            return Boolean.FALSE.equals(senhaLigada) && !Boolean.FALSE.equals(chaveLigada);
+            return Boolean.FALSE.equals(senhaLigada) && !Boolean.TRUE.equals(tecladoLigado) && !Boolean.FALSE.equals(chaveLigada);
+        }
+
+        /** A senha está desligada, mas a senha ainda pode entrar pelo teclado interativo (PAM): desligada só em parte. */
+        public boolean parcial() {
+            return Boolean.FALSE.equals(senhaLigada) && Boolean.TRUE.equals(tecladoLigado);
         }
 
         /** O root não pode entrar por SSH. */

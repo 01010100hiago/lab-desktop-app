@@ -429,9 +429,11 @@ public final class PaginaSeguranca extends PaginaDoServidor {
                 var s = r.ssh().dados();
                 boolean senha = Boolean.TRUE.equals(s.senhaLigada());
                 String root = s.rootDesligado() ? "root desligado" : s.loginDoRoot() == null ? "root: ?" : "root permitido";
-                ssh.mostrar(senha ? "Aceita senha" : s.soChave() ? "Só chave" : "—", root,
-                    senha || (!s.rootDesligado() && s.loginDoRoot() != null) ? (senha ? Gravidade.PERIGO : Gravidade.ATENCAO) : Gravidade.OK,
-                    senha || (!s.rootDesligado() && s.loginDoRoot() != null) ? "alerta" : "ok-circulo");
+                boolean rootAberto = !s.rootDesligado() && s.loginDoRoot() != null;
+                String valor = senha ? "Aceita senha" : s.parcial() ? "Parcial" : s.soChave() ? "Só chave" : "—";
+                String legenda = s.parcial() ? "senha pelo teclado interativo" : root;
+                Gravidade g = senha ? Gravidade.PERIGO : s.parcial() || rootAberto ? Gravidade.ATENCAO : Gravidade.OK;
+                ssh.mostrar(valor, legenda, g, g == Gravidade.OK ? "ok-circulo" : "alerta");
             } else {
                 ssh.mostrar("—", r == null ? "lendo…" : "sem leitura", Gravidade.NEUTRO, "info");
             }

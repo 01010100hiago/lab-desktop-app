@@ -55,8 +55,14 @@ final class PecasDeSeguranca {
             campos.add(new Campo("Login por senha", null));
         } else if (c.senhaLigada()) {
             campos.add(new Campo("Login por senha", "ligada: qualquer um pode tentar adivinhar uma senha", Gravidade.PERIGO));
+        } else if (c.parcial()) {
+            campos.add(new Campo("Login por senha", "parcial: a senha ainda entra pelo teclado interativo", Gravidade.ATENCAO));
         } else {
             campos.add(new Campo("Login por senha", "desligada: só entra quem tem a chave", Gravidade.OK));
+        }
+        if (c.tecladoLigado() != null) {
+            campos.add(new Campo("Teclado interativo (PAM)", c.tecladoLigado() ? "ligado: pode pedir a senha do usuário" + (Boolean.TRUE.equals(c.usaPam()) ? " (UsePAM sim)" : "") : "desligado",
+                c.tecladoLigado() ? Gravidade.ATENCAO : Gravidade.OK));
         }
         String root = c.loginDoRoot();
         if (root == null) {
@@ -72,7 +78,7 @@ final class PecasDeSeguranca {
         CamposEmGrade g = new CamposEmGrade();
         g.definir(campos);
         g.setName("configuracao-do-ssh");
-        if (Boolean.TRUE.equals(c.senhaLigada()) && aoDesligarASenha != null) {
+        if ((Boolean.TRUE.equals(c.senhaLigada()) || c.parcial()) && aoDesligarASenha != null) {
             Botao desligar = Botoes.mini("Desligar o login por senha…", null);
             desligar.setName("desligar-a-senha");
             desligar.addActionListener(e -> aoDesligarASenha.run());
@@ -81,7 +87,7 @@ final class PecasDeSeguranca {
             p.setName("configuracao-do-ssh-com-botao");
             return p;
         }
-        if (Boolean.FALSE.equals(c.senhaLigada())) {
+        if (Boolean.FALSE.equals(c.senhaLigada()) && !c.parcial()) {
             TextoCorrido reverter = new TextoCorrido("Como voltar a aceitar senha (o app não faz isso sozinho), no servidor: "
                 + br.com.labdesktop.acesso.ComandosDoAcesso.comandoParaReverter(), 330).corDoToken(Tokens.TEXTO3).tamanho(12f);
             reverter.setName("como-reverter-a-senha");
