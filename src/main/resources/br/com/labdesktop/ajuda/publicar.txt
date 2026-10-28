@@ -1,17 +1,18 @@
 # Como publico um projeto na internet?
 @rotulo: Publicar na internet
 @busca: publicar internet cloudflare domínio túnel endereço token remover
-@resumo: O app usa a sua conta da Cloudflare para dar um endereço público ao projeto, mostrando tudo antes de mudar.
+@resumo: O app usa a sua conta da Cloudflare para dar um endereço público ao projeto.
 @onde: Conectar a Cloudflare | Servidor > Cloudflare > Conectar a Cloudflare… | cloudflare
 @onde: Publicar na internet | Página do projeto > Internet > Publicar na internet…
 1. Uma vez só: no servidor, aba Cloudflare, clique em "Conectar a Cloudflare…".
 2. A janela diz quais permissões o token precisa e tem um botão que abre a página dos tokens.
-3. Cole o token, escolha o domínio e o túnel e salve. O token fica só no cofre cifrado deste computador.
+3. Cole o token, escolha o domínio e o túnel e salve (o token fica só no cofre deste computador).
 4. Para publicar: abra a página do projeto, aba Internet, e clique em "Publicar na internet…".
-5. O app mostra tudo o que vai mudar. Só depois da sua confirmação ele muda alguma coisa.
-6. Para tirar o endereço, use Remover: o app pede para você digitar o endereço.
+5. O app mostra tudo o que vai mudar e só muda algo depois da sua confirmação.
 [Ir para Cloudflare](ir:cloudflare)
+@acoes: sim
 @veja: projetos
 ## Mais detalhes
-Conectar só lê dados da Cloudflare e grava o token no cofre. Os botões que publicam e removem ficam escondidos, nesta versão, até as ações de escrita serem ligadas.
+Para tirar um endereço, use Remover: o app pede para você digitar o endereço.
+Conectar só lê dados da Cloudflare e grava o token no cofre.
 Se algo falha no meio do caminho, o app desfaz só o que ele mesmo fez.

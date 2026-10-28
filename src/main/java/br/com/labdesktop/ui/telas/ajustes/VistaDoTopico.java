@@ -102,6 +102,10 @@ final class VistaDoTopico {
         cabecalho.add(titulo, BorderLayout.CENTER);
         cabecalho.add(Caixa.coluna(0, copiar), BorderLayout.EAST);
         filhos.add(cabecalho);
+        if (t.soComAcoes()) {
+            // a frase FIXA do topo (fora de "Mais detalhes"): sem as ações de escrita ligadas, que é o padrão, esses botões nem aparecem
+            filhos.add(texto(br.com.labdesktop.ajuda.GuiaDeAjuda.FRASE_DAS_ACOES, 12.5f, Tokens.TEXTO2, false));
+        }
         if (!t.resumo().isBlank()) {
             filhos.add(resumoRapido(t.resumo()));
         }

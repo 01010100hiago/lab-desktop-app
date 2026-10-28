@@ -17,9 +17,10 @@ import java.util.List;
  * @param telas    os botões "Ir para ..." (cada um abre uma tela)
  * @param veja     os ids dos outros tópicos do "Veja também"
  * @param onde     as linhas que este tópico dá à lista rápida "Onde fica...?"
+ * @param soComAcoes o tópico fala de botões que só aparecem com as ações de escrita ligadas ({@code @acoes: sim}): a Ajuda mostra no topo a frase fixa {@link GuiaDeAjuda#FRASE_DAS_ACOES}
  */
 public record TopicoDeAjuda(String id, String titulo, String rotulo, List<String> palavras, String resumo, List<Bloco> corpo, List<Bloco> detalhes, List<Link> telas,
-                            List<String> veja, List<OndeFica> onde) {
+                            List<String> veja, List<OndeFica> onde, boolean soComAcoes) {
 
     /** Uma peça do texto. */
     public sealed interface Bloco permits Paragrafo, Subtitulo, Passo, TabelaDeAtalhos { }

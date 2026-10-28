@@ -10,6 +10,7 @@
 4. Para enviar: clique em "Enviar" e escolha os itens, ou arraste do seu computador para a lista.
 5. Se já existir um item com o mesmo nome, o app pergunta o que fazer.
 [Ir para Arquivos](ir:arquivos)
+@acoes: sim
 @veja: backups terminal
 ## Mais detalhes
 Outras ações: Nova pasta, Novo arquivo, Renomear, Apagar e Mais (mover, copiar o caminho). Um clique duplo num arquivo de texto abre o editor. "Mostrar ocultos" mostra os arquivos que começam com ponto.

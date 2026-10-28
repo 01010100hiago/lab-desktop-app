@@ -306,6 +306,38 @@ class AjudaNaJanelaTest {
         assertTrue(doMenu.stream().anyMatch(m -> m.chave().equals("ajuda")), "a própria Ajuda tem atalho");
     }
 
+    /** A tabela mostrava Cmd+Shift+N (Novo projeto) mesmo na versão padrão, onde o Novo projeto não existe. */
+    @Test
+    void aTabelaDeAtalhosNaoTemONovoProjetoSemAsAcoesDeEscrita() {
+        String antes = System.getProperty(br.com.labdesktop.ui.telas.FluxosDeProjeto.PROPRIEDADE_ACOES);
+        try {
+            System.clearProperty(br.com.labdesktop.ui.telas.FluxosDeProjeto.PROPRIEDADE_ACOES);
+            assertFalse(Visual.naEdt(() -> menu.atalhosDoMenu()).stream().anyMatch(m -> m.chave().equals("novo-projeto")), "versão padrão: sem Novo projeto");
+            System.setProperty(br.com.labdesktop.ui.telas.FluxosDeProjeto.PROPRIEDADE_ACOES, "true");
+            assertTrue(Visual.naEdt(() -> menu.atalhosDoMenu()).stream().anyMatch(m -> m.chave().equals("novo-projeto")), "com as ações ligadas, a tecla aparece");
+        } finally {
+            if (antes == null) {
+                System.clearProperty(br.com.labdesktop.ui.telas.FluxosDeProjeto.PROPRIEDADE_ACOES);
+            } else {
+                System.setProperty(br.com.labdesktop.ui.telas.FluxosDeProjeto.PROPRIEDADE_ACOES, antes);
+            }
+        }
+    }
+
+    /** A frase fixa no topo dos tópicos de botões de escrita, VISÍVEL sem abrir "Mais detalhes". */
+    @Test
+    void osTopicosDeBotoesDeEscritaDizemNoTopoQueELesSoAparecemComAsAcoesLigadas() {
+        SecaoAjuda a = ajuda();
+        for (String id : List.of("projetos", "publicar", "arquivos", "logs-e-consumo")) {
+            Visual.naEdt(() -> a.abrir(id));
+            Visual.naEdt(() -> SemTransbordo.achados(painel));
+            assertFalse(Visual.naEdt(() -> a.vistaAtual().detalhes() != null && a.vistaAtual().detalhes().aberta()), id + ": os detalhes estão recolhidos");
+            assertTrue(textoDe(a).contains(GuiaDeAjuda.FRASE_DAS_ACOES), id + " tem a frase fixa no topo");
+        }
+        Visual.naEdt(() -> a.abrir("conectar"));
+        assertFalse(textoDe(a).contains(GuiaDeAjuda.FRASE_DAS_ACOES), "só os tópicos de escrita levam a frase");
+    }
+
     @Test
     void todoAtalhoCitadoNaAjudaExisteNoMenuEmCadaSistema() {
         List<String> citados = new ArrayList<>();

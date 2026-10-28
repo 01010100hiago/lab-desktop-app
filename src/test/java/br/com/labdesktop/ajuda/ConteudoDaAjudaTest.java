@@ -34,6 +34,59 @@ class ConteudoDaAjudaTest {
         return texto.codePoints().anyMatch(cp -> cp >= 0x1F000 || (cp >= 0x2600 && cp <= 0x27BF) || cp == 0xFE0F || cp == 0x200D || (cp >= 0x2B00 && cp <= 0x2BFF));
     }
 
+    /**
+     * A Ajuda dizia "No passo 3, clique em Testar conexão" e o botão ficava no passo 2. Todo "passo N" que um tópico cita tem de existir no assistente
+     * (o título "Passo N de 3" no código) e todo botão citado entre aspas depois de "clique em" tem de ser um texto de botão que existe no código.
+     */
+    @Test
+    void osPassosEOsBotoesCitadosNosTopicosExistemNoCodigoDoApp() throws IOException {
+        StringBuilder fontes = new StringBuilder();
+        try (Stream<Path> s = Files.walk(Path.of("src", "main", "java"))) {
+            for (Path p : s.filter(x -> x.toString().endsWith(".java")).toList()) {
+                fontes.append(Files.readString(p)).append('\n');
+            }
+        }
+        String codigo = fontes.toString();
+        java.util.regex.Pattern passo = java.util.regex.Pattern.compile("(?i)\\bno passo (\\d)\\b");
+        java.util.regex.Pattern botao = java.util.regex.Pattern.compile("(?i)clique em \"([^\"]+)\"");
+        List<String> ruins = new ArrayList<>();
+        for (TopicoDeAjuda t : GUIA.topicos()) {
+            List<String> textos = new ArrayList<>();
+            for (Bloco b : t.corpo()) {
+                if (b instanceof Passo p) {
+                    textos.add(p.texto());
+                } else if (b instanceof Paragrafo p) {
+                    textos.add(p.texto());
+                }
+            }
+            for (String texto : textos) {
+                java.util.regex.Matcher m = passo.matcher(texto);
+                while (m.find()) {
+                    if (!codigo.contains("Passo " + m.group(1) + " de 3")) {
+                        ruins.add(t.id() + ": cita o passo " + m.group(1) + ", que o assistente não tem: " + texto);
+                    }
+                }
+                m = botao.matcher(texto);
+                while (m.find()) {
+                    String rotulo = m.group(1).replace("…", "").replace("...", "").strip();
+                    if (!codigo.contains("\"" + rotulo)) {
+                        ruins.add(t.id() + ": cita o botão \"" + m.group(1) + "\", que não existe no código");
+                    }
+                }
+            }
+        }
+        assertTrue(ruins.isEmpty(), String.join("\n", ruins));
+    }
+
+    @Test
+    void osTopicosQueFalamDeBotoesDeEscritaTemAFraseFixaDoTopo() {
+        for (String id : List.of("projetos", "publicar", "arquivos", "logs-e-consumo")) {
+            assertTrue(GUIA.topico(id).soComAcoes(), id + " tem @acoes: sim");
+        }
+        assertTrue(GuiaDeAjuda.FRASE_DAS_ACOES.contains("só aparecem") && GuiaDeAjuda.FRASE_DAS_ACOES.contains("ações de escrita"));
+        assertFalse(GuiaDeAjuda.chavesCitadas(GUIA.topico("projetos")).contains("novo-projeto"), "o Novo projeto não cita atalho que some na versão padrão");
+    }
+
     @Test
     void todoArquivoDaPastaEstaNoIndiceETodoNomeDoIndiceTemArquivo() throws IOException {
         Set<String> nosArquivos = new HashSet<>();

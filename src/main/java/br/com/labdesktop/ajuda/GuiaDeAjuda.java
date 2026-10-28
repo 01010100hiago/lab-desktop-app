@@ -35,6 +35,7 @@ import java.util.stream.Collectors;
  *   [Ir para Projetos](ir:projetos)        (sozinho na linha: botão que abre a tela; ids em {@link Destino})
  *   {tabela-de-atalhos}                    (sozinho na linha: a tabela gerada do menu)
  *   @veja: outro-topico outro-topico       (o "Veja também": até 3 ids)
+ *   @acoes: sim                            (o tópico fala de botões que só aparecem com as ações de escrita ligadas: a Ajuda põe a frase fixa no topo)
  *   ## Mais detalhes                       (o que vem depois fica na seção recolhível)
  *   ... {atalho:ajustes} ...               (dentro do texto: a tecla daquele item do menu)
  * </pre>
@@ -120,6 +121,7 @@ public final class GuiaDeAjuda {
         List<Bloco> corpo = new ArrayList<>();
         List<Bloco> detalhes = new ArrayList<>();
         List<Bloco> destino = corpo;
+        boolean soComAcoes = false;
         StringBuilder paragrafo = new StringBuilder();
         for (String bruta : texto.split("\\R", -1)) {
             String linha = bruta.strip();
@@ -135,6 +137,8 @@ public final class GuiaDeAjuda {
                     palavras.addAll(List.of(linha.substring("@busca:".length()).strip().split("\\s+")));
                 } else if (linha.startsWith("@resumo:")) {
                     resumo = linha.substring("@resumo:".length()).strip();
+                } else if (linha.startsWith("@acoes:")) {
+                    soComAcoes = linha.substring("@acoes:".length()).strip().equalsIgnoreCase("sim");
                 } else if (linha.startsWith("@veja:")) {
                     veja.addAll(List.of(linha.substring("@veja:".length()).strip().split("\\s+")));
                 } else if (linha.startsWith("@onde:")) {
@@ -180,8 +184,11 @@ public final class GuiaDeAjuda {
         }
         fecharParagrafo(paragrafo, destino);
         return new TopicoDeAjuda(id, titulo == null ? "" : titulo, rotulo == null ? (titulo == null ? id : titulo) : rotulo, List.copyOf(palavras), resumo, List.copyOf(corpo), List.copyOf(detalhes), List.copyOf(telas), List.copyOf(veja),
-            List.copyOf(onde));
+            List.copyOf(onde), soComAcoes);
     }
+
+    /** A frase fixa do topo dos tópicos que falam de botões de escrita: sem as ações ligadas (o padrão) esses botões nem aparecem, e o usuário não deve achar que errou. */
+    public static final String FRASE_DAS_ACOES = "Os botões que mudam coisas no servidor só aparecem quando as ações de escrita estão ligadas.";
 
     private static void fecharParagrafo(StringBuilder paragrafo, List<Bloco> blocos) {
         if (paragrafo.length() > 0) {

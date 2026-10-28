@@ -402,7 +402,9 @@ public final class MenuApp {
         List<br.com.labdesktop.ajuda.AtalhoDoMenu> lista = new ArrayList<>();
         porChave.forEach((chave, mi) -> {
             KeyStroke tecla = mi.getAccelerator();
-            if (tecla != null && !(chave.startsWith("aba-") && !mi.isEnabled())) {
+            // sem as ações de escrita (o padrão) o Novo projeto não existe: a tabela da Ajuda não mostra uma tecla que não faz nada
+            boolean semEfeito = chave.equals("novo-projeto") && !br.com.labdesktop.ui.telas.FluxosDeProjeto.liberadasPorPropriedade();
+            if (tecla != null && !semEfeito && !(chave.startsWith("aba-") && !mi.isEnabled())) {
                 String descricao = chave.startsWith("aba-") ? "Abrir a aba " + chave.substring(4) + " da barra (" + mi.getText() + ")" : mi.getText().replace("…", "");
                 lista.add(new br.com.labdesktop.ajuda.AtalhoDoMenu(chave, descricao, Teclas.descrever(tecla, comportamento.sistema())));
             }

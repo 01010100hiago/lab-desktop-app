@@ -9,6 +9,7 @@
 3. Aba Consumo e limite: mostra quanto o projeto usou do plano do Claude.
 4. Nela, "Definir limite" põe um teto para o projeto; "Retomar" e "Liberar" tiram uma pausa por limite.
 [Ir para Projetos](ir:projetos)
+@acoes: sim
 @veja: servidor projetos
 ## Mais detalhes
 A aba Consumo e limite só aparece quando o servidor tem Claude e não aparece em "Este computador". Os botões que mudam limites ficam escondidos até as ações de escrita serem ligadas nesta versão.
