@@ -438,6 +438,10 @@ public final class TunelPorArquivo implements Tunel {
             } catch (FalhaDoProjeto f) {
                 List<String> naoDesfez = aplicada.desfazer();
                 obs.etapa(Etapa.CONFERIR_E_REINICIAR, ObservadorDaEtapa.Estado.FALHOU, f.mensagem());
+                if (naoDesfez.isEmpty()) {
+                    // o passo da regra tinha ficado "feito" na tela: foi desfeito aqui dentro, e a tela precisa saber
+                    obs.etapa(regra, ObservadorDaEtapa.Estado.DESFEITO, remover ? "A regra voltou ao config.yml." : "A regra foi tirada do config.yml de novo.");
+                }
                 throw comOQueSobrou(f, naoDesfez, aplicada.reiniciou ? "O config.yml foi devolvido como estava e o cloudflared foi reiniciado de novo." : "O config.yml foi devolvido como estava; nada foi reiniciado.");
             }
             return aplicada;

@@ -218,6 +218,87 @@ class RemovedorEListadorTest {
         assertTrue(lab.rodando);
     }
 
+    @Test
+    void seOCloudflaredRecusaAoTirarARegraAFalhaEDaRegraENuncaDoDnsEOPassoFicaDesfeito() throws Exception {
+        publicarDemo();
+        String comRegra = lab.ler(LabSimulado.CONFIG);
+        lab.validarSempreFalha = true;
+        List<String> eventos = new java.util.concurrent.CopyOnWriteArrayList<>();
+        RemovedorDeEndereco.Resultado res;
+        try (RemovedorDeEndereco r = removedorDoArquivo()) {
+            res = r.executar(r.preparar("lab-demo.example.com"), (e, st, f) -> eventos.add(e + ":" + st), Cancelamento.NUNCA);
+        }
+        assertFalse(res.removido());
+        assertEquals(comRegra, lab.ler(LabSimulado.CONFIG), "o arquivo voltou");
+        assertEquals(1, cf.registros.size(), "o DNS nem foi tentado");
+        assertTrue(eventos.contains("CONFERIR_E_REINICIAR:FALHOU"), eventos.toString());
+        assertFalse(eventos.contains("REMOVER_DNS:FALHOU"), "o DNS não falhou: nem foi tentado. " + eventos);
+        assertFalse(eventos.contains("REMOVER_DNS:ANDANDO"), eventos.toString());
+        assertTrue(eventos.contains("REMOVER_REGRA:DESFEITO"), "a tela precisa ver a regra devolvida, e não um passo ainda \"feito\": " + eventos);
+        assertTrue(eventos.lastIndexOf("REMOVER_REGRA:DESFEITO") > eventos.lastIndexOf("REMOVER_REGRA:FEITO"), eventos.toString());
+    }
+
+    @Test
+    void seOApagarODnsPerdeARespostaMasApagouARegraNaoVolta() throws Exception {
+        publicarDemo();
+        cf.executarEPerderAResposta("DELETE /zones/.*", 1);
+        RemovedorDeEndereco.Resultado res;
+        try (RemovedorDeEndereco r = removedorDoArquivo()) {
+            res = r.executar(r.preparar("lab-demo.example.com"), ObservadorDaEtapa.NENHUM, Cancelamento.NUNCA);
+        }
+        assertTrue(res.removido(), "o app releu o nome, viu que o registro sumiu e deu como feito: " + res.falha());
+        assertEquals(List.of(), cf.registros);
+        assertFalse(lab.ler(LabSimulado.CONFIG).contains("lab-demo"), "a regra continua tirada");
+        assertEquals(2, lab.reinicios.get(), "um reinício da publicação e um da remoção; nenhum para restaurar");
+    }
+
+    @Test
+    void seOApagarODnsPerdeARespostaESeOregistroContinuaLaARegraVolta() throws Exception {
+        publicarDemo();
+        String comRegra = lab.ler(LabSimulado.CONFIG);
+        cf.falhar("DELETE /zones/.*", 504, "{\"success\":false,\"errors\":[{\"code\":9999,\"message\":\"Gateway timeout\"}]}", 1);
+        RemovedorDeEndereco.Resultado res;
+        try (RemovedorDeEndereco r = removedorDoArquivo()) {
+            res = r.executar(r.preparar("lab-demo.example.com"), ObservadorDaEtapa.NENHUM, Cancelamento.NUNCA);
+        }
+        assertFalse(res.removido());
+        assertEquals(1, cf.registros.size(), "o registro continua");
+        assertEquals(comRegra, lab.ler(LabSimulado.CONFIG), "e a regra voltou, como antes do pedido");
+    }
+
+    @Test
+    void regraDoAppSemRegistroDeDnsApareceNaListaESaiComRemover() throws Exception {
+        publicarDemo();
+        // o DNS foi apagado à mão no painel da Cloudflare; a regra marcada ficou no config.yml
+        cf.registros.clear();
+        try (ClienteCloudflare a = api()) {
+            List<EnderecoDoApp> l = new ListadorDeEnderecos(a, porArquivo, lab.ambiente()).listar(null);
+            assertEquals(1, l.size(), "a regra marcada, sem DNS, não pode ficar invisível");
+            EnderecoDoApp e = l.get(0);
+            assertEquals("lab-demo.example.com", e.hostname());
+            assertEquals("demo", e.projeto(), "o projeto vem da marca da regra");
+            assertEquals("http://demo-app:3000", e.servico());
+            assertFalse(e.temDns());
+            assertEquals(EnderecoDoApp.Regra.SIM, e.regra());
+            assertEquals(1, new ListadorDeEnderecos(a, porArquivo, lab.ambiente()).listar("demo").size());
+            assertEquals(0, new ListadorDeEnderecos(a, porArquivo, lab.ambiente()).listar("outro").size());
+        }
+        // e Remover funciona só com a regra
+        try (RemovedorDeEndereco r = removedorDoArquivo()) {
+            RemovedorDeEndereco.Previa previa = r.preparar("lab-demo.example.com");
+            assertTrue(previa.podeRemover(), previa.bloqueio());
+            assertTrue(r.executar(previa, ObservadorDaEtapa.NENHUM, Cancelamento.NUNCA).removido());
+        }
+        assertFalse(lab.ler(LabSimulado.CONFIG).contains("lab-demo"));
+    }
+
+    @Test
+    void regraDoDonoSemMarcaNuncaApareceNaLista() throws Exception {
+        try (ClienteCloudflare a = api()) {
+            assertEquals(List.of(), new ListadorDeEnderecos(a, porArquivo, lab.ambiente()).listar(null), "meu-painel é do usuário, sem marca: fora da lista");
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------
     // remover (túnel pela API)
     // ---------------------------------------------------------------------------------------------

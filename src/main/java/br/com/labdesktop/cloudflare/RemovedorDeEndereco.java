@@ -119,33 +119,41 @@ public final class RemovedorDeEndereco implements AutoCloseable {
         }
         List<String> copias = new ArrayList<>();
         Tunel.Aplicada aplicada = null;
+        Etapa atual = Etapa.REMOVER_REGRA;
+        // o passo da regra conta o que falhou sozinho; se ele lançar sem ter dito nada (cancelou antes, o arquivo mudou), a falha ainda é DELE, nunca do DNS
+        boolean[] regraJaDisseQueFalhou = {false};
+        ObservadorDaEtapa vigia = (e, st, f) -> {
+            if (st == ObservadorDaEtapa.Estado.FALHOU) {
+                regraJaDisseQueFalhou[0] = true;
+            }
+            obs.etapa(e, st, f);
+        };
         try {
             if (cancelamento != null && cancelamento.cancelado()) {
                 throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.CANCELADO, "Cancelado.");
             }
-            aplicada = previa.mudancaDoTunel().aplicar(obs, cancelamento);
+            aplicada = previa.mudancaDoTunel().aplicar(vigia, cancelamento);
             if (aplicada.copia() != null) {
                 copias.add(aplicada.copia());
             }
             if (cancelamento != null && cancelamento.cancelado()) {
                 throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.CANCELADO, "Cancelado.");
             }
+            atual = Etapa.REMOVER_DNS;
             if (previa.dnsId() != null) {
                 obs.etapa(Etapa.REMOVER_DNS, ObservadorDaEtapa.Estado.ANDANDO, "Apagando o registro de DNS…");
-                try {
-                    api.removerDns(cfg.zonaId(), previa.dnsId());
-                } catch (ErroCloudflare e) {
-                    if (e.tipo() != ErroCloudflare.Tipo.NAO_ENCONTRADO) {
-                        throw FalhasDaCloudflare.de(e);
-                    }
-                }
+                apagarDns(previa);
                 obs.etapa(Etapa.REMOVER_DNS, ObservadorDaEtapa.Estado.FEITO, "Registro apagado.");
             } else {
                 obs.etapa(Etapa.REMOVER_DNS, ObservadorDaEtapa.Estado.PULADO, "Não havia registro de DNS do app.");
             }
             return new Resultado(true, null, List.of(), List.of(), copias);
         } catch (FalhaDoProjeto f) {
-            obs.etapa(Etapa.REMOVER_DNS, ObservadorDaEtapa.Estado.FALHOU, f.mensagem());
+            if (atual == Etapa.REMOVER_DNS) {
+                obs.etapa(Etapa.REMOVER_DNS, ObservadorDaEtapa.Estado.FALHOU, f.mensagem());
+            } else if (!regraJaDisseQueFalhou[0]) {
+                obs.etapa(Etapa.REMOVER_REGRA, ObservadorDaEtapa.Estado.FALHOU, f.mensagem());
+            }
             List<String> desfeito = new ArrayList<>();
             List<String> naoConsegui = new ArrayList<>();
             if (aplicada != null) {
@@ -158,6 +166,31 @@ public final class RemovedorDeEndereco implements AutoCloseable {
                 }
             }
             return new Resultado(false, f.mensagem(), desfeito, naoConsegui, copias);
+        }
+    }
+
+    /**
+     * Apaga o registro. Se o DELETE termina sem resposta (prazo, conexão), o registro pode ter sido apagado mesmo assim: o app RELÊ o nome antes de dizer que falhou. Se o
+     * registro já sumiu, deu certo (e a regra do túnel NÃO é restaurada: o endereço estava sendo removido de verdade); se continua lá, é falha e a regra volta.
+     */
+    private void apagarDns(Previa previa) throws FalhaDoProjeto {
+        try {
+            api.removerDns(cfg.zonaId(), previa.dnsId());
+        } catch (ErroCloudflare e) {
+            if (e.tipo() == ErroCloudflare.Tipo.NAO_ENCONTRADO) {
+                return;
+            }
+            if (e.incerto()) {
+                try {
+                    boolean aindaLa = api.registrosDnsComONome(cfg.zonaId(), previa.hostname()).stream().anyMatch(r -> r.id().equals(previa.dnsId()));
+                    if (!aindaLa) {
+                        return;
+                    }
+                } catch (ErroCloudflare conferencia) {
+                    throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.INCERTO, e.mensagem() + " E também não consegui conferir se o registro foi apagado: " + conferencia.mensagem(), null, e);
+                }
+            }
+            throw FalhasDaCloudflare.de(e);
         }
     }
 }

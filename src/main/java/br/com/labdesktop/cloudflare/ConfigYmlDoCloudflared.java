@@ -27,7 +27,8 @@ public final class ConfigYmlDoCloudflared {
     private static final Pattern CHAVE_DE_CIMA = Pattern.compile("^[A-Za-z_\"'][^\\s]*\\s*:.*$");
     private static final Pattern TUNEL = Pattern.compile("^tunnel:\\s*(.*?)\\s*(#.*)?$");
     private static final Pattern CHAVE_DA_REGRA = Pattern.compile("^(hostname|service|path)\\s*:\\s*(.*?)\\s*$");
-    private static final Pattern MARCA = Pattern.compile("^\\s*#\\s*lab-desktop:\\s*(\\S+).*$");
+    private static final Pattern MARCA = Pattern.compile("^\\s*#\\s*lab-desktop:\\s*(\\S+)(?:\\s*\\((.*)\\))?.*$");
+    private static final Pattern PROJETO_DA_MARCA = Pattern.compile("^projeto ([a-z0-9][a-z0-9-]{0,48})(?:,.*)?$");
 
     /** O que o app não consegue fazer neste arquivo, e por quê. */
     public static final class Problema extends Exception {
@@ -56,8 +57,9 @@ public final class ConfigYmlDoCloudflared {
      * @param inicio        a linha (a partir de 0) do traço da regra
      * @param fim           a linha depois da última linha da regra (sem as em branco do fim)
      * @param marcadaPeloApp tem, logo acima, a marca {@code # lab-desktop: <este hostname>}
+     * @param projetoDaMarca o projeto que a marca diz ({@code # lab-desktop: x (projeto demo, 2026-10-28)}), ou {@code ""}
      */
-    public record Regra(String hostname, String servico, int inicio, int fim, boolean marcadaPeloApp) {
+    public record Regra(String hostname, String servico, int inicio, int fim, boolean marcadaPeloApp, String projetoDaMarca) {
         public boolean ehFinal() {
             return hostname.isEmpty();
         }
@@ -257,11 +259,16 @@ public final class ConfigYmlDoCloudflared {
                 }
             }
             boolean marcada = false;
+            String projetoDaMarca = "";
             if (ini > bloco[0] + 1) {
                 Matcher mm = MARCA.matcher(t.linhas().get(ini - 1));
                 marcada = mm.matches() && !hostname.isEmpty() && mm.group(1).equalsIgnoreCase(hostname);
+                if (marcada && mm.group(2) != null) {
+                    Matcher mp = PROJETO_DA_MARCA.matcher(mm.group(2).strip());
+                    projetoDaMarca = mp.matches() ? mp.group(1) : "";
+                }
             }
-            regras.add(new Regra(hostname.toLowerCase(Locale.ROOT), servico, ini, fimDaRegra, marcada));
+            regras.add(new Regra(hostname.toLowerCase(Locale.ROOT), servico, ini, fimDaRegra, marcada, projetoDaMarca));
         }
         return new Itens(regras, recuoDosTracos < 0 ? 2 : recuoDosTracos);
     }

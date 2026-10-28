@@ -310,6 +310,9 @@ public final class CloudflareFalsa implements AutoCloseable {
             JsonNode c = Json.mapper().readTree(corpo);
             registros.add(new Registro("r" + sequencia.incrementAndGet(), c.path("name").asText("").toLowerCase(), c.path("type").asText(), c.path("content").asText(),
                 c.path("proxied").asBoolean(false), c.path("comment").isMissingNode() ? "" : c.path("comment").asText()));
+        } else if (metodo.equals("DELETE") && (m = Pattern.compile("/zones/([^/]+)/dns_records/([^/]+)").matcher(caminho)).matches()) {
+            String id = m.group(2);
+            registros.removeIf(r -> r.id.equals(id));
         } else if (metodo.equals("PUT") && (m = Pattern.compile("/accounts/([^/]+)/cfd_tunnel/([^/]+)/configurations").matcher(caminho)).matches()) {
             String id = m.group(2);
             tuneis.stream().filter(t -> t.id.equals(id)).findFirst().ifPresent(t -> {

@@ -9,9 +9,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Os endereços públicos que o app criou: os registros de DNS da zona cujo comentário começa com {@code lab-desktop:} e que apontam para ESTE túnel, e, para cada um, se a regra
@@ -99,6 +101,21 @@ public final class ListadorDeEnderecos {
                 }
             }
             lista.add(new EnderecoDoApp(r.nome(), doProjeto.get(), servico, r.id(), regra));
+        }
+        // Uma regra do config.yml com a marca do app mas SEM registro de DNS (o DNS foi apagado à mão, ou a publicação parou no meio): sem isto ela ficaria invisível e sem
+        // como sair. Só no túnel por arquivo, porque só ali a regra leva marca; na API a regra não diz de quem é.
+        if (conferiu && cfg.porArquivo()) {
+            Set<String> jaListados = new HashSet<>();
+            lista.forEach(e -> jaListados.add(e.hostname()));
+            for (ConfigYmlDoCloudflared.Regra rg : doArquivo.values()) {
+                if (!rg.marcadaPeloApp() || jaListados.contains(rg.hostname()) || !rg.hostname().endsWith("." + cfg.zonaNome())) {
+                    continue;
+                }
+                if (projeto != null && !projeto.equals(rg.projetoDaMarca())) {
+                    continue;
+                }
+                lista.add(new EnderecoDoApp(rg.hostname(), rg.projetoDaMarca(), rg.servico(), null, EnderecoDoApp.Regra.SIM));
+            }
         }
         lista.sort(Comparator.comparing(EnderecoDoApp::hostname));
         return lista;
