@@ -28,6 +28,12 @@ public interface EscolhedorLocal {
         return Optional.empty();
     }
 
+    /**
+     * Mostra a pasta (ou o arquivo) no gerenciador de arquivos do sistema (Finder, Explorer): o "Mostrar na pasta" do fim de um download. Onde o sistema não sabe, abre a pasta.
+     * O padrão (testes) não faz nada.
+     */
+    default void mostrarNaPasta(Path pastaOuArquivo) { }
+
     /** A pasta do computador que o usuário quer importar como projeto (o seletor do sistema, só pastas); vazio se cancelou. */
     default Optional<Path> escolherPastaParaImportar() {
         return Optional.empty();
@@ -77,6 +83,11 @@ public interface EscolhedorLocal {
                 c.setApproveButtonText("Importar esta pasta");
                 c.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
                 return c.showOpenDialog(janela.get()) == JFileChooser.APPROVE_OPTION ? Optional.of(c.getSelectedFile().toPath()) : Optional.empty();
+            }
+
+            @Override
+            public void mostrarNaPasta(Path pastaOuArquivo) {
+                br.com.labdesktop.ui.Navegador.mostrarNaPasta(pastaOuArquivo);
             }
 
             @Override

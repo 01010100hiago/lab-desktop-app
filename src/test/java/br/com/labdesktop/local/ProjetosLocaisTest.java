@@ -191,6 +191,38 @@ class ProjetosLocaisTest {
         assertEquals(List.of(), comandos);
     }
 
+    @Test
+    void osBackupsDaPastaBackupsAparecemDoMaisNovoAoMaisAntigoSoArquivoComum() throws IOException {
+        escrever("meu-app/docker-compose.yml", "services:\n  web:\n    image: nginx\n");
+        escrever("meu-app/backups/db-antigo.sql", "a".repeat(10));
+        escrever("meu-app/backups/db-novo.sql.gz", "b".repeat(2000));
+        Files.createDirectories(tmp.resolve("meu-app/backups/uma-pasta"));
+        Files.setLastModifiedTime(tmp.resolve("meu-app/backups/db-antigo.sql"), java.nio.file.attribute.FileTime.from(java.time.Instant.parse("2026-10-20T10:00:00Z")));
+        Files.setLastModifiedTime(tmp.resolve("meu-app/backups/db-novo.sql.gz"), java.nio.file.attribute.FileTime.from(java.time.Instant.parse("2026-10-27T10:00:00Z")));
+        List<DetalheProjeto.Backup> b = projetos().detalhe("meu-app").backups();
+        assertEquals(List.of("db-novo.sql.gz", "db-antigo.sql"), b.stream().map(DetalheProjeto.Backup::arquivo).toList(), "a pasta não é backup e o mais novo vem primeiro");
+        assertEquals(2000L, b.get(0).tamanho());
+        assertEquals(java.time.Instant.parse("2026-10-27T10:00:00Z"), b.get(0).quando());
+    }
+
+    @Test
+    void semPastaBackupsOuComLinkNaoHaBackupNenhum() throws IOException {
+        escrever("sem-backup/docker-compose.yml", "services:\n  web:\n    image: nginx\n");
+        assertEquals(List.of(), projetos().detalhe("sem-backup").backups());
+        escrever("fora/segredo.txt", "x");
+        escrever("com-link/docker-compose.yml", "services:\n  web:\n    image: nginx\n");
+        try {
+            Files.createSymbolicLink(tmp.resolve("com-link/backups"), tmp.resolve("fora"));
+            assertEquals(List.of(), projetos().detalhe("com-link").backups(), "link para pasta de fora nunca é seguido");
+            Files.delete(tmp.resolve("com-link/backups"));
+            Files.createDirectories(tmp.resolve("com-link/backups"));
+            Files.createSymbolicLink(tmp.resolve("com-link/backups/atalho.sql"), tmp.resolve("fora/segredo.txt"));
+            assertEquals(List.of(), projetos().detalhe("com-link").backups(), "link para arquivo de fora nunca entra");
+        } catch (UnsupportedOperationException | IOException e) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "sem link simbólico neste sistema");
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------
     // as ações
     // ---------------------------------------------------------------------------------------------

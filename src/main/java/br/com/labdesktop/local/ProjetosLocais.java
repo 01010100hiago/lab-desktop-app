@@ -109,7 +109,35 @@ public final class ProjetosLocais {
         }
         return new DetalheProjeto(nome, descricaoDe(p), texto(p.resolve("README.md")), texto(p.resolve("STATUS.md")),
             composes.stream().map(c -> new DetalheProjeto.Compose(c.arquivo(), c.projetoDoCompose())).toList(), containers, List.of(), null, gitDe(p),
-            List.of(), null, mexidoEm(p), true, List.of(), arquivos, null);
+            backupsDe(p), null, mexidoEm(p), true, List.of(), arquivos, null);
+    }
+
+    /** Quantos backups o detalhe lista no máximo (o do agente também corta). */
+    private static final int MAXIMO_DE_BACKUPS = 200;
+
+    /** Os arquivos da pasta {@code backups/} do projeto, do mais recente ao mais antigo: só arquivo comum (nunca link nem pasta), com o tamanho e a hora de alteração. */
+    static List<DetalheProjeto.Backup> backupsDe(Path projeto) {
+        Path pastaDeBackups = projeto.resolve("backups");
+        if (!Files.isDirectory(pastaDeBackups, LinkOption.NOFOLLOW_LINKS)) {
+            return List.of();
+        }
+        List<DetalheProjeto.Backup> l = new ArrayList<>();
+        try (DirectoryStream<Path> s = Files.newDirectoryStream(pastaDeBackups)) {
+            for (Path f : s) {
+                if (!Files.isRegularFile(f, LinkOption.NOFOLLOW_LINKS)) {
+                    continue;
+                }
+                try {
+                    l.add(new DetalheProjeto.Backup(f.getFileName().toString(), Files.size(f), Files.getLastModifiedTime(f).toInstant()));
+                } catch (IOException e) {
+                    // um arquivo que sumiu no meio da leitura não entra
+                }
+            }
+        } catch (IOException e) {
+            return List.of();
+        }
+        l.sort(Comparator.comparing(DetalheProjeto.Backup::quando, Comparator.nullsLast(Comparator.reverseOrder())));
+        return l.size() > MAXIMO_DE_BACKUPS ? List.copyOf(l.subList(0, MAXIMO_DE_BACKUPS)) : List.copyOf(l);
     }
 
     private static List<String> nomesDasPastas(Path raiz) throws IOException {

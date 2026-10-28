@@ -76,7 +76,35 @@ public class Navegador {
         entregarAoSistema(uri.get());
     }
 
-    /** O único ponto que toca o {@code Desktop}: fora da EDT (o macOS pode demorar para responder). */
+    /**
+     * "Mostrar na pasta": pede ao sistema (Finder, Explorer) para mostrar o item que o app acabou de gravar (um download); onde ele não sabe revelar um arquivo, abre a pasta que o contém.
+     * Fora da EDT e sem nunca lançar. Só chamado com um caminho que o PRÓPRIO app montou depois de o usuário escolher a pasta, nunca com um caminho que veio do servidor.
+     */
+    public static void mostrarNaPasta(java.nio.file.Path alvo) {
+        if (alvo == null) {
+            return;
+        }
+        Fundo.emFundo(() -> {
+            try {
+                if (!Desktop.isDesktopSupported()) {
+                    return;
+                }
+                Desktop d = Desktop.getDesktop();
+                java.io.File f = alvo.toFile();
+                if (f.isFile() && d.isSupported(Desktop.Action.BROWSE_FILE_DIR)) {
+                    d.browseFileDirectory(f);
+                } else if (f.isDirectory() && d.isSupported(Desktop.Action.OPEN)) {
+                    d.open(f);
+                } else if (f.getParentFile() != null && d.isSupported(Desktop.Action.OPEN)) {
+                    d.open(f.getParentFile());
+                }
+            } catch (IOException | RuntimeException e) {
+                // sem pasta para mostrar: nada a fazer
+            }
+        });
+    }
+
+    /** O único ponto que toca o {@code Desktop} para abrir um endereço: fora da EDT (o macOS pode demorar para responder). */
     protected void entregarAoSistema(URI uri) {
         Fundo.emFundo(() -> {
             try {

@@ -41,6 +41,13 @@ final class CenaDeArquivos implements AutoCloseable {
         Path pastaDeDownload;
         int vezesQuePerguntouOQueEnviar;
         Path padraoVisto;
+        /** Cada vez que o app pediu para mostrar uma pasta no gerenciador de arquivos do sistema. */
+        final List<Path> mostradas = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Override
+        public void mostrarNaPasta(Path pastaOuArquivo) {
+            mostradas.add(pastaOuArquivo);
+        }
 
         @Override
         public List<Path> escolherParaEnviar() {
