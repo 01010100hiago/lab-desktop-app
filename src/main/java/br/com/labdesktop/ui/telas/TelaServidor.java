@@ -48,7 +48,8 @@ public final class TelaServidor extends Painel {
         MAQUINA("maquina", "Máquina"),
         PROJETOS("projetos", "Projetos"),
         ARQUIVOS("arquivos", "Arquivos"),
-        TERMINAL("terminal", "Terminal");
+        TERMINAL("terminal", "Terminal"),
+        CLOUDFLARE("cloudflare", "Cloudflare");
 
         private final String id;
         private final String rotulo;
@@ -83,6 +84,7 @@ public final class TelaServidor extends Painel {
     private final ServicosDeArquivos servicosDeArquivos;
     private final EscolhedorLocal escolhedor;
     private final PaginaTerminal terminais;
+    private final PaginaCloudflare cloudflare;
     private final ContextoDeTerminal contextoDeTerminal;
     private final Abas abas = new Abas();
     private final CardLayout cartoes = new CartoesAjustaveis();
@@ -147,6 +149,7 @@ public final class TelaServidor extends Painel {
 
         this.contextoDeTerminal = servidor == null ? null : ContextoDeTerminal.de(servidor, preferencias, projetos.navegador());
         this.terminais = new PaginaTerminal(contextoDeTerminal, projetos.fluxos().avisos());
+        this.cloudflare = new PaginaCloudflare(servidor, projetos.acoes(), projetos.fluxos().liberadas(), projetos.fluxos().avisos());
 
         for (Aba a : Aba.values()) {
             abas.adicionar(a.id, a.rotulo);
@@ -164,6 +167,7 @@ public final class TelaServidor extends Painel {
         corpo.add(projetos, Aba.PROJETOS.id);
         corpo.add(arquivos, Aba.ARQUIVOS.id);
         corpo.add(terminais, Aba.TERMINAL.id);
+        corpo.add(cloudflare, Aba.CLOUDFLARE.id);
         paginaDoServidor.add(abas, BorderLayout.NORTH);
         paginaDoServidor.add(corpo, BorderLayout.CENTER);
         add(paginaDoServidor, CARTAO_PAGINA);
@@ -284,6 +288,26 @@ public final class TelaServidor extends Painel {
             public boolean podeAdicionarContainer() {
                 return projetos.podeAdicionarContainer();
             }
+
+            @Override
+            public void publicarNaInternet(Runnable depois) {
+                projetos.publicarDe(nome, depois);
+            }
+
+            @Override
+            public void conectarCloudflare(Runnable depois) {
+                projetos.conectarCloudflareDe(depois);
+            }
+
+            @Override
+            public void removerEndereco(String hostname, Runnable depois) {
+                projetos.removerEnderecoDe(hostname, depois);
+            }
+
+            @Override
+            public void abrirEndereco(String hostname) {
+                projetos.abrirEnderecoDe(hostname);
+            }
         }, () -> projetos.urlDeLoginDe(nome), aoAtualizarProjeto, CopiadorDeTexto.doSistema(), servicosDeArquivos, escolhedor,
             contextoDeTerminal);
         add(projetoAberto, CARTAO_PROJETO + nome);
@@ -365,6 +389,10 @@ public final class TelaServidor extends Painel {
         return processos;
     }
 
+    public PaginaCloudflare cloudflare() {
+        return cloudflare;
+    }
+
     public PaginaMaquina maquina() {
         return maquina;
     }
@@ -377,7 +405,7 @@ public final class TelaServidor extends Painel {
             case CONTAINERS -> containers;
             case PROCESSOS -> processos;
             case MAQUINA -> maquina;
-            case PROJETOS, ARQUIVOS, TERMINAL -> null;
+            case PROJETOS, ARQUIVOS, TERMINAL, CLOUDFLARE -> null;
         };
     }
 

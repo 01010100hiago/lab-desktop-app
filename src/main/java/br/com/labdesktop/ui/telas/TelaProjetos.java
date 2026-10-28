@@ -323,6 +323,43 @@ public final class TelaProjetos extends Painel {
         acoesUi.adicionarContainer(servidor, projeto, () -> fluxos.iniciar(projeto));
     }
 
+    /** As ações de interface (diálogos) da janela, ou {@code null} nos testes de tela. */
+    AcoesDaInterface acoes() {
+        return acoesUi;
+    }
+
+    /** "Publicar na internet" da página de um projeto: abre o diálogo (o app só escreve depois do clique de confirmar). Só com as ações liberadas. */
+    void publicarDe(String projeto, Runnable depois) {
+        if (acoesUi == null || servidor == null || !fluxos.liberadas()) {
+            return;
+        }
+        acoesUi.publicarNaInternet(servidor, projeto, depois);
+    }
+
+    /** "Conectar a Cloudflare": o diálogo do token (só lê da Cloudflare e grava no cofre local; não depende da trava das ações). */
+    void conectarCloudflareDe(Runnable depois) {
+        if (acoesUi == null || servidor == null) {
+            return;
+        }
+        acoesUi.conectarCloudflare(servidor, depois);
+    }
+
+    /** "Remover" de um endereço publicado: abre o diálogo que pede para digitar o endereço. Só com as ações liberadas. */
+    void removerEnderecoDe(String hostname, Runnable depois) {
+        if (acoesUi == null || servidor == null || !fluxos.liberadas()) {
+            return;
+        }
+        acoesUi.removerEnderecoDaInternet(servidor, hostname, depois);
+    }
+
+    /** Abre no navegador um endereço público da zona conectada. */
+    void abrirEnderecoDe(String hostname) {
+        if (acoesUi == null || servidor == null) {
+            return;
+        }
+        acoesUi.abrirEnderecoPublico(servidor, hostname);
+    }
+
     /** A página do projeto pode oferecer "Adicionar container" (as ações liberadas e um servidor que sabe escrever em projeto)? */
     boolean podeAdicionarContainer() {
         return podeCriarProjeto();

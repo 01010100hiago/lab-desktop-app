@@ -70,7 +70,8 @@ public final class TelaProjeto extends Painel {
         TERMINAL("terminal", "Terminal"),
         ARQUIVOS("arquivos", "Arquivos"),
         BACKUPS("backups", "Backups"),
-        CONSUMO("consumo", "Consumo e limite");
+        CONSUMO("consumo", "Consumo e limite"),
+        INTERNET("internet", "Internet");
 
         private final String id;
         private final String rotulo;
@@ -112,6 +113,18 @@ public final class TelaProjeto extends Painel {
         default boolean podeAdicionarContainer() {
             return false;
         }
+
+        /** O usuário pediu "Publicar na internet" (a janela abre o diálogo; o app só escreve depois do clique de confirmar). {@code depois} roda quando o diálogo termina. */
+        default void publicarNaInternet(Runnable depois) { }
+
+        /** O usuário pediu "Conectar a Cloudflare" (abre o diálogo do token). */
+        default void conectarCloudflare(Runnable depois) { }
+
+        /** O usuário pediu para remover um endereço publicado (abre o diálogo de confirmação). */
+        default void removerEndereco(String hostname, Runnable depois) { }
+
+        /** O usuário pediu para abrir um endereço público no navegador. */
+        default void abrirEndereco(String hostname) { }
     }
 
     private final transient ServidorLab servidor;
@@ -185,6 +198,10 @@ public final class TelaProjeto extends Painel {
         this.ctx.irParaOClaude = this::mostrarOClaude;
         this.ctx.adicionarContainer = saida::adicionarContainer;
         this.ctx.podeAdicionarContainer = saida::podeAdicionarContainer;
+        this.ctx.publicarNaInternet = saida::publicarNaInternet;
+        this.ctx.conectarCloudflare = saida::conectarCloudflare;
+        this.ctx.removerEndereco = saida::removerEndereco;
+        this.ctx.abrirEndereco = saida::abrirEndereco;
 
         paginas.put(Aba.VISAO_GERAL, new PaginaVisaoGeral(ctx));
         paginas.put(Aba.LOGS, new PaginaLogs(ctx));
@@ -193,6 +210,7 @@ public final class TelaProjeto extends Painel {
             avisos, fluxos == null ? dialogo -> { } : fluxos.apresentador(), escolhedor).comCopiador(copiador));
         paginas.put(Aba.BACKUPS, new PaginaBackups(ctx));
         paginas.put(Aba.CONSUMO, new PaginaConsumo(ctx));
+        paginas.put(Aba.INTERNET, new PaginaInternet(ctx));
 
         voltar.setToolTipText("Volta para a lista de projetos (Esc)");
         voltar.getAccessibleContext().setAccessibleName("Voltar para a lista de projetos");
@@ -489,6 +507,10 @@ public final class TelaProjeto extends Painel {
 
     PaginaBackups backups() {
         return (PaginaBackups) paginas.get(Aba.BACKUPS);
+    }
+
+    PaginaInternet internet() {
+        return (PaginaInternet) paginas.get(Aba.INTERNET);
     }
 
     PaginaConsumo consumo() {

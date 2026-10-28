@@ -43,6 +43,15 @@ final class ContextoDoProjeto {
     /** O servidor sabe escrever no compose deste projeto (o agente do lab, ou este computador) e as ações estão liberadas? */
     Supplier<Boolean> podeAdicionarContainer = () -> false;
 
+    /** O que o botão "Publicar na internet" faz (abre o diálogo; o app só escreve depois do clique de confirmar); o argumento roda quando o diálogo termina. */
+    Consumer<Runnable> publicarNaInternet = depois -> { };
+    /** O que "Conectar a Cloudflare" faz (abre o diálogo do token; só lê da Cloudflare e grava no cofre local). */
+    Consumer<Runnable> conectarCloudflare = depois -> { };
+    /** O que "Remover" de um endereço faz (abre o diálogo que pede para digitar o endereço). */
+    java.util.function.BiConsumer<String, Runnable> removerEndereco = (host, depois) -> { };
+    /** Abre o endereço público no navegador (só um endereço da zona conectada). */
+    Consumer<String> abrirEndereco = host -> { };
+
     EstadoServidor estado;
     DetalheProjeto detalhe;
     /** O erro da primeira leitura (que não é de rede), enquanto ainda não há detalhe nenhum para mostrar. */

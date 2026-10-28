@@ -238,6 +238,230 @@ public final class AcoesDaInterface {
             CopiadorDeTexto.doSistema()));
     }
 
+    // =====================================================================================================
+    // Cloudflare
+    // =====================================================================================================
+
+    /**
+     * "Conectar a Cloudflare" (e "Trocar a conta"): abre o diálogo do token. Conectar só LÊ da Cloudflare (verifica o token, lista domínios e túneis) e grava no cofre local; nada é
+     * escrito na Cloudflare nem no servidor. O que fazer depois de salvar é de quem chamou (a tela se atualiza).
+     */
+    public void conectarCloudflare(ServidorLab lab, Runnable depois) {
+        br.com.labdesktop.cloudflare.ServicoCloudflare servico = lab.cloudflare();
+        if (servico.ehLocal()) {
+            avisos.atencao("Publicar na internet pede um servidor com o cloudflared (o túnel). Este computador não tem um túnel configurado pelo app.");
+            return;
+        }
+        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoConectarCloudflare(new MotorDaConexaoCloudflare(servico), avisos, CopiadorDeTexto.doSistema(),
+            depois == null ? () -> { } : depois));
+    }
+
+    /** O que o diálogo "Conectar a Cloudflare" usa do domínio. */
+    private final class MotorDaConexaoCloudflare implements br.com.labdesktop.ui.dialogos.DialogoConectarCloudflare.Motor {
+        private final br.com.labdesktop.cloudflare.ServicoCloudflare servico;
+
+        MotorDaConexaoCloudflare(br.com.labdesktop.cloudflare.ServicoCloudflare servico) {
+            this.servico = servico;
+        }
+
+        @Override
+        public java.util.Optional<br.com.labdesktop.cofre.ConfiguracaoCloudflare> escolhaAtual() {
+            return servico.escolha();
+        }
+
+        @Override
+        public br.com.labdesktop.cloudflare.ServicoCloudflare.Descoberta descobrir(char[] token) throws br.com.labdesktop.cloudflare.ErroCloudflare {
+            return servico.descobrir(token);
+        }
+
+        @Override
+        public List<br.com.labdesktop.cloudflare.TunelCf> tuneis(br.com.labdesktop.cloudflare.ServicoCloudflare.Descoberta d, String contaId)
+            throws br.com.labdesktop.cloudflare.ErroCloudflare {
+            return servico.tuneisDaConta(d, contaId);
+        }
+
+        @Override
+        public br.com.labdesktop.cloudflare.TunelPorArquivo.Conferencia conferirServidor(String caminhoDoConfig, String container) {
+            return servico.conferirServidor(caminhoDoConfig, container);
+        }
+
+        @Override
+        public void salvar(br.com.labdesktop.cloudflare.ServicoCloudflare.Descoberta d, br.com.labdesktop.cofre.ConfiguracaoCloudflare escolha)
+            throws br.com.labdesktop.cofre.CofreException {
+            servico.salvar(d, escolha);
+        }
+
+        @Override
+        public void abrirPagina(String url) {
+            if (navegador != null) {
+                navegador.abrirPaginaDaCloudflare(url);
+            }
+        }
+    }
+
+    /**
+     * "Desconectar a Cloudflare": pergunta antes (o botão repete o que faz) e só então apaga o token do cofre (zerado) e a escolha. Não mexe na Cloudflare nem nos endereços já
+     * publicados: eles continuam no ar, e o app só deixa de poder criar e remover até conectar de novo.
+     */
+    public void desconectarCloudflare(ServidorLab lab, Runnable depois) {
+        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoConfirmar("Desconectar a Cloudflare", "link",
+            "O app apaga o token do cofre e esquece o domínio e o túnel escolhidos. Os endereços já publicados continuam no ar (nada muda na Cloudflare nem no servidor); "
+                + "para criar ou remover endereços de novo, conecte outra vez.", "Desconectar", true, sim -> {
+                    if (!sim) {
+                        return;
+                    }
+                    Tarefas.rodar(() -> {
+                        lab.cloudflare().desconectar();
+                        return Boolean.TRUE;
+                    }, ok -> {
+                        avisos.ok("Cloudflare desconectada: o token foi apagado do cofre.");
+                        if (depois != null) {
+                            depois.run();
+                        }
+                    }, falha -> avisos.erro("Não consegui apagar do cofre: " + MensagensDeErro.de(falha)));
+                }));
+    }
+
+    /** O endereço público no navegador do sistema (só um endereço de UM nível do domínio que o usuário escolheu). */
+    public void abrirEnderecoPublico(ServidorLab lab, String hostname) {
+        java.util.Optional<br.com.labdesktop.cofre.ConfiguracaoCloudflare> cfg = lab.cloudflare().escolha();
+        if (cfg.isEmpty() || navegador == null) {
+            return;
+        }
+        navegador.abrirEnderecoPublico(cfg.get().zonaNome(), hostname);
+    }
+
+    /**
+     * "Publicar na internet" na página de um projeto: abre o diálogo (serviço, porta, nome, e a prévia do que será feito). Só o CLIQUE do usuário chega aqui; nada é escrito antes do
+     * clique em "Publicar" lá dentro.
+     */
+    public void publicarNaInternet(ServidorLab lab, String projeto, Runnable depois) {
+        br.com.labdesktop.cloudflare.ServicoCloudflare servico = lab.cloudflare();
+        if (servico.ehLocal()) {
+            avisos.atencao("Publicar na internet pede um servidor com o cloudflared (o túnel). Este computador não tem um túnel configurado pelo app.");
+            return;
+        }
+        if (!servico.conectado()) {
+            avisos.atencao("Conecte a Cloudflare primeiro (aba Cloudflare do servidor).");
+            return;
+        }
+        br.com.labdesktop.cloudflare.PublicadorNaInternet publicador;
+        try {
+            publicador = servico.publicador(p -> {
+                lab.acoes().iniciar(p);
+            });
+        } catch (FalhaDoProjeto f) {
+            avisos.erro(f.mensagem());
+            return;
+        }
+        String zona = servico.escolha().map(br.com.labdesktop.cofre.ConfiguracaoCloudflare::zonaNome).orElse("");
+        String prefixo = servico.escolha().map(br.com.labdesktop.cofre.ConfiguracaoCloudflare::prefixo).orElse("lab");
+        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoPublicar(new MotorDaPublicacao(lab, servico, publicador, projeto, zona, prefixo), avisos, CopiadorDeTexto.doSistema(),
+            depois == null ? () -> { } : depois));
+    }
+
+    /** O que o diálogo "Publicar na internet" usa do domínio, sobre o servidor de verdade. */
+    private final class MotorDaPublicacao implements br.com.labdesktop.ui.dialogos.DialogoPublicar.Motor {
+        private final ServidorLab lab;
+        private final br.com.labdesktop.cloudflare.ServicoCloudflare servico;
+        private final br.com.labdesktop.cloudflare.PublicadorNaInternet publicador;
+        private final String projeto;
+        private final String zona;
+        private final String prefixo;
+
+        MotorDaPublicacao(ServidorLab lab, br.com.labdesktop.cloudflare.ServicoCloudflare servico, br.com.labdesktop.cloudflare.PublicadorNaInternet publicador, String projeto,
+                          String zona, String prefixo) {
+            this.lab = lab;
+            this.servico = servico;
+            this.publicador = publicador;
+            this.projeto = projeto;
+            this.zona = zona;
+            this.prefixo = prefixo;
+        }
+
+        @Override
+        public String projeto() {
+            return projeto;
+        }
+
+        @Override
+        public String zona() {
+            return zona;
+        }
+
+        @Override
+        public String prefixo() {
+            return prefixo;
+        }
+
+        @Override
+        public boolean podeRecriar() {
+            return podeCriarProjeto(lab);
+        }
+
+        @Override
+        public List<br.com.labdesktop.cloudflare.ComposeComEdge.Servico> servicos() throws FalhaDoProjeto {
+            return servico.servicosDoProjeto(projeto);
+        }
+
+        @Override
+        public br.com.labdesktop.cloudflare.PublicadorNaInternet.Previa preparar(br.com.labdesktop.cloudflare.PublicadorNaInternet.Pedido pedido) throws FalhaDoProjeto {
+            return publicador.preparar(pedido);
+        }
+
+        @Override
+        public br.com.labdesktop.cloudflare.PublicadorNaInternet.Resultado executar(br.com.labdesktop.cloudflare.PublicadorNaInternet.Previa previa,
+                                                                                         br.com.labdesktop.cloudflare.ObservadorDaEtapa observador,
+                                                                                         br.com.labdesktop.arquivos.Cancelamento cancelamento) {
+            return publicador.executar(previa, observador, cancelamento);
+        }
+
+        @Override
+        public br.com.labdesktop.cloudflare.TestadorDeUrl.Resultado testarDeNovo(String hostname, br.com.labdesktop.arquivos.Cancelamento cancelamento) {
+            return servico.testar(hostname, cancelamento);
+        }
+
+        @Override
+        public void abrirEndereco(String hostname) {
+            abrirEnderecoPublico(lab, hostname);
+        }
+
+        @Override
+        public void encerrar() {
+            publicador.close();
+        }
+    }
+
+    /** "Remover" um endereço que o app criou: abre o diálogo (a prévia só lê; remover exige digitar o endereço). */
+    public void removerEnderecoDaInternet(ServidorLab lab, String hostname, Runnable depois) {
+        br.com.labdesktop.cloudflare.ServicoCloudflare servico = lab.cloudflare();
+        br.com.labdesktop.cloudflare.RemovedorDeEndereco removedor;
+        try {
+            removedor = servico.removedor();
+        } catch (FalhaDoProjeto f) {
+            avisos.erro(f.mensagem());
+            return;
+        }
+        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoRemoverEndereco(hostname, new br.com.labdesktop.ui.dialogos.DialogoRemoverEndereco.Motor() {
+            @Override
+            public br.com.labdesktop.cloudflare.RemovedorDeEndereco.Previa preparar(String h) throws FalhaDoProjeto {
+                return removedor.preparar(h);
+            }
+
+            @Override
+            public br.com.labdesktop.cloudflare.RemovedorDeEndereco.Resultado executar(br.com.labdesktop.cloudflare.RemovedorDeEndereco.Previa previa,
+                                                                                            br.com.labdesktop.cloudflare.ObservadorDaEtapa observador,
+                                                                                            br.com.labdesktop.arquivos.Cancelamento cancelamento) {
+                return removedor.executar(previa, observador, cancelamento);
+            }
+
+            @Override
+            public void encerrar() {
+                removedor.close();
+            }
+        }, avisos, depois == null ? () -> { } : depois));
+    }
+
     /** O que o diálogo "Novo projeto" usa do domínio, sobre o servidor de verdade. */
     private final class MotorDeProjetos implements DialogoNovoProjeto.Motor {
         private final ServidorLab lab;

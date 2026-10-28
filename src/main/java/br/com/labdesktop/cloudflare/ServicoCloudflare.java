@@ -274,6 +274,11 @@ public final class ServicoCloudflare {
         }
     }
 
+    /** Testa o endereço público de novo (um GET em {@code https://<host>/}, só leitura). Bloqueia até o prazo do teste. */
+    public TestadorDeUrl.Resultado testar(String hostname, br.com.labdesktop.arquivos.Cancelamento cancelamento) {
+        return testador.get().testar(hostname, cancelamento);
+    }
+
     /** Confere o token guardado (só leitura): ainda vale? */
     public TokenVerificado conferirToken() throws ErroCloudflare, FalhaDoProjeto {
         try (ClienteCloudflare api = clienteDoCofre()) {
