@@ -34,7 +34,7 @@ public final class VerificacoesDoComputador {
     private final PlataformaLocal plataforma;
 
     public VerificacoesDoComputador(ExecutorDeProcesso executor, SondaDoComputador sonda, PlataformaLocal plataforma) {
-        this.executor = executor;
+        this.executor = new ExecutorSoDeLeitura(executor); // roda sem clique: só leituras passam
         this.sonda = sonda;
         this.plataforma = plataforma;
     }

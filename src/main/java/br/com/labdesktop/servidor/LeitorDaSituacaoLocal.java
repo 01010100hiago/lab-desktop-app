@@ -2,6 +2,7 @@ package br.com.labdesktop.servidor;
 
 import br.com.labdesktop.local.ComandosLocais;
 import br.com.labdesktop.local.ExecutorDeProcesso;
+import br.com.labdesktop.local.ExecutorSoDeLeitura;
 import br.com.labdesktop.local.ProgramaNaoEncontradoException;
 import br.com.labdesktop.ssh.ResultadoExec;
 import java.io.IOException;
@@ -19,7 +20,7 @@ final class LeitorDaSituacaoLocal {
     private final String container;
 
     LeitorDaSituacaoLocal(ExecutorDeProcesso executor, String container) {
-        this.executor = executor;
+        this.executor = new ExecutorSoDeLeitura(executor); // roda sozinho, em segundo plano: só leituras passam
         this.container = container;
     }
 
