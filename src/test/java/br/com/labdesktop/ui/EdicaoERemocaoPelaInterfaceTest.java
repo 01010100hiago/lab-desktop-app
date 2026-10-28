@@ -466,11 +466,11 @@ class EdicaoERemocaoPelaInterfaceTest {
         DialogoRemoverServidor d = dialogos.ultimoComo(DialogoRemoverServidor.class);
 
         String texto = Visual.naEdt(d::explicacaoDaRevogacao);
-        assertTrue(texto.startsWith("Apaga o token deste Mac no painel do servidor."), texto);
+        assertTrue(texto.startsWith("Apaga o token deste computador no painel do servidor."), texto);
         assertTrue(texto.contains("veio de um arquivo seu") && texto.contains("NÃO a tira do acesso do usuário labuser")
             && texto.contains("você pode usá-la fora do app"), texto);
         assertFalse(texto.contains("chave que o app criou"), "não promete o que não vai acontecer: " + texto);
-        assertTrue(Visual.naEdt(d::explicacaoDaChave).contains("o arquivo original no seu Mac não é mexido"), Visual.naEdt(d::explicacaoDaChave));
+        assertTrue(Visual.naEdt(d::explicacaoDaChave).contains("o arquivo original no seu computador não é mexido"), Visual.naEdt(d::explicacaoDaChave));
         assertTrue(Visual.naEdt(() -> d.caixaDeRevogar().isSelected()), "revogar continua marcada: o token do app sai de qualquer jeito");
         Visual.salvar(Visual.renderizar(d.raiz(), 540, Visual.alturaPreferida(d.raiz(), 540)), "dialogo-remover-servidor-chave-importada");
 
@@ -478,7 +478,7 @@ class EdicaoERemocaoPelaInterfaceTest {
 
         Espera.ate(PRAZO, () -> "removido (erro='" + Visual.naEdt(d::textoDoErro) + "')", () -> cofre.servidores().isEmpty());
         Espera.ate(PRAZO, "aviso", () -> avisos.disse("atencao", "NÃO a tirou"));
-        assertTrue(agente.tokens.isEmpty(), "o token deste Mac saiu do painel do servidor");
+        assertTrue(agente.tokens.isEmpty(), "o token deste computador saiu do painel do servidor");
         assertTrue(comandosDeChave.isEmpty(), "a chave do usuário ficou no authorized_keys: ele não perde o acesso por fora do app");
     }
 

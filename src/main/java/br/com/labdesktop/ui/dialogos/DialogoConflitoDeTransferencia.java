@@ -41,7 +41,7 @@ public final class DialogoConflitoDeTransferencia extends Dialogo {
         this.aoDecidir = aoDecidir;
         boolean envio = c.tipo() == Tipo.ENVIO;
         String nome = TextoSeguro.limparLinha(c.nome());
-        String ondeEsta = envio ? "No servidor" : "No seu Mac";
+        String ondeEsta = envio ? "No servidor" : "No seu computador";
         String outro = envio ? "O que você está enviando" : "O que você está baixando";
         JComponent corpo = Caixa.coluna(12,
             cabecalho("alerta", "\"" + encurtar(nome) + "\" já existe"),

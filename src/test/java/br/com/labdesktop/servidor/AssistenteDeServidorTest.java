@@ -170,7 +170,7 @@ class AssistenteDeServidorTest {
 
         assistente.concluir(lab, DISPOSITIVO, segunda::add);
 
-        assertFalse(segunda.contains(Etapa.REGISTRANDO_TOKEN), "o token deste Mac já existe: " + segunda);
+        assertFalse(segunda.contains(Etapa.REGISTRANDO_TOKEN), "o token deste computador já existe: " + segunda);
         assertEquals(1, agente.tokens.size());
     }
 

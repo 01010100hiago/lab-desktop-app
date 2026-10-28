@@ -281,8 +281,8 @@ public final class GerenciadorDeArquivos extends Painel {
         JPanel linhaDeFiltro = Caixa.linha(14, campoDeFiltro, caixaDeOcultos, Caixa.mola(), resumo);
         resumo.setMaximumSize(new Dimension(420, 24));
 
-        enviar.setToolTipText("Envia arquivos e pastas do seu Mac para esta pasta (ou arraste do Finder)");
-        baixar.setToolTipText("Baixa o que está selecionado para uma pasta do seu Mac");
+        enviar.setToolTipText("Envia arquivos e pastas do seu computador para esta pasta (ou arraste do gerenciador de arquivos)");
+        baixar.setToolTipText("Baixa o que está selecionado para uma pasta do seu computador");
         novaPasta.setToolTipText("Cria uma pasta aqui");
         novoArquivo.setToolTipText("Cria um arquivo vazio aqui e o abre no editor");
         renomear.setToolTipText("Muda o nome do item selecionado (F2)");
@@ -1180,7 +1180,7 @@ public final class GerenciadorDeArquivos extends Painel {
                     : "Este arquivo é de \"" + TextoSeguro.limparLinha(dono) + "\" e o usuário que o app usa neste servidor não pode gravar nele.";
                 ctx.apresentador().mostrar(new DialogoConfirmar("Salvar com sudo?", "chave", quem
                     + " Posso tentar salvar com sudo: o servidor precisa deixar este usuário usar sudo sem digitar senha. "
-                    + "Antes, o conteúdo que está no servidor vira uma cópia no seu Mac.", "Salvar com sudo", true, true, ok -> {
+                    + "Antes, o conteúdo que está no servidor vira uma cópia no seu computador.", "Salvar com sudo", true, true, ok -> {
                         if (ok) {
                             salvarEditor(s, false, true);
                         }
@@ -1219,7 +1219,7 @@ public final class GerenciadorDeArquivos extends Painel {
             emVoo.decrementAndGet();
             s.painel.definirConteudo(novo, novo.texto());
             s.atualizarPodeDesfazer();
-            ctx.avisos().ok("Voltei " + TextoSeguro.limparLinha(novo.nome()) + " à versão anterior. O que estava lá virou uma cópia no seu Mac.");
+            ctx.avisos().ok("Voltei " + TextoSeguro.limparLinha(novo.nome()) + " à versão anterior. O que estava lá virou uma cópia no seu computador.");
         }, erro -> {
             emVoo.decrementAndGet();
             ErroSftp f = ErroSftp.de(erro, "gravar este arquivo");
@@ -1569,7 +1569,7 @@ public final class GerenciadorDeArquivos extends Painel {
             });
         }, erro -> {
             emVoo.decrementAndGet();
-            ctx.avisos().erro("Não consegui ler o que você escolheu neste Mac.");
+            ctx.avisos().erro("Não consegui ler o que você escolheu neste computador.");
         });
     }
 

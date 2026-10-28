@@ -84,7 +84,7 @@ public final class AssistenteDeServidor {
     /** Um passo da conclusão, para a tela mostrar o andamento. */
     public enum Etapa {
         CONECTANDO("Conectando ao servidor e autenticando com a chave"),
-        REGISTRANDO_TOKEN("Registrando o token deste Mac no agente (por SSH)"),
+        REGISTRANDO_TOKEN("Registrando o token deste computador no agente (por SSH)"),
         TESTANDO_AGENTE("Testando o agente do painel"),
         LENDO_LIMITES("Lendo os limites do plano"),
         PRONTO("Pronto");

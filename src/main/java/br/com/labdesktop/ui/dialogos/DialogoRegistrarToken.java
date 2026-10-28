@@ -61,17 +61,17 @@ public final class DialogoRegistrarToken extends Dialogo {
         this.confirmar = Botoes.primario(substituir ? "Substituir token" : "Registrar token", "chave");
 
         TextoCorrido explicacao = paragrafo(substituir
-            ? "O agente de " + servidor + " não aceita mais o token deste Mac (foi revogado, ou o cofre foi recriado). "
+            ? "O agente de " + servidor + " não aceita mais o token deste computador (foi revogado, ou o cofre foi recriado). "
                 + "O app revoga a entrada antiga com este nome e registra um token novo. A entrada antiga deixa de valer agora."
-            : "O app gera um token só para este Mac, registra o hash dele no agente de " + servidor
-                + " por SSH e guarda o token no cofre. O token em si nunca sai do Mac.");
+            : "O app gera um token só para este computador, registra o hash dele no agente de " + servidor
+                + " por SSH e guarda o token no cofre. O token em si nunca sai do computador.");
         substituirAntigo.setSelected(substituir);
         substituirAntigo.setVisible(false);
 
         conteudo(Caixa.coluna(14,
             cabecalho("chave", substituir ? "Substituir o token" : "Registrar o token"),
             explicacao,
-            Caixa.coluna(5, Rotulo.rotuloDeCampo("Nome deste Mac no agente"), nome,
+            Caixa.coluna(5, Rotulo.rotuloDeCampo("Nome deste computador no agente"), nome,
                 Rotulo.dica("Letras minúsculas, números e hífen (até 40).")),
             substituirAntigo,
             erro,

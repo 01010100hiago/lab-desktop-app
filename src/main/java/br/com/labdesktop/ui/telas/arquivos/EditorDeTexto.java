@@ -110,10 +110,10 @@ final class EditorDeTexto extends Painel {
         String dir = br.com.labdesktop.arquivos.CaminhoRemoto.pai(aberto.caminho());
         pasta.setText("em " + TextoSeguro.limparLinha(dir));
         pasta.setToolTipText(TextoSeguro.limparLinha(aberto.caminho()));
-        salvar.setToolTipText("Grava no servidor (Cmd+S)");
+        salvar.setToolTipText("Grava no servidor (" + br.com.labdesktop.ui.componentes.Teclas.nome() + "+S)");
         desfazer.setToolTipText("Volta ao conteúdo que o arquivo tinha antes da última vez que você salvou aqui");
         recarregar.setToolTipText("Lê o arquivo de novo do servidor (descarta o que você digitou e não salvou)");
-        buscar.setToolTipText("Procura neste arquivo (Cmd+F)");
+        buscar.setToolTipText("Procura neste arquivo (" + br.com.labdesktop.ui.componentes.Teclas.nome() + "+F)");
         fechar.setToolTipText("Fecha o editor");
         desfazer.setEnabled(false);
         salvar.setEnabled(false);

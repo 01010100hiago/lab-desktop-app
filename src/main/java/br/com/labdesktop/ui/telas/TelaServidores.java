@@ -98,7 +98,7 @@ public final class TelaServidores extends Painel {
         t.setIconTextGap(8);
         JPanel c = Caixa.coluna(10, t,
             Rotulo.secundario("Cadastre o primeiro: o app gera a chave SSH, você confere a impressão digital do servidor e ele "
-                + "registra o token deste Mac."), adicionarNoVazio);
+                + "registra o token deste computador."), adicionarNoVazio);
         c.setBorder(javax.swing.BorderFactory.createEmptyBorder(28, 28, 28, 28));
         Painel cartao = new Painel(new BorderLayout()).fundo(Tokens.SUPERFICIE).borda(Tokens.BORDA).raio(14);
         cartao.add(c, BorderLayout.CENTER);
@@ -195,7 +195,7 @@ public final class TelaServidores extends Painel {
             add(cabecalho, BorderLayout.NORTH);
 
             JPanel detalhes = new Painel(new GridBagLayout());
-            detalhes.add(chave("Token deste Mac"), restricoes(0, 0, 0));
+            detalhes.add(chave("Token deste computador"), restricoes(0, 0, 0));
             detalhes.add(token, restricoes(1, 0, 1));
             detalhes.add(chave("2FA"), restricoes(2, 0, 0));
             detalhes.add(selo2fa, restricoes(3, 0, 0));

@@ -373,7 +373,7 @@ class EdicaoERemocaoDeServidorTest {
         assertTrue(r.tokenRevogado());
         assertTrue(r.chaveTiradaDoServidor());
         assertTrue(r.avisos().isEmpty(), r.avisos().toString());
-        assertTrue(agente.tokens.isEmpty(), "o token deste Mac saiu do agente");
+        assertTrue(agente.tokens.isEmpty(), "o token deste computador saiu do agente");
         assertEquals(List.of(blob + "\n"), comandosDeChave, "só o texto da chave foi, por stdin");
         assertTrue(cofre.servidores().isEmpty());
         assertTrue(cofre.chaves().isEmpty());

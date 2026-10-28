@@ -149,7 +149,7 @@ public final class DialogoSenhaMestra extends Dialogo {
 
         return Caixa.coluna(14,
             cabecalho("chave", "Criar o cofre"),
-            paragrafo("A senha-mestra protege as chaves SSH e os tokens deste Mac. Prefira uma frase de 4 palavras ou mais, "
+            paragrafo("A senha-mestra protege as chaves SSH e os tokens deste computador. Prefira uma frase de 4 palavras ou mais, "
                 + "com espaços: é a mais forte e a mais fácil de lembrar. Sem frase, use 16 caracteres ou mais. Senha "
                 + "comum (palavra, nome, data ou sequência, mesmo com número no fim) é recusada."),
             caixaDoAviso,

@@ -947,7 +947,7 @@ public final class ConexaoSsh implements ConexaoDoServidor {
 
         static Falha tokenRecusado() {
             return new Falha(Falha.Tipo.TOKEN_RECUSADO,
-                "O agente recusou o token deste Mac. Registre o token de novo.");
+                "O agente recusou o token deste computador. Registre o token de novo.");
         }
 
         static Falha codigo2faPendente() {

@@ -61,11 +61,11 @@ public final class SondagemDeHost {
             case RECUSOU -> "O servidor em " + onde + " recusou a conexão. Confira a porta e se o SSH está ligado nele "
                 + "(botão Voltar para mudar o endereço ou a porta).";
             case TEMPO_ESGOTADO -> "Não consegui falar com " + host + " na porta " + porta + ": ele não respondeu a tempo. "
-                + "Confira o endereço e a porta (botão Voltar), se o servidor está ligado e se este Mac está na mesma rede "
+                + "Confira o endereço e a porta (botão Voltar), se o servidor está ligado e se este computador está na mesma rede "
                 + "que ele.";
             case NOME_NAO_ENCONTRADO -> "Não encontrei o endereço " + host + ". Confira se ele está escrito certo "
                 + "(botão Voltar).";
-            case SEM_ROTA -> "Este Mac não achou caminho até " + host + ". Confira o endereço (botão Voltar) e se o Mac está "
+            case SEM_ROTA -> "Este computador não achou caminho até " + host + ". Confira o endereço (botão Voltar) e se o computador está "
                 + "na mesma rede do servidor.";
             case OUTRO -> "Não consegui obter a chave do servidor em " + onde + ". Confira o endereço e a porta (botão "
                 + "Voltar) e se o servidor está ligado; também pode ser que essa porta não seja a do SSH.";

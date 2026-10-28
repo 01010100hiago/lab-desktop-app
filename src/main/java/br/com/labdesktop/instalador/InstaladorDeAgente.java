@@ -387,7 +387,7 @@ public final class InstaladorDeAgente {
         } catch (InterruptedException e) {
             throw e;
         } catch (Exception e) {
-            throw new FalhaDePasso("Não consegui registrar o token deste Mac no agente: " + limpar(Redator.redigir(e)));
+            throw new FalhaDePasso("Não consegui registrar o token deste computador no agente: " + limpar(Redator.redigir(e)));
         }
     }
 

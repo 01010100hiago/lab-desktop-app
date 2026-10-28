@@ -1012,8 +1012,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
             concluir.setEnabled(true);
             boolean semClaude = Boolean.FALSE.equals(lab.estado().temClaude());
             mensagemDaConexao.setText(semClaude
-                ? "Tudo certo: o servidor respondeu e o token deste Mac está registrado. Clique em Concluir para ver o servidor."
-                : "Tudo certo: o servidor respondeu, o token deste Mac está registrado e os limites do "
+                ? "Tudo certo: o servidor respondeu e o token deste computador está registrado. Clique em Concluir para ver o servidor."
+                : "Tudo certo: o servidor respondeu, o token deste computador está registrado e os limites do "
                     + "plano chegaram. Clique em Concluir para ver os projetos.");
             reajustar();
         }, this::falhouAConclusao);
@@ -1067,7 +1067,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
                     usuarioAtual(), portaDoAgenteAtual());
             }
         } else if (falha instanceof ErroProvisionamento e && ErroProvisionamento.TOKEN_CONFLITO.equals(e.codigo())) {
-            mensagem = "Já existe um token chamado \"" + nomeDoDispositivo + "\" no agente (de outro Mac, ou de um cofre "
+            mensagem = "Já existe um token chamado \"" + nomeDoDispositivo + "\" no agente (de outro computador, ou de um cofre "
                 + "antigo). Posso revogar o antigo e registrar um novo: a entrada antiga deixa de valer agora.";
             substituirToken.setVisible(true);
         }

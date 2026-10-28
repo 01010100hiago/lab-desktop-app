@@ -107,7 +107,7 @@ class InstalacaoPeloServidorLabTest {
             tmp.resolve("pessoal").resolve(ComandosRemotos.caminhoDoPacote(parametros, PACOTE)))));
         assertEquals("0.1.0-abc1234", servidor.versaoExtraida);
         assertEquals("painel-lab", servidor.containerNome);
-        assertEquals(1, agente.tokens.size(), "o token deste Mac foi registrado (por docker exec, no agente que acabou de subir)");
+        assertEquals(1, agente.tokens.size(), "o token deste computador foi registrado (por docker exec, no agente que acabou de subir)");
         assertTrue(cofre.tokenDoServidor(lab.id()).isPresent(), "e guardado no cofre");
 
         lab.aoMudarOAgenteNoServidor();

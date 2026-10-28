@@ -93,7 +93,7 @@ public final class DialogoRemoverServidor extends Dialogo {
         } else {
             explicacaoDaChave = dicaCorrida("A chave só serve a este servidor. Sem ele, ela não tem mais uso e pode ser apagada "
                 + "do cofre." + (origemDaChave == Origem.GERADA_PELO_APP ? ""
-                    : " Só a cópia que está no cofre: o arquivo original no seu Mac não é mexido."));
+                    : " Só a cópia que está no cofre: o arquivo original no seu computador não é mexido."));
         }
         if (conectado) {
             explicacaoDaRevogacao = dicaCorrida(textoDaRevogacao(usuario, origemDaChave, chaveCompartilhada));
@@ -139,7 +139,7 @@ public final class DialogoRemoverServidor extends Dialogo {
      * fica, porque ele pode usá-la no terminal e em outras máquinas.
      */
     static String textoDaRevogacao(String usuario, Origem origem, boolean chaveCompartilhada) {
-        String inicio = "Apaga o token deste Mac no painel do servidor";
+        String inicio = "Apaga o token deste computador no painel do servidor";
         String fim = " Se algo não der certo, o app avisa e remove mesmo assim.";
         if (chaveCompartilhada) {
             return inicio + ". A chave fica no acesso do usuário " + usuario + " porque outro servidor seu também a usa." + fim;

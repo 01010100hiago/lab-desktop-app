@@ -10,7 +10,7 @@ public enum PassoDeInstalacao implements Passo {
     CONSTRUIR_IMAGEM("Construir a imagem do agente no servidor"),
     SUBIR_CONTAINER("Subir o container do agente"),
     SONDAR("Conferir que o agente responde"),
-    REGISTRAR_TOKEN("Registrar o token deste Mac");
+    REGISTRAR_TOKEN("Registrar o token deste computador");
 
     private final String rotulo;
 

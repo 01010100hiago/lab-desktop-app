@@ -93,7 +93,7 @@ class FilaDeTransferenciasTest {
             assertEquals("<h1>oi</h1>", Files.readString(c.orbita().resolve("meu-site/index.html")));
             assertEquals("body{}", Files.readString(c.orbita().resolve("meu-site/css/temas/escuro.css")));
             assertTrue(Files.isDirectory(c.orbita().resolve("meu-site/vazia")), "pasta vazia também vai");
-            assertFalse(Files.exists(c.orbita().resolve("meu-site/atalho.txt"), java.nio.file.LinkOption.NOFOLLOW_LINKS), "link do Mac não é seguido");
+            assertFalse(Files.exists(c.orbita().resolve("meu-site/atalho.txt"), java.nio.file.LinkOption.NOFOLLOW_LINKS), "link do computador não é seguido");
         }
     }
 

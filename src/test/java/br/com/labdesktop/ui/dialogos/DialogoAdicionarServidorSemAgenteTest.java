@@ -226,7 +226,7 @@ class DialogoAdicionarServidorSemAgenteTest {
         Visual.naEdt(() -> aoInstalar.get().run());
         Espera.ate(PRAZO, () -> "pronto (msg=" + Visual.naEdt(d::mensagemDaConexao) + ")", () -> Visual.naEdt(() -> d.botaoConcluir().isEnabled()));
         assertFalse(Visual.naEdt(d::perguntandoDoAgente));
-        assertTrue(Visual.naEdt(d::mensagemDaConexao).contains("Tudo certo: o servidor respondeu e o token deste Mac está registrado."),
+        assertTrue(Visual.naEdt(d::mensagemDaConexao).contains("Tudo certo: o servidor respondeu e o token deste computador está registrado."),
             Visual.naEdt(d::mensagemDaConexao));
         assertEquals(1, agente.tokens.size(), "agora sim o token foi registrado, com o agente de pé");
         assertEquals(EstadoConexao.CONECTADO, lab.estado().conexao());

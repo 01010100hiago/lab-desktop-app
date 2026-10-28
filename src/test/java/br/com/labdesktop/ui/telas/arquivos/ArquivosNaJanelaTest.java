@@ -340,7 +340,7 @@ class ArquivosNaJanelaTest {
         Visual.salvar(dialogo(Visual.naEdt(() -> dialogos.ultimo()), 520), "arquivos-apagar-confirmacao");
 
         // já existe: um envio de um arquivo que o servidor já tem
-        Path local = Files.writeString(tmp.resolve("README.md"), "versão do Mac, com mais coisa dentro\n".repeat(30));
+        Path local = Files.writeString(tmp.resolve("README.md"), "versão do computador, com mais coisa dentro\n".repeat(30));
         Visual.naEdt(() -> g.enviarArquivosLocais(List.of(local), O));
         Espera.ate(Duration.ofSeconds(30), "diálogo de conflito", () -> Visual.naEdt(() -> dialogos.ultimo()) instanceof DialogoConflitoDeTransferencia);
         var conflito = (DialogoConflitoDeTransferencia) Visual.naEdt(() -> dialogos.ultimo());

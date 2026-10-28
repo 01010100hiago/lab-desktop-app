@@ -146,7 +146,7 @@ public final class ConteudoDosAvisos {
                             + (e.versao().api() == null ? "desconhecida" : e.versao().api()) + ").", List.of());
                 }
                 if (e.semToken()) {
-                    yield new AvisoDeConexao(Gravidade.DESTAQUE, "chave", "Este Mac ainda não tem token em " + nome,
+                    yield new AvisoDeConexao(Gravidade.DESTAQUE, "chave", "Este computador ainda não tem token em " + nome,
                         "O agente ainda aceita chamadas sem token, mas o token identifica este app (e é exigido depois do corte).",
                         List.of(Acao.REGISTRAR_TOKEN));
                 }
@@ -185,11 +185,11 @@ public final class ConteudoDosAvisos {
                 : new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "Confirme o servidor " + nome,
                     "A chave do servidor ainda não foi confirmada: compare a impressão digital antes de conectar.",
                     List.of(Acao.CONFERIR_IMPRESSAO));
-            case TOKEN_RECUSADO -> new AvisoDeConexao(Gravidade.PERIGO, "chave", "O agente de " + nome + " não aceita o token deste Mac",
+            case TOKEN_RECUSADO -> new AvisoDeConexao(Gravidade.PERIGO, "chave", "O agente de " + nome + " não aceita o token deste computador",
                 "O token foi revogado ou o cofre foi recriado. Registre um token novo.", List.of(Acao.REGISTRAR_TOKEN));
             case AGUARDANDO_2FA -> new AvisoDeConexao(Gravidade.ATENCAO, "chave", "Código do autenticador pendente",
-                nome + " pede o código de 6 dígitos do autenticador para este Mac.", List.of(Acao.DIGITAR_CODIGO));
-            case SUSPENSO -> new AvisoDeConexao(Gravidade.NEUTRO, "pausa", "O Mac está em repouso",
+                nome + " pede o código de 6 dígitos do autenticador para este computador.", List.of(Acao.DIGITAR_CODIGO));
+            case SUSPENSO -> new AvisoDeConexao(Gravidade.NEUTRO, "pausa", "O computador está em repouso",
                 "A conexão com " + nome + " volta quando ele acordar.", List.of());
         };
     }

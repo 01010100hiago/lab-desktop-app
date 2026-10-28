@@ -573,7 +573,7 @@ public final class PainelDoRegistro extends Painel {
         if (copiador.copiar(texto)) {
             avisos.info(linhas.size() == 1 ? "Linha copiada." : linhas.size() + " linhas copiadas.");
         } else {
-            avisos.atencao("Não consegui copiar. Selecione o texto e use Cmd+C.");
+            avisos.atencao("Não consegui copiar. Selecione o texto e use " + br.com.labdesktop.ui.componentes.Teclas.nome() + "+C.");
         }
     }
 

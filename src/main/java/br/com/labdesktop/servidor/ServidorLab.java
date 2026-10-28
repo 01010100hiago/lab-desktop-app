@@ -1055,7 +1055,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
                     token = true; // já não existia no agente: o resultado é o mesmo
                 } else {
                     LOG.warn("Não consegui revogar o token de {}: {}", id, e.getMessage());
-                    avisos.add("Não consegui apagar o token deste Mac no painel do servidor (" + e.getMessage() + ").");
+                    avisos.add("Não consegui apagar o token deste computador no painel do servidor (" + e.getMessage() + ").");
                 }
             }
         }

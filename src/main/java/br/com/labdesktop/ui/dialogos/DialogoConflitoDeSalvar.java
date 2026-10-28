@@ -34,7 +34,7 @@ public final class DialogoConflitoDeSalvar extends Dialogo {
                 + "está no editor. Recarregar não é possível: não há mais o que ler."
             : "O arquivo " + n + " mudou no servidor desde que você abriu: alguém (ou algum programa) o alterou. Recarregar traz a "
                 + "versão do servidor e descarta o que você digitou aqui. Sobrescrever mesmo assim grava a sua versão; a que está "
-                + "no servidor vai para uma cópia no seu Mac, então nada se perde.";
+                + "no servidor vai para uma cópia no seu computador, então nada se perde.";
         JComponent corpo = Caixa.coluna(14,
             cabecalho("alerta", apagado ? "O arquivo foi apagado do servidor" : "O arquivo mudou no servidor desde que você abriu"),
             paragrafo(t),

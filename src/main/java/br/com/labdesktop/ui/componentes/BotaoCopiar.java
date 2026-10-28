@@ -37,7 +37,7 @@ public final class BotaoCopiar {
                 voltar.restart();
                 avisos.info("Copiado.");
             } else {
-                avisos.atencao("Não consegui copiar. Selecione o texto e use Cmd+C.");
+                avisos.atencao("Não consegui copiar. Selecione o texto e use " + Teclas.nome() + "+C.");
             }
         });
         return botao;

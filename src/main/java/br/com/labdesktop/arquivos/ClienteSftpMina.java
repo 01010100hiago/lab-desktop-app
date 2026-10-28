@@ -646,7 +646,7 @@ public final class ClienteSftpMina implements ClienteSftp {
             }
             total = Files.size(local);
         } catch (IOException e) {
-            throw new ErroSftp(ErroSftp.Tipo.OUTRO, "Não consegui ler \"" + local.getFileName() + "\" neste Mac.", e);
+            throw new ErroSftp(ErroSftp.Tipo.OUTRO, "Não consegui ler \"" + local.getFileName() + "\" neste computador.", e);
         }
         int permissoesLocais = permissoesLocais(local);
         String pasta = CaminhoRemoto.pai(destino);
@@ -663,7 +663,7 @@ public final class ClienteSftpMina implements ClienteSftp {
                 long noServidor = cli.stat(temporario).getSize();
                 if (noServidor != total) {
                     throw new ErroSftp(ErroSftp.Tipo.TAMANHO_NAO_CONFERE, "O tamanho de \"" + CaminhoRemoto.nome(destino)
-                        + "\" no servidor não confere com o do seu Mac. Envie de novo.");
+                        + "\" no servidor não confere com o do seu computador. Envie de novo.");
                 }
                 Attributes existente = existente(cli, destino);
                 int permissoes = existente != null && existente.getFlags().contains(Attribute.Perms)

@@ -42,7 +42,7 @@ public final class MensagensDeErro {
             case ErroApi.RespostaInvalida r -> "O agente respondeu algo que o app não entendeu.";
             case ErroApi.NaoAutorizado n -> n.totpRequerido()
                 ? "O servidor pede o código do autenticador."
-                : "O agente não reconhece o token deste Mac.";
+                : "O agente não reconhece o token deste computador.";
             case ErroApi.Conflito c -> c.mensagem();
             case ErroApi.NaoEncontrado n -> n.mensagem();
             case ErroApi.ServidorErro s -> s.mensagem();
@@ -57,7 +57,7 @@ public final class MensagensDeErro {
                 "Sem conexão SSH com o servidor agora. Espere conectar e tente de novo.";
             case ErroProvisionamento.TOTP_JA_ATIVO -> "O 2FA já está ativo neste servidor.";
             case ErroProvisionamento.TOKEN_CONFLITO ->
-                "Já existe um token com esse nome de dispositivo no servidor (de outro Mac, ou de um cofre antigo).";
+                "Já existe um token com esse nome de dispositivo no servidor (de outro computador, ou de um cofre antigo).";
             case "totp_requerido" -> "O código do autenticador é necessário e não foi informado.";
             default -> e.getMessage();
         };

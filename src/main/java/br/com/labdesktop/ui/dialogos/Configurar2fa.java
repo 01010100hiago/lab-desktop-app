@@ -189,7 +189,7 @@ public final class Configurar2fa extends Dialogo {
     private JComponent cartaoAtivo() {
         return Caixa.coluna(14,
             cabecalho("chave", "O 2FA está ativo"),
-            paragrafo("Neste servidor, cada Mac confirma o código do autenticador a cada 30 dias. Para desativar, "
+            paragrafo("Neste servidor, cada computador confirma o código do autenticador a cada 30 dias. Para desativar, "
                 + "digite um código válido agora."),
             Caixa.linha(0, Caixa.mola(), codigoParaDesativar, Caixa.mola()),
             erroDeDesativar,
@@ -307,7 +307,7 @@ public final class Configurar2fa extends Dialogo {
                 (estado == Estado2fa.PENDENTE
                     ? "Há uma configuração começada e ainda não confirmada em " + servidor + ". Configurar de novo gera um segredo novo."
                     : "O 2FA está desligado em " + servidor + ".")
-                    + " Com ele ligado, o agente só atende este Mac depois de um código do Google Authenticator, "
+                    + " Com ele ligado, o agente só atende este computador depois de um código do Google Authenticator, "
                     + "confirmado a cada 30 dias. Enquanto você não confirmar o primeiro código, nada é exigido." + nota);
             mostrarCartao(LIGAR);
         }
@@ -369,8 +369,8 @@ public final class Configurar2fa extends Dialogo {
         desfazerConfirmar.run();
         zerarSegredo(); // o 2FA está ativo: o segredo já cumpriu seu papel na tela
         textoPronto.setText("O 2FA está ativo em " + servidor + ". "
-            + ate.map(t -> "Este Mac fica confirmado por 30 dias (até " + DATA_E_HORA.format(t.atZone(ZoneId.systemDefault())) + ")")
-                .orElse("Este Mac vai pedir o código na próxima vez que o servidor exigir")
+            + ate.map(t -> "Este computador fica confirmado por 30 dias (até " + DATA_E_HORA.format(t.atZone(ZoneId.systemDefault())) + ")")
+                .orElse("Este computador vai pedir o código na próxima vez que o servidor exigir")
             + ". Os próximos Macs vão pedir o código de 6 dígitos ao conectar.");
         avisos.ok("2FA ativado em " + servidor + ".");
         mostrarCartao(PRONTO);

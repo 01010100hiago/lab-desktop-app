@@ -27,7 +27,7 @@ public final class MenuDoServidor {
         CONECTAR("Conectar agora", "rede"),
         CONFERIR_IMPRESSAO("Conferir a impressão do servidor…", "chave"),
         DIGITAR_CODIGO("Digitar o código do autenticador…", "chave"),
-        REGISTRAR_TOKEN("Registrar o token deste Mac…", "chave"),
+        REGISTRAR_TOKEN("Registrar o token deste computador…", "chave"),
         CONFIGURAR_2FA("Configurar 2FA…", "chave"),
         DESATIVAR_2FA("Desativar 2FA…", "chave"),
         /** O servidor responde por SSH e não tem o agente: abre a confirmação (nada se instala sem o clique e a confirmação). */

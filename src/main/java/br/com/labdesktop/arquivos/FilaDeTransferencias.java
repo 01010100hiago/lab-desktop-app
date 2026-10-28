@@ -647,7 +647,7 @@ public final class FilaDeTransferencias implements AutoCloseable {
             try {
                 if (item.pasta()) {
                     if (Files.exists(item.local(), LinkOption.NOFOLLOW_LINKS) && !Files.isDirectory(item.local(), LinkOption.NOFOLLOW_LINKS)) {
-                        throw new ErroSftp(ErroSftp.Tipo.JA_EXISTE, "Já existe um arquivo com o nome da pasta neste Mac.");
+                        throw new ErroSftp(ErroSftp.Tipo.JA_EXISTE, "Já existe um arquivo com o nome da pasta neste computador.");
                     }
                     Files.createDirectories(item.local());
                     t.contarItem();
@@ -662,7 +662,7 @@ public final class FilaDeTransferencias implements AutoCloseable {
                 problemas.add(item.local().getFileName() + ": " + e.mensagemSimples());
             } catch (IOException e) {
                 t.falhou();
-                problemas.add(item.local().getFileName() + ": não consegui gravar neste Mac.");
+                problemas.add(item.local().getFileName() + ": não consegui gravar neste computador.");
             }
             publicar(t, false);
         }
@@ -728,7 +728,7 @@ public final class FilaDeTransferencias implements AutoCloseable {
         Path alvo = item.local();
         if (Files.exists(alvo, LinkOption.NOFOLLOW_LINKS)) {
             if (Files.isDirectory(alvo, LinkOption.NOFOLLOW_LINKS)) {
-                throw new ErroSftp(ErroSftp.Tipo.JA_EXISTE, "Já existe uma pasta com este nome neste Mac.");
+                throw new ErroSftp(ErroSftp.Tipo.JA_EXISTE, "Já existe uma pasta com este nome neste computador.");
             }
             Escolha escolha = decidir(t, new Conflito(Tipo.DOWNLOAD, alvo.getFileName().toString(), alvo.toString(), item.tamanho(),
                 item.modificadoEm(), Files.size(alvo), modificadoLocal(alvo)));

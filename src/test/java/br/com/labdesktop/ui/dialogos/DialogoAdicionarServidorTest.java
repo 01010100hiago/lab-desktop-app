@@ -323,7 +323,7 @@ class DialogoAdicionarServidorTest {
             assertEquals(2, Visual.naEdt(() -> d.estadoDaEtapa(e)), "etapa " + e + " feita");
         }
         assertEquals("Conexão: Conectado", Visual.naEdt(d::estadoDaConexao));
-        assertEquals(1, agente.tokens.size(), "o token deste Mac foi registrado por SSH");
+        assertEquals(1, agente.tokens.size(), "o token deste computador foi registrado por SSH");
         ServidorLab lab = Visual.naEdt(d::servidorCadastrado);
         assertNotNull(lab);
         assertEquals(EstadoConexao.CONECTADO, lab.estado().conexao());

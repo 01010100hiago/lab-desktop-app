@@ -82,7 +82,7 @@ public interface EscolhedorLocal {
             @Override
             public Optional<Path> escolherPastaParaBaixar(Path padrao) {
                 JFileChooser c = new JFileChooser(padrao == null ? null : padrao.toFile());
-                c.setDialogTitle("Escolha a pasta do seu Mac para guardar o que vai baixar");
+                c.setDialogTitle("Escolha a pasta do seu computador para guardar o que vai baixar");
                 c.setApproveButtonText("Baixar para aqui");
                 c.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
                 return c.showOpenDialog(janela.get()) == JFileChooser.APPROVE_OPTION ? Optional.of(c.getSelectedFile().toPath()) : Optional.empty();

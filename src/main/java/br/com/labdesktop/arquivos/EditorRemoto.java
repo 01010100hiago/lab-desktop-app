@@ -94,7 +94,7 @@ public final class EditorRemoto {
         }
         if (e.tamanho() > DetectorDeTexto.LIMITE) {
             throw new ErroSftp(ErroSftp.Tipo.NAO_E_TEXTO, "\"" + nome + "\" é grande demais para editar aqui (" + Formato.fmtBytes(e.tamanho())
-                + "; o limite é 1 MB). Use Baixar para abrir no seu Mac.");
+                + "; o limite é 1 MB). Use Baixar para abrir no seu computador.");
         }
         byte[] bytes = servico.cliente().lerArquivo(real, DetectorDeTexto.LIMITE + 1);
         if (bytes.length > DetectorDeTexto.LIMITE) {
@@ -205,7 +205,7 @@ public final class EditorRemoto {
         try {
             backups.guardar(base.caminhoReal(), anterior);
         } catch (IOException e) {
-            throw new ErroSftp(ErroSftp.Tipo.OUTRO, "Não consegui guardar a cópia de segurança no seu Mac, então NÃO salvei. "
+            throw new ErroSftp(ErroSftp.Tipo.OUTRO, "Não consegui guardar a cópia de segurança no seu computador, então NÃO salvei. "
                 + "Confira o espaço em disco.", e);
         }
         return atual;
@@ -253,7 +253,7 @@ public final class EditorRemoto {
         try {
             bytes = backups.ler(b);
         } catch (IOException e) {
-            throw new ErroSftp(ErroSftp.Tipo.OUTRO, "Não consegui ler a cópia guardada no seu Mac.", e);
+            throw new ErroSftp(ErroSftp.Tipo.OUTRO, "Não consegui ler a cópia guardada no seu computador.", e);
         }
         Texto t = DetectorDeTexto.detectar(bytes);
         if (t == null) {

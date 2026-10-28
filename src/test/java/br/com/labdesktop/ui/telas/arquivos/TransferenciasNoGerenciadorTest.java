@@ -163,7 +163,7 @@ class TransferenciasNoGerenciadorTest {
     @Test
     void jaExistePerguntaSubstituirPularManterOsDoisOuCancelar(@TempDir Path tmp) throws Exception {
         try (CenaDeArquivos c = cena(tmp)) {
-            Path local = Files.writeString(tmp.resolve("README.md"), "novo README do Mac");
+            Path local = Files.writeString(tmp.resolve("README.md"), "novo README do computador");
             c.escolhedor.paraEnviar = List.of(local);
             c.clicar("enviar");
             DialogoConflitoDeTransferencia d = c.esperarDialogo(DialogoConflitoDeTransferencia.class);
@@ -179,7 +179,7 @@ class TransferenciasNoGerenciadorTest {
             assertEquals("Esperando sua resposta", Visual.naEdt(() -> c.g.painelDeTransferencias().linhas().get(0).estadoEmTexto()));
             Visual.naEdt(() -> d.botaoManterOsDois().doClick(0));
             esperarFim(c, 1);
-            assertEquals("novo README do Mac", Files.readString(c.sftp.orbita().resolve("README (2).md")));
+            assertEquals("novo README do computador", Files.readString(c.sftp.orbita().resolve("README (2).md")));
             assertTrue(Files.readString(c.sftp.orbita().resolve("README.md")).startsWith("# Órbita"), "o original ficou");
         }
     }
@@ -324,7 +324,7 @@ class TransferenciasNoGerenciadorTest {
             Visual.naEdt(() -> c.g.selecionarNaTabela("Dockerfile"));
             c.clicar("baixar");
             DialogoConflitoDeTransferencia d = c.esperarDialogo(DialogoConflitoDeTransferencia.class);
-            assertTrue(Visual.naEdt(() -> TextosDoTeste.de(d.raiz())).contains("No seu Mac:"));
+            assertTrue(Visual.naEdt(() -> TextosDoTeste.de(d.raiz())).contains("No seu computador:"));
             Visual.naEdt(() -> d.botaoManterOsDois().doClick(0));
             esperarFim(c, 1);
             assertEquals("o que já estava no Mac", Files.readString(destino.resolve("Dockerfile")));

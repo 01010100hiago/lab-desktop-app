@@ -428,7 +428,7 @@ class DialogoDoAgenteTest {
         assertEquals("Atualizar em vps-1", Visual.naEdt(() -> d.botaoConfirmar().getText()));
         String tela = textosDaRaiz(d);
         assertTrue(tela.contains("Versão instalada: 0.0.9-velha. Versão do pacote deste app: 0.1.0-abc1234."), tela);
-        assertTrue(tela.contains("Os dados e o token deste Mac ficam como estão"), tela);
+        assertTrue(tela.contains("Os dados e o token deste computador ficam como estão"), tela);
         fotografar(d, "dialogo-agente-atualizar");
 
         Visual.naEdt(() -> d.botaoConfirmar().doClick());

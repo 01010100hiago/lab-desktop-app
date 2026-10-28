@@ -86,7 +86,7 @@ public final class DialogoDoAgente extends Dialogo {
         "O agente roda num container que tem acesso ao Docker do servidor. Isso equivale a ser administrador (root) nele: instale só em "
             + "servidor seu.",
         "Ele escuta SÓ em 127.0.0.1 do servidor (nunca em 0.0.0.0): nada entra pela rede, e só este app o alcança, pelo túnel SSH.",
-        "O token deste Mac fica no agente apenas como hash (SHA-256), nunca em claro.",
+        "O token deste computador fica no agente apenas como hash (SHA-256), nunca em claro.",
         "O app não abre porta no firewall e não mexe nele.");
 
     private static final String PAGINA_CONFERINDO = "conferindo";
@@ -233,7 +233,7 @@ public final class DialogoDoAgente extends Dialogo {
                 + "e arquivos não são tocados."));
         } else {
             corpo.add(paragrafo(acao == Acao.ATUALIZAR
-                ? "O app vai instalar a versão nova do agente por cima da atual, mantendo os dados e o token deste Mac."
+                ? "O app vai instalar a versão nova do agente por cima da atual, mantendo os dados e o token deste computador."
                 : "O agente é um programa pequeno que roda num container do Docker do servidor. Com ele o app mostra CPU, memória, disco, "
                 + "processos e containers. NADA foi instalado ainda: confira abaixo e clique no botão para começar."));
             corpo.add(versaoAtual);
@@ -575,8 +575,8 @@ public final class DialogoDoAgente extends Dialogo {
             + (acao == Acao.ATUALIZAR ? " O agente atual é guardado (parado) como " + parametros.containerAnterior()
                 + " enquanto o novo sobe: se o novo não responder, o app o devolve ao ar; só no fim, com o novo funcionando, o antigo é removido." : ""));
         itens.add(acao == Acao.ATUALIZAR
-            ? "5. Conferir que o agente responde. Os dados e o token deste Mac ficam como estão."
-            : "5. Conferir que o agente responde e registrar o token deste Mac (o agente guarda só o hash).");
+            ? "5. Conferir que o agente responde. Os dados e o token deste computador ficam como estão."
+            : "5. Conferir que o agente responde e registrar o token deste computador (o agente guarda só o hash).");
         for (String t : itens) {
             listaDoQueVaiAcontecer.add(dicaCorrida(t));
             listaDoQueVaiAcontecer.add(Caixa.espacoVertical(3));
@@ -591,7 +591,7 @@ public final class DialogoDoAgente extends Dialogo {
         String c = parametros.container();
         for (String t : List.of(
             "• O container " + c + " é parado e removido (só se foi o app que o criou: o app não mexe no que não instalou).",
-            "• Os dados do agente (o token deste Mac no agente e o 2FA do agente) são apagados, junto com o volume " + parametros.volume() + ".",
+            "• Os dados do agente (o token deste computador no agente e o 2FA do agente) são apagados, junto com o volume " + parametros.volume() + ".",
             "• A imagem do agente e a pasta ~/" + parametros.pasta() + " do servidor são apagadas.",
             "• O Docker continua instalado.",
             "• Depois disso o app volta a usar " + alvo.nome() + " só por SSH: terminal, Segurança e Arquivos seguem funcionando.")) {

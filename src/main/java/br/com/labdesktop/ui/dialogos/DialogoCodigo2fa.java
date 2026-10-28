@@ -49,7 +49,7 @@ public final class DialogoCodigo2fa extends Dialogo {
         this.restante = Math.max(0, aguardeSegundos);
 
         TextoCorrido explicacao = paragrafo("O servidor " + servidor + " pede o código de 6 dígitos do autenticador "
-            + "(Google Authenticator) para este Mac.");
+            + "(Google Authenticator) para este computador.");
         JComponent campoCentral = Caixa.linha(0, Caixa.mola(), campo, Caixa.mola());
         TextoCorrido dica = dicaCorrida("Se o código está certo e a tela diz que não, confira a hora do celular.");
 
