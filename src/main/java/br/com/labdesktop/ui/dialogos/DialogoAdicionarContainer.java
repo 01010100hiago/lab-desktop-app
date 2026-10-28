@@ -124,12 +124,12 @@ public final class DialogoAdicionarContainer extends Dialogo {
             abrirPorta,
             Caixa.linha(8, campoPortaNoComputador, new Rotulo("→").corDoToken(Tokens.TEXTO3), campoPortaNoContainer, rotuloPortas, Caixa.mola()),
             problemas,
-            new Rotulo("O que muda no docker-compose.yml").negrito(),
+            Caixa.linha(8, new Rotulo("O que muda no docker-compose.yml").negrito(), Caixa.mola(), copiar),
             previaRolavel,
             nota,
             falha,
             sucesso);
-        conteudoComRodape(Caixa.coluna(10, cabecalho("docker", "Adicionar container"), corpo), rodape(copiar, cancelar, iniciar, gravar));
+        conteudoComRodape(Caixa.coluna(10, cabecalho("docker", "Adicionar container"), corpo), rodape(null, cancelar, iniciar, gravar));
         botaoPadrao(gravar);
 
         cancelar.addActionListener(e -> aoCancelar());

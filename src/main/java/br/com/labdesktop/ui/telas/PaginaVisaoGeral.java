@@ -116,7 +116,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
 
         // linha 1: a descrição; linha 2: a ficha; linha 3: os detalhes técnicos (fechados) à esquerda e os botões à direita
         // (sem as ações ligadas, no lugar dos botões vai o aviso de somente leitura)
-        JPanel acoes = Caixa.fluxo(java.awt.FlowLayout.RIGHT, 8, compose, reiniciar, adicionarContainer, abrirClaude, retomar, verSessao, somenteLeitura);
+        JPanel acoes = Caixa.fluxo(java.awt.FlowLayout.RIGHT, 8, compose, reiniciar, abrirClaude, retomar, verSessao, somenteLeitura);
         JPanel linha3 = new Painel(new BorderLayout(16, 0));
         linha3.add(new AEsquerda(secaoTecnica), BorderLayout.CENTER);
         linha3.add(acoes, BorderLayout.EAST);
@@ -124,7 +124,8 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         JPanel cabecalho = Caixa.coluna(6, descricao, ficha, linha3);
         cabecalho.setName("cabecalho-do-projeto");
 
-        caixa.apoio(Caixa.fluxo(java.awt.FlowLayout.RIGHT, 16, apoio, tabela.paginacaoExterna()));
+        // "Adicionar container" mora na caixa dos containers (é sobre eles), e não na fileira de ações do projeto, onde faltaria lugar
+        caixa.apoio(Caixa.fluxo(java.awt.FlowLayout.RIGHT, 16, apoio, tabela.paginacaoExterna(), adicionarContainer));
         caixa.linha(tabela, 0);
         if (ctx.acoesLiberadas()) {
             tabela.acaoPorLinha("", this::botaoDoContainer);

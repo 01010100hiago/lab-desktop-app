@@ -208,6 +208,12 @@ public final class TelaProjeto extends Painel {
             abas.adicionar(a.id, a.rotulo);
             corpo.add(a == Aba.ARQUIVOS ? arquivos : paginas.get(a), a.id);
         }
+        if (servidor != null && servidor.ehLocal()) {
+            // "Este computador": logs, backups e consumo são do agente do lab; a página nasce sem eles (e não os pisca até o primeiro detalhe)
+            abas.definirVisivel(Aba.LOGS.id, false);
+            abas.definirVisivel(Aba.BACKUPS.id, false);
+            abas.definirVisivel(Aba.CONSUMO.id, false);
+        }
         abas.aoSelecionar(id -> mostrarAba(Aba.de(id)));
         JPanel topo = new Painel(new BorderLayout());
         topo.add(linha, BorderLayout.NORTH);

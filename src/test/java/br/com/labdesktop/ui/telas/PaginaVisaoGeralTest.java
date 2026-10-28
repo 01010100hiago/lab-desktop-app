@@ -361,6 +361,34 @@ class PaginaVisaoGeralTest {
     }
 
     // ---------------------------------------------------------------------------------------------
+    // Adicionar container
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void adicionarContainerAparecePedeODialogoESoComAsAcoesELiberacaoDoServidor() {
+        Cena c = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
+        PaginaVisaoGeral p = pagina(c);
+        assertTrue(Visual.naEdt(() -> p.botaoAdicionarContainer().isVisible()));
+        assertEquals("Adicionar container", Visual.naEdt(() -> p.botaoAdicionarContainer().getText()));
+        Visual.naEdt(() -> p.botaoAdicionarContainer().doClick());
+        assertEquals(List.of("adicionar-container"), c.saida.pedidos, "só pede: quem escreve é o diálogo, depois do clique de gravar");
+        // sem as ações ligadas, nada de botão (a mesma trava de iniciar e parar)
+        Cena leitura = cena(false, FixturesDeApi.detalheDoProjetoSintetico());
+        assertFalse(Visual.naEdt(() -> pagina(leitura).botaoAdicionarContainer().isVisible()));
+        // e o servidor que não sabe escrever em projeto (sem o agente do lab) também não
+        Cena semAgente = cena(true, FixturesDeApi.detalheDoProjetoSintetico());
+        semAgente.saida.podeAdicionar = false;
+        semAgente.com(EstadoConexao.CONECTADO, FixturesDeApi.detalheDoProjetoSintetico());
+        assertFalse(Visual.naEdt(() -> pagina(semAgente).botaoAdicionarContainer().isVisible()));
+        for (Tema t : List.of(Tema.CLARO, Tema.ESCURO)) {
+            Visual.tema(t);
+            Cena foto = new Cena(true, Aba.VISAO_GERAL).com(EstadoConexao.CONECTADO, FixturesDeApi.detalheDoProjetoSintetico());
+            Visual.salvar(Visual.renderizar(foto.tela, 1100 - BarraServidores.LARGURA, 672), "visao-geral-com-adicionar-container-" + (t == Tema.CLARO ? "claro" : "escuro"));
+        }
+        Visual.tema(Tema.CLARO);
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // Cabe numa tela só, sem rolagem
     // ---------------------------------------------------------------------------------------------
 

@@ -327,7 +327,8 @@ public final class ProjetosLocais {
         for (Compose c : composes) {
             ResultadoExec r = escrita.executar(ComandosLocais.comporProjeto(c.projetoDoCompose(), p.resolve(c.arquivo()).toString(), acao),
                 PRAZO_DA_ACAO);
-            String texto = (r.stdout().isBlank() ? r.stderr() : r.stdout()).strip();
+            // o Docker escreve o progresso e o erro no stderr: com falha vale o stderr; com sucesso, o que saiu no stdout (ou o progresso)
+            String texto = (r.status() != 0 ? (r.stderr().isBlank() ? r.stdout() : r.stderr()) : (r.stdout().isBlank() ? r.stderr() : r.stdout())).strip();
             saida.append('[').append(c.arquivo()).append("] ").append(texto).append('\n');
             if (r.status() != 0) {
                 throw new IOException(saida.toString().strip());

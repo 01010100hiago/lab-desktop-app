@@ -58,6 +58,19 @@ class TelaProjetoTest {
         public void abaMudou(Aba aba) {
             pedidos.add("aba:" + aba.id());
         }
+
+        /** O servidor sabe adicionar container (o agente do lab ou este computador): com as ações ligadas, o botão aparece. */
+        boolean podeAdicionar = true;
+
+        @Override
+        public void adicionarContainer() {
+            pedidos.add("adicionar-container");
+        }
+
+        @Override
+        public boolean podeAdicionarContainer() {
+            return podeAdicionar;
+        }
     }
 
     /** Tudo o que um teste de página precisa, montado de uma vez. */

@@ -286,13 +286,21 @@ public final class DialogoNovoProjeto extends Dialogo {
     }
 
     private void ligarCampos() {
-        campoNome.getDocument().addDocumentListener(new SimplesOuvinteDeDocumento(this::revalidarCriar));
-        campoNomeImportar.getDocument().addDocumentListener(new SimplesOuvinteDeDocumento(this::revalidarImportar));
+        campoNome.getDocument().addDocumentListener(new SimplesOuvinteDeDocumento(() -> {
+            dizerErro(falhaDeCriar, ""); // o usuário mexeu no que pediu: a frase do erro de antes não vale mais
+            revalidarCriar();
+        }));
+        campoNomeImportar.getDocument().addDocumentListener(new SimplesOuvinteDeDocumento(() -> {
+            limparAFalhaDeImportar();
+            revalidarImportar();
+        }));
         campoUrl.getDocument().addDocumentListener(new SimplesOuvinteDeDocumento(() -> {
+            limparAFalhaDeImportar();
             sugerirNomeDaUrl();
             revalidarImportar();
         }));
         campoOutraPasta.getDocument().addDocumentListener(new SimplesOuvinteDeDocumento(() -> {
+            limparAFalhaDeImportar();
             sugerirNomeDaPastaDoServidor();
             revalidarImportar();
         }));
@@ -530,6 +538,13 @@ public final class DialogoNovoProjeto extends Dialogo {
         }
         int i = candidatas.getSelectedIndex();
         return i >= 0 && i < listaDeCandidatas.size() ? listaDeCandidatas.get(i).caminho() : "";
+    }
+
+    private void limparAFalhaDeImportar() {
+        if (!ocupado) {
+            dizerErro(falhaDeImportar, "");
+            blocoDoComando.setVisible(false);
+        }
     }
 
     private void sugerirNomeDaUrl() {
