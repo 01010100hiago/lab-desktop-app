@@ -51,6 +51,12 @@ public interface ApiCloudflare extends AutoCloseable {
     /** {@code DELETE /zones/:id/dns_records/:id}. */
     void removerDns(String zonaId, String registroId) throws ErroCloudflare;
 
+    /**
+     * Quem diz se o usuário cancelou: a espera por causa de um 429 (até 30 s, três vezes) passa a ser feita em fatias curtas e para na hora do cancelamento, em vez de prender o
+     * botão Cancelar por minutos. Sem isto (o padrão) a espera é inteira.
+     */
+    default void cancelarQuando(java.util.function.BooleanSupplier cancelado) { }
+
     @Override
     void close();
 }

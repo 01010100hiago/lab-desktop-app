@@ -246,15 +246,28 @@ class DialogoPublicarTest {
     }
 
     @Test
-    void composeDoDonoForaDoFormatoBloqueiaEMostraOBlocoParaCopiar() throws Exception {
+    void comNetworkModeNaoHaBlocoParaCopiarSoOMotivo() throws Exception {
         c.lab.escrever(LabSimulado.PROJETOS + "/demo/docker-compose.yml", PublicadorPorArquivoTestApoio.COMPOSE.replace("    networks:\n      - default\n", "    network_mode: host\n"));
+        DialogoPublicar d = abrir();
+        Espera.ate(PRAZO, "o serviço do compose", () -> ed(() -> d.caixaDeServicos().getItemCount()) == 1);
+        Visual.naEdt(() -> d.botaoConferir().doClick());
+        Espera.ate(PRAZO, () -> "bloqueio: " + ed(d::textoDoBloqueio), () -> ed(() -> d.previa() != null));
+        assertFalse(ed(() -> d.botaoPublicar().isEnabled()));
+        assertTrue(ed(d::textoDoBloqueio).contains("network_mode"), ed(d::textoDoBloqueio));
+        assertFalse(ed(() -> d.botaoCopiarBloco().isVisible()), "o bloco (networks default e edge) contradiria o network_mode: não é oferecido");
+        assertEquals("", ed(d::textoDoBloco));
+    }
+
+    @Test
+    void composeDoDonoForaDoFormatoBloqueiaEMostraOBlocoParaCopiar() throws Exception {
+        c.lab.escrever(LabSimulado.PROJETOS + "/demo/docker-compose.yml", PublicadorPorArquivoTestApoio.COMPOSE.replace("    networks:\n      - default\n", "    networks: [default, interna]\n"));
         DialogoPublicar d = abrir();
         Espera.ate(PRAZO, "o serviço do compose", () -> ed(() -> d.caixaDeServicos().getItemCount()) == 1);
         Visual.naEdt(() -> d.botaoConferir().doClick());
         Espera.ate(PRAZO, () -> "bloqueio: " + ed(d::textoDoBloqueio), () -> ed(() -> d.previa() != null));
         assertFalse(ed(() -> d.botaoPublicar().isEnabled()), "bloqueado: o botão não vale");
         assertTrue(ed(d::textoDoBloqueio).contains("copie o bloco"), ed(d::textoDoBloqueio));
-        assertTrue(ed(d::textoDoBloqueio).contains("network_mode"), "diz por quê: " + ed(d::textoDoBloqueio));
+        assertTrue(ed(d::textoDoBloqueio).contains("uma linha só"), "diz por quê: " + ed(d::textoDoBloqueio));
         assertTrue(ed(d::textoDoBloco).contains("container_name: demo-app"), ed(d::textoDoBloco));
         assertTrue(ed(() -> d.botaoCopiarBloco().isVisible()));
         Visual.naEdt(() -> d.botaoCopiarBloco().doClick());

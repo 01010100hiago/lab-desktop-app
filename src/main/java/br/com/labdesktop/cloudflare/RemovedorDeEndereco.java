@@ -117,6 +117,7 @@ public final class RemovedorDeEndereco implements AutoCloseable {
         if (!previa.podeRemover()) {
             return new Resultado(false, previa.bloqueio(), List.of(), List.of(), List.of());
         }
+        api.cancelarQuando(() -> cancelamento != null && cancelamento.cancelado()); // a espera de um 429 não prende o Cancelar
         List<String> copias = new ArrayList<>();
         Tunel.Aplicada aplicada = null;
         Etapa atual = Etapa.REMOVER_REGRA;

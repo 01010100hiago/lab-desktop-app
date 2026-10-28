@@ -73,12 +73,22 @@ public final class DialogoConectarCloudflare extends Dialogo {
     /** As páginas do diálogo. */
     public enum Pagina { TOKEN, ESCOLHA }
 
-    /** As permissões que o app precisa no token, uma por linha (o texto que o usuário copia para conferir no painel da Cloudflare). */
-    public static final List<String> PERMISSOES_DO_TOKEN = List.of(
+    /**
+     * As permissões do token para um túnel gerido por ARQUIVO (o config.yml), uma por linha: só o DNS da zona. Nada de "Túnel > Editar": essa permissão deixaria o token apagar
+     * e mudar túneis da conta inteira, e o app não precisa dela aqui.
+     */
+    public static final List<String> PERMISSOES_TUNEL_POR_ARQUIVO = List.of(
         "Zona > Zona > Ler                    (Zone > Zone > Read)",
         "Zona > DNS > Editar                  (Zone > DNS > Edit)",
-        "Conta > Cloudflare Tunnel > Editar   (Account > Tunnel > Edit)",
         "Recursos da zona: Incluir > Zona específica > o seu domínio");
+
+    /** As permissões para um túnel gerido pela Cloudflare (pela API): as de cima, mais editar o túnel (e a conta nos "Recursos da conta"). */
+    public static final List<String> PERMISSOES_TUNEL_PELA_API = List.of(
+        "Zona > Zona > Ler                    (Zone > Zone > Read)",
+        "Zona > DNS > Editar                  (Zone > DNS > Edit)",
+        "Conta > Cloudflare Tunnel > Editar   (Account > Cloudflare Tunnel > Edit)",
+        "Recursos da zona: Incluir > Zona específica > o seu domínio",
+        "Recursos da conta: Incluir > a sua conta");
 
     private static final int LARGURA = 520;
     private static final String PADRAO_DO_ARQUIVO = "/srv/lab/infra/cloudflared/config.yml";
@@ -103,6 +113,8 @@ public final class DialogoConectarCloudflare extends Dialogo {
     private Pagina pagina = Pagina.TOKEN;
     private boolean ocupado;
     private ServicoCloudflare.Descoberta descoberta;
+    /** Gravando no cofre: a descoberta (e a cópia do token dela) não pode ser zerada por um fechar no meio da gravação. */
+    private boolean salvando;
     private TunelPorArquivo.Conferencia conferencia;
     private final AtomicInteger geracaoDosTuneis = new AtomicInteger();
 
@@ -215,8 +227,10 @@ public final class DialogoConectarCloudflare extends Dialogo {
     // =====================================================================================================
 
     private JComponent montarPaginaDoToken(CopiadorDeTexto copiador, Notificacoes avisos) {
-        AreaPermissoes permissoes = new AreaPermissoes();
-        Botao copiarPermissoes = BotaoCopiar.criar("Copiar as permissões", () -> String.join("\n", PERMISSOES_DO_TOKEN), copiador, avisos);
+        AreaPermissoes permissoesDoArquivo = new AreaPermissoes(PERMISSOES_TUNEL_POR_ARQUIVO, 84);
+        AreaPermissoes permissoesDaApi = new AreaPermissoes(PERMISSOES_TUNEL_PELA_API, 112);
+        Botao copiarDoArquivo = BotaoCopiar.criar("Copiar as permissões (túnel por arquivo)", () -> String.join("\n", PERMISSOES_TUNEL_POR_ARQUIVO), copiador, avisos);
+        Botao copiarDaApi = BotaoCopiar.criar("Copiar as permissões (túnel pela API)", () -> String.join("\n", PERMISSOES_TUNEL_PELA_API), copiador, avisos);
         TextoCorrido aviso = new TextoCorrido("Este token vale como uma senha do DNS do seu domínio: quem o tiver mexe nos endereços dele. Cole só aqui. Ele fica no cofre cifrado "
             + "deste app e some desta tela; nunca vai ao servidor, a arquivo nem a log. Se desconfiar de algo, apague o token no painel da Cloudflare.", LARGURA)
             .corDoToken(Tokens.ATENCAO).tamanho(12.5f);
@@ -226,11 +240,16 @@ public final class DialogoConectarCloudflare extends Dialogo {
             passo("1.", "Abra a página dos tokens da Cloudflare (Meu perfil > Tokens de API)."),
             Caixa.linha(8, abrirPaginaDosTokens, abrirGuia, Caixa.mola()),
             passo("2.", "Clique em \"Criar token\" e em \"Criar token personalizado\"."),
-            passo("3.", "Dê SÓ estas permissões (as mínimas):"),
-            permissoes.rolavel(),
-            dicaCorrida("A terceira só é necessária se o seu túnel é gerido pela Cloudflare (o painel dela chama de \"gerido remotamente\"): para só listar os túneis, \"Ler\" basta. "
-                + "Escolha a zona do seu domínio em \"Recursos da zona\", e não \"Todas as zonas\"."),
-            Caixa.linha(8, copiarPermissoes, Caixa.mola()),
+            passo("3.", "Dê SÓ as permissões do seu caso (as mínimas). Se o seu túnel é gerido por um arquivo config.yml no servidor (o mais comum), use este bloco:"),
+            new Rotulo("Túnel gerido por arquivo").negrito().tamanho(12.5f),
+            permissoesDoArquivo.rolavel(),
+            Caixa.linha(8, copiarDoArquivo, Caixa.mola()),
+            dicaCorrida("Se o túnel é gerido pela Cloudflare (o painel dela diz \"gerido remotamente\"), o app também precisa editar o túnel. Use este bloco, que tem a mais "
+                + "\"Conta > Cloudflare Tunnel > Editar\" (essa permissão deixa o token mudar túneis da conta toda: só dê se for esse o caso):"),
+            new Rotulo("Túnel gerido pela Cloudflare (pela API)").negrito().tamanho(12.5f),
+            permissoesDaApi.rolavel(),
+            Caixa.linha(8, copiarDaApi, Caixa.mola()),
+            dicaCorrida("Onde a Cloudflare pedir \"Recursos da zona\" ou \"Recursos da conta\", escolha a zona do seu domínio e a sua conta, e não \"Todas as zonas\" nem \"Todas as contas\"."),
             passo("4.", "Crie o token e copie o valor: a Cloudflare o mostra uma vez só."),
             Caixa.espacoVertical(2),
             new Rotulo("Cole o token aqui").negrito(),
@@ -252,10 +271,10 @@ public final class DialogoConectarCloudflare extends Dialogo {
         private final br.com.labdesktop.ui.componentes.AreaMonoespacada area = new br.com.labdesktop.ui.componentes.AreaMonoespacada("Permissões do token", true);
         private final javax.swing.JScrollPane rolagem;
 
-        AreaPermissoes() {
-            area.setText(String.join("\n", PERMISSOES_DO_TOKEN));
+        AreaPermissoes(List<String> linhas, int altura) {
+            area.setText(String.join("\n", linhas));
             rolagem = br.com.labdesktop.ui.componentes.AreaMonoespacada.emRolagem(area);
-            rolagem.setPreferredSize(new java.awt.Dimension(LARGURA, 112));
+            rolagem.setPreferredSize(new java.awt.Dimension(LARGURA, altura));
         }
 
         JComponent rolavel() {
@@ -315,10 +334,12 @@ public final class DialogoConectarCloudflare extends Dialogo {
 
     @Override
     protected void aoFechar() {
-        campoDoToken.setText("");
+        Campos.apagarSenha(campoDoToken);
         geracaoDosTuneis.incrementAndGet();
         if (descoberta != null) {
-            descoberta.close(); // zera a cópia do token que a descoberta guardava (o cofre já tem a dele, se o usuário salvou)
+            if (!salvando) {
+                descoberta.close(); // zera a cópia do token que a descoberta guardava (o cofre já tem a dele, se o usuário salvou)
+            } // gravando: quem a zera é o fim da gravação (salvar), com o token ainda inteiro até lá
             descoberta = null;
         }
     }
@@ -358,7 +379,7 @@ public final class DialogoConectarCloudflare extends Dialogo {
             }
         }, d -> {
             definirOcupado(false, "");
-            campoDoToken.setText("");
+            Campos.apagarSenha(campoDoToken);
             if (jaFechou()) {
                 d.close();
                 return;
@@ -604,17 +625,29 @@ public final class DialogoConectarCloudflare extends Dialogo {
             return;
         }
         ServicoCloudflare.Descoberta d = descoberta;
+        salvando = true;
         definirOcupado(true, null);
         Tarefas.rodar(() -> {
             motor.salvar(d, escolha);
             return Boolean.TRUE;
         }, ok -> {
+            salvando = false;
             definirOcupado(false, "");
             avisos.ok("Cloudflare conectada: domínio " + z.nome() + ", túnel " + nomeDoTunel + ". O token ficou no cofre, cifrado.");
-            fechar();
+            if (jaFechou()) {
+                d.close(); // o usuário fechou durante a gravação: ela terminou, e só agora a cópia do token é zerada
+            } else {
+                fechar();
+            }
             aoConectar.run();
         }, falha -> {
+            salvando = false;
             definirOcupado(false, "");
+            if (jaFechou()) {
+                d.close();
+                avisos.erro("Não consegui guardar a Cloudflare no cofre: " + MensagensDeErro.de(falha));
+                return;
+            }
             dizerErro(erroDaEscolha, "Não consegui guardar no cofre: " + MensagensDeErro.de(falha));
         });
     }

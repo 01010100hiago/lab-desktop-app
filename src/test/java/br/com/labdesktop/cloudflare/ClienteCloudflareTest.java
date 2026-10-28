@@ -218,6 +218,26 @@ class ClienteCloudflareTest {
     }
 
     @Test
+    void cancelarNaEsperaDoLimiteDeTaxaParaNaHoraEmVezDeEsperarOsTrintaSegundos() throws Exception {
+        cf.limitarTaxa("GET /zones", 5, "30");
+        java.util.concurrent.atomic.AtomicBoolean cancelou = new java.util.concurrent.atomic.AtomicBoolean();
+        List<Duration> fatias = new ArrayList<>();
+        try (ClienteCloudflare c = new ClienteCloudflare(cf.base(), token, ClienteCloudflare.Opcoes.rapida().comEsperas(3, d -> {
+            fatias.add(d);
+            if (fatias.size() == 2) {
+                cancelou.set(true); // o usuário clica em Cancelar enquanto o app espera
+            }
+        }))) {
+            c.cancelarQuando(cancelou::get);
+            ErroCloudflare e = erro(c::zonas);
+            assertEquals(Tipo.CANCELADO, e.tipo());
+        }
+        assertEquals(2, fatias.size(), "parou logo depois do cancelamento, e não depois de 60 fatias de meio segundo");
+        assertEquals(Duration.ofMillis(500), fatias.get(0));
+        assertEquals(1, cf.pedidos.stream().filter(p -> p.caminho().equals("/zones")).count(), "e nem pediu de novo");
+    }
+
+    @Test
     void identificadorComFormatoEstranhoNaoChegaARede() throws Exception {
         try (ClienteCloudflare c = cliente()) {
             assertEquals(Tipo.RECUSADO, erro(() -> c.tuneis("../../etc")).tipo());

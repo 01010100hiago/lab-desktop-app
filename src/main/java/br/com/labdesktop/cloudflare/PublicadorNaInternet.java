@@ -288,6 +288,7 @@ public final class PublicadorNaInternet implements AutoCloseable {
         if (!previa.podePublicar()) {
             return new Resultado(Desfecho.FALHOU, previa.hostname(), previa.url(), null, previa.bloqueio(), null, List.of(), List.of(), List.of(), previa.avisos());
         }
+        api.cancelarQuando(() -> cancelamento != null && cancelamento.cancelado()); // a espera de um 429 não prende o Cancelar
         List<Desfazer> pilha = new ArrayList<>();
         List<String> copias = new ArrayList<>();
         List<String> avisosDaExecucao = new ArrayList<>();

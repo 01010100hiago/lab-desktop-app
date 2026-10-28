@@ -49,7 +49,7 @@ public final class ComposeComEdge {
      * @param novoTexto       o arquivo com as linhas acrescentadas ({@code null} se {@link Situacao#MANUAL}; igual ao de antes se {@link Situacao#PRONTO})
      * @param containerName   o nome que o container terá (o que o serviço já tinha, ou o pedido)
      * @param motivos         em {@link Situacao#MANUAL}, por que o app não escreve (frases simples); senão vazio
-     * @param blocoParaCopiar o texto para o usuário colar à mão (sempre preenchido: serve de plano B)
+     * @param blocoParaCopiar o texto para o usuário colar à mão (plano B); vazio quando não há bloco que resolva (o serviço usa network_mode: só o motivo vale)
      */
     public record Proposta(Situacao situacao, String novoTexto, String containerName, List<String> motivos, String blocoParaCopiar) {
         public Proposta {
@@ -299,6 +299,7 @@ public final class ComposeComEdge {
         boolean temContainerName = false;
         boolean temNetworks = false;
         boolean redesEmLinhaSo = false;
+        boolean usaNetworkMode = false;
         int linhaDoNetworks = -1;
         if (alvo != null) {
             for (int i = alvo.inicio() + 1; i < alvo.fim(); i++) {
@@ -323,7 +324,11 @@ public final class ComposeComEdge {
                             redesEmLinhaSo = true;
                         }
                     }
-                    case "network_mode" -> motivos.add("O serviço usa network_mode, que não combina com a rede edge.");
+                    case "network_mode" -> {
+                        motivos.add("O serviço usa network_mode, que não combina com a rede edge (com network_mode o container não entra em rede nenhuma do compose): "
+                            + "troque o network_mode por redes, ou não publique este serviço pelo túnel.");
+                        usaNetworkMode = true;
+                    }
                     default -> { }
                 }
             }
@@ -366,7 +371,8 @@ public final class ComposeComEdge {
                 redeAMenos = false;
             }
         }
-        String bloco = blocoParaCopiar(servico, nome, temContainerName, temNetworks);
+        // com network_mode o bloco (networks: default e edge) CONTRADIZ o bloqueio: não há o que colar, só o motivo
+        String bloco = usaNetworkMode ? "" : blocoParaCopiar(servico, nome, temContainerName, temNetworks);
         if (!motivos.isEmpty()) {
             return new Proposta(Situacao.MANUAL, null, nome, motivos, bloco);
         }

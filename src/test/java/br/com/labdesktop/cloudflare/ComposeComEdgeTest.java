@@ -147,7 +147,11 @@ class ComposeComEdgeTest {
             assertEquals(Situacao.MANUAL, p.situacao(), c.trecho());
             assertNull(p.novoTexto(), "o app nunca escreve: " + c.trecho());
             assertTrue(p.motivos().stream().anyMatch(m -> m.contains(c.trecho())), c.trecho() + " -> " + p.motivos());
-            assertTrue(p.blocoParaCopiar().contains("external: true"), c.trecho());
+            if (c.trecho().equals("network_mode")) {
+                assertEquals("", p.blocoParaCopiar(), "com network_mode o bloco contradiria o bloqueio: não há bloco, só o motivo");
+            } else {
+                assertTrue(p.blocoParaCopiar().contains("external: true"), c.trecho());
+            }
         }
     }
 

@@ -97,6 +97,7 @@ public final class ClienteCloudflare implements ApiCloudflare {
     private final Opcoes opcoes;
     private final HttpClient http;
     private volatile java.util.function.IntConsumer aoEsperarOLimite = s -> { };
+    private volatile java.util.function.BooleanSupplier cancelado;
 
     /** O endereço da API: o padrão da Cloudflare, ou o da propriedade de teste. */
     public static URI urlBase() {
@@ -146,6 +147,11 @@ public final class ClienteCloudflare implements ApiCloudflare {
             .connectTimeout(opcoes.conexao())
             .executor(Fundo.ioVirtual())
             .build();
+    }
+
+    @Override
+    public void cancelarQuando(java.util.function.BooleanSupplier quando) {
+        this.cancelado = quando;
     }
 
     /** Avisa (na thread que chama) quantos segundos o cliente vai esperar por causa de um 429, para a tela dizer o que está acontecendo. */
@@ -379,7 +385,7 @@ public final class ClienteCloudflare implements ApiCloudflare {
                 Duration espera = esperaDo429(resposta);
                 aoEsperarOLimite.accept((int) Math.max(1, espera.toSeconds()));
                 try {
-                    opcoes.esperador().esperar(espera);
+                    esperarComCancelamento(espera);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     throw new ErroCloudflare(Tipo.CANCELADO, "Cancelado.", 429, 0, false, e);
@@ -387,6 +393,27 @@ public final class ClienteCloudflare implements ApiCloudflare {
                 continue; // a Cloudflare recusou ANTES de executar: repetir é seguro, até para escrita
             }
             return interpretar(status, bytes, oQue, escrita);
+        }
+    }
+
+    /** A espera do 429: inteira se ninguém pode cancelar; em fatias de meio segundo (olhando o cancelamento) se alguém pode. */
+    private void esperarComCancelamento(Duration espera) throws InterruptedException, ErroCloudflare {
+        java.util.function.BooleanSupplier c = cancelado;
+        if (c == null) {
+            opcoes.esperador().esperar(espera);
+            return;
+        }
+        Duration restante = espera;
+        while (restante.compareTo(Duration.ZERO) > 0) {
+            if (c.getAsBoolean()) {
+                throw new ErroCloudflare(Tipo.CANCELADO, "Cancelado.", 429, 0, false, null);
+            }
+            Duration fatia = restante.compareTo(Duration.ofMillis(500)) > 0 ? Duration.ofMillis(500) : restante;
+            opcoes.esperador().esperar(fatia);
+            restante = restante.minus(fatia);
+        }
+        if (c.getAsBoolean()) {
+            throw new ErroCloudflare(Tipo.CANCELADO, "Cancelado.", 429, 0, false, null);
         }
     }
 

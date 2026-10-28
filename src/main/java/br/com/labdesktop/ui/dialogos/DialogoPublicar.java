@@ -410,7 +410,7 @@ public final class DialogoPublicar extends Dialogo {
         rolagemDoTunel.setVisible(temTunel);
         avisosDaPrevia.setText(String.join("\n", previa.avisos().stream().map(a -> "• " + a).toList()));
         avisosDaPrevia.setVisible(!previa.avisos().isEmpty());
-        boolean manual = previa.compose() == ComposeComEdge.Situacao.MANUAL;
+        boolean manual = previa.compose() == ComposeComEdge.Situacao.MANUAL && !previa.blocoParaCopiar().isEmpty(); // sem bloco (network_mode) só o motivo aparece
         areaDoBloco.setText(manual ? previa.blocoParaCopiar() : "");
         areaDoBloco.setCaretPosition(0);
         tituloDoBloco.setVisible(manual);

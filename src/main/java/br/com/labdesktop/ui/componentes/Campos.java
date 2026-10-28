@@ -51,6 +51,27 @@ public final class Campos {
         return c;
     }
 
+    /**
+     * Apaga o que está num campo de senha, DE VERDADE: {@code setText("")} só tira o texto da vista e os caracteres ficariam no buffer interno do documento (a "folga" do
+     * {@code GapContent}). Sobrescreve o conteúdo com {@code \0} do mesmo tamanho e só depois o remove. É o melhor que o Swing deixa fazer (o {@code String} que o campo mostrou
+     * ao digitar não é alcançável); o app nunca guarda o token digitado em {@code String}.
+     */
+    public static void apagarSenha(JPasswordField c) {
+        javax.swing.text.Document d = c.getDocument();
+        int n = d.getLength();
+        if (n == 0) {
+            return;
+        }
+        try {
+            if (d instanceof javax.swing.text.AbstractDocument ad) {
+                ad.replace(0, n, "\0".repeat(n), null);
+            }
+            d.remove(0, d.getLength());
+        } catch (javax.swing.text.BadLocationException e) {
+            c.setText("");
+        }
+    }
+
     /** Os seis dígitos do autenticador: só números e o espaço do meio, até 7 caracteres, grande e centralizado. */
     public static JTextField codigoDeAutenticador() {
         JTextField c = new JTextField(8);

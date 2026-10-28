@@ -51,6 +51,7 @@ class DialogoConectarCloudflareTest {
     final AtomicInteger conectados = new AtomicInteger();
     final Clipboard area = new Clipboard("teste");
     volatile boolean semListarTuneis;
+    volatile java.util.concurrent.CountDownLatch segurarSalvar;
 
     @BeforeEach
     void montar() throws Exception {
@@ -95,6 +96,14 @@ class DialogoConectarCloudflareTest {
 
             @Override
             public void salvar(ServicoCloudflare.Descoberta d, ConfiguracaoCloudflare escolha) throws CofreException {
+                java.util.concurrent.CountDownLatch trava = segurarSalvar;
+                if (trava != null) {
+                    try {
+                        trava.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
                 s.salvar(d, escolha);
             }
 
@@ -148,12 +157,59 @@ class DialogoConectarCloudflareTest {
     }
 
     @Test
-    void botaoDeCopiarAsPermissoesLevaOTextoCerto() throws Exception {
+    void osDoisBlocosDePermissoesTemCadaUmSeuBotaoDeCopiarEOBlocoDoArquivoNaoPedeEditarTunel() throws Exception {
         DialogoConectarCloudflare d = abrir();
-        javax.swing.AbstractButton copiar = achar(d.raiz(), "Copiar as permissões");
-        Visual.naEdt(() -> copiar.doClick());
+        javax.swing.AbstractButton doArquivo = achar(d.raiz(), "Copiar as permissões (túnel por arquivo)");
+        Visual.naEdt(() -> doArquivo.doClick());
         String copiado = (String) area.getContents(null).getTransferData(java.awt.datatransfer.DataFlavor.stringFlavor);
-        assertEquals(String.join("\n", DialogoConectarCloudflare.PERMISSOES_DO_TOKEN), copiado);
+        assertEquals(String.join("\n", DialogoConectarCloudflare.PERMISSOES_TUNEL_POR_ARQUIVO), copiado);
+        assertFalse(copiado.contains("Tunnel") || copiado.contains("Túnel"), "túnel por arquivo: nada de editar túnel (apagaria túneis da conta): " + copiado);
+        assertTrue(copiado.contains("DNS > Editar") && copiado.contains("Zona > Ler"), copiado);
+        javax.swing.AbstractButton daApi = achar(d.raiz(), "Copiar as permissões (túnel pela API)");
+        Visual.naEdt(() -> daApi.doClick());
+        String daApiTexto = (String) area.getContents(null).getTransferData(java.awt.datatransfer.DataFlavor.stringFlavor);
+        assertEquals(String.join("\n", DialogoConectarCloudflare.PERMISSOES_TUNEL_PELA_API), daApiTexto);
+        assertTrue(daApiTexto.contains("Cloudflare Tunnel > Editar") && daApiTexto.contains("Recursos da conta"), daApiTexto);
+        String t = CenarioDeCloudflare.textos(d.raiz());
+        assertTrue(t.contains("Recursos da zona") && t.contains("Recursos da conta"), "a dica diz onde escolher a zona e a conta");
+    }
+
+    @Test
+    void fecharODialogoNoMeioDaGravacaoNaoZeraOTokenAntesDeGravar() throws Exception {
+        java.util.concurrent.CountDownLatch segurar = new java.util.concurrent.CountDownLatch(1);
+        segurarSalvar = segurar;
+        DialogoConectarCloudflare d = abrir();
+        verificarComOTokenCerto(d);
+        Visual.naEdt(() -> d.escolherOTunelNumero(1));
+        Visual.naEdt(() -> d.botaoPrincipal().doClick()); // começa a gravar (a gravação fica parada na trava do teste)
+        Espera.ate(PRAZO, "gravação em andamento", () -> ed(d::ocupado));
+        Visual.naEdt(() -> d.fechar());                    // o usuário fecha no meio da gravação
+        segurar.countDown();
+        Espera.ate(PRAZO, "conectou mesmo com o diálogo já fechado", () -> conectados.get() == 1);
+        assertTrue(c.cofre.tokenCloudflare(c.servidorId).isPresent(), "o token chegou inteiro ao cofre (não foi zerado pelo fechar)");
+        assertEquals("Bearer " + CloudflareFalsa.TOKEN_CERTO, c.cofre.tokenCloudflare(c.servidorId).orElseThrow().cabecalhoAuthorization());
+        assertTrue(avisos.disse("ok", "Cloudflare conectada"), avisos.todos.toString());
+    }
+
+    @Test
+    void apagarSenhaSobrescreveOBufferAntesDeTirarOTexto() {
+        java.util.List<String> trocas = new java.util.ArrayList<>();
+        javax.swing.JPasswordField campo = ed(() -> {
+            javax.swing.JPasswordField f = new javax.swing.JPasswordField();
+            f.setDocument(new javax.swing.text.PlainDocument() {
+                @Override
+                public void replace(int offset, int length, String text, javax.swing.text.AttributeSet attrs) throws javax.swing.text.BadLocationException {
+                    trocas.add(text);
+                    super.replace(offset, length, text, attrs);
+                }
+            });
+            f.setText("segredo123");
+            return f;
+        });
+        trocas.clear();
+        Visual.naEdt(() -> br.com.labdesktop.ui.componentes.Campos.apagarSenha(campo));
+        assertEquals(List.of("\0".repeat(10)), trocas, "primeiro troca tudo por \\0 do mesmo tamanho");
+        assertEquals(0, ed(() -> campo.getPassword().length));
     }
 
     private static javax.swing.AbstractButton achar(java.awt.Component raiz, String texto) {
