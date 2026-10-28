@@ -44,6 +44,15 @@ public interface ClienteSftp extends AutoCloseable {
     void gravarAtomico(String caminho, byte[] conteudo, int permissoes) throws ErroSftp;
 
     /**
+     * Troca o conteúdo de um arquivo que JÁ EXISTE gravando POR CIMA dele, no mesmo arquivo: o mesmo dono, as mesmas permissões e o mesmo i-node. É o contrário
+     * de {@link #gravarAtomico}, e existe para o que um container enxerga como ARQUIVO ligado ao do servidor (um bind mount de um arquivo só, como o
+     * {@code config.yml} do cloudflared): trocar o arquivo por um novo deixaria o container olhando o antigo. Não é atômico (um corte no meio deixa o arquivo
+     * pela metade), então quem usa guarda antes uma cópia e a devolve se algo falhar. {@code NAO_EXISTE} se o arquivo não existe (nunca cria), e
+     * {@code SEM_PERMISSAO} se o usuário não pode escrever nele.
+     */
+    void gravarNoLugar(String caminho, byte[] conteudo) throws ErroSftp;
+
+    /**
      * Envia UM arquivo local. Grava num temporário, confere o tamanho e renomeia por cima do destino (se já existe, a decisão
      * de substituir foi de quem chama); cancelar apaga o temporário e deixa o destino como estava.
      */

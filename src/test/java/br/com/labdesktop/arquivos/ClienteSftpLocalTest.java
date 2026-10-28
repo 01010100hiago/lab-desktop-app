@@ -109,6 +109,29 @@ class ClienteSftpLocalTest {
     }
 
     @Test
+    void gravarNoLugarMantemOMesmoArquivoEAsPermissoesENuncaCria() throws Exception {
+        Path f = raiz.resolve("config.yml");
+        Files.writeString(f, "um conteúdo bem mais comprido que o novo\n");
+        Files.setPosixFilePermissions(f, PosixFilePermissions.fromString("rw-r-----"));
+        Object antes = Files.readAttributes(f, java.nio.file.attribute.BasicFileAttributes.class).fileKey();
+
+        c.gravarNoLugar(f.toString(), "novo\n".getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("novo\n", Files.readString(f), "o conteúdo foi trocado por inteiro (truncou)");
+        assertEquals(0640, ClienteSftpLocal.bitsDe(Files.getPosixFilePermissions(f)));
+        if (antes != null) {
+            assertEquals(antes, Files.readAttributes(f, java.nio.file.attribute.BasicFileAttributes.class).fileKey(), "o MESMO arquivo (i-node): um container que o monta o vê mudar");
+        }
+        try (var s = Files.list(raiz)) {
+            assertEquals(List.of("config.yml"), s.map(p -> p.getFileName().toString()).toList(), "nenhum temporário");
+        }
+        assertEquals(ErroSftp.Tipo.NAO_EXISTE, tipoDe(() -> c.gravarNoLugar(t("nao-existe.yml"), new byte[] {1})));
+        assertFalse(Files.exists(raiz.resolve("nao-existe.yml")), "nunca cria");
+        Files.createDirectories(raiz.resolve("pasta"));
+        assertEquals(ErroSftp.Tipo.OUTRO, tipoDe(() -> c.gravarNoLugar(t("pasta"), new byte[] {1})));
+    }
+
+    @Test
     void gravarAtomicoTrocaPorCimaSemDeixarTemporarioEMantemAsPermissoes() throws Exception {
         Path f = raiz.resolve("conf.txt");
         Files.writeString(f, "velho");

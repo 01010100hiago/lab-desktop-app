@@ -267,6 +267,23 @@ public final class ClienteSftpLocal implements ClienteSftp {
         }
     }
 
+    @Override
+    public void gravarNoLugar(String caminho, byte[] conteudo) throws ErroSftp {
+        Path alvo = p(caminho);
+        try {
+            if (!Files.exists(alvo)) {
+                throw ErroSftp.naoExiste(alvo.getFileName() == null ? caminho : alvo.getFileName().toString());
+            }
+            if (Files.isDirectory(alvo)) {
+                throw new ErroSftp(ErroSftp.Tipo.OUTRO, "\"" + alvo.getFileName() + "\" é uma pasta, não um arquivo.");
+            }
+            // sem CREATE: só escreve no que já existe; TRUNCATE_EXISTING zera o conteúdo mantendo o arquivo (dono, permissões, i-node)
+            Files.write(alvo, conteudo, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException | RuntimeException e) {
+            throw ErroSftp.de(e, "gravar este arquivo");
+        }
+    }
+
     private static void trocar(Path de, Path para) throws IOException {
         try {
             Files.move(de, para, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);

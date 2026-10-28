@@ -240,6 +240,29 @@ class ClienteSftpMinaTest {
     }
 
     @Test
+    void gravarNoLugarMantemOMesmoArquivoPermissoesEDonoENuncaCria(@TempDir Path tmp) throws Exception {
+        try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
+            Path arquivo = c.escrever(CenarioDeSftp.ORBITA + "/config.yml", "um conteúdo bem mais comprido que o novo\n");
+            Files.setPosixFilePermissions(arquivo, PosixFilePermissions.fromString("rw-r-----"));
+            Object antes = Files.readAttributes(arquivo, java.nio.file.attribute.BasicFileAttributes.class).fileKey();
+            c.cliente.gravarNoLugar(CenarioDeSftp.ORBITA + "/config.yml", "novo\n".getBytes(StandardCharsets.UTF_8));
+            assertEquals("novo\n", Files.readString(arquivo));
+            assertEquals("rw-r-----", perms(arquivo));
+            if (antes != null) {
+                assertEquals(antes, Files.readAttributes(arquivo, java.nio.file.attribute.BasicFileAttributes.class).fileKey(), "o mesmo arquivo: um bind mount de arquivo único o vê mudar");
+            }
+            try (var s = Files.list(c.orbita())) {
+                assertEquals(List.of("config.yml"), s.map(p -> p.getFileName().toString()).toList(), "sem temporário");
+            }
+            ErroSftp falta = assertThrows(ErroSftp.class, () -> c.cliente.gravarNoLugar(CenarioDeSftp.ORBITA + "/nao-existe.yml", new byte[] {1}));
+            assertEquals(ErroSftp.Tipo.NAO_EXISTE, falta.tipo());
+            assertFalse(Files.exists(c.orbita().resolve("nao-existe.yml")), "nunca cria");
+            ErroSftp pasta = assertThrows(ErroSftp.class, () -> c.cliente.gravarNoLugar(CenarioDeSftp.ORBITA, new byte[] {1}));
+            assertEquals(ErroSftp.Tipo.OUTRO, pasta.tipo());
+        }
+    }
+
+    @Test
     void gravarAtomicoSemOExtensaoDoOpensshUsaOCaminhoDeReservaSemPerderODado(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
             Path arquivo = c.escrever(CenarioDeSftp.ORBITA + "/conf.ini", "antigo");

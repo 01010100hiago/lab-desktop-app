@@ -421,6 +421,25 @@ public final class ClienteSftpMina implements ClienteSftp {
         cli.setStat(temporario, privado);
     }
 
+    @Override
+    public void gravarNoLugar(String caminho, byte[] conteudo) throws ErroSftp {
+        String destino = limpo(caminho);
+        usar("gravar este arquivo", false, cli -> {
+            Attributes atual = existente(cli, destino);
+            if (atual == null) {
+                throw ErroSftp.naoExiste(CaminhoRemoto.nome(destino));
+            }
+            if (atual.isDirectory()) {
+                throw new ErroSftp(ErroSftp.Tipo.OUTRO, "\"" + CaminhoRemoto.nome(destino) + "\" é uma pasta, não um arquivo.");
+            }
+            // sem Create e sem Exclusive: só abre o que já existe, e Truncate zera o conteúdo mantendo o arquivo (dono, permissões, i-node)
+            try (OutputStream out = cli.write(destino, OpenMode.Write, OpenMode.Truncate)) {
+                out.write(conteudo);
+            }
+            return null;
+        });
+    }
+
     /** {@code true} se trocar o arquivo por um novo entregaria a outro dono (os dois donos são conhecidos e diferentes). */
     static boolean trocaMudariaODono(String donoDoNovo, String donoDoAntigo) {
         return donoDoNovo != null && donoDoAntigo != null && !donoDoNovo.isBlank() && !donoDoAntigo.isBlank()
