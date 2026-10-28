@@ -66,7 +66,7 @@ class CaminhosAppTest {
         Files.setPosixFilePermissions(dados, PosixFilePermissions.fromString("rwxr-xr-x"));
         CaminhosApp.de(dados, tmp.resolve("logs")).prepararPastas();
         assertEquals("rwx------", Permissoes.comoTexto(dados));
-        assertFalse(Permissoes.corrigirSeAberta(dados, Permissoes.PASTA_PRIVADA));
+        assertFalse(Permissoes.corrigirPastaSeAberta(dados));
         assertTrue(Files.isDirectory(dados));
     }
 }

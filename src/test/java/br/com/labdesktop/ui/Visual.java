@@ -149,7 +149,8 @@ public final class Visual {
     /** Grava o PNG em build/telas/&lt;nome&gt;.png (dentro do diretório do projeto, ignorado pelo git). */
     public static Path salvar(BufferedImage img, String nome) {
         try {
-            Path pasta = Path.of("build", "telas");
+            // com o LaF forçado (-Plabdesktop.laf=generico, "como no Windows" num Mac) os PNGs vão para uma pasta à parte e não misturam com os do estilo natural
+            Path pasta = Path.of("build", System.getProperty(EstiloDeLaf.PROPRIEDADE) == null ? "telas" : "telas-" + EstiloDeLaf.padrao().name().toLowerCase(java.util.Locale.ROOT));
             Files.createDirectories(pasta);
             Path arquivo = pasta.resolve(nome + ".png");
             ImageIO.write(img, "png", arquivo.toFile());

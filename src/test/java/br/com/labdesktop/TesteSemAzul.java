@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.labdesktop.ui.EstiloDeLaf;
 import br.com.labdesktop.ui.GerenciadorTema;
 import br.com.labdesktop.ui.tema.Tokens;
 import br.com.labdesktop.util.Preferencias.Tema;
@@ -17,6 +18,8 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 /**
  * "Nunca azul nem ciano" (ARQUITETURA 8.2 e 2.1): varre TODAS as cores do {@code UIManager} nos dois temas e
@@ -69,8 +72,11 @@ class TesteSemAzul {
         return cores;
     }
 
+    /** O estilo do LaF do teste em curso: cada teste de cor roda nos DOIS (Mac e genérico, o do Windows e do Linux) com os mesmos tokens. */
+    private static EstiloDeLaf estilo = EstiloDeLaf.MAC;
+
     private static void instalar(Tema tema) throws Exception {
-        SwingUtilities.invokeAndWait(() -> new GerenciadorTema(tema, false).instalar());
+        SwingUtilities.invokeAndWait(() -> new GerenciadorTema(tema, false, false, estilo).instalar());
     }
 
     private static List<String> ofensores() {
@@ -84,16 +90,20 @@ class TesteSemAzul {
         return ruins;
     }
 
-    @Test
-    void temaClaroNaoTemAzulNemCiano() throws Exception {
+    @ParameterizedTest
+    @EnumSource(EstiloDeLaf.class)
+    void temaClaroNaoTemAzulNemCiano(EstiloDeLaf e) throws Exception {
+        estilo = e;
         instalar(Tema.CLARO);
         assertTrue(todasAsCores().size() > 300, "o varredor deveria ver centenas de cores do FlatLaf");
         List<String> ruins = ofensores();
         assertTrue(ruins.isEmpty(), "Cores azuis ou ciano no tema CLARO:\n" + String.join("\n", ruins));
     }
 
-    @Test
-    void temaEscuroNaoTemAzulNemCiano() throws Exception {
+    @ParameterizedTest
+    @EnumSource(EstiloDeLaf.class)
+    void temaEscuroNaoTemAzulNemCiano(EstiloDeLaf e) throws Exception {
+        estilo = e;
         instalar(Tema.ESCURO);
         assertTrue(todasAsCores().size() > 300);
         List<String> ruins = ofensores();
@@ -114,8 +124,10 @@ class TesteSemAzul {
         }
     }
 
-    @Test
-    void osDoisTemasDefinemTodosOsTokensDoPainel() throws Exception {
+    @ParameterizedTest
+    @EnumSource(EstiloDeLaf.class)
+    void osDoisTemasDefinemTodosOsTokensDoPainel(EstiloDeLaf e) throws Exception {
+        estilo = e;
         for (Tema tema : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
             instalar(tema);
             for (String chave : Tokens.TODAS) {
@@ -124,8 +136,10 @@ class TesteSemAzul {
         }
     }
 
-    @Test
-    void osTokensDeDestaqueEEstadoSaoOsDaPaletaNeutra() throws Exception {
+    @ParameterizedTest
+    @EnumSource(EstiloDeLaf.class)
+    void osTokensDeDestaqueEEstadoSaoOsDaPaletaNeutra(EstiloDeLaf e) throws Exception {
+        estilo = e;
         instalar(Tema.CLARO);
         assertEquals(new Color(0x26292C), Tokens.cor(Tokens.DESTAQUE), "grafite cheio");
         assertEquals(new Color(0xF6F7F8), Tokens.cor(Tokens.BG));

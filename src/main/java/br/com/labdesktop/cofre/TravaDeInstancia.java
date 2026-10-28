@@ -35,12 +35,7 @@ public final class TravaDeInstancia implements AutoCloseable {
     public static TravaDeInstancia adquirir(CaminhosApp caminhos) throws CofreEmUsoException, IOException {
         caminhos.prepararPastas();
         Set<StandardOpenOption> opcoes = Set.of(StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        FileChannel canal;
-        try {
-            canal = FileChannel.open(caminhos.arquivoTrava(), opcoes, Permissoes.atributoDeArquivoPrivado());
-        } catch (UnsupportedOperationException e) {
-            canal = FileChannel.open(caminhos.arquivoTrava(), opcoes);
-        }
+        FileChannel canal = Permissoes.abrirCanalPrivado(caminhos.arquivoTrava(), opcoes);
         FileLock trava;
         try {
             trava = canal.tryLock();

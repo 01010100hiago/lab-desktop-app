@@ -4,9 +4,6 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.FileAttribute;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -15,7 +12,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -34,10 +30,6 @@ public final class BackupsLocais {
     public static final int MANTER = 20;
 
     private static final DateTimeFormatter PASTA_DA_HORA = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS");
-    private static final FileAttribute<Set<PosixFilePermission>> SO_O_DONO_PASTA =
-        PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"));
-    private static final FileAttribute<Set<PosixFilePermission>> SO_O_DONO_ARQUIVO =
-        PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
 
     /** Uma versão guardada. */
     public record Backup(Path arquivo, Instant quando) { }
@@ -71,9 +63,10 @@ public final class BackupsLocais {
         String hora = PASTA_DA_HORA.format(LocalDateTime.ofInstant(agora, fuso));
         Path pastaDaHora = pastaDoServidor().resolve(hora);
         Path alvo = resolverDentro(pastaDaHora, caminhoRemoto);
-        Files.createDirectories(alvo.getParent(), SO_O_DONO_PASTA);
+        Files.createDirectories(alvo.getParent(), br.com.labdesktop.util.Permissoes.atributosDePastaPrivada());
         // CREATE_NEW: duas gravações no mesmo milissegundo não se sobrescrevem (a segunda falha e quem chama vê)
-        Files.write(Files.createFile(alvo, SO_O_DONO_ARQUIVO), conteudo);
+        br.com.labdesktop.util.Permissoes.criarArquivoPrivado(alvo);
+        Files.write(alvo, conteudo);
         podar(caminhoRemoto);
         return new Backup(alvo, agora);
     }

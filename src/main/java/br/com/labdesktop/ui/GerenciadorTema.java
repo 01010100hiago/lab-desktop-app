@@ -8,6 +8,8 @@ import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.extras.FlatAnimatedLafChange;
 import com.formdev.flatlaf.fonts.inter.FlatInterFont;
 import com.formdev.flatlaf.fonts.jetbrains_mono.FlatJetBrainsMonoFont;
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLightLaf;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import java.util.List;
@@ -15,8 +17,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import javax.swing.UIManager;
 
 /**
- * O tema do app (ARQUITETURA 8.2): {@code FlatMacLightLaf} e {@code FlatMacDarkLaf} com os tokens do painel web
- * registrados por {@code FlatLaf.registerCustomDefaultsSource("br.com.labdesktop.ui.tema")}, fontes Inter e
+ * O tema do app (ARQUITETURA 8.2): {@code FlatMacLightLaf} e {@code FlatMacDarkLaf} no Mac, {@code FlatLightLaf} e {@code FlatDarkLaf} no Windows e no Linux ({@link EstiloDeLaf}),
+ * sempre com os MESMOS tokens do painel web registrados por {@code FlatLaf.registerCustomDefaultsSource("br.com.labdesktop.ui.tema")}, fontes Inter e
  * JetBrains Mono. A escolha é CLARO, ESCURO ou SISTEMA; o sistema é consultado na abertura e ao ganhar foco
  * ({@link #conferirSistema()}), e a troca vale sem reiniciar.
  *
@@ -26,7 +28,7 @@ import javax.swing.UIManager;
  */
 public final class GerenciadorTema {
 
-    /** O pacote de recursos com os {@code FlatMacLightLaf.properties} e {@code FlatMacDarkLaf.properties} do app. */
+    /** O pacote de recursos com os {@code FlatLightLaf.properties}, {@code FlatDarkLaf.properties} (tokens, valem para os dois estilos) e {@code FlatMac*Laf.properties} (só o que é do Mac) do app. */
     public static final String PACOTE_DO_TEMA = "br.com.labdesktop.ui.tema";
 
     private static boolean preparado;
@@ -36,6 +38,7 @@ public final class GerenciadorTema {
     private boolean aplicado;
     private boolean escuroAplicado;
     private final boolean animar;
+    private final EstiloDeLaf estilo;
     private final List<Runnable> ouvintes = new CopyOnWriteArrayList<>();
 
     /**
@@ -51,6 +54,12 @@ public final class GerenciadorTema {
      *                             sem instalar o claro e trocar logo em seguida (dois {@code setup} e um clarão).
      */
     public GerenciadorTema(Tema escolha, boolean sistemaEscuroInicial, boolean animar) {
+        this(escolha, sistemaEscuroInicial, animar, EstiloDeLaf.padrao());
+    }
+
+    /** Com o estilo do LaF dado (os testes provam o do Windows e o do Mac no mesmo computador). */
+    public GerenciadorTema(Tema escolha, boolean sistemaEscuroInicial, boolean animar, EstiloDeLaf estilo) {
+        this.estilo = estilo;
         this.escolha = escolha == null ? Tema.SISTEMA : escolha;
         this.sistemaEscuro = sistemaEscuroInicial;
         this.animar = animar;
@@ -63,10 +72,13 @@ public final class GerenciadorTema {
      */
     public static void preAquecer() {
         preparar();
+        if (EstiloDeLaf.padrao() != EstiloDeLaf.MAC) {
+            return; // só o Mac tem o dylib que demora; o do Windows (FlatLaf) só é carregado se houver decoração própria de janela, que o app não usa
+        }
         try {
             com.formdev.flatlaf.ui.FlatNativeMacLibrary.isLoaded();
         } catch (LinkageError | RuntimeException e) {
-            // fora do macOS ou sem o dylib: o tema funciona do mesmo jeito, só sem o recurso nativo
+            // sem o dylib: o tema funciona do mesmo jeito, só sem o recurso nativo
         }
     }
 
@@ -95,6 +107,11 @@ public final class GerenciadorTema {
     public void instalar() {
         preparar();
         aplicar(efetivoEscuro());
+    }
+
+    /** O estilo do LaF que este gerenciador instala. */
+    public EstiloDeLaf estilo() {
+        return estilo;
     }
 
     /** O tema escolhido (não o efetivo: {@code SISTEMA} continua {@code SISTEMA}). */
@@ -167,10 +184,16 @@ public final class GerenciadorTema {
         if (trocando) {
             FlatAnimatedLafChange.showSnapshot();
         }
-        if (escuro) {
-            FlatMacDarkLaf.setup();
+        if (estilo == EstiloDeLaf.MAC) {
+            if (escuro) {
+                FlatMacDarkLaf.setup();
+            } else {
+                FlatMacLightLaf.setup();
+            }
+        } else if (escuro) {
+            FlatDarkLaf.setup();
         } else {
-            FlatMacLightLaf.setup();
+            FlatLightLaf.setup();
         }
         Fontes.instalarBase(); // o texto base (14, com o fator do usuário) vale para todo componente padrão
         FlatLaf.updateUI();

@@ -50,11 +50,6 @@ public final class GravadorDeArquivoNovo {
     }
 
     private static java.nio.channels.FileChannel abrirPrivado(Path tmp) throws IOException {
-        java.util.Set<StandardOpenOption> o = java.util.Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-        try {
-            return java.nio.channels.FileChannel.open(tmp, o, br.com.labdesktop.util.Permissoes.atributoDeArquivoPrivado());
-        } catch (UnsupportedOperationException e) {
-            return java.nio.channels.FileChannel.open(tmp, o); // sistema de arquivos sem POSIX (Windows): o ACL do proprietário vem de Permissoes
-        }
+        return br.com.labdesktop.util.Permissoes.abrirCanalPrivado(tmp, java.util.Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE));
     }
 }

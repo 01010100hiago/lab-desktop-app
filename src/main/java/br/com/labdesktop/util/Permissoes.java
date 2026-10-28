@@ -1,68 +1,95 @@
 package br.com.labdesktop.util;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
+import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileAttribute;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * Permissões POSIX do que o app grava: pasta 0700 e arquivos 0600 (ARQUITETURA 5.1). Em sistema de arquivos
- * sem POSIX (não é o caso do macOS) as operações viram no-op em vez de falhar.
+ * "Só o dono" para o que o app grava (pasta, arquivos, trava, log, backups): a porta única para {@link ProtecaoDeArquivos}, que escolhe pelo sistema de arquivos POSIX (0700 e 0600), ACL
+ * do NTFS (a entrada do dono) ou nada. Ninguém mais chama {@code PosixFilePermissions} direto: no Windows isso lança {@code UnsupportedOperationException}.
  */
 public final class Permissoes {
 
-    /** {@code rwx------}. */
-    public static final Set<PosixFilePermission> PASTA_PRIVADA = PosixFilePermissions.fromString("rwx------");
-    /** {@code rw-------}. */
-    public static final Set<PosixFilePermission> ARQUIVO_PRIVADO = PosixFilePermissions.fromString("rw-------");
+    private static final Logger LOG = LoggerFactory.getLogger(Permissoes.class);
+    private static volatile ProtecaoDeArquivos protecao = ProtecaoDeArquivos.doSistema();
 
     private Permissoes() { }
 
-    /** Atributo para criar arquivo já com {@code rw-------} (sem janela em que ele existe mais aberto). */
-    public static FileAttribute<Set<PosixFilePermission>> atributoDeArquivoPrivado() {
-        return PosixFilePermissions.asFileAttribute(ARQUIVO_PRIVADO);
+    /** Troca a proteção (testes: a do Windows num Mac). Devolve a anterior. */
+    public static ProtecaoDeArquivos trocar(ProtecaoDeArquivos nova) {
+        ProtecaoDeArquivos antes = protecao;
+        protecao = nova;
+        return antes;
     }
 
-    /** Cria a pasta (e as que faltarem) com {@code rwx------}. Se já existe, só confere e corrige. */
-    public static void criarPastaPrivada(Path pasta) throws IOException {
-        if (!Files.exists(pasta)) {
-            try {
-                Files.createDirectories(pasta, PosixFilePermissions.asFileAttribute(PASTA_PRIVADA));
-            } catch (UnsupportedOperationException e) {
-                Files.createDirectories(pasta);
-                return;
-            }
-        }
-        corrigirSeAberta(pasta, PASTA_PRIVADA);
+    public static ProtecaoDeArquivos atual() {
+        return protecao;
+    }
+
+    /** Atributos para criar um arquivo já só do dono (vazio onde a criação não aceita permissão). */
+    public static FileAttribute<?>[] atributosDeArquivoPrivado() {
+        return protecao.atributosDeArquivo();
+    }
+
+    /** Atributos para criar pastas já só do usuário. */
+    public static FileAttribute<?>[] atributosDePastaPrivada() {
+        return protecao.atributosDePasta();
+    }
+
+    /** Cria o arquivo (falha se existe) já só do usuário. */
+    public static void criarArquivoPrivado(Path arquivo) throws IOException {
+        Files.createFile(arquivo, protecao.atributosDeArquivo());
+        restringirSemFalhar(arquivo, false);
     }
 
     /**
-     * Garante que o arquivo ou pasta tem exatamente as permissões esperadas.
-     *
-     * @return {@code true} se estava diferente e foi corrigido (o app avisa o usuário), {@code false} se já estava certo
+     * Abre (criando, se for o caso) um canal já só do dono. Num arquivo NOVO em sistema sem permissões na criação (NTFS) a restrição vem logo depois da criação; se ela falhar, o app
+     * segue (log de aviso): o conteúdo sensível é cifrado, e a trava do usuário é uma segunda camada.
      */
-    public static boolean corrigirSeAberta(Path caminho, Set<PosixFilePermission> esperadas) throws IOException {
-        try {
-            Set<PosixFilePermission> atuais = Files.getPosixFilePermissions(caminho);
-            if (atuais.equals(esperadas)) {
-                return false;
-            }
-            Files.setPosixFilePermissions(caminho, esperadas);
-            return true;
-        } catch (UnsupportedOperationException e) {
-            return false;
+    public static FileChannel abrirCanalPrivado(Path arquivo, Set<? extends OpenOption> opcoes) throws IOException {
+        boolean existia = Files.exists(arquivo);
+        FileChannel canal = FileChannel.open(arquivo, opcoes, protecao.atributosDeArquivo());
+        if (!existia) {
+            restringirSemFalhar(arquivo, false);
         }
+        return canal;
     }
 
-    /** As permissões atuais em texto ({@code rw-------}), ou {@code "?"} se o sistema de arquivos não for POSIX. */
+    /** Cria a pasta (e as que faltarem) só do usuário. Se já existe, só confere e corrige. */
+    public static void criarPastaPrivada(Path pasta) throws IOException {
+        if (!Files.exists(pasta)) {
+            Files.createDirectories(pasta, protecao.atributosDePasta());
+            restringirSemFalhar(pasta, true);
+        }
+        corrigirPastaSeAberta(pasta);
+    }
+
+    /** @return {@code true} se estava aberta e foi corrigida (o app avisa o usuário) */
+    public static boolean corrigirPastaSeAberta(Path pasta) throws IOException {
+        return protecao.corrigirSeAberta(pasta, true);
+    }
+
+    /** @return {@code true} se estava aberto e foi corrigido (o app avisa o usuário) */
+    public static boolean corrigirArquivoSeAberto(Path arquivo) throws IOException {
+        return protecao.corrigirSeAberta(arquivo, false);
+    }
+
+    /** As permissões atuais em texto ({@code rw-------}), ou {@code "?"} se o sistema de arquivos não souber dizer. */
     public static String comoTexto(Path caminho) throws IOException {
+        return protecao.descrever(caminho);
+    }
+
+    private static void restringirSemFalhar(Path caminho, boolean pasta) {
         try {
-            return PosixFilePermissions.toString(Files.getPosixFilePermissions(caminho));
-        } catch (UnsupportedOperationException e) {
-            return "?";
+            protecao.restringirAoDono(caminho, pasta);
+        } catch (IOException | RuntimeException e) {
+            LOG.warn("Não consegui deixar {} só para o usuário: {}", caminho.getFileName(), e.toString());
         }
     }
 }

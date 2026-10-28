@@ -27,13 +27,9 @@ public final class ConfiguracaoDeLog {
         Path log = caminhos.arquivoLog();
         rotacionarSeGrande(log);
         if (!Files.exists(log)) {
-            try {
-                Files.createFile(log, Permissoes.atributoDeArquivoPrivado());
-            } catch (UnsupportedOperationException e) {
-                Files.createFile(log);
-            }
+            Permissoes.criarArquivoPrivado(log);
         } else {
-            Permissoes.corrigirSeAberta(log, Permissoes.ARQUIVO_PRIVADO);
+            Permissoes.corrigirArquivoSeAberto(log);
         }
         System.setProperty("org.slf4j.simpleLogger.logFile", log.toString());
         LogDeRequisicoes.ligarSeSolicitado();

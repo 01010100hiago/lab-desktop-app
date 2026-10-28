@@ -125,6 +125,10 @@ tasks.test {
     if (project.hasProperty("labdesktop.dockerReal")) {
         systemProperty("labdesktop.dockerReal", project.property("labdesktop.dockerReal").toString())
     }
+    // `./gradlew test -Plabdesktop.laf=generico` roda a suíte inteira com o LaF do Windows e do Linux (FlatLightLaf/FlatDarkLaf) num Mac (ou `mac`, o contrário): os PNGs saem em build/telas-generico/.
+    if (project.hasProperty("labdesktop.laf")) {
+        systemProperty("labdesktop.laf", project.property("labdesktop.laf").toString())
+    }
     // Os testes de tela pintam componentes soltos numa imagem: sem janela, sem ícone saltando no Dock do Mac.
     systemProperty("java.awt.headless", "true")
     doFirst { tmpDosTestes.mkdirs() }

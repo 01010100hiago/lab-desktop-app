@@ -44,11 +44,7 @@ public final class ArquivoPrivado {
     }
 
     private static FileChannel abrirParaCriar(Path tmp, Set<StandardOpenOption> opcoes) throws IOException {
-        try {
-            return FileChannel.open(tmp, opcoes, Permissoes.atributoDeArquivoPrivado());
-        } catch (UnsupportedOperationException e) {
-            return FileChannel.open(tmp, opcoes); // sistema de arquivos sem POSIX: não é o caso do macOS
-        }
+        return Permissoes.abrirCanalPrivado(tmp, opcoes);
     }
 
     /**

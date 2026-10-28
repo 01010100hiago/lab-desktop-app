@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.labdesktop.tendencias.Metrica;
+import br.com.labdesktop.ui.EstiloDeLaf;
 import br.com.labdesktop.ui.GerenciadorTema;
 import br.com.labdesktop.ui.telas.GraficosParaTeste;
 import br.com.labdesktop.ui.tema.Tokens;
@@ -14,6 +15,8 @@ import java.util.Set;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 /**
  * As linhas dos seis gráficos de tendência nos DOIS temas: cada linha tem contraste de pelo menos 3:1 contra a superfície onde é desenhada (o mínimo para elemento gráfico, WCAG
@@ -28,12 +31,17 @@ class ContrasteDosGraficosTest {
         GerenciadorTema.preparar();
     }
 
+    /** O estilo do LaF do teste em curso: cada teste de cor roda nos DOIS (Mac e genérico, o do Windows e do Linux) com os mesmos tokens. */
+    private static EstiloDeLaf estilo = EstiloDeLaf.MAC;
+
     private static void instalar(Tema tema) throws Exception {
-        SwingUtilities.invokeAndWait(() -> new GerenciadorTema(tema, false).instalar());
+        SwingUtilities.invokeAndWait(() -> new GerenciadorTema(tema, false, false, estilo).instalar());
     }
 
-    @Test
-    void cadaLinhaTemPeloMenosTresPorUmContraAsuperficieNosDoisTemas() throws Exception {
+    @ParameterizedTest
+    @EnumSource(EstiloDeLaf.class)
+    void cadaLinhaTemPeloMenosTresPorUmContraAsuperficieNosDoisTemas(EstiloDeLaf e) throws Exception {
+        estilo = e;
         for (Tema tema : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
             instalar(tema);
             Color superficie = Tokens.cor(Tokens.SUPERFICIE);
@@ -57,8 +65,10 @@ class ContrasteDosGraficosTest {
         assertTrue(GraficosParaTeste.tracejada(Metrica.UPLOAD) && !GraficosParaTeste.tracejada(Metrica.DOWNLOAD), "Download sólido e Upload tracejado");
     }
 
-    @Test
-    void aCorDeCadaGraficoEDeUmSoExcetoARedeEACpuNuncaDivideACorComNinguem() throws Exception {
+    @ParameterizedTest
+    @EnumSource(EstiloDeLaf.class)
+    void aCorDeCadaGraficoEDeUmSoExcetoARedeEACpuNuncaDivideACorComNinguem(EstiloDeLaf e) throws Exception {
+        estilo = e;
         // só o Download e o Upload (a rede, com a seta de cada um e o traço do Upload) dividem a cor; a CPU, o Disco, a Memória e a Escrita têm cada um a sua
         for (Metrica m : Metrica.values()) {
             for (Metrica o : Metrica.values()) {
@@ -85,8 +95,10 @@ class ContrasteDosGraficosTest {
         }
     }
 
-    @Test
-    void asCoresDasLinhasNaoTemMatizAzulNosDoisTemas() throws Exception {
+    @ParameterizedTest
+    @EnumSource(EstiloDeLaf.class)
+    void asCoresDasLinhasNaoTemMatizAzulNosDoisTemas(EstiloDeLaf e) throws Exception {
+        estilo = e;
         for (Tema tema : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
             instalar(tema);
             for (Metrica m : Metrica.values()) {

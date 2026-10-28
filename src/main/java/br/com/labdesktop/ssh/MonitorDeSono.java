@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Avisa as {@link ConexaoSsh} quando o Mac dorme e acorda (ARQUITETURA 6.3). Sono derruba o TCP sem avisar: ao
+ * Avisa as {@link ConexaoSsh} quando o computador dorme e acorda (ARQUITETURA 6.3): pelo evento do macOS ou, onde o sistema não avisa (Windows, Linux), pelo {@link VigiaDeRelogio}. Sono derruba o TCP sem avisar: ao
  * acordar a sessão está certamente morta, e esperar o heartbeat custaria quase um minuto.
  *
  * <p>Este pacote é de domínio e não importa {@code java.awt} (regra de camadas), com UMA exceção deliberada:
@@ -45,15 +45,24 @@ public final class MonitorDeSono implements SystemSleepListener {
         };
     }
 
+    /**
+     * O computador esteve parado e já voltou (o {@link VigiaDeRelogio} viu o relógio saltar, no Windows e no Linux, que não avisam): vale como "dormiu" e "acordou" de uma vez. A
+     * conexão vai a {@code SUSPENSO} e reconecta depois da espera de sempre.
+     */
+    public void suspensaoDetectada() {
+        disparar(aoDormir);
+        disparar(aoAcordar);
+    }
+
     @Override
     public void systemAboutToSleep(SystemSleepEvent evento) {
-        LOG.info("O Mac vai dormir.");
+        LOG.info("O computador vai dormir.");
         disparar(aoDormir);
     }
 
     @Override
     public void systemAwoke(SystemSleepEvent evento) {
-        LOG.info("O Mac acordou.");
+        LOG.info("O computador acordou.");
         disparar(aoAcordar);
     }
 

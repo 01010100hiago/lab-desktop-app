@@ -179,12 +179,7 @@ final class ArquivoCofre {
     }
 
     private static FileChannel abrirParaCriar(Path destino) throws IOException {
-        Set<StandardOpenOption> opcoes = Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-        try {
-            return FileChannel.open(destino, opcoes, Permissoes.atributoDeArquivoPrivado());
-        } catch (UnsupportedOperationException e) {
-            return FileChannel.open(destino, opcoes);
-        }
+        return Permissoes.abrirCanalPrivado(destino, Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE));
     }
 
     /** {@code fsync} da pasta, para o rename sobreviver a uma queda de energia. Falhar aqui não invalida a gravação. */

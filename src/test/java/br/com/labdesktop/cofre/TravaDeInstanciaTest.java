@@ -56,12 +56,17 @@ class TravaDeInstanciaTest {
         }
     }
 
+    private static String caminhoDoFilho() throws Exception {
+        String sep = System.getProperty("path.separator");
+        return classes(TravaDeInstancia.class) + sep + classes(Filho.class) + sep + classes(org.slf4j.LoggerFactory.class) + sep + classes(Class.forName("org.slf4j.simple.SimpleLogger"));
+    }
+
     @Test
     void outroProcessoNaoConsegueAMesmaTrava(@TempDir Path tmp) throws Exception {
         CaminhosApp c = Fixtures.caminhos(tmp);
         Path java = Path.of(System.getProperty("java.home"), "bin", "java");
-        // O filho só precisa das classes do app e do teste; nenhuma biblioteca de terceiros.
-        String cp = classes(TravaDeInstancia.class) + System.getProperty("path.separator") + classes(Filho.class);
+        // O filho só precisa das classes do app e do teste e do slf4j (a proteção de arquivos registra avisos); nenhuma outra biblioteca de terceiros.
+        String cp = caminhoDoFilho();
         Process filho = new ProcessBuilder(java.toString(), "-cp", cp, Filho.class.getName(), c.pastaDados().toString())
             .redirectErrorStream(true).start();
         try {
@@ -83,7 +88,7 @@ class TravaDeInstanciaTest {
     void travaSoltaQuandoOProcessoMorreSemFechar(@TempDir Path tmp) throws Exception {
         CaminhosApp c = Fixtures.caminhos(tmp);
         Path java = Path.of(System.getProperty("java.home"), "bin", "java");
-        String cp = classes(TravaDeInstancia.class) + System.getProperty("path.separator") + classes(Filho.class);
+        String cp = caminhoDoFilho();
         Process filho = new ProcessBuilder(java.toString(), "-cp", cp, Filho.class.getName(), c.pastaDados().toString())
             .redirectErrorStream(true).start();
         BufferedReader saida = new BufferedReader(new InputStreamReader(filho.getInputStream(), StandardCharsets.UTF_8));

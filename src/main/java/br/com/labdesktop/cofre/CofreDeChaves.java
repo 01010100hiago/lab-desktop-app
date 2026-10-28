@@ -305,12 +305,12 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
     private static void corrigirPermissoes(CaminhosApp caminhos, List<String> avisos) {
         try {
             if (Files.isDirectory(caminhos.pastaDados())
-                && Permissoes.corrigirSeAberta(caminhos.pastaDados(), Permissoes.PASTA_PRIVADA)) {
+                && Permissoes.corrigirPastaSeAberta(caminhos.pastaDados())) {
                 avisos.add("As permissões da pasta do cofre estavam abertas demais e foram corrigidas (0700).");
             }
             for (ArquivoUsado a : ArquivoUsado.values()) {
                 Path p = a.caminho(caminhos);
-                if (Files.isRegularFile(p) && Permissoes.corrigirSeAberta(p, Permissoes.ARQUIVO_PRIVADO)) {
+                if (Files.isRegularFile(p) && Permissoes.corrigirArquivoSeAberto(p)) {
                     avisos.add("As permissões de " + a.nomeDoArquivo() + " estavam abertas demais e foram corrigidas (0600).");
                 }
             }

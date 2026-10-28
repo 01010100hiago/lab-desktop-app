@@ -3,6 +3,7 @@ package br.com.labdesktop;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.labdesktop.ui.EstiloDeLaf;
 import br.com.labdesktop.ui.GerenciadorTema;
 import br.com.labdesktop.ui.terminal.PaletaTerminal;
 import br.com.labdesktop.ui.tema.Tokens;
@@ -16,6 +17,8 @@ import java.util.List;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 /**
  * Contraste WCAG dos pares texto sobre superfície NOS DOIS temas: nenhum par de texto abaixo de 4,5, e o
@@ -55,8 +58,11 @@ class TesteContraste {
             Math.round(frente.getBlue() * a + fundo.getBlue() * (1 - a)));
     }
 
+    /** O estilo do LaF do teste em curso: cada teste de cor roda nos DOIS (Mac e genérico, o do Windows e do Linux) com os mesmos tokens. */
+    private static EstiloDeLaf estilo = EstiloDeLaf.MAC;
+
     private static void instalar(Tema tema) throws Exception {
-        SwingUtilities.invokeAndWait(() -> new GerenciadorTema(tema, false).instalar());
+        SwingUtilities.invokeAndWait(() -> new GerenciadorTema(tema, false, false, estilo).instalar());
     }
 
     private record Par(String texto, String superficie, double minimo) { }
@@ -99,8 +105,10 @@ class TesteContraste {
         return String.format("#%02X%02X%02X", c.getRed(), c.getGreen(), c.getBlue());
     }
 
-    @Test
-    void osParesDeTextoPassamDe4ePontoCincoNosDoisTemas() throws Exception {
+    @ParameterizedTest
+    @EnumSource(EstiloDeLaf.class)
+    void osParesDeTextoPassamDe4ePontoCincoNosDoisTemas(EstiloDeLaf estiloDoTeste) throws Exception {
+        estilo = estiloDoTeste;
         StringBuilder tabela = new StringBuilder();
         List<String> ruins = new ArrayList<>();
         for (Tema tema : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
@@ -122,7 +130,7 @@ class TesteContraste {
             }
             tabela.append(String.format("pior par de texto em %s: %.2f%n", tema, pior));
         }
-        Path saida = Path.of("build", "contraste.txt");
+        Path saida = Path.of("build", estiloDoTeste == EstiloDeLaf.MAC ? "contraste.txt" : "contraste-generico.txt");
         try {
             Files.createDirectories(saida.getParent());
             Files.writeString(saida, tabela.toString());
@@ -132,8 +140,10 @@ class TesteContraste {
         assertTrue(ruins.isEmpty(), "Pares abaixo do mínimo de contraste:\n" + String.join("\n", ruins));
     }
 
-    @Test
-    void fundoETextoDoTerminalSaoOsTokensDosLogsDeCadaTema() throws Exception {
+    @ParameterizedTest
+    @EnumSource(EstiloDeLaf.class)
+    void fundoETextoDoTerminalSaoOsTokensDosLogsDeCadaTema(EstiloDeLaf e) throws Exception {
+        estilo = e;
         instalar(Tema.ESCURO);
         assertEquals(PaletaTerminal.FUNDO_ESCURO, Tokens.cor(Tokens.LOGS_BG).getRGB() & 0xFFFFFF);
         assertEquals(PaletaTerminal.TEXTO_ESCURO, Tokens.cor(Tokens.LOGS_TEXTO).getRGB() & 0xFFFFFF);
