@@ -27,14 +27,45 @@ import org.slf4j.LoggerFactory;
 public final class ProtecaoAcl implements ProtecaoDeArquivos {
 
     private final Function<Path, AclFileAttributeView> vista;
+    private final Function<Path, UserPrincipal> usuarioAtual;
 
+    /** A vista real da ACL e o usuário que está rodando o app. */
     public ProtecaoAcl() {
-        this(p -> Files.getFileAttributeView(p, AclFileAttributeView.class));
+        this(p -> Files.getFileAttributeView(p, AclFileAttributeView.class), ProtecaoAcl::usuarioQueRodaOApp);
     }
 
-    /** Com a vista da ACL trocável (testes). */
+    /** Com a vista da ACL trocável (testes); o "usuário atual" é o dono que a vista informa. */
     public ProtecaoAcl(Function<Path, AclFileAttributeView> vista) {
+        this(vista, p -> {
+            try {
+                return vista.apply(p).getOwner();
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+    }
+
+    /** Com a vista e o usuário atual trocáveis (testes). */
+    public ProtecaoAcl(Function<Path, AclFileAttributeView> vista, Function<Path, UserPrincipal> usuarioAtual) {
         this.vista = vista;
+        this.usuarioAtual = usuarioAtual;
+    }
+
+    /**
+     * Quem está rodando o app ({@code user.name}), e NÃO o dono do arquivo: numa pasta criada por um administrador (instalador) o dono pode ser o grupo Administradores, e a ACL só
+     * dele deixaria o próprio usuário sem acesso. Se o sistema não souber resolver o nome, cai no usuário (com um aviso no log).
+     */
+    static UserPrincipal usuarioQueRodaOApp(Path caminho) {
+        try {
+            return caminho.getFileSystem().getUserPrincipalLookupService().lookupPrincipalByName(System.getProperty("user.name"));
+        } catch (IOException | RuntimeException e) {
+            LoggerFactory.getLogger(ProtecaoAcl.class).warn("Não consegui achar o usuário atual para a ACL de {}; uso o dono do arquivo: {}", caminho.getFileName(), e.toString());
+            try {
+                return Files.getOwner(caminho);
+            } catch (IOException e2) {
+                throw new java.io.UncheckedIOException(e2);
+            }
+        }
     }
 
     @Override
@@ -53,11 +84,16 @@ public final class ProtecaoAcl implements ProtecaoDeArquivos {
         if (v == null) {
             throw new IOException("Este sistema de arquivos não deixa mudar a lista de acesso de " + caminho.getFileName() + ".");
         }
-        UserPrincipal proprietario = v.getOwner();
+        UserPrincipal dono;
+        try {
+            dono = usuarioAtual.apply(caminho);
+        } catch (java.io.UncheckedIOException e) {
+            throw e.getCause();
+        }
         Set<AclEntryFlag> flags = pasta ? EnumSet.of(AclEntryFlag.FILE_INHERIT, AclEntryFlag.DIRECTORY_INHERIT) : EnumSet.noneOf(AclEntryFlag.class);
-        AclEntry deDono = AclEntry.newBuilder().setType(AclEntryType.ALLOW).setPrincipal(proprietario).setPermissions(EnumSet.allOf(AclEntryPermission.class)).setFlags(flags).build();
+        AclEntry deDono = AclEntry.newBuilder().setType(AclEntryType.ALLOW).setPrincipal(dono).setPermissions(EnumSet.allOf(AclEntryPermission.class)).setFlags(flags).build();
         v.setAcl(List.of(deDono));
-        List<String> outros = quemMaisTemAcesso(v.getAcl(), proprietario);
+        List<String> outros = quemMaisTemAcesso(v.getAcl(), dono);
         if (!outros.isEmpty()) {
             LoggerFactory.getLogger(ProtecaoAcl.class).debug("Depois de restringir {}, ainda têm acesso (herdado): {}", caminho.getFileName(), outros);
         }
@@ -83,7 +119,7 @@ public final class ProtecaoAcl implements ProtecaoDeArquivos {
     }
 
     /** Os nomes de quem, além do dono, tem uma entrada de PERMISSÃO na ACL. */
-    static List<String> quemMaisTemAcesso(List<AclEntry> acl, UserPrincipal proprietario) {
-        return acl.stream().filter(e -> e.type() == AclEntryType.ALLOW && !e.principal().equals(proprietario)).map(e -> e.principal().getName()).distinct().toList();
+    static List<String> quemMaisTemAcesso(List<AclEntry> acl, UserPrincipal dono) {
+        return acl.stream().filter(e -> e.type() == AclEntryType.ALLOW && !e.principal().equals(dono)).map(e -> e.principal().getName()).distinct().toList();
     }
 }

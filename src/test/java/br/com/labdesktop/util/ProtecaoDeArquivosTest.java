@@ -104,6 +104,21 @@ class ProtecaoDeArquivosTest {
     }
 
     @Test
+    void aEntradaEDoUsuarioQueRodaOAppEnaoDoDonoDoArquivo() throws IOException {
+        // pasta criada por um instalador/administrador: o dono do arquivo é o grupo, mas quem precisa de acesso é o usuário atual
+        AclFalsa v = new AclFalsa("BUILTIN\\Administradores");
+        Usuario ana = new Usuario("PC\\ana");
+        new ProtecaoAcl(p -> v, p -> ana).restringirAoDono(Path.of("LabDesktop"), true);
+        assertEquals(List.of(ana), v.gravada.stream().map(AclEntry::principal).toList());
+    }
+
+    @Test
+    void usuarioQueRodaOAppVemDoNomeDoUsuarioDoSistema(@org.junit.jupiter.api.io.TempDir Path tmp) throws IOException {
+        UserPrincipal achado = ProtecaoAcl.usuarioQueRodaOApp(tmp);
+        assertEquals(java.nio.file.Files.getOwner(tmp), achado, "numa pasta que o próprio usuário criou, o usuário atual é o dono");
+    }
+
+    @Test
     void naAclAPastaPassaOAcessoSoDoDonoParaOQueNascerDentro() throws IOException {
         AclFalsa v = new AclFalsa("PC\\ana");
         new ProtecaoAcl(p -> v).restringirAoDono(Path.of("LabDesktop"), true);
