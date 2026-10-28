@@ -219,7 +219,7 @@ public final class TelaProjetos extends Painel {
         vista.add(cartao, BorderLayout.NORTH);
         JScrollPane rolagem = rolagemDaLista = new JScrollPane(vista, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
             JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        rolagem.setBorder(null);
+        rolagem.setBorder(javax.swing.BorderFactory.createEmptyBorder());
         rolagem.setOpaque(false);
         rolagem.getViewport().setOpaque(false);
         rolagem.getVerticalScrollBar().setUnitIncrement(18);

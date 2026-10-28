@@ -79,7 +79,7 @@ public final class TelaServidores extends Painel {
         JPanel vista = new Rolavel(new BorderLayout());
         vista.add(cartoesPanel, BorderLayout.NORTH);
         JScrollPane rolagem = new JScrollPane(vista);
-        rolagem.setBorder(null);
+        rolagem.setBorder(javax.swing.BorderFactory.createEmptyBorder());
         rolagem.setOpaque(false);
         rolagem.getViewport().setOpaque(false);
         rolagem.getVerticalScrollBar().setUnitIncrement(18);

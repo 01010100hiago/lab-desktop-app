@@ -79,8 +79,8 @@ public final class MioloRolavel extends JScrollPane {
     public MioloRolavel(JComponent conteudo, IntSupplier alturaMaxima, boolean preencherAltura) {
         super(new Vista(conteudo, preencherAltura), VERTICAL_SCROLLBAR_AS_NEEDED, HORIZONTAL_SCROLLBAR_NEVER);
         this.alturaMaxima = alturaMaxima;
-        setBorder(null);
-        setViewportBorder(null);
+        setBorder(javax.swing.BorderFactory.createEmptyBorder());
+        setViewportBorder(javax.swing.BorderFactory.createEmptyBorder());
         setOpaque(false);
         getViewport().setOpaque(false);
         getVerticalScrollBar().setUnitIncrement(24);

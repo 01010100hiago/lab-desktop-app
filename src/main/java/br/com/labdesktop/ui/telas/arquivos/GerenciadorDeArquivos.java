@@ -325,7 +325,7 @@ public final class GerenciadorDeArquivos extends Painel {
         }
 
         JScrollPane rolagemDaTabela = new JScrollPane(tabela);
-        rolagemDaTabela.setBorder(null);
+        rolagemDaTabela.setBorder(javax.swing.BorderFactory.createEmptyBorder());
         rolagemDaTabela.setColumnHeaderView(tabela.getTableHeader()); // sem esperar o addNotify: o cabeçalho aparece também fora de janela
         rolagemDaTabela.getViewport().setOpaque(true);
         tabelaEsmaecivel.setLayout(new BorderLayout());
@@ -339,7 +339,7 @@ public final class GerenciadorDeArquivos extends Painel {
         moldura.add(areaDaLista, BorderLayout.CENTER);
 
         JScrollPane rolagemDaArvore = new JScrollPane(arvore);
-        rolagemDaArvore.setBorder(null);
+        rolagemDaArvore.setBorder(javax.swing.BorderFactory.createEmptyBorder());
         rolagemDaArvore.getViewport().setOpaque(true);
         Painel molduraDaArvore = new Painel(new BorderLayout());
         molduraDaArvore.fundo(Tokens.SUPERFICIE).borda(Tokens.BORDA).raio(8);
@@ -353,7 +353,7 @@ public final class GerenciadorDeArquivos extends Painel {
         divisor.setDividerLocation(200);
         divisor.setResizeWeight(0);
         divisor.setContinuousLayout(true);
-        divisor.setBorder(null);
+        divisor.setBorder(javax.swing.BorderFactory.createEmptyBorder());
         divisor.setOpaque(false);
 
         navegador.add(topo, BorderLayout.NORTH);

@@ -61,8 +61,8 @@ public final class AreaDaPagina extends JScrollPane {
         super(VERTICAL_SCROLLBAR_AS_NEEDED, HORIZONTAL_SCROLLBAR_NEVER);
         this.preencheAAltura = preencheAAltura;
         setViewportView(new Vista(conteudo));
-        setBorder(null);
-        setViewportBorder(null);
+        setBorder(javax.swing.BorderFactory.createEmptyBorder());
+        setViewportBorder(javax.swing.BorderFactory.createEmptyBorder());
         setOpaque(false);
         getViewport().setOpaque(false);
         getVerticalScrollBar().setUnitIncrement(18);

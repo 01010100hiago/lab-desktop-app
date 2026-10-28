@@ -79,7 +79,7 @@ final class PainelDeTransferencias extends Painel {
         lista.setLayout(new BoxLayout(lista, BoxLayout.Y_AXIS));
         lista.setBorder(BorderFactory.createEmptyBorder(0, 12, 8, 12));
         rolagem = new JScrollPane(lista, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        rolagem.setBorder(null);
+        rolagem.setBorder(javax.swing.BorderFactory.createEmptyBorder());
         rolagem.setOpaque(false);
         rolagem.getViewport().setOpaque(false);
         rolagem.getVerticalScrollBar().setUnitIncrement(16);

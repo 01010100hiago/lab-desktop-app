@@ -132,7 +132,7 @@ public final class DialogoRelatorio extends Dialogo {
         resumo.setLineWrap(true);
         resumo.setWrapStyleWord(true);
         resumo.setOpaque(false);
-        resumo.setBorder(null);
+        resumo.setBorder(javax.swing.BorderFactory.createEmptyBorder());
         resumo.putClientProperty("html.disable", Boolean.TRUE);
         resumo.setName("resumo-do-relatorio");
         br.com.labdesktop.ui.tema.Fontes.aplicar(resumo, br.com.labdesktop.ui.tema.Fontes.TEXTO, java.awt.Font.PLAIN, 12.5f);

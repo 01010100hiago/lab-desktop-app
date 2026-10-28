@@ -37,7 +37,7 @@ public final class TextoCorrido extends JTextArea {
         setOpaque(false);
         setLineWrap(true);
         setWrapStyleWord(true);
-        setBorder(null);
+        setBorder(javax.swing.BorderFactory.createEmptyBorder());
         setMargin(new Insets(0, 0, 0, 0));
         refazerAFonte();
         putClientProperty("html.disable", Boolean.TRUE);
