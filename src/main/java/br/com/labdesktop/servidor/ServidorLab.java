@@ -1,5 +1,6 @@
 package br.com.labdesktop.servidor;
 
+import br.com.labdesktop.acesso.DesligadorDeSenha;
 import br.com.labdesktop.api.ClienteApi;
 import br.com.labdesktop.api.ErroApi;
 import br.com.labdesktop.api.ErroApi.ErroRede;
@@ -38,6 +39,9 @@ import br.com.labdesktop.seguranca.ValidadorDeNomes;
 import br.com.labdesktop.ssh.ConexaoSsh;
 import br.com.labdesktop.ssh.ConfigSsh;
 import br.com.labdesktop.ssh.ErroProvisionamento;
+import br.com.labdesktop.ssh.FalhaDeEntradaPorSenha;
+import br.com.labdesktop.ssh.ProvaDeChave;
+import br.com.labdesktop.ssh.ProvaPorChave;
 import br.com.labdesktop.ssh.InfoConexao;
 import br.com.labdesktop.ssh.PoliticaDeBackoff;
 import br.com.labdesktop.ssh.ProvisionadorRemoto;
@@ -98,6 +102,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
 
     private final String id;
     private final AcessoAoCofre cofre;
+    private final ConfigSsh cfgSsh;
     private final PedidoDeCodigo2fa pedidoDeCodigo;
     private final Executor entrega;
 
@@ -159,6 +164,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         this.id = servidorId;
         this.locais = locais;
         this.cofre = cofre;
+        this.cfgSsh = cfgSsh;
         this.pedidoDeCodigo = pedidoDeCodigo == null ? PedidoDeCodigo2fa.NUNCA : pedidoDeCodigo;
         this.entrega = entrega;
         this.trabalho = trabalho;
@@ -665,6 +671,26 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             throw new IllegalStateException("Em Este computador o agente se cria por \"Preparar este computador\".");
         }
         return new InstaladorDeAgente(new ExecutorSsh(conexaoSsh), parametros, pacote, ganchosDeInstalacao());
+    }
+
+    /**
+     * Monta o desligador do login por senha deste servidor. NÃO lê nem escreve nada: quem o aciona é a tela de confirmação ({@code DialogoDesligarSenha}),
+     * e a parte que escreve só roda depois do clique do usuário e do nome do servidor digitado. A prova de que a chave ainda entra abre uma conexão NOVA só
+     * com a chave do cofre, com os pins confirmados deste servidor.
+     */
+    public DesligadorDeSenha desligadorDeSenha() {
+        if (local) {
+            throw new IllegalStateException("Este computador não tem login por senha por SSH.");
+        }
+        ProvaDeChave prova = () -> {
+            ConfigServidor c = config();
+            try {
+                new ProvaPorChave(c.host(), c.porta(), c.usuario(), cofre.keyPairDoServidor(id), c.pins(), cfgSsh).provar();
+            } catch (CofreException e) {
+                throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_LOGIN_POR_CHAVE, "Não consegui ler a chave deste servidor no cofre.", e);
+            }
+        };
+        return new DesligadorDeSenha(new ExecutorSsh(conexaoSsh), prova, java.time.LocalDateTime::now);
     }
 
     /** O instalador terminou (instalou, atualizou ou removeu): repete o teste do agente para o estado refletir o que há no servidor. */

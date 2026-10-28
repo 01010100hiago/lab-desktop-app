@@ -2,16 +2,19 @@ package br.com.labdesktop.ui.dialogos;
 
 import br.com.labdesktop.cofre.ImportacaoDeChaveException;
 import br.com.labdesktop.cofre.InfoChave;
+import br.com.labdesktop.cofre.Pin;
 import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Conclusao;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Dados;
 import br.com.labdesktop.servidor.AssistenteDeServidor.ErroDoAssistente;
+import br.com.labdesktop.servidor.AssistenteDeServidor.EtapaDoPrimeiroAcesso;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Etapa;
 import br.com.labdesktop.servidor.EstadoServidor;
 import br.com.labdesktop.servidor.Inscricao;
 import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.seguranca.Zeragem;
 import br.com.labdesktop.ssh.ErroProvisionamento;
+import br.com.labdesktop.ssh.FalhaDeEntradaPorSenha;
 import br.com.labdesktop.ssh.SondagemDeHost;
 import br.com.labdesktop.ui.ApresentacaoDoEstado;
 import br.com.labdesktop.ui.MensagensDeErro;
@@ -75,6 +78,12 @@ import javax.swing.JTextField;
  */
 public final class DialogoAdicionarServidor extends Dialogo {
 
+    // O passo 2 tem a entrada com a SENHA, uma vez. O caminho principal é: confirmar o host (a impressão digital, ANTES
+    // de a senha sair do app) -> a senha do usuário no servidor, digitada uma única vez e nunca guardada -> o app instala a chave pública no authorized_keys
+    // -> PROVA, numa conexão nova só com a chave -> segue para o passo 3 (token, agente) sem pedir senha de novo -> e, no fim, a pergunta opcional "Quer
+    // desligar o login por senha neste servidor?" (padrão: Manter a senha). O caminho manual (mostrar a chave pública e instalar à mão) está em "Opções
+    // avançadas" e é o que o app mostra sozinho se o servidor não aceita senha.
+
     /** Quem mostra o {@link DialogoConfiarHost}. Em produção abre o diálogo modal; os testes confirmam direto. */
     @FunctionalInterface
     public interface ConfirmadorDeHost {
@@ -103,6 +112,18 @@ public final class DialogoAdicionarServidor extends Dialogo {
     public static final String TEXTO_SEM_O_AGENTE_NO_APP = "O servidor está conectado por SSH. "
         + br.com.labdesktop.instalador.PacoteDoAgenteAusenteException.TEXTO;
 
+    /** A frase sob o campo da senha: o que o app faz com ela. */
+    public static final String TEXTO_DA_SENHA = "O app entra uma vez com a senha, instala a chave deste computador no servidor e passa a entrar só pela chave. "
+        + "A senha não é guardada em lugar nenhum e é apagada da memória logo depois.";
+
+    /** A pergunta do último passo, depois de a chave estar provada (sem urgência e sem vermelho). */
+    public static final String TEXTO_DA_PERGUNTA_DA_SENHA = "A chave já funciona. Quer desligar o login por senha neste servidor? É mais seguro: ninguém "
+        + "consegue adivinhar a senha. Você continua entrando pelo app, que usa a chave.";
+
+    /** O que muda e o que não muda se o usuário mantiver a senha. */
+    public static final String TEXTO_DE_MANTER_A_SENHA = "Se você mantiver a senha, nada muda no servidor. Dá para desligar depois, em Segurança, no "
+        + "servidor.";
+
     /** A dica do campo "Porta do painel no servidor", a mesma no assistente e em "Editar servidor". */
     public static final String DICA_DA_PORTA_DO_PAINEL = "Deixe 7000, a não ser que o painel do servidor use outra porta.";
 
@@ -117,6 +138,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private static final String PAGINA_DADOS = "dados";
     private static final String PAGINA_CHAVE = "chave";
     private static final String PAGINA_CONEXAO = "conexao";
+    private static final String PAGINA_SENHA = "senha";
 
     private final AssistenteDeServidor assistente;
     private final Notificacoes avisos;
@@ -126,6 +148,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private final CopiadorDeTexto copiador;
     /** Abre a confirmação "Instalar agente" para o servidor; o {@code Runnable} roda (na EDT) se o agente ficou instalado. */
     private final BiConsumer<ServidorLab, Runnable> instalarAgente;
+    /** Abre a confirmação "Desligar a senha" para o servidor; o {@code Runnable} roda (na EDT) quando a janela dela fecha depois de o usuário ter agido. */
+    private final BiConsumer<ServidorLab, Runnable> desligarSenha;
 
     private final CardLayout paginas = new br.com.labdesktop.ui.componentes.CartoesAjustaveis();
     private final JPanel pilha = new Painel(paginas);
@@ -161,7 +185,18 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private final SecaoRecolhivel opcoesAvancadas;
     private final Botao voltar = Botoes.fantasma("Voltar", "voltar");
     private final Botao cancelarNoPassoDaChave = Botoes.secundario("Cancelar", null);
-    private final Botao testar = Botoes.primario("Testar conexão", "rede");
+    private final Botao testar = Botoes.secundario("Testar conexão", "rede");
+    // o primeiro acesso por senha
+    private final JPasswordField senhaDoServidor = Campos.senha(24);
+    private final Rotulo rotuloDaSenha = Rotulo.rotuloDeCampo("Senha do usuário do servidor");
+    private final Botao entrarComSenha = Botoes.primario("Entrar e instalar a chave", "chave");
+    private final TextoCorrido andamentoDaSenha = new TextoCorrido("", LARGURA_DO_TEXTO).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
+    /** A impressão digital que o usuário confirmou, para o endereço e a porta de agora (tentar a senha de novo não pergunta outra vez). */
+    private ConfirmacaoDeHost hostConfirmado;
+    private boolean senhaUsada;
+
+    private record ConfirmacaoDeHost(String endereco, int porta, Pin pin) { }
+
     private InfoChave chaveGerada;
     private InfoChave chaveImportada;
     private Path arquivoParaImportar;
@@ -173,6 +208,9 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private final Map<Etapa, Rotulo> linhasDasEtapas = new EnumMap<>(Etapa.class);
     private final Map<Etapa, Icon[]> iconesDasEtapas = new EnumMap<>(Etapa.class);
     private final Rotulo estadoDaConexao = new Rotulo().tamanho(13f);
+    /** "Chave instalada e provada": só aparece quando o usuário entrou com a senha no passo 2. */
+    private final TextoCorrido notaDaChave = new TextoCorrido("A chave foi instalada no servidor e já entrou numa conexão nova. Daqui em diante o app só usa a chave.",
+        LARGURA_DO_TEXTO).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     private final TextoCorrido mensagemDaConexao = new TextoCorrido("", LARGURA_DO_TEXTO).corDoToken(Tokens.TEXTO);
     private final InstrucaoDaChave instrucaoNaConexao;
     private final Botao tentarDeNovo = Botoes.secundario("Tentar de novo", "atualizar");
@@ -183,6 +221,10 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private final Botao instalarOAgente = Botoes.primario("Instalar agente", "servidor");
     private final Botao agoraNao = Botoes.secundario("Agora não, usar só por SSH", null);
     private boolean perguntandoDoAgente;
+
+    // ---- passo 4: perguntar se desliga a senha (só depois do primeiro acesso por senha) ----
+    private final Botao manterASenha = Botoes.primario("Manter a senha", "ok");
+    private final Botao desligarASenha = Botoes.secundario("Desligar a senha…", null);
     private ServidorLab lab;
     private Inscricao inscricaoDoEstado;
     private String nomeDoDispositivo = "mac";
@@ -216,8 +258,17 @@ public final class DialogoAdicionarServidor extends Dialogo {
                                     Consumer<ServidorLab> aoConcluir, ConfirmadorDeHost confirmadorDeHost,
                                     SeletorDeArquivo seletorDeArquivo, CopiadorDeTexto copiador,
                                     BiConsumer<ServidorLab, Runnable> instalarAgente) {
+        this(assistente, primeiro, avisos, aoConcluir, confirmadorDeHost, seletorDeArquivo, copiador, instalarAgente, null);
+    }
+
+    /** Também com o que abre a confirmação "Desligar a senha" (a pergunta opcional do fim, depois de entrar com a senha uma vez). */
+    public DialogoAdicionarServidor(AssistenteDeServidor assistente, boolean primeiro, Notificacoes avisos,
+                                    Consumer<ServidorLab> aoConcluir, ConfirmadorDeHost confirmadorDeHost,
+                                    SeletorDeArquivo seletorDeArquivo, CopiadorDeTexto copiador,
+                                    BiConsumer<ServidorLab, Runnable> instalarAgente, BiConsumer<ServidorLab, Runnable> desligarSenha) {
         super("Adicionar servidor");
         this.instalarAgente = instalarAgente != null ? instalarAgente : (lab, depois) -> { };
+        this.desligarSenha = desligarSenha != null ? desligarSenha : (lab, depois) -> { };
         this.assistente = assistente;
         this.avisos = avisos;
         this.aoConcluir = aoConcluir;
@@ -236,14 +287,17 @@ public final class DialogoAdicionarServidor extends Dialogo {
         instrucaoNaConexao = new InstrucaoDaChave(copiador, avisos, this::reajustar);
         repetirGeracao.setVisible(false);
         linhaDaSenhaDoArquivo = montarLinhaDaSenhaDoArquivo();
-        opcoesAvancadas = new SecaoRecolhivel("Opções avançadas (já tenho uma chave)",
+        opcoesAvancadas = new SecaoRecolhivel("Opções avançadas (já tenho uma chave, ou prefiro instalá-la à mão)",
             "Esconder as opções avançadas", montarOpcoesAvancadas(), this::reajustar);
         pilha.add(montarPaginaDeDados(), PAGINA_DADOS);
         pilha.add(montarPaginaDaChave(), PAGINA_CHAVE);
         pilha.add(montarPaginaDeConexao(), PAGINA_CONEXAO);
+        pilha.add(montarPaginaDaSenha(), PAGINA_SENHA);
         pilhaDeRodapes.add(rodape(null, cancelar, continuar), PAGINA_DADOS);
-        pilhaDeRodapes.add(rodape(voltar, cancelarNoPassoDaChave, testar), PAGINA_CHAVE);
+        pilhaDeRodapes.add(rodape(voltar, cancelarNoPassoDaChave, entrarComSenha), PAGINA_CHAVE);
         pilhaDeRodapes.add(rodape(null, fecharConexao, agoraNao, instalarOAgente, substituirToken, tentarDeNovo, concluir), PAGINA_CONEXAO);
+        pilhaDeRodapes.add(rodape(null, desligarASenha, manterASenha), PAGINA_SENHA);
+        andamentoDaSenha.setVisible(false);
         conteudoComRodape(pilha, pilhaDeRodapes);
 
         ligarEventos();
@@ -276,18 +330,27 @@ public final class DialogoAdicionarServidor extends Dialogo {
     }
 
     private JComponent montarPaginaDaChave() {
+        senhaDoServidor.getAccessibleContext().setAccessibleName("Senha do usuário no servidor");
+        JComponent blocoDaSenha = Caixa.coluna(6, rotuloDaSenha, Caixa.linha(0, senhaDoServidor, Caixa.mola()), dicaCorrida(TEXTO_DA_SENHA), andamentoDaSenha,
+            estado, erro);
         return Caixa.coluna(12,
             cabecalho("chave", "Chave deste servidor"),
             passo("Passo 2 de 3 · Chave de acesso"),
             paragrafo(TEXTO_DA_CHAVE),
-            estado,
-            instrucaoDaChave.componente(),
-            Caixa.linha(0, repetirGeracao, Caixa.mola()),
-            opcoesAvancadas,
-            erro);
+            blocoDaSenha,
+            opcoesAvancadas);
     }
 
-    /** O que só quem já tem uma chave usa. Fechado por padrão ({@link #opcoesAvancadas}). */
+    /** O passo opcional do fim: o app nunca desliga a senha sozinho; pergunta, e "Manter a senha" é o padrão. */
+    private JComponent montarPaginaDaSenha() {
+        return Caixa.coluna(12,
+            cabecalho("chave", "Login por senha"),
+            passo("Opcional · Último passo"),
+            paragrafo(TEXTO_DA_PERGUNTA_DA_SENHA),
+            dicaCorrida(TEXTO_DE_MANTER_A_SENHA));
+    }
+
+    /** O que só quem já tem uma chave, ou prefere instalá-la à mão, usa. Fechado por padrão ({@link #opcoesAvancadas}). */
     private JComponent montarOpcoesAvancadas() {
         ButtonGroup grupo = new ButtonGroup();
         grupo.add(gerarNova);
@@ -306,7 +369,12 @@ public final class DialogoAdicionarServidor extends Dialogo {
             }
         });
         // Cada opção ocupa suas linhas, com o controle dela recuado embaixo: lado a lado a lista de chaves estourava a largura.
-        JComponent opcoes = Caixa.coluna(6,
+        JComponent opcoes = Caixa.coluna(8,
+            dicaCorrida("Se prefere não digitar a senha, instale a chave você mesmo (copie a linha abaixo ou o comando) e clique em Testar conexão. "
+                + "Aqui também dá para usar uma chave que você já tem."),
+            instrucaoDaChave.componente(),
+            Caixa.linha(0, repetirGeracao, Caixa.mola()),
+            Caixa.linha(0, testar, Caixa.mola()), // o caminho de antes (a chave instalada à mão) mora aqui, junto da chave e do comando
             gerarNova,
             recuado(botaoGerarOutra),
             usarExistente,
@@ -359,9 +427,11 @@ public final class DialogoAdicionarServidor extends Dialogo {
         instalarOAgente.setVisible(false);
         agoraNao.setVisible(false);
         concluir.setEnabled(false);
+        notaDaChave.setVisible(false);
         return Caixa.coluna(14,
             cabecalho("rede", "Conectar e registrar o token"),
             passo("Passo 3 de 3 · Conectar"),
+            notaDaChave,
             Caixa.coluna(8, linhas.toArray(Component[]::new)),
             estadoDaConexao,
             mensagemDaConexao,
@@ -389,6 +459,10 @@ public final class DialogoAdicionarServidor extends Dialogo {
         botaoImportarComSenha.addActionListener(e -> importarDoArquivoEscolhido());
         senhaDoArquivo.addActionListener(e -> importarDoArquivoEscolhido());
         testar.addActionListener(e -> testar());
+        entrarComSenha.addActionListener(e -> entrarComSenha());
+        senhaDoServidor.addActionListener(e -> entrarComSenha());
+        manterASenha.addActionListener(e -> manterASenha());
+        desligarASenha.addActionListener(e -> desligarASenha());
         cancelar.addActionListener(e -> aoCancelar());
         cancelarNoPassoDaChave.addActionListener(e -> aoCancelar());
         tentarDeNovo.addActionListener(e -> executarConclusao());
@@ -406,7 +480,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
         rolarParaOTopo();
         botaoPadrao(switch (nomeDaPagina) {
             case PAGINA_DADOS -> continuar;
-            case PAGINA_CHAVE -> testar;
+            case PAGINA_CHAVE -> entrarComSenha;
+            case PAGINA_SENHA -> manterASenha; // o padrão é o seguro: Manter a senha nunca atrapalha nada
             default -> concluir;
         });
         reajustar();
@@ -490,6 +565,41 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     public Botao botaoCancelar() {
         return cancelar;
+    }
+
+    /** O campo da senha do usuário no servidor (passo 2). */
+    public JPasswordField campoDaSenhaDoServidor() {
+        return senhaDoServidor;
+    }
+
+    /** "Entrar e instalar a chave" (passo 2). */
+    public Botao botaoEntrarComSenha() {
+        return entrarComSenha;
+    }
+
+    /** "Manter a senha" (a pergunta do fim). */
+    public Botao botaoManterASenha() {
+        return manterASenha;
+    }
+
+    /** "Desligar a senha…" (a pergunta do fim). */
+    public Botao botaoDesligarASenha() {
+        return desligarASenha;
+    }
+
+    /** A frase de andamento do primeiro acesso por senha (entrando, instalando, provando). */
+    public String andamentoDaSenha() {
+        return andamentoDaSenha.isVisible() ? andamentoDaSenha.getText() : "";
+    }
+
+    /** O usuário usou a senha no passo 2 (então o último passo pergunta se desliga o login por senha). */
+    public boolean senhaFoiUsada() {
+        return senhaUsada;
+    }
+
+    /** O rótulo do campo da senha, com o usuário. */
+    public String rotuloDoCampoDaSenha() {
+        return rotuloDaSenha.getText();
     }
 
     public Botao botaoConcluir() {
@@ -644,6 +754,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
             return;
         }
         dizerErro(erroDosDados, "");
+        rotuloDaSenha.setText("Senha do usuário " + usuarioAtual() + " no servidor (usada só agora, não fica guardada)");
         mostrarPagina(PAGINA_CHAVE);
         garantirChaveGerada();
         atualizarCaixaDaChave();
@@ -749,7 +860,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         atualizarCaixaDaChave();
     }
 
-    /** Liga e desliga o que cada momento permite; é a única que decide se "Testar conexão" vale. */
+    /** Liga e desliga o que cada momento permite; é a única que decide se "Testar conexão" e "Entrar e instalar a chave" valem. */
     private void atualizarControlesDaChave() {
         Modo modo = modoSelecionado();
         boolean temChavesNoCofre = chavesDoCofre.getItemCount() > 0;
@@ -764,8 +875,12 @@ public final class DialogoAdicionarServidor extends Dialogo {
         botaoImportarComSenha.setEnabled(!ocupado);
         voltar.setEnabled(!ocupado);
         testar.setEnabled(!ocupado && !gerando && chaveEscolhidaAgora() != null);
+        entrarComSenha.setEnabled(!ocupado && !gerando && chaveEscolhidaAgora() != null);
+        senhaDoServidor.setEnabled(!ocupado);
         reajustar();
     }
+
+
 
     /** Mostra a chave pública da chave usada agora, com o próximo passo, ou esconde o quadro se ainda não há chave. */
     private void atualizarCaixaDaChave() {
@@ -895,7 +1010,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
                     mostrarErro(TEXTO_DE_SERVIDOR_NAO_CONFIRMADO);
                     return;
                 }
-                cadastrar(dados, daVez, resultado);
+                cadastrar(dados, daVez, resultado.pin());
             });
         }, falha -> {
             ocupar(false);
@@ -904,10 +1019,10 @@ public final class DialogoAdicionarServidor extends Dialogo {
         });
     }
 
-    private void cadastrar(Dados dados, InfoChave daVez, SondagemDeHost.Resultado resultado) {
+    private void cadastrar(Dados dados, InfoChave daVez, Pin pin) {
         estado.setText("Gravando o servidor e a impressão digital no cofre…");
         ocupar(true);
-        Tarefas.rodar(() -> assistente.cadastrar(dados, daVez.id(), resultado.pin()), novo -> {
+        Tarefas.rodar(() -> assistente.cadastrar(dados, daVez.id(), pin), novo -> {
             ocupar(false);
             estado.setText("");
             this.lab = novo;
@@ -915,6 +1030,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
                 descartarEmFundo(chaveGerada); // o usuário usou outra chave: a que o app criou ficou órfã
             }
             inscreverNoEstado();
+            notaDaChave.setVisible(senhaUsada);
             mostrarPagina(PAGINA_CONEXAO);
             executarConclusao();
         }, falha -> {
@@ -924,13 +1040,136 @@ public final class DialogoAdicionarServidor extends Dialogo {
         });
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Passo 2 pelo caminho da senha
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * "Entrar e instalar a chave": 1) confere o servidor (a sondagem e a impressão digital que o usuário confirma, ANTES de a senha sair do app); 2) entra com a senha
+     * UMA vez e instala a chave pública; 3) prova, numa conexão nova só com a chave, que ela entra; 4) só então grava o servidor no cofre e segue para o passo 3,
+     * sem pedir senha de novo. A senha vive só no {@code char[]} da tarefa (o campo é apagado ao clicar) e é zerada ao terminar, deu certo ou não.
+     */
+    private void entrarComSenha() {
+        if (!entrarComSenha.isEnabled() || ocupado) {
+            return;
+        }
+        Dados dados;
+        try {
+            dados = lerDados();
+        } catch (IllegalArgumentException e) {
+            mostrarErro(e.getMessage());
+            return;
+        }
+        InfoChave daVez = chaveEscolhidaAgora();
+        if (daVez == null) {
+            mostrarErro("A chave ainda não está pronta. Espere um instante, ou escolha uma nas opções avançadas.");
+            return;
+        }
+        if (senhaDigitada() == 0) {
+            mostrarErro("Digite a senha do usuário " + usuarioAtual() + " no servidor, ou use as opções avançadas.");
+            senhaDoServidor.requestFocusInWindow();
+            return;
+        }
+        dizerErro(erro, "");
+        ConfirmacaoDeHost ja = hostConfirmado;
+        if (ja != null && ja.endereco().equals(dados.host()) && ja.porta() == dados.porta()) {
+            instalarComSenha(dados, daVez, ja.pin()); // o usuário já conferiu este endereço e esta porta: tentar a senha de novo não pergunta outra vez
+            return;
+        }
+        estado.setText("Consultando a chave do servidor em " + dados.host() + ":" + dados.porta() + "…");
+        ocupar(true, entrarComSenha);
+        Tarefas.rodar(() -> assistente.sondar(dados.host(), dados.porta()), resultado -> {
+            ocupar(false);
+            estado.setText("");
+            confirmadorDeHost.confirmar(dados.nome(), dados.host() + ":" + dados.porta(), resultado, confiou -> {
+                if (!confiou) {
+                    mostrarErro(TEXTO_DE_SERVIDOR_NAO_CONFIRMADO);
+                    return;
+                }
+                hostConfirmado = new ConfirmacaoDeHost(dados.host(), dados.porta(), resultado.pin());
+                instalarComSenha(dados, daVez, resultado.pin());
+            });
+        }, falha -> {
+            ocupar(false);
+            estado.setText("");
+            mostrarErro(MensagensDeErro.de(falha));
+        });
+    }
+
+    /** Quantos caracteres há no campo da senha (a cópia que o campo entrega é zerada na hora). */
+    private int senhaDigitada() {
+        char[] copia = senhaDoServidor.getPassword();
+        int n = copia.length;
+        Zeragem.zerar(copia);
+        return n;
+    }
+
+    private void instalarComSenha(Dados dados, InfoChave daVez, Pin pin) {
+        char[] senha = senhaDoServidor.getPassword(); // uma cópia: do assistente em diante é dele zerá-la
+        if (senha.length == 0) {
+            mostrarErro("Digite a senha do usuário " + usuarioAtual() + " no servidor.");
+            senhaDoServidor.requestFocusInWindow();
+            return;
+        }
+        Campos.apagarSenha(senhaDoServidor); // o campo não guarda mais nada: se falhar, o usuário digita de novo
+        estado.setText("");
+        mostrarAndamentoDaSenha(EtapaDoPrimeiroAcesso.ENTRANDO);
+        ocupar(true, entrarComSenha);
+        Tarefas.rodar(() -> {
+            try {
+                return assistente.instalarAChaveComSenha(dados, daVez, pin, senha,
+                    etapa -> br.com.labdesktop.util.Fundo.naEdt(() -> mostrarAndamentoDaSenha(etapa)));
+            } finally {
+                Zeragem.zerar(senha);
+            }
+        }, instalada -> {
+            ocupar(false);
+            andamentoDaSenha.setVisible(false);
+            if (jaFechou()) {
+                return;
+            }
+            senhaUsada = true;
+            cadastrar(dados, daVez, pin);
+        }, falha -> {
+            ocupar(false);
+            andamentoDaSenha.setVisible(false);
+            aoFalharASenha(falha);
+        });
+    }
+
+    private void mostrarAndamentoDaSenha(EtapaDoPrimeiroAcesso etapa) {
+        andamentoDaSenha.setText(etapa.rotulo() + "…");
+        andamentoDaSenha.setVisible(true);
+        reajustar();
+    }
+
+    /** A senha não deu: a frase diz o motivo, e o caminho de antes (a chave pública) abre sozinho quando é o que resolve. */
+    private void aoFalharASenha(Throwable falha) {
+        if (falha instanceof FalhaDeEntradaPorSenha f) {
+            mostrarErro(f.getMessage());
+            switch (f.motivo()) {
+                case SERVIDOR_SEM_SENHA, SEM_LOGIN_POR_CHAVE -> opcoesAvancadas.definirAberta(true);
+                case HOST_MUDOU -> hostConfirmado = null;
+                case SENHA_INCORRETA, CONTA_BLOQUEADA, SENHA_EXPIRADA, MUITAS_TENTATIVAS -> senhaDoServidor.requestFocusInWindow();
+                default -> { /* a frase basta */ }
+            }
+        } else {
+            mostrarErro(MensagensDeErro.de(falha));
+        }
+        atualizarControlesDaChave();
+    }
+
     private void ocupar(boolean sim) {
+        ocupar(sim, testar);
+    }
+
+    private void ocupar(boolean sim, Botao quem) {
         ocupado = sim;
         for (JComponent c : new JComponent[] {nome, host, porta, usuario, portaDoAgente, continuar}) {
             c.setEnabled(!sim);
         }
         if (sim) {
-            desfazerOcupado = testar.ocupar();
+            desfazerOcupado = quem.ocupar();
         } else {
             desfazerOcupado.run();
             desfazerOcupado = () -> { };
@@ -1011,10 +1250,11 @@ public final class DialogoAdicionarServidor extends Dialogo {
             tentarDeNovo.setVisible(false);
             concluir.setEnabled(true);
             boolean semClaude = Boolean.FALSE.equals(lab.estado().temClaude());
+            String seguir = senhaUsada ? "Clique em Concluir: falta só uma pergunta opcional sobre o login por senha."
+                : semClaude ? "Clique em Concluir para ver o servidor." : "Clique em Concluir para ver os projetos.";
             mensagemDaConexao.setText(semClaude
-                ? "Tudo certo: o servidor respondeu e o token deste computador está registrado. Clique em Concluir para ver o servidor."
-                : "Tudo certo: o servidor respondeu, o token deste computador está registrado e os limites do "
-                    + "plano chegaram. Clique em Concluir para ver os projetos.");
+                ? "Tudo certo: o servidor respondeu e o token deste computador está registrado. " + seguir
+                : "Tudo certo: o servidor respondeu, o token deste computador está registrado e os limites do plano chegaram. " + seguir);
             reajustar();
         }, this::falhouAConclusao);
     }
@@ -1051,9 +1291,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         }
         concluido = true;
         avisos.ok("Servidor " + lab.estado().nome() + " adicionado, só por SSH. Instale o agente quando quiser: o botão está no cartão do servidor.");
-        ServidorLab pronto = lab;
-        fechar();
-        aoConcluir.accept(pronto);
+        terminarOuPerguntarDaSenha();
     }
 
     private void falhouAConclusao(Throwable falha) {
@@ -1090,9 +1328,48 @@ public final class DialogoAdicionarServidor extends Dialogo {
             return;
         }
         avisos.ok("Servidor " + lab.estado().nome() + " adicionado.");
+        terminarOuPerguntarDaSenha();
+    }
+
+    /** Se o usuário entrou com a senha, o último passo PERGUNTA se desliga o login por senha (nunca sozinho); senão, entrega o servidor e fecha. */
+    private void terminarOuPerguntarDaSenha() {
+        if (senhaUsada) {
+            mostrarPagina(PAGINA_SENHA);
+            return;
+        }
+        entregarEFechar();
+    }
+
+    private void entregarEFechar() {
+        if (lab == null) {
+            fechar();
+            return;
+        }
         ServidorLab pronto = lab;
         fechar();
         aoConcluir.accept(pronto);
+    }
+
+    /** "Manter a senha": o padrão. Não mexe em nada no servidor; o usuário pode rever isso depois, em Segurança. */
+    private void manterASenha() {
+        entregarEFechar();
+    }
+
+    /** "Desligar a senha…": abre a confirmação (o que será feito, os riscos, o nome do servidor a digitar). Só ela escreve no servidor. */
+    private void desligarASenha() {
+        if (lab != null) {
+            desligarSenha.accept(lab, this::entregarEFechar);
+        }
+    }
+
+    /** Esc e o X na pergunta do fim valem "Manter a senha": o servidor já está pronto e precisa ser entregue à janela. */
+    @Override
+    protected void aoCancelar() {
+        if (PAGINA_SENHA.equals(paginaAtual)) {
+            manterASenha();
+            return;
+        }
+        fechar();
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -1112,6 +1389,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
             inscricaoDoEstado = null;
         }
         senhaDoArquivo.setText("");
+        Campos.apagarSenha(senhaDoServidor);
+        hostConfirmado = null;
     }
 
     @Override

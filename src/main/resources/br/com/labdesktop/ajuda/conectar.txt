@@ -1,16 +1,20 @@
-# Como conecto o app a um servidor?
+# Como conecto o app a um servidor? Preciso da senha?
 @rotulo: Conectar a um servidor
-@busca: conectar chave senha host impressão digital token 2fa ssh autenticador
-@resumo: O app conecta por SSH com uma chave que ele mesmo cria e guarda no cofre; você só confere a impressão digital do servidor.
+@busca: conectar primeira conexão senha chave host impressão digital desligar senha token 2fa ssh autenticador
+@resumo: A senha vale uma vez: o app instala a chave, prova que entra e passa a usar só a chave.
 @onde: Botão Adicionar (servidor) | Barra da esquerda > Adicionar | servidores
+@onde: Desligar o login por senha | Servidor > Segurança > SSH e bloqueio | seguranca
 @onde: Código do autenticador (2FA) | Menu Servidor > Configurar 2FA…
-1. Clique em Adicionar, no alto da barra da esquerda (ou menu Servidor, Adicionar servidor).
-2. Escolha "Outro servidor (SSH)" e preencha nome, endereço, usuário e porta do SSH.
-3. No passo 2 o app cria a chave sozinho; quem administra o servidor põe a linha dela no seu acesso ("Ver comando" copia o comando pronto).
-4. No passo 3, clique em "Testar conexão", compare a impressão digital com a do servidor e clique em "Confere, confiar neste servidor".
-5. O app registra um token deste computador no agente e o estado na barra da esquerda vira "Conectado".
+1. Clique em Adicionar, no alto da barra da esquerda, escolha "Outro servidor (SSH)" e preencha os dados.
+2. No passo 2, digite a senha do usuário no servidor e clique em "Entrar e instalar a chave". Ela não fica guardada.
+3. Confira a impressão digital e clique em "Confere, confiar neste servidor": só depois disso a senha sai do app.
+4. O app instala a chave, prova que ela entra numa conexão nova, registra o token e o estado vira "Conectado".
+5. No fim, ele pergunta se você quer desligar o login por senha. "Manter a senha" não muda nada.
 [Ir para Servidores](ir:servidores)
 @veja: adicionar-servidor agente chave-recusada
 ## Mais detalhes
-Sem a conferência da impressão digital o app não conecta. Se o servidor usa o código do autenticador (2FA), o app abre a janela "Código do autenticador" e pede os 6 dígitos do celular; depois de confirmar, este computador fica liberado por 30 dias.
-Para ligar ou desligar o 2FA de um servidor, use o menu Servidor, "Configurar 2FA…" ou "Desativar 2FA…".
+Primeira conexão com senha: o app só usa a senha neste passo. Ele guarda a chave cifrada no cofre e nunca a senha. Se você errar a senha 3 vezes seguidas, há uma pausa curta, para não bloquear a sua conta no servidor. O app avisa, em palavras simples, quando a senha está errada, a conta está bloqueada, a senha venceu ou o endereço mudou.
+Se o servidor não aceita senha (só chave), ou não aceita a chave depois de instalada, o app abre as "Opções avançadas" com a chave pública e o comando para quem administra o servidor instalar. Se você prefere não digitar a senha, esse caminho também serve.
+Desligar a senha: o app nunca faz isso sozinho. Use "Desligar a senha…" no último passo ou em Servidor, Segurança, SSH e bloqueio. Ele mostra o que vai fazer e os riscos, pede para você digitar o nome do servidor, faz uma cópia datada do arquivo do SSH, confere a configuração, recarrega o SSH sem reiniciar e prova que a chave ainda entra. Se não entrar, desfaz sozinho e conta o que aconteceu.
+Para desligar a senha o usuário precisa ser administrador ou ter sudo sem senha; senão o app mostra o comando para você rodar no servidor. O app não liga a senha de novo: o comando para voltar atrás aparece na própria tela. Servidores gerenciados por outra ferramenta (cloud-init, painel do provedor) podem desfazer a mudança.
+Sem a conferência da impressão digital o app não conecta. Se o servidor usa o código do autenticador (2FA), o app abre a janela "Código do autenticador" e pede os 6 dígitos do celular; depois de confirmar, este computador fica liberado por 30 dias. Para ligar ou desligar o 2FA, use o menu Servidor, "Configurar 2FA…" ou "Desativar 2FA…".

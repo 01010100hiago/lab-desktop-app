@@ -6,10 +6,12 @@
 @onde: Atualizar ou remover o agente | Menu Servidor > Atualizar agente… ou Remover agente…
 1. Abra o servidor. Se o agente falta, a faixa no alto da página mostra o botão "Instalar agente".
 2. Também dá pelo menu Servidor, "Instalar agente…".
-3. O app mostra o que vai fazer e só instala depois da sua confirmação. Nunca instala sozinho.
+3. O app mostra o que vai fazer e só instala depois da sua confirmação. Nunca instala sozinho nem pede a senha de novo.
 4. Depois, o menu Servidor oferece "Atualizar agente…" e "Remover agente…" (só do agente que o próprio app instalou).
 [Ir para Resumo](ir:resumo)
 @veja: conectar servidor
 ## Mais detalhes
+No assistente de Adicionar servidor, depois de a chave ser instalada e provada, o app pergunta se você quer instalar o agente agora. A senha do servidor já foi esquecida: a instalação usa só a chave.
+Se o seu usuário não pode usar o Docker nem o sudo sem senha, o app não tenta subir de nível: mostra o comando exato para quem administra o servidor rodar. Ele nunca pede nem guarda senha de sudo.
 Sem o agente, o terminal, os arquivos e a tela Segurança funcionam só com o SSH; mas você não vê CPU, memória, containers nem projetos.
 O Claude é opcional: o app funciona igual sem ele. As telas do Claude (sessão, limite de uso, perguntas) só aparecem quando o servidor tem Claude, e o app nunca instala nenhuma IA.

@@ -93,8 +93,20 @@ public final class PaginaSeguranca extends PaginaDoServidor {
     private final JPanel firewallEPortas = new Painel(new GridLayout(1, 2, 28, 0));
     private final JPanel sshEBloqueio = new Painel(new GridLayout(1, 2, 28, 0));
 
+    /** Quem abre a confirmação "Desligar a senha" do servidor desta aba ({@code null}: o botão não aparece). */
+    private final Runnable aoDesligarASenha;
+
     public PaginaSeguranca(ServidorLab servidor, Runnable aoAtualizar) {
+        this(servidor, aoAtualizar, null);
+    }
+
+    /**
+     * @param aoDesligarASenha chamado (na EDT) pelo botão "Desligar o login por senha…"; só abre a confirmação, que lê, mostra os riscos e pede o nome do
+     *                         servidor antes de mexer em qualquer coisa
+     */
+    public PaginaSeguranca(ServidorLab servidor, Runnable aoAtualizar, Runnable aoDesligarASenha) {
         super(servidor, aoAtualizar);
+        this.aoDesligarASenha = aoDesligarASenha;
         iniciar();
     }
 
@@ -271,7 +283,7 @@ public final class PaginaSeguranca extends PaginaDoServidor {
         }
         preencher(firewallEPortas, PecasDeSeguranca.secao("Firewall", PecasDeSeguranca.firewall(r.firewall())),
             PecasDeSeguranca.secao("Portas abertas para fora da máquina", PecasDeSeguranca.portas(r.portas())));
-        preencher(sshEBloqueio, PecasDeSeguranca.secao("Configuração do SSH", PecasDeSeguranca.ssh(r.ssh())),
+        preencher(sshEBloqueio, PecasDeSeguranca.secao("Configuração do SSH", PecasDeSeguranca.ssh(r.ssh(), aoDesligarASenha)),
             PecasDeSeguranca.secao("Bloqueio automático de IPs (fail2ban)", PecasDeSeguranca.fail2ban(r.fail2ban())));
     }
 

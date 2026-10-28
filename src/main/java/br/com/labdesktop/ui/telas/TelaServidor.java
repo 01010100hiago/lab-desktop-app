@@ -145,7 +145,8 @@ public final class TelaServidor extends Painel {
         this.projetos = projetos;
         this.resumo = new PaginaResumo(servidor, aoAtualizar, this::mostrarAba,
             ApoioDoResumo.de(projetos.fluxos().apresentador(), projetos.fluxos().avisos(), escolhedor, servicos.memoria()));
-        this.seguranca = new PaginaSeguranca(servidor, aoAtualizar);
+        this.seguranca = new PaginaSeguranca(servidor, aoAtualizar,
+            servidor == null || projetos.acoes() == null || servidor.ehLocal() ? null : () -> projetos.acoes().desligarSenha(servidor));
         this.containers = new PaginaContainers(servidor, aoAtualizar);
         this.processos = new PaginaProcessos(servidor, aoAtualizar);
         this.maquina = new PaginaMaquina(servidor, aoAtualizar);

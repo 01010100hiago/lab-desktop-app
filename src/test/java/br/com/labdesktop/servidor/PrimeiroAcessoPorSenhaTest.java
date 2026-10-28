@@ -130,6 +130,21 @@ class PrimeiroAcessoPorSenhaTest {
     }
 
     @Test
+    void conectarPeloCaminhoDeAntesNuncaInstalaChaveNemTocaNoSshd() throws Exception {
+        InfoChave chave = assistente.gerarChave("lab");
+        SondagemDeHost.Resultado sonda = assistente.sondar("127.0.0.1", ssh.porta());
+        ServidorLab lab = assistente.cadastrar(dados(), chave.id(), sonda.pin());
+        ssh.aceitar(cofre.keyPairDoServidor(lab.id()).getPublic()); // o usuário instalou a chave à mão
+        assistente.concluir(lab, "mac-de-teste", e -> { });
+
+        assertEquals(EstadoConexao.CONECTADO, lab.estado().conexao());
+        assertEquals(List.of(), ssh.senhasVistas, "sem senha nenhuma");
+        assertTrue(ssh.comandos.stream().noneMatch(c -> c.equals(ComandosDoAcesso.instalarChave()) || c.contains("sshd") || c.contains("authorized_keys")),
+            "conectar não instala chave nem mexe no sshd: " + ssh.comandos);
+        assertFalse(Files.exists(shell.authorizedKeys()), "nenhum authorized_keys foi tocado");
+    }
+
+    @Test
     void repetirOPrimeiroAcessoNaoDuplicaAChave() throws Exception {
         InfoChave chave = assistente.gerarChave("lab");
         Pin pin = assistente.sondar("127.0.0.1", ssh.porta()).pin();

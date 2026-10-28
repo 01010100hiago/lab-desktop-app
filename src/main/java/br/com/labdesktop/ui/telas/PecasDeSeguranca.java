@@ -6,10 +6,13 @@ import br.com.labdesktop.servidor.ResumoDeSeguranca.Leitura;
 import br.com.labdesktop.servidor.ResumoDeSeguranca.PortaAberta;
 import br.com.labdesktop.servidor.ResumoDeSeguranca.ResumoDoFirewall;
 import br.com.labdesktop.ui.Gravidade;
+import br.com.labdesktop.ui.componentes.Botao;
+import br.com.labdesktop.ui.componentes.Botoes;
 import br.com.labdesktop.ui.componentes.Caixa;
 import br.com.labdesktop.ui.componentes.Icones;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
+import br.com.labdesktop.ui.componentes.TextoCorrido;
 import br.com.labdesktop.ui.telas.CamposEmGrade.Campo;
 import br.com.labdesktop.ui.tema.Tokens;
 import br.com.labdesktop.util.Formato;
@@ -32,7 +35,16 @@ final class PecasDeSeguranca {
 
     private PecasDeSeguranca() { }
 
+    /** A configuração do SSH sem o botão de desligar a senha (os testes e quem não tem como abrir a confirmação). */
     static JComponent ssh(Leitura<ConfiguracaoDoSsh> l) {
+        return ssh(l, null);
+    }
+
+    /**
+     * A configuração do SSH. Com a senha LIGADA e uma ação dada, ganha o botão "Desligar o login por senha…" (que só ABRE a confirmação: nada muda ao clicar
+     * aqui). Com a senha desligada, diz como reverter (o app nunca religa a senha sozinho).
+     */
+    static JComponent ssh(Leitura<ConfiguracaoDoSsh> l, Runnable aoDesligarASenha) {
         if (!l.lida()) {
             return aviso(l);
         }
@@ -40,11 +52,11 @@ final class PecasDeSeguranca {
         List<Campo> campos = new ArrayList<>();
         campos.add(new Campo("Porta", c.porta() == null ? null : String.valueOf(c.porta())));
         if (c.senhaLigada() == null) {
-            campos.add(new Campo("Entrada por senha", null));
+            campos.add(new Campo("Login por senha", null));
         } else if (c.senhaLigada()) {
-            campos.add(new Campo("Entrada por senha", "ligada: qualquer um pode tentar adivinhar uma senha", Gravidade.PERIGO));
+            campos.add(new Campo("Login por senha", "ligada: qualquer um pode tentar adivinhar uma senha", Gravidade.PERIGO));
         } else {
-            campos.add(new Campo("Entrada por senha", "desligada: só entra quem tem a chave", Gravidade.OK));
+            campos.add(new Campo("Login por senha", "desligada: só entra quem tem a chave", Gravidade.OK));
         }
         String root = c.loginDoRoot();
         if (root == null) {
@@ -60,6 +72,21 @@ final class PecasDeSeguranca {
         CamposEmGrade g = new CamposEmGrade();
         g.definir(campos);
         g.setName("configuracao-do-ssh");
+        if (Boolean.TRUE.equals(c.senhaLigada()) && aoDesligarASenha != null) {
+            Botao desligar = Botoes.mini("Desligar o login por senha…", null);
+            desligar.setName("desligar-a-senha");
+            desligar.addActionListener(e -> aoDesligarASenha.run());
+            JPanel p = Caixa.coluna(8, g, Caixa.linha(0, desligar, Caixa.mola()),
+                new TextoCorrido("O app mostra antes o que vai fazer e os riscos. Nada muda ao clicar neste botão.", 330).corDoToken(Tokens.TEXTO3).tamanho(12f));
+            p.setName("configuracao-do-ssh-com-botao");
+            return p;
+        }
+        if (Boolean.FALSE.equals(c.senhaLigada())) {
+            TextoCorrido reverter = new TextoCorrido("Como voltar a aceitar senha (o app não faz isso sozinho), no servidor: "
+                + br.com.labdesktop.acesso.ComandosDoAcesso.comandoParaReverter(), 330).corDoToken(Tokens.TEXTO3).tamanho(12f);
+            reverter.setName("como-reverter-a-senha");
+            return Caixa.coluna(8, g, reverter);
+        }
         return g;
     }
 

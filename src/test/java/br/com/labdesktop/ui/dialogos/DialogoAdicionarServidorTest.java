@@ -394,18 +394,19 @@ class DialogoAdicionarServidorTest {
             assertTrue(aberto <= 800 * 0.8, "a janela cabe na tela com folga: " + aberto + " px");
             assertTrue(conteudo > aberto, "o conteúdo é mais alto que a janela (" + conteudo + " px contra " + aberto + " px)");
             assertTrue(aberto >= fechado, "abrir seções nunca encolhe a janela");
-            for (var botao : List.of(d.botaoTestar(), d.botaoVoltar(), d.botaoCancelar())) {
+            for (var botao : List.of(d.botaoEntrarComSenha(), d.botaoVoltar(), d.botaoCancelar())) {
                 assertFalse(Visual.naEdt(() -> javax.swing.SwingUtilities.isDescendingFrom(botao, miolo)),
                     "o botão " + botao.getText() + " fica FORA da área que rola");
             }
-            assertTrue(Visual.naEdt(() -> javax.swing.SwingUtilities.isDescendingFrom(d.botaoTestar(), d.raiz())));
+            assertTrue(Visual.naEdt(() -> javax.swing.SwingUtilities.isDescendingFrom(d.botaoEntrarComSenha(), d.raiz())));
+            assertTrue(Visual.naEdt(() -> javax.swing.SwingUtilities.isDescendingFrom(d.botaoTestar(), d.opcoesAvancadas())), "Testar conexão (o caminho de antes) mora nas opções avançadas");
             assertEquals(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER, miolo.getHorizontalScrollBarPolicy());
             Visual.salvar(Visual.renderizar(d.raiz(), 560, Visual.alturaPreferida(d.raiz(), 560)), "assistente-passo-2-tudo-aberto-notebook");
 
-            // Numa tela alta o mesmo conteúdo cabe inteiro e não rola.
-            Dialogo.definirAlturaDaTelaParaTeste(1600);
+            // Numa tela alta o mesmo conteúdo cabe inteiro e não rola (com a senha no passo, tudo aberto pede mais que os 1600 px de antes).
+            Dialogo.definirAlturaDaTelaParaTeste(2000);
             Visual.alturaPreferida(d.raiz(), 560);
-            assertFalse(Visual.naEdt(miolo::rola), "numa tela de 1600 px de altura o mesmo conteúdo cabe inteiro");
+            assertFalse(Visual.naEdt(miolo::rola), "numa tela de 2000 px de altura o mesmo conteúdo cabe inteiro (conteúdo " + conteudo + " px)");
             Dialogo.definirAlturaDaTelaParaTeste(800);
             Visual.naEdt(() -> d.secaoDoComando().botao().doClick());
             Visual.naEdt(() -> d.opcoesAvancadas().botao().doClick());

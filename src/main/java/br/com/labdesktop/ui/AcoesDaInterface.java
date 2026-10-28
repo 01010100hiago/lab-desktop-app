@@ -1,5 +1,6 @@
 package br.com.labdesktop.ui;
 
+import br.com.labdesktop.acesso.DesligadorDeSenha;
 import br.com.labdesktop.api.ErroApi;
 import br.com.labdesktop.api.modelo.RespostaNovoProjeto;
 import br.com.labdesktop.arquivos.CaminhosLocais;
@@ -39,6 +40,7 @@ import br.com.labdesktop.ui.dialogos.Apresentador;
 import br.com.labdesktop.ui.dialogos.Configurar2fa;
 import br.com.labdesktop.ui.dialogos.DialogoAdicionarServidor;
 import br.com.labdesktop.ui.dialogos.DialogoConfiarHost;
+import br.com.labdesktop.ui.dialogos.DialogoDesligarSenha;
 import br.com.labdesktop.ui.dialogos.DialogoDoAgente;
 import br.com.labdesktop.ui.dialogos.DialogoEscolherServidor;
 import br.com.labdesktop.ui.dialogos.DialogoPrepararComputador;
@@ -109,7 +111,46 @@ public final class AcoesDaInterface {
     public void adicionarServidorPorSsh() {
         boolean primeiro = gerenciador.servidores().stream().noneMatch(s -> !s.ehLocal());
         apresentador.mostrar(new DialogoAdicionarServidor(assistente, primeiro, avisos, aoSelecionar, null, null,
-            CopiadorDeTexto.doSistema(), this::instalarAgente));
+            CopiadorDeTexto.doSistema(), this::instalarAgente, this::desligarSenha));
+    }
+
+    /**
+     * "Desligar a senha…" (a pergunta opcional do fim do assistente e o botão da aba Segurança): abre a CONFIRMAÇÃO, que só LÊ ao abrir e só escreve depois do
+     * clique e do nome do servidor digitado. Só o clique do usuário chega aqui; nada desliga a senha sozinho.
+     *
+     * <p>Fora da trava {@code labdesktop.acoes}, como o assistente de servidor, a instalação do agente e a remoção do servidor (que também escrevem no servidor):
+     * desligar a senha só faz sentido no app instalado, que não liga essa trava, e a própria confirmação (o que será feito, os riscos, o nome do servidor digitado, a prova da chave
+     * e o desfazer) já é mais forte que um interruptor de desenvolvedor.
+     *
+     * @param depois roda (na EDT) quando a janela fecha depois de o usuário ter agido
+     */
+    public void desligarSenha(ServidorLab lab, Runnable depois) {
+        if (lab.ehLocal()) {
+            avisos.info("Este computador não entra por SSH, então não há login por senha para desligar.");
+            return;
+        }
+        if (!lab.estado().conexao().permiteExec()) {
+            avisos.atencao("O app precisa da conexão por chave com o servidor para desligar a senha com segurança. Conecte primeiro.");
+            return;
+        }
+        DesligadorDeSenha desligador = lab.desligadorDeSenha();
+        DialogoDesligarSenha.Motor motor = new DialogoDesligarSenha.Motor() {
+            @Override
+            public DesligadorDeSenha.Avaliacao avaliar() throws Exception {
+                return desligador.avaliar();
+            }
+
+            @Override
+            public DesligadorDeSenha.Resultado desligar(DesligadorDeSenha.Avaliacao avaliacao, DesligadorDeSenha.Observador observador) {
+                return desligador.desligar(avaliacao, observador);
+            }
+        };
+        apresentador.mostrar(new DialogoDesligarSenha(lab.estado().nome(), motor, CopiadorDeTexto.doSistema(), avisos, depois == null ? () -> { } : depois));
+    }
+
+    /** {@link #desligarSenha(ServidorLab, Runnable)} sem nada a fazer depois (o botão da aba Segurança). */
+    public void desligarSenha(ServidorLab lab) {
+        desligarSenha(lab, () -> { });
     }
 
     // =====================================================================================================
