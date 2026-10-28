@@ -77,7 +77,7 @@ public final class DialogoProcesso extends Dialogo {
     private final boolean administrador;
     private final String nomeParaDigitar;
     private final Rotulo tituloDoComando = new Rotulo("Rode no Terminal, com a sua permissão").negrito();
-    private final AreaMonoespacada areaDoComando = new AreaMonoespacada("Comando para você rodar", false);
+    private final AreaMonoespacada areaDoComando = new AreaMonoespacada("Comando para você rodar", true);
     private final JScrollPane rolagemDoComando = AreaMonoespacada.emRolagem(areaDoComando);
     private final Botao copiarComando;
     private final JProgressBar progresso = new JProgressBar();
@@ -143,7 +143,8 @@ public final class DialogoProcesso extends Dialogo {
         campoDaConfirmacao.putClientProperty("html.disable", Boolean.TRUE);
         campoDaConfirmacao.getAccessibleContext().setAccessibleName("Digite o nome para confirmar");
         campoDaConfirmacao.getDocument().addDocumentListener(new SimplesOuvinteDeDocumento(this::conferirAConfirmacao));
-        rolagemDoComando.setPreferredSize(new java.awt.Dimension(LARGURA, 60));
+        rolagemDoComando.setPreferredSize(new java.awt.Dimension(LARGURA, 92));
+        rolagemDoComando.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER); // o comando comprido quebra dentro da caixa, nunca é cortado
         progresso.setIndeterminate(true);
         blocoDoResultado = Caixa.coluna(6, Caixa.linha(8, selo, Caixa.mola()), textoDoResultado);
         blocoDoResultado.setVisible(false);
@@ -453,6 +454,11 @@ public final class DialogoProcesso extends Dialogo {
 
     public Botao botaoProteger() {
         return proteger;
+    }
+
+    /** A caixa do comando quebra a linha comprida dentro dela (nada cortado, sem barra horizontal)? */
+    public boolean comandoQuebraLinha() {
+        return areaDoComando.getLineWrap() && rolagemDoComando.getHorizontalScrollBarPolicy() == javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER;
     }
 
     public JTextField campoDaConfirmacao() {

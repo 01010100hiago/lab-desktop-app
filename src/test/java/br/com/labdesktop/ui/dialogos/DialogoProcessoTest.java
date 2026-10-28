@@ -193,6 +193,7 @@ class DialogoProcessoTest {
         ProcessoAlvo outro = new ProcessoAlvo(3200, "postgres", "postgres", null, null);
         DialogoProcesso d = abrir(outro, Acao.ENCERRAR);
         assertEquals("ps -o pid,user,lstart,comm -p 3200\nps -o comm= -p 3200 | grep -Eq '(^|/)postgres$' && sudo kill -TERM 3200", ed(d::textoDoComando));
+        assertTrue(ed(d::comandoQuebraLinha), "o comando comprido quebra dentro da caixa: nada de fim cortado nem barra horizontal");
         assertFalse(ed(() -> d.botaoEncerrar().isVisible()), "o app não age sem permissão");
         assertTrue(ed(d::textoDaExplicacao).contains("não usa sudo nem digita senha"));
         assertEquals("Fechar", ed(() -> d.botaoFechar().getText()));
