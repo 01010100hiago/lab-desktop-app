@@ -112,6 +112,7 @@ final class PaginaBackups extends PaginaDoProjeto {
         baixar.setToolTipText("Baixa " + b.arquivo() + " para este computador");
         baixar.getAccessibleContext().setAccessibleName("Baixar " + b.arquivo());
         baixar.addActionListener(e -> baixar(List.of(b)));
+        aplicarEstadoDaConexao(baixar); // a página nova da tabela nasce já com o estado de agora (sem conexão: desligado e com a explicação), não "ligado" por esquecimento
         caixas.add(c);
         botoesDeBaixar.add(baixar);
         return Caixa.linha(8, c, baixar);
@@ -130,15 +131,24 @@ final class PaginaBackups extends PaginaDoProjeto {
         baixarSelecionados.setEnabled(n > 0);
         selecionarTodos.setText(!itens.isEmpty() && selecionados.size() == itens.size() ? "Limpar a seleção" : "Selecionar todos");
         selecionarTodos.setEnabled(!itens.isEmpty());
-        boolean pode = ctx.baixarBackups != null && ctx.estado != null ? ctx.estado.conexao().permiteExec() : ctx.baixarBackups != null;
         for (Botao b : botoesDeBaixar) {
-            b.setEnabled(pode);
-            if (!pode) {
-                b.setToolTipText("Sem conexão com o servidor agora: espere a conexão voltar.");
-            }
+            aplicarEstadoDaConexao(b);
         }
         baixarSelecionados.setVisible(!itens.isEmpty());
         selecionarTodos.setVisible(!itens.isEmpty());
+    }
+
+    private boolean podeBaixar() {
+        return ctx.baixarBackups != null && (ctx.estado == null || ctx.estado.conexao().permiteExec());
+    }
+
+    /** Liga ou desliga um botão Baixar pelo estado da conexão de AGORA; serve aos botões que já existiam e aos das páginas novas da tabela. */
+    private void aplicarEstadoDaConexao(Botao b) {
+        boolean pode = podeBaixar();
+        b.setEnabled(pode);
+        if (!pode) {
+            b.setToolTipText("Sem conexão com o servidor agora: espere a conexão voltar.");
+        }
     }
 
     @Override

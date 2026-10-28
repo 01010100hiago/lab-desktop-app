@@ -56,7 +56,9 @@ class CoresDosComponentesTest {
         m.put("iconeFantasma", () -> Botoes.iconeFantasma("atualizar", "Atualizar"));
         m.put("filtro", () -> Botoes.filtro("No ar", null));
         m.put("caixa", () -> new JCheckBox("Mostrar ocultos", true));
+        m.put("caixa desmarcada", () -> new JCheckBox("Mostrar ocultos", false));
         m.put("opcao", () -> new JRadioButton("Copiar", true));
+        m.put("opcao desmarcada", () -> new JRadioButton("Copiar", false));
         m.put("campo", () -> new JTextField("texto digitado", 12));
         m.put("lista suspensa", () -> new JComboBox<>(new String[] {"Primeira", "Segunda"}));
         return m;

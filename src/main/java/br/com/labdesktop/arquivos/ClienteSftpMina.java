@@ -717,7 +717,7 @@ public final class ClienteSftpMina implements ClienteSftp {
     @Override
     public void baixar(String remoto, Path local, Progresso progresso, Cancelamento cancelamento) throws ErroSftp {
         String origem = limpo(remoto);
-        Path parcial = local.resolveSibling("." + nomeCurto(local) + ".labdesktop-parcial");
+        Path parcial = local.resolveSibling(nomeDoParcial(local));
         usar("baixar este arquivo", false, cli -> {
             Attributes a = cli.stat(origem);
             if (a.isDirectory()) {
@@ -725,13 +725,18 @@ public final class ClienteSftpMina implements ClienteSftp {
             }
             long total = a.getFlags().contains(Attribute.Size) ? a.getSize() : -1;
             boolean ok = false;
+            prepararOParcial(parcial);
             try {
+                // CREATE_NEW: nunca segue um link que alguém tenha posto no lugar do parcial (CREATE seguiria e gravaria no destino do link)
                 try (InputStream in = cli.read(origem);
-                     OutputStream out = Files.newOutputStream(parcial, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
-                         StandardOpenOption.WRITE)) {
+                     OutputStream out = Files.newOutputStream(parcial, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
                     copiar(in, out, total, progresso, cancelamento);
                 }
                 long gravado = Files.size(parcial);
+                if (total >= 0 && gravado > total) {
+                    throw new ErroSftp(ErroSftp.Tipo.TAMANHO_NAO_CONFERE, "\"" + local.getFileName() + "\" cresceu no servidor durante o download (eram "
+                        + total + " bytes e chegaram " + gravado + "): provavelmente o backup ainda estava sendo gravado. Espere ele terminar e baixe de novo.");
+                }
                 if (total >= 0 && gravado != total) {
                     throw new ErroSftp(ErroSftp.Tipo.TAMANHO_NAO_CONFERE, "O tamanho de \"" + local.getFileName()
                         + "\" baixado não confere com o do servidor. Baixe de novo.");
@@ -762,9 +767,38 @@ public final class ClienteSftpMina implements ClienteSftp {
         });
     }
 
-    private static String nomeCurto(Path local) {
-        String n = local.getFileName().toString();
-        return n.length() > 100 ? n.substring(0, 100) : n;
+    /**
+     * O nome do parcial: oculto e ÚNICO para este destino (um hash do caminho inteiro), de modo que dois arquivos de nome comprido que só diferem no fim, ou duas transferências para
+     * pastas diferentes, nunca usem o mesmo parcial. Curto (a regra de 255 bytes e a de 260 caracteres do Windows não passam por causa dele).
+     */
+    static String nomeDoParcial(Path local) {
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(local.toAbsolutePath().normalize().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(".labdesktop-");
+            for (int i = 0; i < 8; i++) {
+                sb.append(String.format("%02x", h[i]));
+            }
+            return sb.append(".parcial").toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** Um parcial velho (de um download que caiu) é apagado; um link ou uma pasta no lugar dele é recusado (alguém pode ter posto lá para o app gravar em outro lugar). */
+    private static void prepararOParcial(Path parcial) throws ErroSftp {
+        boolean existe = Files.exists(parcial, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        if (!existe) {
+            return;
+        }
+        if (Files.isSymbolicLink(parcial) || !Files.isRegularFile(parcial, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            throw new ErroSftp(ErroSftp.Tipo.OUTRO, "Há um link ou uma pasta onde o app grava o arquivo parcial deste download. Por segurança, não baixei nada; apague "
+                + parcial.getFileName() + " e tente de novo.");
+        }
+        try {
+            Files.delete(parcial);
+        } catch (IOException e) {
+            throw new ErroSftp(ErroSftp.Tipo.OUTRO, "Não consegui preparar o arquivo parcial deste download neste computador.");
+        }
     }
 
     /** Copia em blocos, conferindo o cancelamento a cada um e contando o andamento. */

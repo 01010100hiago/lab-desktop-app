@@ -436,7 +436,71 @@ class ClienteSftpMinaTest {
             assertArrayEquals(dados, Files.readAllBytes(baixado));
             assertEquals(dados.length, baixados.get(baixados.size() - 1));
             try (var s = Files.list(tmp)) {
-                assertFalse(s.anyMatch(p -> p.getFileName().toString().contains("labdesktop-parcial")), "sem parcial esquecido");
+                assertFalse(s.anyMatch(p -> p.getFileName().toString().endsWith(".parcial")), "sem parcial esquecido");
+            }
+        }
+    }
+
+    @Test
+    void parcialQueEUmLinkNaoFazOAppGravarNoDestinoDoLink(@TempDir Path tmp) throws Exception {
+        try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
+            c.escrever(CenarioDeSftp.ORBITA + "/backup.sql", "CONTEUDO DO BACKUP");
+            Path destino = Files.createDirectories(tmp.resolve("dl")).resolve("backup.sql");
+            Path vitima = Files.writeString(tmp.resolve("vitima.txt"), "NAO MEXER");
+            // alguém deixou um link onde o app grava o parcial
+            Files.createSymbolicLink(destino.resolveSibling(ClienteSftpMina.nomeDoParcial(destino)), vitima);
+            ErroSftp e = assertThrows(ErroSftp.class, () -> c.cliente.baixar(CenarioDeSftp.ORBITA + "/backup.sql", destino, Progresso.NENHUM, Cancelamento.NUNCA));
+            assertTrue(e.getMessage().contains("link ou uma pasta"), e.getMessage());
+            assertEquals("NAO MEXER", Files.readString(vitima), "o destino do link não foi tocado");
+            assertFalse(Files.exists(destino), "e o backup nem foi gravado");
+            assertTrue(Files.isSymbolicLink(destino.resolveSibling(ClienteSftpMina.nomeDoParcial(destino))), "o link do outro fica como estava: o app não apaga o que não é dele");
+        }
+    }
+
+    @Test
+    void parcialVelhoDeUmDownloadQueCaiuEApagadoEODownloadSegue(@TempDir Path tmp) throws Exception {
+        try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
+            c.escrever(CenarioDeSftp.ORBITA + "/backup.sql", "NOVO");
+            Path destino = Files.createDirectories(tmp.resolve("dl")).resolve("backup.sql");
+            Files.writeString(destino.resolveSibling(ClienteSftpMina.nomeDoParcial(destino)), "RESTO DE UM DOWNLOAD QUE CAIU, COMPRIDO DEMAIS");
+            c.cliente.baixar(CenarioDeSftp.ORBITA + "/backup.sql", destino, Progresso.NENHUM, Cancelamento.NUNCA);
+            assertEquals("NOVO", Files.readString(destino));
+            try (var s = Files.list(destino.getParent())) {
+                assertEquals(1, s.count(), "o parcial velho não sobrou");
+            }
+        }
+    }
+
+    @Test
+    void oNomeDoParcialEUnicoPorDestinoECurto(@TempDir Path tmp) {
+        String longo = "x".repeat(150);
+        Path a = tmp.resolve(longo + "A.sql");
+        Path b = tmp.resolve(longo + "B.sql");
+        assertTrue(!ClienteSftpMina.nomeDoParcial(a).equals(ClienteSftpMina.nomeDoParcial(b)), "dois nomes longos que só diferem no fim não dividem o parcial");
+        assertTrue(!ClienteSftpMina.nomeDoParcial(tmp.resolve("a/x.sql")).equals(ClienteSftpMina.nomeDoParcial(tmp.resolve("b/x.sql"))), "nem o mesmo nome em pastas diferentes");
+        assertTrue(ClienteSftpMina.nomeDoParcial(a).length() < 40 && ClienteSftpMina.nomeDoParcial(a).startsWith("."), "oculto e curto");
+    }
+
+    @Test
+    void arquivoQueCresceuNoServidorDuranteODownloadDizIssoComClareza(@TempDir Path tmp) throws Exception {
+        try (CenarioDeSftp c = new CenarioDeSftp(tmp)) {
+            byte[] dados = new byte[6 * 1024 * 1024];
+            Files.write(c.orbita().resolve("crescendo.sql"), dados);
+            Path destino = Files.createDirectories(tmp.resolve("dl")).resolve("crescendo.sql");
+            ErroSftp e = assertThrows(ErroSftp.class, () -> c.cliente.baixar(CenarioDeSftp.ORBITA + "/crescendo.sql", destino, (feitos, total) -> {
+                if (feitos > 0 && feitos < 3 * 1024 * 1024) {
+                    try {
+                        Files.write(c.orbita().resolve("crescendo.sql"), new byte[1024 * 1024], java.nio.file.StandardOpenOption.APPEND);
+                    } catch (java.io.IOException ex) {
+                        throw new java.io.UncheckedIOException(ex);
+                    }
+                }
+            }, Cancelamento.NUNCA));
+            assertEquals(ErroSftp.Tipo.TAMANHO_NAO_CONFERE, e.tipo());
+            assertTrue(e.getMessage().contains("cresceu no servidor") && e.getMessage().contains("ainda estava sendo gravado"), e.getMessage());
+            assertFalse(Files.exists(destino), "o arquivo incompleto não entra no lugar");
+            try (var s = Files.list(destino.getParent())) {
+                assertEquals(0, s.count(), "nem o parcial sobra");
             }
         }
     }

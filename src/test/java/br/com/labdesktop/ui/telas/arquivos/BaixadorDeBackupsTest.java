@@ -61,6 +61,11 @@ class BaixadorDeBackupsTest {
         Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(b));
     }
 
+    /** O diálogo aparece depois da conferência do disco, que roda fora da EDT. */
+    private static void esperarDialogo(CenaDeArquivos c) {
+        Espera.ate(CenaDeArquivos.PRAZO, "o diálogo", () -> Visual.naEdt(() -> c.dialogos.ultimo() instanceof DialogoConfirmar));
+    }
+
     private static Retrato primeiro(BaixadorDeBackups b) {
         return Visual.naEdt(() -> b.fila().retratos().get(0));
     }
@@ -226,6 +231,7 @@ class BaixadorDeBackupsTest {
             c.escolhedor.pastaDeDownload = destino;
             BaixadorDeBackups b = baixador(c);
             Visual.naEdt(() -> b.baixar(List.of(new Backup("pequeno.sql", 600L * 1024 * 1024, QUANDO))));
+            esperarDialogo(c);
             DialogoConfirmar d = (DialogoConfirmar) c.dialogos.ultimo();
             assertEquals("Backup grande", d.titulo());
             assertEquals(null, b.fila(), "nada começou antes do clique");
@@ -243,11 +249,136 @@ class BaixadorDeBackupsTest {
             BaixadorDeBackups b = baixador(c);
             long absurdo = Files.getFileStore(destino).getUsableSpace() + 10L * 1024 * 1024 * 1024; // mais do que cabe, de verdade
             Visual.naEdt(() -> b.baixar(List.of(new Backup("enorme.sql", absurdo, QUANDO))));
+            esperarDialogo(c);
             DialogoConfirmar d = (DialogoConfirmar) c.dialogos.ultimo();
             assertEquals("Sem espaço no disco", d.titulo());
             assertEquals(null, b.fila(), "não começou");
             Visual.naEdt(() -> d.botaoCancelar().doClick(0));
             assertEquals(null, b.fila());
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // A cerca é a pasta backups, com os links por SFTP de verdade
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void linkDeBackupsParaOEnvEParaOEtcPasswdSaoRecusadosEORestoBaixa(@TempDir Path tmp) throws Exception {
+        try (CenaDeArquivos c = cena(tmp)) {
+            Files.writeString(c.sftp.orbita().resolve(".env"), "SEGREDO=123");
+            escreverBackup(c, "ok.sql", 500);
+            Path backups = c.sftp.orbita().resolve("backups");
+            Files.createSymbolicLink(backups.resolve("x"), Path.of("../.env"));
+            Files.createSymbolicLink(backups.resolve("passwd"), Path.of("/etc/passwd"));
+            Path destino = Files.createDirectories(tmp.resolve("dl"));
+            c.escolhedor.pastaDeDownload = destino;
+            BaixadorDeBackups b = baixador(c);
+            Visual.naEdt(() -> b.baixar(List.of(new Backup("x", 11L, QUANDO), new Backup("ok.sql", 500L, QUANDO), new Backup("passwd", 100L, QUANDO))));
+            esperarFim(b, 1);
+            Retrato r = primeiro(b);
+            assertEquals(Estado.COM_PROBLEMAS, r.estado(), r.mensagem());
+            assertTrue(r.mensagem().startsWith("1 arquivo baixado, 2 recusados"), r.mensagem());
+            assertTrue(r.mensagem().contains("x: é um link que leva para fora da pasta de onde o app baixa (backups)"), r.mensagem());
+            assertTrue(r.mensagem().contains("Por segurança, não foi baixado"), r.mensagem());
+            try (var s = Files.list(destino)) {
+                assertEquals(List.of("ok.sql"), s.map(p -> p.getFileName().toString()).toList(), "só o arquivo de verdade foi gravado; nem o .env nem o passwd");
+            }
+            assertTrue(Visual.naEdt(b::textoDoResultado).startsWith("Terminou com problema: 1 arquivo baixado, 2 recusados"), Visual.naEdt(b::textoDoResultado));
+            b.encerrar();
+        }
+    }
+
+    @Test
+    void linkParaDentroDoProprioBackupsContinuaValendo(@TempDir Path tmp) throws Exception {
+        try (CenaDeArquivos c = cena(tmp)) {
+            escreverBackup(c, "real.sql", 300);
+            Files.createSymbolicLink(c.sftp.orbita().resolve("backups").resolve("ultimo.sql"), Path.of("real.sql"));
+            Path destino = Files.createDirectories(tmp.resolve("dl"));
+            c.escolhedor.pastaDeDownload = destino;
+            BaixadorDeBackups b = baixador(c);
+            Visual.naEdt(() -> b.baixar(List.of(new Backup("ultimo.sql", 300L, QUANDO))));
+            esperarFim(b, 1);
+            assertEquals(Estado.CONCLUIDA, primeiro(b).estado(), primeiro(b).mensagem());
+            assertEquals(300, Files.size(destino.resolve("ultimo.sql")));
+            b.encerrar();
+        }
+    }
+
+    @Test
+    void aPastaBackupsSerUmLinkParaForaDoProjetoNaoBaixaNada(@TempDir Path tmp) throws Exception {
+        Visual.tema(Tema.CLARO);
+        try (CenaDeArquivos c = new CenaDeArquivos(tmp, true, "orbita", s -> {
+            CenaDeArquivos.projetoDeExemplo(s);
+            Path fora = Files.createDirectories(s.local(O).getParent().resolve("outro-projeto"));
+            Files.writeString(fora.resolve("segredo.sql"), "NAO E DESTE PROJETO");
+            Files.createSymbolicLink(s.local(O + "/backups"), Path.of("../outro-projeto"));
+        }, false)) {
+            Path destino = Files.createDirectories(tmp.resolve("dl"));
+            c.escolhedor.pastaDeDownload = destino;
+            BaixadorDeBackups b = baixador(c);
+            Visual.naEdt(() -> b.baixar(List.of(new Backup("segredo.sql", 19L, QUANDO))));
+            Espera.ate(CenaDeArquivos.PRAZO, "o aviso", () -> c.avisos.todos.stream().anyMatch(a -> a.texto().contains("A pasta de backups deste projeto é um link que leva para fora")));
+            assertEquals(null, b.fila(), "nada começou");
+            try (var s = Files.list(destino)) {
+                assertEquals(0, s.count(), "nada foi gravado");
+            }
+            b.encerrar();
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Tamanho que o servidor não disse, caminho do Windows e E/S fora da EDT
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void tamanhoQueOServidorNaoDisseAvisaEmVezDeContarZero(@TempDir Path tmp) throws Exception {
+        try (CenaDeArquivos c = cena(tmp)) {
+            escreverBackup(c, "sem-tamanho.sql", 700);
+            Path destino = Files.createDirectories(tmp.resolve("dl"));
+            c.escolhedor.pastaDeDownload = destino;
+            BaixadorDeBackups b = baixador(c);
+            Visual.naEdt(() -> b.baixar(List.of(new Backup("sem-tamanho.sql", null, QUANDO))));
+            esperarDialogo(c);
+            DialogoConfirmar d = (DialogoConfirmar) c.dialogos.ultimo();
+            assertEquals("Tamanho desconhecido", d.titulo());
+            assertEquals(null, b.fila(), "nada começou antes do clique");
+            Visual.naEdt(() -> d.botaoConfirmar().doClick(0));
+            esperarFim(b, 1);
+            assertEquals(Estado.CONCLUIDA, primeiro(b).estado(), primeiro(b).mensagem());
+            assertTrue(Visual.naEdt(b::textoDoResultado).contains("NÃO foi conferido"), "o resultado não finge que conferiu: " + Visual.naEdt(b::textoDoResultado));
+            b.encerrar();
+        }
+    }
+
+    @Test
+    void caminhoDoWindowsComMaisDe260CaracteresPedeOutraPasta(@TempDir Path tmp) throws Exception {
+        try (CenaDeArquivos c = cena(tmp)) {
+            escreverBackup(c, "db.sql", 100);
+            Path destino = Files.createDirectories(tmp.resolve("a".repeat(200)));
+            c.escolhedor.pastaDeDownload = destino;
+            BaixadorDeBackups b = baixador(c);
+            Visual.naEdt(() -> b.definirWindows(true));
+            Visual.naEdt(() -> b.baixar(List.of(new Backup("db.sql", 100L, QUANDO))));
+            Espera.ate(CenaDeArquivos.PRAZO, "o diálogo", () -> Visual.naEdt(() -> c.dialogos.ultimo() instanceof DialogoConfirmar));
+            DialogoConfirmar d = (DialogoConfirmar) c.dialogos.ultimo();
+            assertEquals("Caminho comprido demais", d.titulo());
+            assertEquals(null, b.fila());
+            b.encerrar();
+        }
+    }
+
+    @Test
+    void foraDoWindowsOCaminhoLongoNaoImpede(@TempDir Path tmp) throws Exception {
+        try (CenaDeArquivos c = cena(tmp)) {
+            escreverBackup(c, "db.sql", 100);
+            Path destino = Files.createDirectories(tmp.resolve("a".repeat(120)));
+            c.escolhedor.pastaDeDownload = destino;
+            BaixadorDeBackups b = baixador(c);
+            Visual.naEdt(() -> b.definirWindows(false));
+            Visual.naEdt(() -> b.baixar(List.of(new Backup("db.sql", 100L, QUANDO))));
+            esperarFim(b, 1);
+            assertEquals(Estado.CONCLUIDA, primeiro(b).estado(), primeiro(b).mensagem());
+            b.encerrar();
         }
     }
 

@@ -294,6 +294,7 @@ class TransferenciasNoGerenciadorTest {
             c.escolhedor.pastaDeDownload = destino;
             Visual.naEdt(() -> c.g.selecionarNaTabela("README.md", "src"));
             c.clicar("baixar");
+            Espera.ate(CenaDeArquivos.PRAZO, "o seletor abriu (a pasta de Downloads é lida fora da EDT antes)", () -> c.escolhedor.padraoVisto != null);
             assertEquals(ServicosDeArquivos.pastaDeDownloadsPadrao(), c.escolhedor.padraoVisto, "o seletor começa em Downloads");
             esperarFim(c, 1);
             assertEquals(Estado.CONCLUIDA, primeiro(c).estado(), primeiro(c).mensagem());

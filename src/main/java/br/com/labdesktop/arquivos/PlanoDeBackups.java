@@ -37,11 +37,13 @@ public final class PlanoDeBackups {
     private final List<Item> itens;
     private final List<Recusado> recusados;
     private final long bytes;
+    private final List<String> semTamanho;
 
-    private PlanoDeBackups(List<Item> itens, List<Recusado> recusados, long bytes) {
+    private PlanoDeBackups(List<Item> itens, List<Recusado> recusados, long bytes, List<String> semTamanho) {
         this.itens = List.copyOf(itens);
         this.recusados = List.copyOf(recusados);
         this.bytes = bytes;
+        this.semTamanho = List.copyOf(semTamanho);
     }
 
     /**
@@ -52,6 +54,7 @@ public final class PlanoDeBackups {
         List<Item> itens = new ArrayList<>();
         List<Recusado> recusados = new ArrayList<>();
         long bytes = 0;
+        List<String> semTamanho = new ArrayList<>();
         java.util.Set<String> locais = new java.util.HashSet<>();
         for (Backup b : escolhidos) {
             String arquivo = b.arquivo() == null ? "" : b.arquivo();
@@ -75,8 +78,11 @@ public final class PlanoDeBackups {
             long tamanho = b.tamanho() == null ? -1 : Math.max(-1, b.tamanho());
             itens.add(new Item(new EntradaRemota(local, remoto, EntradaRemota.Tipo.ARQUIVO, false, tamanho, b.quando(), -1, "", "", null), local, nome.get().mudou()));
             bytes += Math.max(0, tamanho);
+            if (tamanho < 0) {
+                semTamanho.add(local);
+            }
         }
-        return new PlanoDeBackups(itens, recusados, bytes);
+        return new PlanoDeBackups(itens, recusados, bytes, semTamanho);
     }
 
     private static String resumido(String s) {
@@ -96,7 +102,15 @@ public final class PlanoDeBackups {
         return recusados;
     }
 
-    /** A soma dos tamanhos que o servidor disse (um que ele não disse conta zero). */
+    /**
+     * Os arquivos (nome local) cujo tamanho o servidor NÃO disse. Eles não entram na soma ({@link #bytes}) e o app não consegue conferir o tamanho depois nem saber se cabem no disco:
+     * a tela avisa antes de baixar, em vez de fingir que pesam zero.
+     */
+    public List<String> semTamanho() {
+        return semTamanho;
+    }
+
+    /** A soma dos tamanhos que o servidor disse (os que ele não disse ficam de fora: ver {@link #semTamanho}). */
     public long bytes() {
         return bytes;
     }
@@ -129,6 +143,17 @@ public final class PlanoDeBackups {
             return Optional.empty();
         }
         return faltaDeEspaco(livre);
+    }
+
+    /** O primeiro item cujo caminho passa do limite do Windows com esta pasta de destino, ou vazio. */
+    public Optional<String> caminhoLongoDemaisNoWindows(Path pastaDeDestino) {
+        for (Item i : itens) {
+            Optional<String> longo = NomeLocalSeguro.longoDemaisNoWindows(pastaDeDestino.toAbsolutePath().toString(), i.nomeLocal());
+            if (longo.isPresent()) {
+                return longo;
+            }
+        }
+        return Optional.empty();
     }
 
     /** O mesmo com o espaço livre já em mãos (os testes). */

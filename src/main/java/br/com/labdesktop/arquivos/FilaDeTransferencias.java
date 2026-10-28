@@ -107,6 +107,8 @@ public final class FilaDeTransferencias implements AutoCloseable {
         final List<T> itens = new ArrayList<>();
         long bytes;
         int ignorados;
+        /** Itens que o plano RECUSOU (um link para fora da pasta, por exemplo), cada um com a sua frase: o resto do lote segue. */
+        final List<String> recusados = new ArrayList<>();
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -640,7 +642,10 @@ public final class FilaDeTransferencias implements AutoCloseable {
         Plano<ItemDeDownload> plano = planejarDownload(servico, remotos, base, t.cancelamento);
         t.definirPlano(plano.bytes, plano.itens.size());
         publicar(t, true);
-        List<String> problemas = new ArrayList<>();
+        List<String> problemas = new ArrayList<>(plano.recusados);
+        for (int i = 0; i < plano.recusados.size(); i++) {
+            t.falhou();
+        }
         int baixados = 0;
         for (ItemDeDownload item : plano.itens) {
             t.cancelamento.conferir();
@@ -666,30 +671,44 @@ public final class FilaDeTransferencias implements AutoCloseable {
             }
             publicar(t, false);
         }
-        terminar(t, "baixado", "baixados", baixados, plano.ignorados, problemas);
+        terminar(t, "baixado", "baixados", baixados, plano.ignorados, plano.recusados.size(), problemas);
     }
 
     private Plano<ItemDeDownload> planejarDownload(ServicoDeArquivos servico, List<EntradaRemota> remotos, Path base, Cancelamento cancelamento) throws ErroSftp {
         Plano<ItemDeDownload> plano = new Plano<>();
         for (EntradaRemota e : remotos) {
             cancelamento.conferir();
-            Path destino = dentroDe(base, e.nome());
-            if (destino == null) {
-                plano.ignorados++;
-                continue;
-            }
-            if (e.ehPasta() && !e.link()) {
-                String real = servico.resolverDentroDaRaiz(e.caminho());
-                caminharRemoto(servico, real, destino, plano, cancelamento);
-            } else if (e.tipo() == EntradaRemota.Tipo.ARQUIVO) {
-                String real = servico.resolverDentroDaRaiz(e.caminho());
-                plano.itens.add(new ItemDeDownload(real, destino, false, Math.max(0, e.tamanho()), e.modificadoEm()));
-                plano.bytes += Math.max(0, e.tamanho());
-            } else {
-                plano.ignorados++; // link para pasta, link quebrado, arquivo especial
+            try {
+                planejarUm(servico, e, base, plano, cancelamento);
+            } catch (ErroSftp falha) {
+                if (falha.tipo() == ErroSftp.Tipo.CANCELADO || falha.tipo() == ErroSftp.Tipo.SEM_CONEXAO || falha.tipo() == ErroSftp.Tipo.SFTP_INDISPONIVEL) {
+                    throw falha; // o lote inteiro para: não é culpa deste item
+                }
+                // um item que a cerca recusa (link para fora, nome ruim) é só ELE recusado: o resto do lote segue e o resumo diz quantos
+                plano.recusados.add(e.nome() + ": " + (falha.tipo() == ErroSftp.Tipo.FORA_DA_RAIZ
+                    ? "é um link que leva para fora da pasta de onde o app baixa (" + servico.escopo().nome() + "). Por segurança, não foi baixado."
+                    : falha.mensagemSimples()));
             }
         }
         return plano;
+    }
+
+    private void planejarUm(ServicoDeArquivos servico, EntradaRemota e, Path base, Plano<ItemDeDownload> plano, Cancelamento cancelamento) throws ErroSftp {
+        Path destino = dentroDe(base, e.nome());
+        if (destino == null) {
+            plano.ignorados++;
+            return;
+        }
+        if (e.ehPasta() && !e.link()) {
+            String real = servico.resolverDentroDaRaiz(e.caminho());
+            caminharRemoto(servico, real, destino, plano, cancelamento);
+        } else if (e.tipo() == EntradaRemota.Tipo.ARQUIVO) {
+            String real = servico.resolverDentroDaRaiz(e.caminho());
+            plano.itens.add(new ItemDeDownload(real, destino, false, Math.max(0, e.tamanho()), e.modificadoEm()));
+            plano.bytes += Math.max(0, e.tamanho());
+        } else {
+            plano.ignorados++; // link para pasta, link quebrado, arquivo especial
+        }
     }
 
     private void caminharRemoto(ServicoDeArquivos servico, String pastaRemota, Path pastaLocal, Plano<ItemDeDownload> plano, Cancelamento cancelamento) throws ErroSftp {
@@ -792,8 +811,15 @@ public final class FilaDeTransferencias implements AutoCloseable {
     }
 
     private void terminar(Trabalho t, String singular, String plural, int feitos, int ignorados, List<String> problemas) {
+        terminar(t, singular, plural, feitos, ignorados, 0, problemas);
+    }
+
+    private void terminar(Trabalho t, String singular, String plural, int feitos, int ignorados, int recusados, List<String> problemas) {
         StringBuilder sb = new StringBuilder();
         sb.append(feitos).append(feitos == 1 ? " arquivo " + singular : " arquivos " + plural);
+        if (recusados > 0) {
+            sb.append(", ").append(recusados).append(recusados == 1 ? " recusado" : " recusados");
+        }
         int pulados;
         synchronized (t) {
             pulados = t.pulados;

@@ -64,6 +64,16 @@ public record Escopo(String nome, String raiz, Set<String> intocaveis, Set<Strin
         return new Escopo(nome, raiz, intocaveis(raizDosProjetos, home));
     }
 
+    /**
+     * SÓ a pasta {@code backups} de um projeto ({@code <projetos>/<projeto>/backups}): a cerca do download de backups. Um link dentro dela que aponta para o resto do projeto
+     * ({@code backups/x -> ../.env}) ou para fora ({@code -> /etc/passwd}) leva para fora desta raiz e é recusado, coisa que a cerca da pasta inteira do projeto deixaria passar.
+     */
+    public static Escopo projetoBackups(String raizDosProjetos, String nomeDoProjeto, String home) throws ErroSftp {
+        String nome = CaminhoRemoto.validarNome(nomeDoProjeto);
+        String raiz = CaminhoRemoto.juntar(CaminhoRemoto.juntar(raizDosProjetos, nome), PlanoDeBackups.PASTA);
+        return new Escopo("backups", raiz, intocaveis(raizDosProjetos, home));
+    }
+
     /** O servidor inteiro a partir de uma pasta (Projetos, Minha pasta, ou {@code /}). */
     public static Escopo servidor(String nome, String raiz, String raizDosProjetos, String home) {
         return new Escopo(nome, raiz, intocaveis(raizDosProjetos, home));

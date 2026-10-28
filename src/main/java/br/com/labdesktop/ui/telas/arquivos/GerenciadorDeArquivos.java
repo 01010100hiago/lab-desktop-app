@@ -1620,11 +1620,11 @@ public final class GerenciadorDeArquivos extends Painel {
         if (!preparado || itens.isEmpty()) {
             return;
         }
-        Optional<Path> destino = ctx.escolhedor().escolherPastaParaBaixar(ServicosDeArquivos.pastaDeDownloadsPadrao());
-        if (destino.isEmpty()) {
-            return;
-        }
-        baixarPara(itens, destino.get());
+        // a pasta de Downloads é lida do disco: fora da EDT, antes de abrir o seletor
+        br.com.labdesktop.ui.Tarefas.rodar(ServicosDeArquivos::pastaDeDownloadsPadrao, padrao -> {
+            Optional<Path> destino = ctx.escolhedor().escolherPastaParaBaixar(padrao);
+            destino.ifPresent(d -> baixarPara(itens, d));
+        }, falha -> ctx.avisos().erro("Não consegui abrir o seletor de pasta: " + br.com.labdesktop.ui.MensagensDeErro.de(falha)));
     }
 
     /** Baixa itens para uma pasta já escolhida, avisando antes se somam mais de 500 MB. */

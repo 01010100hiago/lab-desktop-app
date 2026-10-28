@@ -13,6 +13,7 @@ import br.com.labdesktop.ui.Visual;
 import br.com.labdesktop.ui.componentes.Botao;
 import br.com.labdesktop.ui.telas.TelaProjeto.Aba;
 import br.com.labdesktop.util.Preferencias.Tema;
+import br.com.labdesktop.api.modelo.DetalheProjeto;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -126,6 +127,38 @@ class ProcessosEBackupsNaPaginaDoProjetoTest {
         PaginaBackups p = ed(c.tela::backups);
         assertTrue(ed(() -> p.botoesDeBaixar().stream().noneMatch(Botao::isEnabled)));
         assertTrue(ed(() -> p.botoesDeBaixar().get(0).getToolTipText()).contains("Sem conexão com o servidor"));
+    }
+
+    private static DetalheProjeto detalheCom25Backups() {
+        StringBuilder sb = new StringBuilder("\"backups\": [");
+        for (int i = 1; i <= 25; i++) {
+            sb.append(i > 1 ? "," : "").append("{\"arquivo\":\"b").append(i).append(".sql.gz\",\"tamanho\":1000,\"quando\":\"2026-10-01T03:00:00.000Z\"}");
+        }
+        sb.append("], \"backups_antigos\": [");
+        return TelaProjetoTest.detalheCom("\"backups\": [", sb.toString());
+    }
+
+    @Test
+    void asPaginasNovasDaTabelaNascemJaComOEstadoDeSemConexao() {
+        Visual.tema(Tema.CLARO);
+        TelaProjetoTest.Cena c = new TelaProjetoTest.Cena(true, Aba.BACKUPS).com(EstadoConexao.CONECTADO, detalheCom25Backups());
+        Visual.naEdt(() -> c.tela.aoMudarEstado(TelaProjetoTest.estado(EstadoConexao.RECONECTANDO)));
+        PaginaBackups p = ed(c.tela::backups);
+        Visual.naEdt(() -> p.tabela().irParaPagina(2)); // a página 2 é desenhada AGORA, já com a conexão fora
+        assertEquals("mostrando 11-20 de 25", ed(() -> p.tabela().textoDoResumo()));
+        List<Botao> daPagina = ed(() -> p.botoesDeBaixar().subList(p.botoesDeBaixar().size() - 10, p.botoesDeBaixar().size()));
+        assertEquals(10, daPagina.size());
+        assertTrue(ed(() -> daPagina.stream().noneMatch(Botao::isEnabled)), "os botões da página nova também estão desligados");
+        assertTrue(ed(() -> daPagina.get(0).getToolTipText()).contains("Sem conexão com o servidor"), "e dizem por quê");
+    }
+
+    @Test
+    void asPaginasNovasComConexaoNascemLigadasEAConexaoQueVoltaLigaTudo() {
+        Visual.tema(Tema.CLARO);
+        TelaProjetoTest.Cena c = new TelaProjetoTest.Cena(true, Aba.BACKUPS).com(EstadoConexao.CONECTADO, detalheCom25Backups());
+        PaginaBackups p = ed(c.tela::backups);
+        Visual.naEdt(() -> p.tabela().irParaPagina(2));
+        assertTrue(ed(() -> p.botoesDeBaixar().stream().allMatch(Botao::isEnabled)));
     }
 
     @Test

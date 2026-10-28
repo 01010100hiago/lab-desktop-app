@@ -59,10 +59,19 @@ class PlanoDeBackupsTest {
     }
 
     @Test
-    void tamanhoDesconhecidoContaZeroEMantemMenosUm() {
-        PlanoDeBackups p = PlanoDeBackups.de(PROJETO, List.of(new Backup("x.sql", null, QUANDO)));
-        assertEquals(0, p.bytes());
+    void tamanhoDesconhecidoFicaForaDaSomaEApareceNaListaDeSemTamanho() {
+        PlanoDeBackups p = PlanoDeBackups.de(PROJETO, List.of(new Backup("x.sql", null, QUANDO), b("y.sql", 100)));
+        assertEquals(100, p.bytes(), "o que o servidor não disse não entra na soma");
         assertEquals(-1, p.entradas().get(0).tamanho());
+        assertEquals(List.of("x.sql"), p.semTamanho(), "a tela avisa antes de baixar, em vez de fingir que pesa zero");
+        assertEquals(List.of(), PlanoDeBackups.de(PROJETO, List.of(b("y.sql", 100))).semTamanho());
+    }
+
+    @Test
+    void caminhoLongoDoWindowsPorItem() {
+        PlanoDeBackups p = PlanoDeBackups.de(PROJETO, List.of(b("db.sql", 10)));
+        assertEquals(java.util.Optional.empty(), p.caminhoLongoDemaisNoWindows(java.nio.file.Path.of("/tmp")));
+        assertTrue(p.caminhoLongoDemaisNoWindows(java.nio.file.Path.of("/" + "a".repeat(300))).isPresent());
     }
 
     @Test
