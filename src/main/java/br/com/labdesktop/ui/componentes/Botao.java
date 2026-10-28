@@ -28,25 +28,25 @@ public final class Botao extends JButton {
      */
     public enum Variante {
         PRIMARIO("background: $Lab.destaque; foreground: $Lab.destaqueTexto; borderColor: $Lab.destaque; "
-            + "hoverBackground: $Lab.destaqueForte; pressedBackground: $Lab.destaqueForte; "
+            + "hoverBackground: $Lab.destaqueForte; pressedBackground: $Lab.destaqueApertado; "
             + "hoverBorderColor: $Lab.destaqueForte; focusedBorderColor: $Lab.foco; "
             + DESABILITADO
-            + padrao("$Lab.destaque", "$Lab.destaqueTexto", "$Lab.destaque", "$Lab.destaqueForte", "$Lab.destaqueForte", "$Lab.destaqueForte"),
+            + padrao("$Lab.destaque", "$Lab.destaqueTexto", "$Lab.destaque", "$Lab.destaqueForte", "$Lab.destaqueApertado", "$Lab.destaqueForte"),
             Tokens.DESTAQUE_TEXTO, true),
         SECUNDARIO(DESABILITADO
             + padrao("$Button.background", "$Lab.texto", "$Lab.destaque", "$Button.hoverBackground", "$Button.pressedBackground", "$Lab.destaque"),
             Tokens.TEXTO, false),
-        PERIGO("foreground: $Lab.perigo; hoverBackground: $Lab.perigoSuave; pressedBackground: $Lab.perigoSuave; hoverBorderColor: $Lab.perigo; "
+        PERIGO("foreground: $Lab.perigo; hoverBackground: $Lab.perigoSuave; pressedBackground: $Lab.perigoSuaveApertado; hoverBorderColor: $Lab.perigo; "
             + DESABILITADO
             // o botão do Enter de uma pergunta que apaga ou desfaz: cheio em vermelho com o texto de destaque (branco no claro, grafite no escuro)
-            + padrao("$Lab.perigo", "$Lab.destaqueTexto", "$Lab.perigo", "$Lab.perigoForte", "$Lab.perigoForte", "$Lab.perigoForte"),
+            + padrao("$Lab.perigo", "$Lab.destaqueTexto", "$Lab.perigo", "$Lab.perigoForte", "$Lab.perigoApertado", "$Lab.perigoForte"),
             Tokens.PERIGO, false),
         LINK("buttonType: borderless; foreground: $Lab.destaque; hoverForeground: $Lab.destaqueForte; "
             + "hoverBackground: null; pressedBackground: null; margin: 0,2,0,2; "
             + padrao("null", "$Lab.destaque", "null", "null", "null", "null"), Tokens.DESTAQUE, false),
         FANTASMA("buttonType: borderless; foreground: $Lab.texto2; hoverForeground: $Lab.texto; "
-            + "hoverBackground: $Lab.superficie3; pressedBackground: $Lab.superficie3; "
-            + padrao("null", "$Lab.texto2", "null", "$Lab.superficie3", "$Lab.superficie3", "null"),
+            + "hoverBackground: $Lab.superficie3; pressedBackground: $Lab.borda; "
+            + padrao("null", "$Lab.texto2", "null", "$Lab.superficie3", "$Lab.borda", "null"),
             Tokens.TEXTO2, false);
 
         private final String estilo;
