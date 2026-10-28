@@ -89,9 +89,13 @@ public final class FluxosDeProjeto {
         this.liberadas = liberadas;
     }
 
-    /** O que a aplicação passa ao construtor: as ações só ligam com {@code -Dlabdesktop.acoes=true}. */
+    /**
+     * O que a aplicação passa ao construtor: as ações de escrita vêm LIGADAS e só desligam com
+     * {@code -Dlabdesktop.acoes=false}. É a única chave: a trava continua valendo em cada ação, por dentro.
+     */
     public static boolean liberadasPorPropriedade() {
-        return Boolean.getBoolean(PROPRIEDADE_ACOES);
+        String valor = System.getProperty(PROPRIEDADE_ACOES);
+        return valor == null || Boolean.parseBoolean(valor.trim());
     }
 
     /** Quem mostra os avisos (a página do projeto usa os mesmos da lista). */

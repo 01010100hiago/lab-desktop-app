@@ -302,7 +302,7 @@ class NovoProjetoLocalNaJanelaTest {
     @Test
     void oItemDoMenuAcompanhaAMudancaDeTelaSemPrecisarAbrirOMenu() throws Exception {
         // o atalho de um item desabilitado não faz nada: a habilitação não pode esperar o menu ser aberto
-        System.clearProperty(FluxosDeProjeto.PROPRIEDADE_ACOES);
+        System.setProperty(FluxosDeProjeto.PROPRIEDADE_ACOES, "false");
         MenuApp menu = menu();
         assertFalse(Visual.naEdt(menu.itemNovoProjeto()::isEnabled));
         System.setProperty(FluxosDeProjeto.PROPRIEDADE_ACOES, "true");
@@ -313,14 +313,14 @@ class NovoProjetoLocalNaJanelaTest {
 
     @Test
     void oItemDoMenuFicaDesabilitadoSemAsAcoes() throws Exception {
-        System.clearProperty(FluxosDeProjeto.PROPRIEDADE_ACOES);
+        System.setProperty(FluxosDeProjeto.PROPRIEDADE_ACOES, "false");
         MenuApp menu = menu();
         assertFalse(Visual.naEdt(menu.itemNovoProjeto()::isEnabled));
     }
 
     @Test
     void semAsAcoesLigadasNemBotaoNemConvite() throws Exception {
-        System.clearProperty(FluxosDeProjeto.PROPRIEDADE_ACOES);
+        System.setProperty(FluxosDeProjeto.PROPRIEDADE_ACOES, "false");
         painel = Visual.naEdt(() -> new PainelPrincipal(gerenciador, assistente, avisos, dialogos, new NavegadorGravado(avisos), ServicosDeArquivos.descartaveis()));
         Visual.naEdt(() -> painel.mostrarServidor(lab));
         TelaProjetos lista = listaDeProjetos();

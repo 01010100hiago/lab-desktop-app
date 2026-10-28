@@ -169,7 +169,7 @@ class ArquivosNaJanelaTest {
 
     @Test
     void semAPropriedadeDeAcoesAsDuasAbasSoLeem() throws Exception {
-        System.clearProperty(FluxosDeProjeto.PROPRIEDADE_ACOES);
+        System.setProperty(FluxosDeProjeto.PROPRIEDADE_ACOES, "false");
         abrirJanela(Tema.CLARO);
         GerenciadorDeArquivos doServidor = abaDoServidor();
         GerenciadorDeArquivos doProjeto = abaDoProjeto();

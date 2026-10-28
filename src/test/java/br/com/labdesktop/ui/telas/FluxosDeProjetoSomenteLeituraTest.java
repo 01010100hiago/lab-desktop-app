@@ -86,7 +86,7 @@ class FluxosDeProjetoSomenteLeituraTest {
         String antes = System.getProperty(FluxosDeProjeto.PROPRIEDADE_ACOES);
         try {
             System.clearProperty(FluxosDeProjeto.PROPRIEDADE_ACOES);
-            assertFalse(FluxosDeProjeto.liberadasPorPropriedade(), "desligada por padrão");
+            assertTrue(FluxosDeProjeto.liberadasPorPropriedade(), "ligada por padrão");
             System.setProperty(FluxosDeProjeto.PROPRIEDADE_ACOES, "true");
             assertTrue(FluxosDeProjeto.liberadasPorPropriedade());
             System.setProperty(FluxosDeProjeto.PROPRIEDADE_ACOES, "false");

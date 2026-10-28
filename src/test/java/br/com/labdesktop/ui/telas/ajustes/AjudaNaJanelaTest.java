@@ -311,8 +311,8 @@ class AjudaNaJanelaTest {
     void aTabelaDeAtalhosNaoTemONovoProjetoSemAsAcoesDeEscrita() {
         String antes = System.getProperty(br.com.labdesktop.ui.telas.FluxosDeProjeto.PROPRIEDADE_ACOES);
         try {
-            System.clearProperty(br.com.labdesktop.ui.telas.FluxosDeProjeto.PROPRIEDADE_ACOES);
-            assertFalse(Visual.naEdt(() -> menu.atalhosDoMenu()).stream().anyMatch(m -> m.chave().equals("novo-projeto")), "versão padrão: sem Novo projeto");
+            System.setProperty(br.com.labdesktop.ui.telas.FluxosDeProjeto.PROPRIEDADE_ACOES, "false");
+            assertFalse(Visual.naEdt(() -> menu.atalhosDoMenu()).stream().anyMatch(m -> m.chave().equals("novo-projeto")), "com as ações desligadas: sem Novo projeto");
             System.setProperty(br.com.labdesktop.ui.telas.FluxosDeProjeto.PROPRIEDADE_ACOES, "true");
             assertTrue(Visual.naEdt(() -> menu.atalhosDoMenu()).stream().anyMatch(m -> m.chave().equals("novo-projeto")), "com as ações ligadas, a tecla aparece");
         } finally {
