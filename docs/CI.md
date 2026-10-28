@@ -55,7 +55,7 @@ No Mac o resultado é `build/instaladores/LabDesktop-<versão>-mac-arm64.dmg`. O
 
 ## Assinatura de código (ainda não feita)
 
-Hoje os instaladores **não são assinados** (no Mac só há a assinatura "ad-hoc", que não tem identidade). Consequência, que o usuário vê:
+Hoje os instaladores **não são assinados** (no Mac só há a assinatura "ad-hoc", que não tem identidade e MUDA a cada build: por isso o macOS pode pedir de novo a permissão de Rede Local e o aviso do Gatekeeper a cada versão instalada). Consequência, que o usuário vê:
 
 - **Windows (SmartScreen):** "O Windows protegeu o computador" na primeira execução. **Mais informações > Executar assim mesmo.** A reputação melhora com o tempo e com a assinatura.
 - **macOS (Gatekeeper):** "não pôde verificar o app". **Ajustes do Sistema > Privacidade e Segurança > Abrir Mesmo Assim** (ou `xattr -dr com.apple.quarantine "/Applications/Lab Desktop.app"`).

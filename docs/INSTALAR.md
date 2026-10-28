@@ -46,7 +46,7 @@ Feito para o macOS atual (o Java 21 do app pede o macOS 11 ou mais novo; foi tes
 
 1. **Baixe** `LabDesktop-<versão>-mac-arm64.dmg` e dê dois cliques.
 2. **Arraste** o Lab Desktop para a pasta **Aplicativos**.
-3. **Aviso do macOS (Gatekeeper).** Como o app ainda não tem a assinatura paga da Apple (nem foi "notarizado"), na primeira abertura o macOS diz que não pôde verificar o app.
+3. **Aviso do macOS (Gatekeeper).** (A cada versão nova do app o macOS pode voltar a avisar, e a pergunta "Lab Desktop quer encontrar dispositivos na rede local" pode aparecer de novo: responda Permitir, senão o app não alcança o seu servidor.) Como o app ainda não tem a assinatura paga da Apple (nem foi "notarizado"), na primeira abertura o macOS diz que não pôde verificar o app.
    - Tente abrir o app (ele não abre, e o aviso aparece). Feche o aviso.
    - Abra **Ajustes do Sistema > Privacidade e Segurança**, role até o fim: aparece "Lab Desktop foi bloqueado". Clique em **Abrir Mesmo Assim** e confirme com a sua senha do Mac.
    - (Alternativa para quem usa o Terminal: `xattr -dr com.apple.quarantine "/Applications/Lab Desktop.app"` e abra de novo.)
