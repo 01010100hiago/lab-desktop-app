@@ -56,17 +56,17 @@ public record IdentidadeDoProcesso(int pid, String uid, String inicio, String no
             }
             String[] p = linha.split(" ", 8);
             if (p.length < 8) {
-                return Optional.empty();
+                continue; // uma linha de ruído (banner, aviso): a que importa é a que começa com o número do processo
             }
             try {
                 int pid = Integer.parseInt(p[0]);
                 String inicio = String.join(" ", p[2], p[3], p[4], p[5], p[6]);
                 if (pid != pidEsperado || !p[1].matches("[0-9]{1,10}") || !INICIO_DO_PS.matcher(inicio).matches()) {
-                    return Optional.empty();
+                    continue;
                 }
                 return Optional.of(new IdentidadeDoProcesso(pid, p[1], inicio, p[7]));
             } catch (IllegalArgumentException e) {
-                return Optional.empty();
+                continue;
             }
         }
         return Optional.empty();

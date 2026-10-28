@@ -90,7 +90,7 @@ class ListaDeProtecaoTest {
 
     @Test
     void naoProtegeProgramaComum() {
-        for (String n : new String[] {"node", "python3", "java", "nginx", "postgres", "redis-server", "vim", "bash", "sleep", "code", "chrome", "firefox", "npm", "tail"}) {
+        for (String n : new String[] {"node", "python3", "java", "nginx", "postgres", "redis-server", "vim", "sleep", "code", "chrome", "firefox", "npm", "tail"}) {
             assertEquals(Optional.empty(), motivo(comum(2000, n)), n);
         }
     }
@@ -110,5 +110,38 @@ class ListaDeProtecaoTest {
             assertTrue(ListaDeProtecao.motivo(new ProcessoAlvo(900, n, "PC\\ana", null, null), win).isPresent(), n);
         }
         assertFalse(ListaDeProtecao.motivo(new ProcessoAlvo(900, "notepad.exe", "PC\\ana", null, null), win).isPresent());
+    }
+
+    @Test
+    void shellsESftpServerSaoDaConexaoENuncaSeOferecem() {
+        for (String n : new String[] {"bash", "-bash", "sh", "zsh", "fish", "dash", "sftp-server", "/usr/lib/openssh/sftp-server", "internal-sftp", "sshd: ana@pts/0", "sshd: ana [priv]",
+            "/usr/sbin/sshd -D", "sshd-session"}) {
+            assertTrue(motivo(comum(300, n)).isPresent(), n);
+        }
+    }
+
+    @Test
+    void nomeEmLinhaDeComandoEComTruncamentoDe15LetrasTambemConfere() {
+        assertTrue(motivo(comum(300, "/usr/sbin/NetworkManager --no-daemon")).isPresent(), "linha de comando: vale o primeiro pedaço");
+        assertTrue(motivo(comum(300, "/lib/systemd/systemd-journald")).isPresent());
+        assertTrue(motivo(comum(300, "networkd-dispat")).isPresent(), "o ps corta networkd-dispatcher em 15 letras");
+        assertFalse(motivo(comum(300, "networkd-xx")).isPresent());
+        assertEquals("sshd", ProcessoAlvo.nomeCurto("sshd: ana@pts/0"));
+        assertEquals("sshd", ProcessoAlvo.nomeCurto("/usr/sbin/sshd -D"));
+        assertEquals("node", ProcessoAlvo.nomeCurto("/usr/bin/node --inspect x.js"));
+        assertEquals("kworker/0:1", ProcessoAlvo.nomeCurto("kworker/0:1"));
+        assertEquals("Google Chrome", ProcessoAlvo.nomeCurto("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"));
+        assertEquals("nginx", ProcessoAlvo.nomeCurto("nginx: master process /usr/sbin/nginx"));
+    }
+
+    @Test
+    void unidadesDoSistemaEDoAcessoSaoProtegidas() {
+        for (String u : new String[] {"docker.service", "containerd.service", "cloudflared.service", "sshd.service", "ssh.service", "ssh.socket", "systemd-logind.service",
+            "NetworkManager.service", "dbus.service", "user@1000.service", "docker.socket"}) {
+            assertTrue(ListaDeProtecao.motivoDaUnidade(u).isPresent(), u);
+        }
+        for (String u : new String[] {"meu-app.service", "app-loja.service", "api@1.service"}) {
+            assertFalse(ListaDeProtecao.motivoDaUnidade(u).isPresent(), u);
+        }
     }
 }

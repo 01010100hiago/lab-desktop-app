@@ -127,7 +127,7 @@ class ControleRemotoComShellTest {
         assertTrue(ProcessosDeVerdade.vivo(b), "o processo que ficou com o número NÃO foi morto");
         assertTrue(r.mensagem().contains("Nada foi enviado"));
         Resultado f = c.forcar(reaproveitado, observador, new Cancelamento());
-        assertEquals(Desfecho.MUDOU, f.desfecho());
+        assertEquals(Desfecho.FALHOU, f.desfecho(), "o à força nem vale sem o pedido educado ter saído por esta prévia");
         assertTrue(ProcessosDeVerdade.vivo(b), "nem à força");
     }
 
@@ -169,9 +169,16 @@ class ControleRemotoComShellTest {
         assertEquals(Oferta.Situacao.SEM_PERMISSAO, oferta.situacao());
         Resultado r = c.encerrar(new Previa(alvo, oferta, lida, null), observador, new Cancelamento());
         assertEquals(Desfecho.SEM_PERMISSAO, r.desfecho(), r.mensagem());
-        assertEquals("sudo kill -TERM " + pidDeRoot, r.comandoParaODono());
+        assertEquals("ps -o pid,user,lstart,comm -p " + pidDeRoot + "\nps -o comm= -p " + pidDeRoot + " | grep -Eq '" + regexDe(lida.nome()) + "' && sudo kill -TERM " + pidDeRoot, r.comandoParaODono());
         assertTrue(r.mensagem().contains("não usa sudo nem digita senha"), r.mensagem());
         assertNotEquals("", r.comandoParaODono());
+    }
+
+    /** O trecho do grep para este nome (cortado em 15 letras e sem {@code $} se passou disso). */
+    private static String regexDe(String nome) {
+        String curto = ProcessoAlvo.nomeCurto(nome);
+        boolean cortado = curto.length() > 15;
+        return "(^|/)" + (cortado ? curto.substring(0, 15) : curto).replace(".", "\\.") + (cortado ? "" : "$");
     }
 
     @Test
@@ -195,7 +202,7 @@ class ControleRemotoComShellTest {
         FalhaDeProcesso f = assertThrows(FalhaDeProcesso.class, () -> c.preparar(alvoDe(pid, eu)));
         assertEquals(Desfecho.SEM_CONFERENCIA, f.desfecho());
         assertTrue(ProcessosDeVerdade.vivo(pid));
-        assertEquals("sudo kill -TERM " + pid, f.comandoParaODono());
+        assertEquals("ps -o pid,user,lstart,comm -p " + pid + "\nps -o comm= -p " + pid + " | grep -Eq '(^|/)sleep$' && sudo kill -TERM " + pid, f.comandoParaODono());
     }
 
     @Test
@@ -204,5 +211,114 @@ class ControleRemotoComShellTest {
         FalhaDeProcesso f = assertThrows(FalhaDeProcesso.class, () -> c.preparar(new ProcessoAlvo(1, "systemd", eu, null, null)));
         assertEquals(Desfecho.PROTEGIDO, f.desfecho());
         assertTrue(shell.recebidos.isEmpty(), "nada foi enviado ao servidor");
+    }
+
+    @Test
+    void forcarSemOPedidoEducadoTerSaidoPorEstaPreviaERecusado() throws Exception {
+        int pid = processos.abrirTeimoso();
+        ControleRemoto c = controle(2, 1);
+        Previa p = c.preparar(alvoDe(pid, eu));
+        assertFalse(p.pedidoEducadoEnviado());
+        Resultado r = c.forcar(p, observador, new Cancelamento());
+        assertEquals(Desfecho.FALHOU, r.desfecho(), r.mensagem());
+        assertTrue(r.mensagem().contains("Primeiro peça"), r.mensagem());
+        assertTrue(ProcessosDeVerdade.vivo(pid), "nada foi enviado");
+        assertTrue(shell.recebidos.stream().noneMatch(l -> l.contains("kill -KILL")), "o servidor nem recebeu o kill");
+        // com o pedido educado saído por ESTA prévia, o à força passa
+        assertEquals(Desfecho.AINDA_RODANDO, c.encerrar(p, observador, new Cancelamento()).desfecho());
+        assertTrue(p.pedidoEducadoEnviado());
+        assertEquals(Desfecho.ENCERRADO, c.forcar(p, observador, new Cancelamento()).desfecho());
+        // outra prévia do mesmo processo não herda o pedido
+        int outro = processos.abrirTeimoso();
+        Previa nova = c.preparar(alvoDe(outro, eu));
+        assertEquals(Desfecho.FALHOU, c.forcar(nova, observador, new Cancelamento()).desfecho());
+        assertTrue(ProcessosDeVerdade.vivo(outro));
+    }
+
+    /** O servidor imprime banner e mensagens soltas do .bashrc em volta do que o app pediu. */
+    private ControleRemoto controleComRuido(int esperaDoTerm) {
+        ProvisionadorRemoto.Executor ruidoso = (comando, stdin, prazo) -> {
+            ResultadoExec r = shell.executar(comando, stdin, prazo);
+            return new ResultadoExec(r.status(), ("Bem-vindo ao servidor!\nenviado\nja-saiu\n" + r.stdout() + "Até logo\nmudou\n").getBytes(java.nio.charset.StandardCharsets.UTF_8), r.stderr().getBytes(), false);
+        };
+        return new ControleRemoto(ruidoso, ExecutorDeArgumentos.porSsh(ruidoso), AmbienteDeProcessos.servidor(eu, Set.of()), ms -> { }, esperaDoTerm, 1);
+    }
+
+    @Test
+    void ruidoDoBashrcEmVoltaDaSaidaNaoConfundeOAppNemEsconde() throws Exception {
+        int pid = processos.abrirEducado();
+        ControleRemoto c = controleComRuido(5);
+        Previa p = c.preparar(alvoDe(pid, eu));
+        Resultado r = c.encerrar(p, observador, new Cancelamento());
+        assertEquals(Desfecho.ENCERRADO, r.desfecho(), r.mensagem());
+        assertFalse(ProcessosDeVerdade.vivo(pid));
+    }
+
+    @Test
+    void ruidoSemAMarcaNuncaViraResposta() throws Exception {
+        int pid = processos.abrirEducado();
+        ProvisionadorRemoto.Executor so = (comando, stdin, prazo) -> comando.startsWith("sh -c")
+            ? new ResultadoExec(0, "enviado\n".getBytes(), new byte[0], false) : shell.executar(comando, stdin, prazo);
+        ControleRemoto c = new ControleRemoto(so, ExecutorDeArgumentos.porSsh(so), AmbienteDeProcessos.servidor(eu, Set.of()), ms -> { }, 2, 1);
+        Previa p = c.preparar(alvoDe(pid, eu));
+        Resultado r = c.encerrar(p, observador, new Cancelamento());
+        assertEquals(Desfecho.FALHOU, r.desfecho(), "a palavra solta 'enviado' não é a resposta do comando");
+        assertTrue(ProcessosDeVerdade.vivo(pid));
+    }
+
+    @Test
+    void processoDeOutroUsuarioEscondidoPeloServidorNaoVaiComoJaSaiu() throws Exception {
+        int pid = processos.abrirEducado();
+        ControleRemoto c = controle(2, 1);
+        Previa real = c.preparar(alvoDe(pid, eu));
+        ProcessosDeVerdade.matarAMao(pid); // o ps não o acha mais (como o ps de outro usuário sob hidepid)
+        IdentidadeDoProcesso deOutro = new IdentidadeDoProcesso(pid, "999999", real.identidade().inicio(), real.identidade().nome());
+        Resultado r = c.encerrar(new Previa(real.alvo(), real.oferta(), deOutro, null), observador, new Cancelamento());
+        assertEquals(Desfecho.SEM_CONFERENCIA, r.desfecho(), r.mensagem());
+        assertFalse(r.desfecho().deuCerto(), "sem prova de que saiu");
+        // o mesmo número, do MESMO usuário, que sumiu: aí sim, já saiu
+        Resultado seu = c.encerrar(real, observador, new Cancelamento());
+        assertEquals(Desfecho.JA_SAIU, seu.desfecho());
+    }
+
+    private ControleRemoto controleComPsDefeituoso(java.util.function.Supplier<ResultadoExec> depoisDoPedido, int esperaDoTerm) {
+        java.util.concurrent.atomic.AtomicBoolean pedidoSaiu = new java.util.concurrent.atomic.AtomicBoolean();
+        ProvisionadorRemoto.Executor defeituoso = (comando, stdin, prazo) -> {
+            if (comando.startsWith("sh -c")) {
+                pedidoSaiu.set(true);
+                return shell.executar(comando, stdin, prazo);
+            }
+            if (pedidoSaiu.get() && comando.contains("ps -o")) {
+                return depoisDoPedido.get();
+            }
+            return shell.executar(comando, stdin, prazo);
+        };
+        return new ControleRemoto(defeituoso, ExecutorDeArgumentos.porSsh(defeituoso), AmbienteDeProcessos.servidor(eu, Set.of()), ms -> { }, esperaDoTerm, 1);
+    }
+
+    @Test
+    void psIlegivelDepoisDoPedidoNaoVaiComoFechou() throws Exception {
+        for (java.util.function.Supplier<ResultadoExec> defeito : List.<java.util.function.Supplier<ResultadoExec>>of(
+            () -> new ResultadoExec(0, "ps: coisa estranha que o app não entende\n".getBytes(), new byte[0], false),
+            () -> new ResultadoExec(2, new byte[0], "ps: erro interno\n".getBytes(), false),
+            () -> new ResultadoExec(127, new byte[0], new byte[0], false),
+            () -> new ResultadoExec(0, new byte[0], new byte[0], false))) {
+            int pid = processos.abrirTeimoso();
+            ControleRemoto c = controleComPsDefeituoso(defeito, 2);
+            Previa p = c.preparar(alvoDe(pid, eu));
+            Resultado r = c.encerrar(p, observador, new Cancelamento());
+            assertEquals(Desfecho.SEM_CONFERENCIA, r.desfecho(), r.mensagem());
+            assertFalse(r.desfecho().deuCerto());
+            assertTrue(r.mensagem().contains("não conseguiu"), r.mensagem());
+        }
+    }
+
+    @Test
+    void soAConfirmacaoDeVerdadeContaComoFechou() throws Exception {
+        int pid = processos.abrirEducado();
+        // o ps do servidor diz, com a saída vazia e o status 1, que o número não existe mais: é a confirmação
+        ControleRemoto c = controleComPsDefeituoso(() -> new ResultadoExec(1, new byte[0], new byte[0], false), 2);
+        Resultado r = c.encerrar(c.preparar(alvoDe(pid, eu)), observador, new Cancelamento());
+        assertEquals(Desfecho.ENCERRADO, r.desfecho(), r.mensagem());
     }
 }

@@ -101,7 +101,7 @@ class ControleLocalTest {
     void processoDeOutroUsuarioNaoEDoApp() {
         Oferta o = unix(2, 1).avaliar(new ProcessoAlvo(777, "postgres", "postgres", null, null));
         assertEquals(Oferta.Situacao.SEM_PERMISSAO, o.situacao());
-        assertEquals("sudo kill -TERM 777", o.comandoParaODono());
+        assertEquals("ps -o pid,user,lstart,comm -p 777\nps -o comm= -p 777 | grep -Eq '(^|/)postgres$' && sudo kill -TERM 777", o.comandoParaODono());
     }
 
     @Test
@@ -174,7 +174,7 @@ class ControleLocalTest {
         Previa p = c.preparar(new ProcessoAlvo(4242, "notepad.exe", "PC\\ana", null, null));
         Resultado r = c.encerrar(p, ObservadorDeProcesso.NENHUM, new Cancelamento());
         assertEquals(Desfecho.ENCERRADO, r.desfecho(), r.mensagem());
-        assertEquals(List.of(List.of("taskkill", "/PID", "4242", "/T")), comandos);
+        assertEquals(List.of(List.of("taskkill", "/PID", "4242")), comandos, "sem /T: os programas que ele abriu ficam como estão");
     }
 
     @Test
@@ -187,7 +187,7 @@ class ControleLocalTest {
         Previa p = c.preparar(new ProcessoAlvo(4242, "notepad.exe", "PC\\ana", null, null));
         assertEquals(Desfecho.AINDA_RODANDO, c.encerrar(p, ObservadorDeProcesso.NENHUM, new Cancelamento()).desfecho());
         assertEquals(Desfecho.ENCERRADO, c.forcar(p, ObservadorDeProcesso.NENHUM, new Cancelamento()).desfecho());
-        assertEquals(List.of(List.of("taskkill", "/PID", "4242", "/T"), List.of("taskkill", "/PID", "4242", "/T", "/F")), comandos);
+        assertEquals(List.of(List.of("taskkill", "/PID", "4242"), List.of("taskkill", "/PID", "4242", "/F")), comandos);
     }
 
     @Test
@@ -205,7 +205,7 @@ class ControleLocalTest {
         ControleLocal c = windows(s, new ArrayList<>(), (a, st, pr) -> new ResultadoExec(1, new byte[0], "ERROR: The process \"4242\" could not be terminated. Access is denied.".getBytes(), false));
         Resultado r = c.encerrar(c.preparar(new ProcessoAlvo(4242, "notepad.exe", "PC\\ana", null, null)), ObservadorDeProcesso.NENHUM, new Cancelamento());
         assertEquals(Desfecho.SEM_PERMISSAO, r.desfecho());
-        assertTrue(r.comandoParaODono().startsWith("taskkill /PID 4242 /T"));
+        assertTrue(r.comandoParaODono().contains("taskkill /PID 4242 /FI \"PID eq 4242\" /FI \"IMAGENAME eq notepad.exe\""), r.comandoParaODono());
         assertFalse(r.comandoParaODono().contains("sudo"));
     }
 
@@ -227,5 +227,107 @@ class ControleLocalTest {
         SistemaFalso s = new SistemaFalso();
         FalhaDeProcesso f = assertThrows(FalhaDeProcesso.class, () -> windows(s, new ArrayList<>(), null).preparar(new ProcessoAlvo(600, "svchost.exe", "PC\\ana", null, null)));
         assertEquals(Desfecho.PROTEGIDO, f.desfecho());
+    }
+
+    /** O sistema de verdade para ler e abrir, mas que NÃO deixa o app mandar sinal pelo número: só pelo handle da prévia. */
+    private static ProcessosDoSistema soPeloHandle() {
+        ProcessosDoSistema real = ProcessosDoSistema.real();
+        return new ProcessosDoSistema() {
+            @Override
+            public Optional<Info> ler(long pid) {
+                return real.ler(pid);
+            }
+
+            @Override
+            public List<Info> todos() {
+                return real.todos();
+            }
+
+            @Override
+            public boolean pedirParaFechar(long pid) {
+                throw new AssertionError("o sinal tem de ir pelo ProcessHandle da prévia, não pelo número");
+            }
+
+            @Override
+            public boolean matar(long pid) {
+                throw new AssertionError("o sinal tem de ir pelo ProcessHandle da prévia, não pelo número");
+            }
+
+            @Override
+            public boolean estaVivo(long pid) {
+                return real.estaVivo(pid);
+            }
+
+            @Override
+            public Optional<ProcessHandle> abrir(long pid) {
+                return real.abrir(pid);
+            }
+
+            @Override
+            public Set<Integer> pidsDoApp() {
+                return real.pidsDoApp();
+            }
+        };
+    }
+
+    @Test
+    void aPreviaGuardaOHandleEOSinalVaiPorEleNuncaPeloNumero() throws Exception {
+        assumeTrue(ShellDeTeste.temShell());
+        int pid = processos.abrirTeimoso();
+        ControleLocal c = new ControleLocal(soPeloHandle(), (a, s, p) -> {
+            throw new AssertionError("sem programa externo");
+        }, new AmbienteDeProcessos(AmbienteDeProcessos.Tipo.COMPUTADOR_MAC_OU_LINUX, eu, Set.of(), ProcessosDoSistema.real().pidsDoApp()), ms -> Thread.sleep(Math.min(ms, 100)), 2, 3);
+        Previa p = c.preparar(alvoDe(pid));
+        assertEquals(pid, p.handle().pid(), "o handle foi aberto na hora de ler");
+        assertEquals(Desfecho.AINDA_RODANDO, c.encerrar(p, ObservadorDeProcesso.NENHUM, new Cancelamento()).desfecho());
+        assertEquals(Desfecho.ENCERRADO, c.forcar(p, ObservadorDeProcesso.NENHUM, new Cancelamento()).desfecho());
+        assertFalse(ProcessosDeVerdade.vivo(pid));
+    }
+
+    @Test
+    void forcarSemOPedidoEducadoSaidoPorEstaPreviaERecusado() throws Exception {
+        assumeTrue(ShellDeTeste.temShell());
+        int pid = processos.abrirTeimoso();
+        ControleLocal c = unix(2, 3);
+        Previa p = c.preparar(alvoDe(pid));
+        Resultado r = c.forcar(p, ObservadorDeProcesso.NENHUM, new Cancelamento());
+        assertEquals(Desfecho.FALHOU, r.desfecho(), r.mensagem());
+        assertTrue(ProcessosDeVerdade.vivo(pid), "nada foi enviado");
+        assertFalse(p.pedidoEducadoEnviado());
+    }
+
+    @Test
+    void windowsTambemSoForcaDepoisDoPedidoEDizAsPalavrasDoWindows() throws Exception {
+        SistemaFalso s = new SistemaFalso();
+        s.vivos.put(4242L, notepad(4242));
+        s.ignoraOPedido = true;
+        List<List<String>> comandos = new ArrayList<>();
+        ControleLocal c = windows(s, comandos, null);
+        Previa p = c.preparar(new ProcessoAlvo(4242, "notepad.exe", "PC\\ana", null, null));
+        assertEquals(Desfecho.FALHOU, c.forcar(p, ObservadorDeProcesso.NENHUM, new Cancelamento()).desfecho());
+        assertTrue(comandos.isEmpty(), "nenhum taskkill foi rodado");
+        List<String> etapas = new ArrayList<>();
+        ObservadorDeProcesso obs = new ObservadorDeProcesso() {
+            @Override
+            public void etapa(String texto) {
+                etapas.add(texto);
+            }
+
+            @Override
+            public void aguardando(int passados, int total) { }
+        };
+        Resultado r = c.encerrar(p, obs, new Cancelamento());
+        String todo = r.mensagem() + " " + String.join(" ", etapas) + " " + p.oferta().explicacao();
+        assertFalse(todo.contains("SIGTERM") || todo.contains("SIGKILL") || todo.contains("Ctrl+C"), todo);
+    }
+
+    @Test
+    void aHoraDeInicioVaiParaATelaEmPortugues() {
+        Previa ps = new Previa(new ProcessoAlvo(4242, "sleep", "ana", null, null), new Oferta(Oferta.Situacao.LIBERADO, Via.PROCESSO, false, "", "", "", ""),
+            new IdentidadeDoProcesso(4242, "1000", "Tue Oct 28 12:05:09 2026", "sleep"), null);
+        assertEquals("28/10/2026 às 12:05:09", ps.iniciouEmParaATela());
+        assertEquals("Tue Oct 28 12:05:09 2026", ps.iniciouEm(), "o valor que o servidor compara continua o do ps");
+        Previa ruim = new Previa(ps.alvo(), ps.oferta(), new IdentidadeDoProcesso(4242, "1000", "Tue Oct 28 99:99:99 2026", "sleep"), null);
+        assertEquals("Tue Oct 28 99:99:99 2026", ruim.iniciouEmParaATela(), "o que não dá para ler aparece como veio");
     }
 }

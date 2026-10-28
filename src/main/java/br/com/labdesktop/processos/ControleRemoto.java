@@ -47,6 +47,10 @@ public final class ControleRemoto implements ControleDeProcessos {
     private final Dorminhoco dorminhoco;
     private final int esperaDoTerm;
     private final int esperaDoKill;
+    private volatile long avisoDoDockerMs = AVISO_DO_DOCKER_EM_MS;
+
+    /** Depois de quanto tempo sem resposta a tela diz que o container está demorando. */
+    public static final long AVISO_DO_DOCKER_EM_MS = 10_000;
 
     public ControleRemoto(ProvisionadorRemoto.Executor linha, AmbienteDeProcessos ambiente) {
         this(linha, ExecutorDeArgumentos.porSsh(linha), ambiente, Thread::sleep, ESPERA_DO_TERM_EM_SEGUNDOS, ESPERA_DO_KILL_EM_SEGUNDOS);
@@ -60,6 +64,12 @@ public final class ControleRemoto implements ControleDeProcessos {
         this.dorminhoco = dorminhoco;
         this.esperaDoTerm = esperaDoTerm;
         this.esperaDoKill = esperaDoKill;
+    }
+
+    /** Só os testes: encurta o tempo até o aviso de demora do Docker. */
+    ControleRemoto comAvisoDoDockerEm(long milissegundos) {
+        this.avisoDoDockerMs = milissegundos;
+        return this;
     }
 
     @Override
@@ -85,6 +95,9 @@ public final class ControleRemoto implements ControleDeProcessos {
         String unidade = null;
         if (oferta.situacao() == Oferta.Situacao.LIBERADO) {
             unidade = detectarServico(pid, id.uid());
+            if (unidade != null && ListaDeProtecao.motivoDaUnidade(unidade).isPresent()) {
+                unidade = null; // filho de um serviço protegido (docker.service, sshd.service...): nunca "Reiniciar o serviço"
+            }
         }
         return new Previa(alvo, oferta, id, unidade);
     }
@@ -98,13 +111,14 @@ public final class ControleRemoto implements ControleDeProcessos {
         }
         Optional<IdentidadeDoProcesso> id = IdentidadeDoProcesso.deSaidaDoPs(r.stdout(), pid);
         if (id.isEmpty()) {
+            boolean numeroNaoExiste = r.stderr().isBlank() && (r.status() == 1 || r.stdout().isBlank());
+            if (numeroNaoExiste) {
+                throw new FalhaDeProcesso(Desfecho.JA_SAIU, "O processo " + pid + " já saiu. A lista vai atualizar.");
+            }
             if (r.stdout().isBlank() && !r.stderr().isBlank()) {
                 throw new FalhaDeProcesso(Desfecho.SEM_CONFERENCIA, "Este servidor não sabe dizer a hora em que o processo " + pid
                     + " começou (o ps dele não tem essa opção), e sem isso o app não consegue ter certeza de que é o mesmo processo. Por segurança, não envia nada. "
-                    + "Se você tem certeza, rode o comando no Terminal.", ComandosDeProcessos.comandoParaODono(pid, Sinal.TERM, ambiente.tipo()), null);
-            }
-            if (r.stdout().isBlank()) {
-                throw new FalhaDeProcesso(Desfecho.JA_SAIU, "O processo " + pid + " já saiu. A lista vai atualizar.");
+                    + "Se você tem certeza, rode o comando no Terminal.", paraODono(pid, alvo.nome(), Sinal.TERM).texto(), null);
             }
             throw new FalhaDeProcesso(Desfecho.SEM_CONFERENCIA, "O servidor respondeu de um jeito que o app não entende; por segurança, nada foi enviado.");
         }
@@ -138,8 +152,8 @@ public final class ControleRemoto implements ControleDeProcessos {
         }
         if (previa.oferta().via() == Via.CONTAINER) {
             String c = previa.alvo().container();
-            obs.etapa("Parando o container " + c + "... (o Docker espera até 10 s)");
-            return docker(ComandosDeProcessos.pararContainer(c), Acao.ENCERRAR, c, Desfecho.ENCERRADO,
+            obs.etapa("Parando o container " + c + "... (o Docker espera até 10 s antes de forçar; o app espera até 1 minuto)");
+            return docker(obs, ComandosDeProcessos.pararContainer(c), Acao.ENCERRAR, c, Desfecho.ENCERRADO,
                 "O container " + c + " parou. Os programas que rodavam nele pararam junto.");
         }
         return sinal(previa, Sinal.TERM, esperaDoTerm, obs, cancelamento);
@@ -151,7 +165,10 @@ public final class ControleRemoto implements ControleDeProcessos {
             return Resultado.de(Desfecho.PROTEGIDO, previa.oferta().protecao());
         }
         if (previa.oferta().via() != Via.PROCESSO || previa.identidade() == null) {
-            return Resultado.de(Desfecho.FALHOU, "Forçar só existe para um processo comum. Um container já é parado à força pelo Docker depois de 10 s.");
+            return Resultado.de(Desfecho.FALHOU, "Forçar só existe para um processo comum. Um container é parado à força pelo próprio Docker se não fechar a tempo.");
+        }
+        if (!previa.pedidoEducadoEnviado()) {
+            return Resultado.de(Desfecho.FALHOU, AvaliadorDeProcessos.FORCAR_SO_DEPOIS);
         }
         return sinal(previa, Sinal.KILL, esperaDoKill, obs, cancelamento);
     }
@@ -163,8 +180,8 @@ public final class ControleRemoto implements ControleDeProcessos {
         }
         if (previa.oferta().via() == Via.CONTAINER) {
             String c = previa.alvo().container();
-            obs.etapa("Reiniciando o container " + c + "...");
-            return docker(ComandosDeProcessos.reiniciarContainer(c), Acao.REINICIAR, c, Desfecho.REINICIADO,
+            obs.etapa("Reiniciando o container " + c + "... (o app espera até 1 minuto)");
+            return docker(obs, ComandosDeProcessos.reiniciarContainer(c), Acao.REINICIAR, c, Desfecho.REINICIADO,
                 "O container " + c + " foi reiniciado. As conexões abertas com ele caíram por alguns segundos.");
         }
         if (previa.temServico() && previa.identidade() != null) {
@@ -186,27 +203,50 @@ public final class ControleRemoto implements ControleDeProcessos {
         return Resultado.de(Desfecho.FALHOU, AvaliadorDeProcessos.SEM_REINICIAR);
     }
 
-    private Resultado docker(java.util.List<String> comando, Acao acao, String container, Desfecho bom, String frase) throws InterruptedException {
+    private Resultado docker(ObservadorDeProcesso obs, java.util.List<String> comando, Acao acao, String container, Desfecho bom, String frase) throws InterruptedException {
         ResultadoExec r;
+        Thread aviso = avisoDeDemora(obs, container);
         try {
             r = argumentos.executar(comando, PRAZO_DO_DOCKER);
         } catch (ComandoDemorouException e) {
             return Resultado.de(Desfecho.FALHOU, "O Docker não terminou em 1 minuto. Veja o estado do container na aba Containers antes de tentar de novo.");
         } catch (IOException e) {
             return new Resultado(Desfecho.FALHOU, textoDaFalhaDeConexao(e), "");
+        } finally {
+            aviso.interrupt();
         }
         if (r.status() == 0) {
             return Resultado.de(bom, frase);
         }
         String erro = r.stderr().toLowerCase(java.util.Locale.ROOT);
         if (erro.contains("permission denied") || erro.contains("got permission denied")) {
+            ComandoParaODono paraUsuario = ComandosDeProcessos.paraODonoDoContainer(acao, container);
             return new Resultado(Desfecho.SEM_PERMISSAO, "O seu usuário não alcança o Docker deste servidor (não está no grupo docker). O app não usa sudo nem digita senha: "
-                + "rode o comando abaixo no Terminal, ou peça ao administrador para pôr o usuário no grupo docker.", ComandosDeProcessos.comandoDoContainerParaODono(acao, container));
+                + "rode o comando abaixo no Terminal, ou peça ao administrador para pôr o usuário no grupo docker." + (paraUsuario.temComando() ? "" : " " + paraUsuario.motivoSem()), paraUsuario.texto());
         }
         if (erro.contains("no such container")) {
             return Resultado.de(Desfecho.JA_SAIU, "O container " + container + " não existe mais. A lista vai atualizar.");
         }
         return Resultado.de(Desfecho.FALHOU, "O Docker não conseguiu: " + limpo(r.stderr()));
+    }
+
+    /** Depois de {@code avisoDoDockerMs} sem resposta, diz na tela que o container está demorando (o Docker espera 10 s antes de forçar). */
+    private Thread avisoDeDemora(ObservadorDeProcesso obs, String container) {
+        Thread t = new Thread(() -> {
+            try {
+                Thread.sleep(avisoDoDockerMs);
+                obs.etapa("Já passaram 10 s e o container " + container + " ainda não fechou: o Docker vai forçar em seguida. O app espera até 1 minuto pela resposta.");
+            } catch (InterruptedException e) {
+                // a resposta chegou antes do aviso: nada a dizer
+            }
+        }, "aviso-do-docker");
+        t.setDaemon(true);
+        t.start();
+        return t;
+    }
+
+    private ComandoParaODono paraODono(Integer pid, String nome, Sinal sinal) {
+        return ComandosDeProcessos.paraODono(pid, nome, sinal, ambiente.tipo());
     }
 
     private Resultado sinal(Previa previa, Sinal sinal, int espera, ObservadorDeProcesso obs, Cancelamento cancelamento) throws InterruptedException {
@@ -219,9 +259,12 @@ public final class ControleRemoto implements ControleDeProcessos {
         } catch (IOException e) {
             return new Resultado(Desfecho.FALHOU, textoDaFalhaDeConexao(e), "");
         }
-        String saida = r.stdout().strip();
+        String saida = ComandosDeProcessos.respostaDoSinal(r.stdout()).orElse("");
         switch (saida) {
             case ComandosDeProcessos.ENVIADO -> {
+                if (sinal == Sinal.TERM) {
+                    previa.registrarPedidoEducado();
+                }
                 return esperarSair(id, sinal, espera, obs, cancelamento);
             }
             case ComandosDeProcessos.MUDOU -> {
@@ -232,12 +275,14 @@ public final class ControleRemoto implements ControleDeProcessos {
                 return Resultado.de(Desfecho.JA_SAIU, "O processo " + pid + " já tinha saído. Nada foi enviado.");
             }
             case ComandosDeProcessos.SEM_PERMISSAO -> {
+                ComandoParaODono paraUsuario = paraODono(pid, id.nome(), sinal);
                 return new Resultado(Desfecho.SEM_PERMISSAO, "O sistema não deixou: este processo não é do usuário " + ambiente.usuarioDoApp() + ". O app não usa sudo nem digita senha. "
-                    + "Se você tem permissão, rode o comando abaixo no Terminal.", ComandosDeProcessos.comandoParaODono(pid, sinal, ambiente.tipo()));
+                    + (paraUsuario.temComando() ? "Se você tem permissão, rode o comando abaixo no Terminal." : paraUsuario.motivoSem()), paraUsuario.texto());
             }
             case ComandosDeProcessos.SEM_CONFERENCIA -> {
-                return new Resultado(Desfecho.SEM_CONFERENCIA, "Este servidor não deixa o app conferir a identidade do processo; por segurança, nada foi enviado.",
-                    ComandosDeProcessos.comandoParaODono(pid, sinal, ambiente.tipo()));
+                ComandoParaODono paraUsuario = paraODono(pid, id.nome(), sinal);
+                return new Resultado(Desfecho.SEM_CONFERENCIA, "O app não conseguiu conferir este processo (o servidor não deixa ler a identidade dele, ou é de outro usuário); "
+                    + "por segurança, nada foi enviado e não dá para dizer se ele saiu." + (paraUsuario.temComando() ? "" : " " + paraUsuario.motivoSem()), paraUsuario.texto());
             }
             default -> {
                 return Resultado.de(Desfecho.FALHOU, "O servidor respondeu de um jeito inesperado e o app não sabe se o pedido saiu. Confira a lista.");
@@ -246,32 +291,45 @@ public final class ControleRemoto implements ControleDeProcessos {
     }
 
     private Resultado esperarSair(IdentidadeDoProcesso id, Sinal sinal, int espera, ObservadorDeProcesso obs, Cancelamento cancelamento) throws InterruptedException {
+        Leitura ultima = Leitura.RODANDO;
         for (int s = 1; s <= espera; s++) {
             dorminhoco.dormir(1000);
             if (cancelamento.cancelado()) {
                 return Resultado.de(Desfecho.CANCELADO, "Você parou de esperar. O pedido (" + sinal.rotulo() + ") já tinha sido enviado; o programa pode ter fechado ou não: veja a lista.");
             }
             obs.aguardando(s, espera);
-            if (saiu(id)) {
+            ultima = ler(id);
+            if (ultima == Leitura.SAIU) {
                 return Resultado.de(Desfecho.ENCERRADO, "O processo " + id.pid() + " (" + limpo(id.nome()) + ") fechou" + (sinal == Sinal.KILL ? " (à força)." : "."));
             }
+        }
+        if (ultima == Leitura.ILEGIVEL) {
+            return Resultado.de(Desfecho.SEM_CONFERENCIA, "O pedido (" + sinal.rotulo() + ") foi enviado ao processo " + id.pid() + " (" + limpo(id.nome()) + "), mas o app não conseguiu "
+                + "ler a resposta do servidor para saber se ele fechou. Confira a lista antes de pedir de novo.");
         }
         return Resultado.de(Desfecho.AINDA_RODANDO, "O processo " + id.pid() + " (" + limpo(id.nome()) + ") recebeu o pedido e continua rodando depois de " + espera + " s. "
             + (sinal == Sinal.TERM ? "Ele pode estar terminando o que fazia. Você pode esperar mais ou forçar (" + Sinal.KILL.rotulo() + ")."
                 : "Isso é raro: ele pode estar preso no sistema. Confira de novo daqui a pouco."));
     }
 
-    /** O processo não é mais o mesmo (saiu, virou zumbi ou o número foi reaproveitado)? Uma leitura que falha NÃO vale como "saiu". */
-    private boolean saiu(IdentidadeDoProcesso id) throws InterruptedException {
+    private enum Leitura { RODANDO, SAIU, ILEGIVEL }
+
+    /**
+     * O processo continua o mesmo? SÓ conta como "fechou" a confirmação de verdade: o {@code ps} disse que o número não existe (status 1 e nenhuma
+     * reclamação) ou mostrou OUTRA identidade (virou zumbi, ou o número foi reaproveitado). Uma saída que o app não entende, um erro do {@code ps} ou a conexão
+     * que falha NÃO valem como "fechou": o app segue esperando e, no fim, diz que não conseguiu conferir.
+     */
+    private Leitura ler(IdentidadeDoProcesso id) throws InterruptedException {
         try {
             ResultadoExec r = argumentos.executar(ComandosDeProcessos.lerIdentidade(id.pid()), ComandosDeProcessos.ambienteDaLeitura(), new byte[0], PRAZO_CURTO);
-            if (r.stdout().isBlank()) {
-                return r.stderr().isBlank();
-            }
             Optional<IdentidadeDoProcesso> agora = IdentidadeDoProcesso.deSaidaDoPs(r.stdout(), id.pid());
-            return agora.isEmpty() || !agora.get().linha().equals(id.linha());
+            if (agora.isEmpty()) {
+                // nenhuma linha do ps que o app entenda: só vale como "fechou" se o ps disse que o número não existe (status 1, sem reclamar); banner do servidor em volta não conta
+                return r.status() == 1 && r.stderr().isBlank() ? Leitura.SAIU : Leitura.ILEGIVEL;
+            }
+            return agora.get().linha().equals(id.linha()) ? Leitura.RODANDO : Leitura.SAIU;
         } catch (IOException e) {
-            return false;
+            return Leitura.ILEGIVEL;
         }
     }
 

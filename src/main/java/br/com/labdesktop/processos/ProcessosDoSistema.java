@@ -43,6 +43,14 @@ public interface ProcessosDoSistema {
 
     boolean estaVivo(long pid);
 
+    /**
+     * Abre o processo AGORA, preso à hora de início que o sistema tem para ele: o {@code destroy()} do {@link ProcessHandle} recusa agir se o número já for de
+     * outro processo. Os sistemas de mentira dos testes não têm handle (vazio).
+     */
+    default Optional<ProcessHandle> abrir(long pid) {
+        return Optional.empty();
+    }
+
     /** O processo do app e os que o abriram (nunca se oferece nenhum deles). */
     Set<Integer> pidsDoApp();
 
@@ -73,6 +81,11 @@ public interface ProcessosDoSistema {
             @Override
             public boolean matar(long pid) {
                 return ProcessHandle.of(pid).map(ProcessHandle::destroyForcibly).orElse(false);
+            }
+
+            @Override
+            public Optional<ProcessHandle> abrir(long pid) {
+                return ProcessHandle.of(pid).filter(ProcessHandle::isAlive);
             }
 
             @Override

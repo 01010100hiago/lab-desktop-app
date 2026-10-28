@@ -15,9 +15,9 @@ import java.util.Optional;
  * agir (nome, dono e hora de início), primeiro o pedido educado e SÓ DEPOIS, por outro clique, o à força.
  *
  * <ul>
- *   <li><b>Mac e Linux</b>: o pedido é o SIGTERM e o à força é o SIGKILL, pelo {@link ProcessHandle} (o Java manda o sinal ao número, sem shell).</li>
- *   <li><b>Windows</b>: {@code taskkill /PID <n> /T} e, para forçar, {@code taskkill /PID <n> /T /F}, com a lista de argumentos fixa; só programas
- *       {@code .exe}.</li>
+ *   <li><b>Mac e Linux</b>: o pedido é o SIGTERM e o à força é o SIGKILL, pelo {@link ProcessHandle} que a prévia guardou ({@link Previa#handle()}): o Java prende o handle à hora de início e recusa agir se o número virou outro processo.</li>
+ *   <li><b>Windows</b>: {@code taskkill /PID <n>} e, para forçar, {@code taskkill /PID <n> /F}, com a lista de argumentos fixa; só programas {@code .exe}.
+ *       Nunca {@code /T}: o programa pode ter aberto outros, e o app não os encerra sem o usuário saber.</li>
  * </ul>
  * Não há Reiniciar para processo comum (o app não sabe como religá-lo).
  */
@@ -76,7 +76,11 @@ public final class ControleLocal implements ControleDeProcessos {
             throw new FalhaDeProcesso(Desfecho.MUDOU, "O processo " + pid + " agora é outro programa (" + limpo(ProcessoAlvo.nomeCurto(info.get().comando())) + "): o número foi reaproveitado. "
                 + "Nada foi enviado; a lista vai atualizar.");
         }
-        return new Previa(alvo, oferta, identidadeDe(info.get()), null);
+        ProcessHandle handle = windows() ? null : sistema.abrir(pid).orElse(null);
+        if (handle != null && info.get().inicio() != null && handle.info().startInstant().isPresent() && !handle.info().startInstant().get().equals(info.get().inicio())) {
+            throw new FalhaDeProcesso(Desfecho.MUDOU, "O processo " + pid + " agora é outro programa: o número foi reaproveitado. Nada foi enviado; a lista vai atualizar.");
+        }
+        return new Previa(alvo, oferta, identidadeDe(info.get()), null, handle, null);
     }
 
     private static IdentidadeDoProcesso identidadeDe(ProcessosDoSistema.Info i) {
@@ -115,11 +119,17 @@ public final class ControleLocal implements ControleDeProcessos {
         if (!identidadeDe(agora.get()).linha().equals(id.linha())) {
             return Resultado.de(Desfecho.MUDOU, "O número " + pid + " agora é de outro processo (o que você escolheu já saiu e o número foi reaproveitado). Nada foi enviado. A lista vai atualizar.");
         }
+        if (forcar && !previa.pedidoEducadoEnviado()) {
+            return Resultado.de(Desfecho.FALHOU, AvaliadorDeProcessos.FORCAR_SO_DEPOIS);
+        }
         Sinal sinal = forcar ? Sinal.KILL : Sinal.TERM;
         obs.etapa("Enviando o pedido " + (forcar ? "à força (" : "para o programa fechar (") + (windows() ? "taskkill" : sinal.rotulo()) + ")...");
-        Resultado recusa = windows() ? taskkill(pid, forcar) : sinalDoSistema(pid, forcar);
+        Resultado recusa = windows() ? taskkill(id, forcar) : sinalDoSistema(previa, forcar);
         if (recusa != null) {
             return recusa;
+        }
+        if (!forcar) {
+            previa.registrarPedidoEducado();
         }
         for (int s = 1; s <= espera; s++) {
             dorminhoco.dormir(1000);
@@ -132,24 +142,31 @@ public final class ControleLocal implements ControleDeProcessos {
             }
         }
         return Resultado.de(Desfecho.AINDA_RODANDO, "O processo " + pid + " (" + limpo(ProcessoAlvo.nomeCurto(id.nome())) + ") recebeu o pedido e continua rodando depois de " + espera + " s. "
-            + (forcar ? "Isso é raro: ele pode estar preso no sistema. Confira de novo daqui a pouco." : "Você pode esperar mais ou forçar (" + (windows() ? "taskkill /F" : Sinal.KILL.rotulo()) + ")."));
+            + (forcar ? "Isso é raro: ele pode estar preso no sistema. Confira de novo daqui a pouco." : "Você pode esperar mais ou forçar" + (windows() ? "." : " (" + Sinal.KILL.rotulo() + ").")));
     }
 
-    /** Mac e Linux: o sinal pelo Java. {@code null} = o pedido saiu e é hora de esperar. */
-    private Resultado sinalDoSistema(int pid, boolean forcar) {
-        boolean aceito = forcar ? sistema.matar(pid) : sistema.pedirParaFechar(pid);
+    /**
+     * Mac e Linux: o sinal pelo Java, pelo {@link ProcessHandle} que a prévia guardou (preso à hora de início: se o número virou outro processo, o Java recusa). Sem handle
+     * (sistema de mentira dos testes), pelo número. {@code null} = o pedido saiu e é hora de esperar.
+     */
+    private Resultado sinalDoSistema(Previa previa, boolean forcar) {
+        int pid = previa.identidade().pid();
+        ProcessHandle h = previa.handle();
+        boolean aceito = h != null ? (forcar ? h.destroyForcibly() : h.destroy()) : (forcar ? sistema.matar(pid) : sistema.pedirParaFechar(pid));
         if (aceito) {
             return null;
         }
         if (!sistema.estaVivo(pid)) {
             return Resultado.de(Desfecho.JA_SAIU, "O processo " + pid + " já tinha saído.");
         }
+        ComandoParaODono paraUsuario = ComandosDeProcessos.paraODono(pid, previa.identidade().nome(), forcar ? Sinal.KILL : Sinal.TERM, ambiente.tipo());
         return new Resultado(Desfecho.SEM_PERMISSAO, "O sistema não deixou: este processo não é do usuário " + ambiente.usuarioDoApp() + ". O app não usa sudo nem digita senha. "
-            + "Se você tem permissão, rode o comando abaixo no Terminal.", ComandosDeProcessos.comandoParaODono(pid, forcar ? Sinal.KILL : Sinal.TERM, ambiente.tipo()));
+            + (paraUsuario.temComando() ? "Se você tem permissão, rode o comando abaixo no Terminal." : paraUsuario.motivoSem()), paraUsuario.texto());
     }
 
     /** Windows: taskkill com a lista de argumentos fixa. */
-    private Resultado taskkill(int pid, boolean forcar) throws InterruptedException {
+    private Resultado taskkill(IdentidadeDoProcesso id, boolean forcar) throws InterruptedException {
+        int pid = id.pid();
         ResultadoExec r;
         try {
             r = executor.executar(ComandosDeProcessos.taskkill(pid, forcar), PRAZO);
@@ -161,8 +178,9 @@ public final class ControleLocal implements ControleDeProcessos {
         }
         String t = (r.stdout() + " " + r.stderr()).toLowerCase(Locale.ROOT);
         if (t.contains("access is denied") || t.contains("acesso negado")) {
+            ComandoParaODono paraUsuario = ComandosDeProcessos.paraODono(pid, ProcessoAlvo.nomeCurto(id.nome()), forcar ? Sinal.KILL : Sinal.TERM, ambiente.tipo());
             return new Resultado(Desfecho.SEM_PERMISSAO, "O Windows não deixou: este programa pede mais permissão do que o app tem. O app não eleva privilégio. "
-                + "Se você tem permissão, rode o comando abaixo num terminal aberto como administrador.", ComandosDeProcessos.comandoParaODono(pid, forcar ? Sinal.KILL : Sinal.TERM, ambiente.tipo()));
+                + (paraUsuario.temComando() ? "Se você tem permissão, rode o comando abaixo num terminal aberto como administrador." : paraUsuario.motivoSem()), paraUsuario.texto());
         }
         if (t.contains("not found") || t.contains("não foi encontrado") || t.contains("nao foi encontrado") || t.contains("no running instance")) {
             return Resultado.de(Desfecho.JA_SAIU, "O processo " + pid + " já tinha saído.");

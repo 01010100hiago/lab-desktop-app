@@ -57,7 +57,7 @@ class ControleRemotoDeContainerTest {
         assertTrue(comandos.isEmpty(), "preparar container não roda nada");
         Resultado r = c.encerrar(p, ObservadorDeProcesso.NENHUM, new Cancelamento());
         assertEquals(Desfecho.ENCERRADO, r.desfecho());
-        assertEquals(List.of(List.of("docker", "stop", "-t", "10", "app-loja-web")), comandos);
+        assertEquals(List.of(List.of("docker", "stop", "app-loja-web")), comandos);
         assertTrue(r.mensagem().contains("app-loja-web"));
     }
 
@@ -66,7 +66,7 @@ class ControleRemotoDeContainerTest {
         ControleRemoto c = controle();
         Resultado r = c.reiniciar(c.preparar(doContainer()), ObservadorDeProcesso.NENHUM, new Cancelamento());
         assertEquals(Desfecho.REINICIADO, r.desfecho());
-        assertEquals(List.of(List.of("docker", "restart", "-t", "10", "app-loja-web")), comandos);
+        assertEquals(List.of(List.of("docker", "restart", "app-loja-web")), comandos);
     }
 
     @Test
@@ -75,10 +75,10 @@ class ControleRemotoDeContainerTest {
         ControleRemoto c = controle();
         Resultado r = c.encerrar(c.preparar(doContainer()), ObservadorDeProcesso.NENHUM, new Cancelamento());
         assertEquals(Desfecho.SEM_PERMISSAO, r.desfecho());
-        assertEquals("sudo docker stop app-loja-web", r.comandoParaODono());
+        assertEquals("sudo docker ps -a --filter \"name=^app-loja-web$\"\n[ \"$(sudo docker inspect -f '{{.Name}}' app-loja-web)\" = \"/app-loja-web\" ] && sudo docker stop app-loja-web", r.comandoParaODono());
         assertTrue(comandos.stream().noneMatch(l -> l.contains("sudo")), "o app nunca roda sudo");
         Resultado rr = c.reiniciar(c.preparar(doContainer()), ObservadorDeProcesso.NENHUM, new Cancelamento());
-        assertEquals("sudo docker restart app-loja-web", rr.comandoParaODono());
+        assertTrue(rr.comandoParaODono().endsWith("&& sudo docker restart app-loja-web"), rr.comandoParaODono());
     }
 
     @Test
@@ -143,7 +143,7 @@ class ControleRemotoDeContainerTest {
         assertTrue(p.temServico());
         Resultado r = c.reiniciar(p, ObservadorDeProcesso.NENHUM, new Cancelamento());
         assertEquals(Desfecho.REINICIADO, r.desfecho());
-        assertEquals(List.of("systemctl", "--user", "restart", "meu-app.service"), comandos.get(comandos.size() - 1));
+        assertEquals(List.of("systemctl", "--user", "restart", "--", "meu-app.service"), comandos.get(comandos.size() - 1));
         assertEquals(Map.of("XDG_RUNTIME_DIR", "/run/user/1000"), ambientes.get(ambientes.size() - 1));
     }
 
@@ -194,5 +194,113 @@ class ControleRemotoDeContainerTest {
         Resultado r = c.encerrar(new Previa(doContainer(), c.avaliar(doContainer()), null, null), ObservadorDeProcesso.NENHUM, new Cancelamento());
         assertEquals(Desfecho.FALHOU, r.desfecho());
         assertEquals(Duration.ofSeconds(60).toSeconds(), 60);
+    }
+
+    @Test
+    void semDashTNoDockerEOAppEsperaAteUmMinuto() throws Exception {
+        ControleRemoto c = controle();
+        List<String> etapas = new ArrayList<>();
+        ObservadorDeProcesso obs = new ObservadorDeProcesso() {
+            @Override
+            public void etapa(String texto) {
+                etapas.add(texto);
+            }
+
+            @Override
+            public void aguardando(int passados, int total) { }
+        };
+        c.encerrar(c.preparar(doContainer()), obs, new Cancelamento());
+        assertTrue(comandos.stream().noneMatch(l -> l.contains("-t")), "o app não corta a espera do container");
+        assertTrue(etapas.get(0).contains("até 10 s") && etapas.get(0).contains("1 minuto"), etapas.toString());
+    }
+
+    @Test
+    void passadosDezSegundosATelaDizQueOContainerEstaDemorando() throws Exception {
+        java.util.concurrent.CountDownLatch libera = new java.util.concurrent.CountDownLatch(1);
+        ExecutorDeArgumentos lento = (a, amb, in, prazo) -> {
+            try {
+                libera.await(10, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return ok("");
+        };
+        ControleRemoto c = new ControleRemoto((l, s, p) -> ok(""), lento, AmbienteDeProcessos.servidor("labuser", Set.of()), ms -> { }, 2, 1).comAvisoDoDockerEm(50);
+        List<String> etapas = new java.util.concurrent.CopyOnWriteArrayList<>();
+        ObservadorDeProcesso obs = new ObservadorDeProcesso() {
+            @Override
+            public void etapa(String texto) {
+                etapas.add(texto);
+                if (texto.contains("Já passaram 10 s")) {
+                    libera.countDown();
+                }
+            }
+
+            @Override
+            public void aguardando(int passados, int total) { }
+        };
+        Resultado r = c.encerrar(c.preparar(doContainer()), obs, new Cancelamento());
+        assertEquals(Desfecho.ENCERRADO, r.desfecho());
+        assertTrue(etapas.stream().anyMatch(t -> t.contains("Já passaram 10 s") && t.contains("app-loja-web")), etapas.toString());
+    }
+
+    @Test
+    void respostaRapidaNaoMostraOAvisoDeDemora() throws Exception {
+        ControleRemoto c = controle().comAvisoDoDockerEm(100);
+        List<String> etapas = new ArrayList<>();
+        ObservadorDeProcesso obs = new ObservadorDeProcesso() {
+            @Override
+            public void etapa(String texto) {
+                etapas.add(texto);
+            }
+
+            @Override
+            public void aguardando(int passados, int total) { }
+        };
+        c.encerrar(c.preparar(doContainer()), obs, new Cancelamento());
+        Thread.sleep(250);
+        assertTrue(etapas.stream().noneMatch(t -> t.contains("Já passaram 10 s")), etapas.toString());
+    }
+
+    @Test
+    void containerDeProxyETuneEProtegidoPeloNomeMesmoSemOdonoMarcar() {
+        ControleRemoto c = controle();
+        for (String nome : new String[] {"cloudflared", "lab-cloudflared-1", "traefik", "caddy", "nginx-proxy", "meu-proxy-reverso", "dockerd-rootless", "painel-lab"}) {
+            FalhaDeProcesso f = assertThrows(FalhaDeProcesso.class, () -> c.preparar(new ProcessoAlvo(900, "node", "root", nome, null)), nome);
+            assertEquals(Desfecho.PROTEGIDO, f.desfecho(), nome);
+        }
+        assertTrue(comandos.isEmpty());
+    }
+
+    @Test
+    void containerMarcadoPeloDonoEProtegidoNaqueleServidor() throws Exception {
+        ExecutorDeArgumentos args = (a, amb, in, prazo) -> {
+            comandos.add(a);
+            return ok("");
+        };
+        ControleRemoto comMarca = new ControleRemoto((l, s, p) -> ok(""), args, AmbienteDeProcessos.servidor("labuser", Set.of("App-Loja-Web")), ms -> { }, 2, 1);
+        FalhaDeProcesso f = assertThrows(FalhaDeProcesso.class, () -> comMarca.preparar(doContainer()));
+        assertEquals(Desfecho.PROTEGIDO, f.desfecho());
+        assertTrue(f.getMessage().contains("marcou"), f.getMessage());
+        assertEquals(Oferta.Situacao.LIBERADO, controle().avaliar(doContainer()).situacao(), "sem a marca, nada o protege");
+    }
+
+    @Test
+    void filhoDeServicoProtegidoNuncaOfereceReiniciarOServico() throws Exception {
+        for (String unidade : new String[] {"docker.service", "cloudflared.service", "sshd.service", "ssh.service", "containerd.service", "systemd-resolved.service", "NetworkManager.service"}) {
+            resposta = cmd -> {
+                if (cmd.get(0).equals("ps")) {
+                    return ok("  4242  1000 Tue Oct 28 12:00:00 2026 meu-app\n");
+                }
+                if (cmd.get(0).equals("cat")) {
+                    return ok("0::/user.slice/user-1000.slice/user@1000.service/app.slice/" + unidade + "\n");
+                }
+                return ok("");
+            };
+            Previa p = controle().preparar(new ProcessoAlvo(4242, "meu-app", "labuser", null, null));
+            assertFalse(p.temServico(), unidade + ": o processo é filho de um serviço protegido");
+            Resultado r = controle().reiniciar(p, ObservadorDeProcesso.NENHUM, new Cancelamento());
+            assertEquals(Desfecho.FALHOU, r.desfecho(), unidade);
+        }
     }
 }

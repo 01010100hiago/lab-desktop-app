@@ -44,8 +44,8 @@ class ComandosDeProcessosTest {
 
     @Test
     void containerPassaPelaRegraDoDocker() {
-        assertEquals(List.of("docker", "stop", "-t", "10", "app-loja-web"), ComandosDeProcessos.pararContainer("app-loja-web"));
-        assertEquals(List.of("docker", "restart", "-t", "10", "lab-claude-x"), ComandosDeProcessos.reiniciarContainer("lab-claude-x"));
+        assertEquals(List.of("docker", "stop", "app-loja-web"), ComandosDeProcessos.pararContainer("app-loja-web"));
+        assertEquals(List.of("docker", "restart", "lab-claude-x"), ComandosDeProcessos.reiniciarContainer("lab-claude-x"));
         for (String ruim : new String[] {"", "a b", "a;b", "$(id)", "-rf", "a/b", "nome\nnovo", "`x`", "a&b", "a|b", "x".repeat(200)}) {
             assertThrows(IllegalArgumentException.class, () -> ComandosDeProcessos.pararContainer(ruim), ruim);
             assertThrows(IllegalArgumentException.class, () -> ComandosDeProcessos.reiniciarContainer(ruim), ruim);
@@ -55,10 +55,10 @@ class ComandosDeProcessosTest {
 
     @Test
     void servicoDoUsuarioPassaPelaRegraDeUnidade() {
-        assertEquals(List.of("systemctl", "--user", "restart", "meu-app.service"), ComandosDeProcessos.reiniciarServicoDoUsuario("meu-app.service"));
-        assertEquals("env XDG_RUNTIME_DIR=/run/user/1000 systemctl --user restart meu-app.service",
+        assertEquals(List.of("systemctl", "--user", "restart", "--", "meu-app.service"), ComandosDeProcessos.reiniciarServicoDoUsuario("meu-app.service"));
+        assertEquals("env XDG_RUNTIME_DIR=/run/user/1000 systemctl --user restart -- meu-app.service",
             ExecutorDeArgumentos.linhaRemota(ComandosDeProcessos.reiniciarServicoDoUsuario("meu-app.service"), ComandosDeProcessos.ambienteDoServicoDoUsuario("1000")));
-        for (String ruim : new String[] {"meu app.service", "x;y.service", "../x.service", "app", "app.timer", "$(id).service", "a\\x2db.service"}) {
+        for (String ruim : new String[] {"meu app.service", "x;y.service", "../x.service", "app", "app.timer", "$(id).service", "a\\x2db.service", "-x.service", "--now.service", "_x.service", ".x.service"}) {
             assertThrows(IllegalArgumentException.class, () -> ComandosDeProcessos.reiniciarServicoDoUsuario(ruim), ruim);
         }
         assertThrows(IllegalArgumentException.class, () -> ComandosDeProcessos.ambienteDoServicoDoUsuario("1000; rm"));
@@ -77,17 +77,16 @@ class ComandosDeProcessosTest {
 
     @Test
     void taskkillSoComNumeroValidadoELista() {
-        assertEquals(List.of("taskkill", "/PID", "4242", "/T"), ComandosDeProcessos.taskkill(4242, false));
-        assertEquals(List.of("taskkill", "/PID", "4242", "/T", "/F"), ComandosDeProcessos.taskkill(4242, true));
+        assertEquals(List.of("taskkill", "/PID", "4242"), ComandosDeProcessos.taskkill(4242, false), "sem /T: não encerra os programas que ele abriu");
+        assertEquals(List.of("taskkill", "/PID", "4242", "/F"), ComandosDeProcessos.taskkill(4242, true));
         assertThrows(IllegalArgumentException.class, () -> ComandosDeProcessos.taskkill(1, false));
     }
 
     @Test
-    void comandosParaODonoNuncaSaoExecutadosENuncaPedemSenhaDoApp() {
-        assertEquals("sudo kill -TERM 77", ComandosDeProcessos.comandoParaODono(77, Sinal.TERM, AmbienteDeProcessos.Tipo.SERVIDOR_LINUX));
-        assertEquals("sudo kill -KILL 77", ComandosDeProcessos.comandoParaODono(77, Sinal.KILL, AmbienteDeProcessos.Tipo.COMPUTADOR_MAC_OU_LINUX));
-        assertTrue(ComandosDeProcessos.comandoParaODono(77, Sinal.KILL, AmbienteDeProcessos.Tipo.COMPUTADOR_WINDOWS).startsWith("taskkill /PID 77 /T /F"));
-        assertEquals("sudo docker stop meu-app", ComandosDeProcessos.comandoDoContainerParaODono(Acao.ENCERRAR, "meu-app"));
-        assertEquals("sudo docker restart meu-app", ComandosDeProcessos.comandoDoContainerParaODono(Acao.REINICIAR, "meu-app"));
+    void respostaDoSinalIgnoraORuidoDoBannerEPegaAUltimaMarcada() {
+        assertEquals(Optional.of("enviado"), ComandosDeProcessos.respostaDoSinal("Bem-vindo ao servidor\nenviado\nlabdesktop:enviado\n"));
+        assertEquals(Optional.of("mudou"), ComandosDeProcessos.respostaDoSinal("labdesktop:enviado\nlabdesktop:mudou\n"));
+        assertEquals(Optional.empty(), ComandosDeProcessos.respostaDoSinal("enviado\n"), "sem a marca, o texto solto do .bashrc não vale");
+        assertEquals(Optional.empty(), ComandosDeProcessos.respostaDoSinal(null));
     }
 }

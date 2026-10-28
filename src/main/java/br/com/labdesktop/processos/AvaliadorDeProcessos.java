@@ -18,6 +18,9 @@ public final class AvaliadorDeProcessos {
     public static final String SEM_REINICIAR = "Reiniciar só existe para containers e serviços: de um processo comum o app não sabe como religá-lo "
         + "(quem o abriu, um serviço ou um terminal, é quem sabe). Encerrar o fecha; para voltar, abra-o de novo do jeito de sempre.";
 
+    /** Por que o à força é recusado sem o pedido educado antes. */
+    public static final String FORCAR_SO_DEPOIS = "Primeiro peça ao programa para fechar (Encerrar). O à força só vale depois disso, para ele ter a chance de salvar o que está fazendo.";
+
     private AvaliadorDeProcessos() { }
 
     public static Oferta avaliar(ProcessoAlvo alvo, AmbienteDeProcessos ambiente) {
@@ -33,17 +36,22 @@ public final class AvaliadorDeProcessos {
                     + "(o container e tudo o que roda nele param) e Reiniciar roda docker restart (para e sobe de novo).",
                 "", "");
         }
+        boolean windows = ambiente.tipo() == AmbienteDeProcessos.Tipo.COMPUTADOR_WINDOWS;
         boolean mesmo = ambiente.ehDoMesmoUsuario(alvo.usuario());
         if (!mesmo) {
             String quem = alvo.usuario().isBlank() ? "outro usuário" : alvo.usuario();
+            ComandoParaODono comando = ComandosDeProcessos.paraODono(alvo.pid(), alvo.nome(), Sinal.TERM, ambiente.tipo());
             return new Oferta(Oferta.Situacao.SEM_PERMISSAO, Via.PROCESSO, false, "",
                 "Este processo é de " + quem + ", e o app age com o usuário " + (ambiente.usuarioDoApp().isBlank() ? "da sua conexão" : ambiente.usuarioDoApp())
-                    + ". O app não usa sudo nem digita senha: se você tem permissão, rode o comando abaixo no Terminal.",
-                AvaliadorDeProcessos.SEM_REINICIAR, ComandosDeProcessos.comandoParaODono(alvo.pid(), Sinal.TERM, ambiente.tipo()));
+                    + ". O app não usa sudo nem digita senha: "
+                    + (comando.temComando() ? "se você tem permissão, rode o comando abaixo no Terminal" + (windows ? " aberto como administrador." : ".") : comando.motivoSem()),
+                AvaliadorDeProcessos.SEM_REINICIAR, comando.texto());
         }
-        return new Oferta(Oferta.Situacao.LIBERADO, Via.PROCESSO, false, "",
-            "O app pede ao programa para fechar (" + Sinal.TERM.rotulo() + "), como um Ctrl+C. Ele pode levar alguns segundos. Se não fechar, "
-                + "você decide se quer forçar (" + Sinal.KILL.rotulo() + "), que mata na hora e não deixa o programa salvar nada.",
-            SEM_REINICIAR, "");
+        String explicacao = windows
+            ? "O app pede ao programa para fechar, como quando você clica no X da janela. Ele pode levar alguns segundos. Se não fechar, "
+                + "você decide se quer forçar, que encerra o programa na hora e não deixa ele salvar nada."
+            : "O app pede ao programa para fechar (" + Sinal.TERM.rotulo() + "), como um Ctrl+C. Ele pode levar alguns segundos. Se não fechar, "
+                + "você decide se quer forçar (" + Sinal.KILL.rotulo() + "), que mata na hora e não deixa o programa salvar nada.";
+        return new Oferta(Oferta.Situacao.LIBERADO, Via.PROCESSO, false, "", explicacao, SEM_REINICIAR, "");
     }
 }

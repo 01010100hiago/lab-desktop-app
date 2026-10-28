@@ -11,14 +11,14 @@ import java.util.regex.Pattern;
  * texto do servidor viaja pelo stdin.
  *
  * <p>Só o {@link #enviarSinal} usa o {@code sh -c}, porque confere a identidade e envia o sinal NO MESMO comando (sem espaço para o número ser
- * reaproveitado entre a conferência e o {@code kill}). Nenhum comando usa {@code sudo}: o app nunca eleva privilégio nem digita senha.
+ * reaproveitado entre a conferência e o {@code kill}). Nenhum comando que o app EXECUTA usa {@code sudo}: o app nunca eleva privilégio nem digita senha (o comando do usuário, que ele só mostra, é {@link ComandoParaODono}).
  */
 public final class ComandosDeProcessos {
 
     /** Nome de container válido para o Docker. */
     public static final Pattern CONTAINER = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$");
     /** Unidade do systemd que o app aceita reiniciar: nome simples terminado em {@code .service}. */
-    public static final Pattern UNIDADE = Pattern.compile("^[A-Za-z0-9_.@:-]{1,100}\\.service$");
+    public static final Pattern UNIDADE = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9_.@:-]{0,99}\\.service$");
 
     /** O que o comando de sinal imprime em cada caso. */
     public static final String ENVIADO = "enviado";
@@ -26,9 +26,6 @@ public final class ComandosDeProcessos {
     public static final String JA_SAIU = "ja-saiu";
     public static final String SEM_PERMISSAO = "sem-permissao";
     public static final String SEM_CONFERENCIA = "sem-conferencia";
-
-    /** Segundos que o Docker espera o container fechar antes de matá-lo. */
-    static final String ESPERA_DO_DOCKER = "10";
 
     private ComandosDeProcessos() { }
 
@@ -51,10 +48,14 @@ public final class ComandosDeProcessos {
 
     // ---- escritas (só pelo clique do usuário) ----
 
+    /** O que o comando de sinal escreve antes de cada resposta: o resto da saída (banner, {@code .bashrc}) é ruído e é ignorado. */
+    public static final String MARCA = "labdesktop:";
+
     /**
      * Confere a identidade e envia o sinal, num comando só. Lê UMA linha do stdin (a identidade esperada, {@link IdentidadeDoProcesso#linha()}) e
-     * imprime {@value #ENVIADO}, {@value #MUDOU} (o número agora é de outro processo; nada enviado), {@value #JA_SAIU}, {@value #SEM_PERMISSAO} ou
-     * {@value #SEM_CONFERENCIA} (o {@code ps} do servidor não sabe dizer a hora de início: nada enviado).
+     * imprime, numa linha própria com a {@value #MARCA}, {@value #ENVIADO}, {@value #MUDOU} (o número agora é de outro processo; nada enviado),
+     * {@value #JA_SAIU}, {@value #SEM_PERMISSAO} ou {@value #SEM_CONFERENCIA} (o {@code ps} do servidor não sabe dizer a hora de início, ou o processo é de
+     * outro usuário e o servidor o esconde: nada enviado, e sem prova de que saiu).
      */
     public static String enviarSinal(int pid, Sinal sinal) {
         int n = ValidadorDePid.exigir(pid);
@@ -62,28 +63,47 @@ public final class ComandosDeProcessos {
             + "IFS= read -r e; "
             + "a=$(LC_ALL=C ps -o pid=,uid=,lstart=,comm= -p " + n + " 2>/dev/null | tr -s \" \" | sed \"s/^ //; s/ $//\"); "
             + "if [ -z \"$a\" ]; then "
-            + "if [ -e /proc/" + n + " ] || kill -0 " + n + " 2>/dev/null; then echo " + SEM_CONFERENCIA + "; else echo " + JA_SAIU + "; fi; "
-            + "elif [ \"$a\" != \"$e\" ]; then echo " + MUDOU + "; "
-            + "elif kill -" + sinal.nome() + " " + n + " 2>/dev/null; then echo " + ENVIADO + "; "
-            + "else echo " + SEM_PERMISSAO + "; fi'";
+            + "d=$(echo \"$e\" | cut -d\" \" -f2); "
+            + "if [ \"$d\" != \"$(id -u)\" ] || [ -e /proc/" + n + " ] || kill -0 " + n + " 2>/dev/null; then echo " + MARCA + SEM_CONFERENCIA + "; else echo " + MARCA + JA_SAIU + "; fi; "
+            + "elif [ \"$a\" != \"$e\" ]; then echo " + MARCA + MUDOU + "; "
+            + "elif kill -" + sinal.nome() + " " + n + " 2>/dev/null; then echo " + MARCA + ENVIADO + "; "
+            + "else echo " + MARCA + SEM_PERMISSAO + "; fi'";
     }
 
-    /** {@code docker stop -t 10 <container>}: o Docker pede, espera 10 s e, se preciso, mata. */
+    /** A resposta do comando de sinal: a ÚLTIMA linha com a {@link #MARCA}; vazio se nenhuma (o app não sabe o que houve). */
+    public static java.util.Optional<String> respostaDoSinal(String saida) {
+        if (saida == null) {
+            return java.util.Optional.empty();
+        }
+        String ultima = null;
+        for (String linha : saida.split("\n")) {
+            String t = linha.strip();
+            if (t.startsWith(MARCA)) {
+                ultima = t.substring(MARCA.length());
+            }
+        }
+        return java.util.Optional.ofNullable(ultima);
+    }
+
+    /**
+     * {@code docker stop <container>}: o Docker pede, espera o tempo que ele mesmo escolhe (10 s, a menos que o container peça outro, e há containers que
+     * pedem mais) e, se preciso, mata. O app NÃO passa {@code -t}: não corta a espera do container, só a acompanha.
+     */
     public static List<String> pararContainer(String container) {
-        return List.of("docker", "stop", "-t", ESPERA_DO_DOCKER, exigirContainer(container));
+        return List.of("docker", "stop", exigirContainer(container));
     }
 
-    /** {@code docker restart -t 10 <container>}. */
+    /** {@code docker restart <container>}, com a espera do próprio container. */
     public static List<String> reiniciarContainer(String container) {
-        return List.of("docker", "restart", "-t", ESPERA_DO_DOCKER, exigirContainer(container));
+        return List.of("docker", "restart", exigirContainer(container));
     }
 
-    /** {@code systemctl --user restart <unidade>}; o {@code XDG_RUNTIME_DIR} vem de {@link #ambienteDoServicoDoUsuario}. */
+    /** {@code systemctl --user restart -- <unidade>} (o {@code --} garante que o nome nunca vira opção); o {@code XDG_RUNTIME_DIR} vem de {@link #ambienteDoServicoDoUsuario}. */
     public static List<String> reiniciarServicoDoUsuario(String unidade) {
         if (unidade == null || !UNIDADE.matcher(unidade).matches()) {
             throw new IllegalArgumentException("Nome de serviço fora do que o app aceita.");
         }
-        return List.of("systemctl", "--user", "restart", unidade);
+        return List.of("systemctl", "--user", "restart", "--", unidade);
     }
 
     /** O ambiente que o {@code systemctl --user} precisa por SSH: onde fica o barramento do usuário. */
@@ -94,24 +114,23 @@ public final class ComandosDeProcessos {
         return Map.of("XDG_RUNTIME_DIR", "/run/user/" + uid);
     }
 
-    /** Windows: {@code taskkill /PID <n> /T} (com a árvore de filhos); {@code forcar} acrescenta {@code /F}. */
+    /**
+     * Windows: {@code taskkill /PID <n>}; {@code forcar} acrescenta {@code /F}. SEM {@code /T}: o {@code /T} também encerra os programas que o
+     * processo abriu, e o app não faz isso sem o usuário saber (por isso nunca o usa; os filhos podem continuar, e a tela não promete o contrário).
+     */
     public static List<String> taskkill(int pid, boolean forcar) {
         int n = ValidadorDePid.exigir(pid);
-        return forcar ? List.of("taskkill", "/PID", String.valueOf(n), "/T", "/F") : List.of("taskkill", "/PID", String.valueOf(n), "/T");
+        return forcar ? List.of("taskkill", "/PID", String.valueOf(n), "/F") : List.of("taskkill", "/PID", String.valueOf(n));
     }
 
-    /** O comando que o USUÁRIO roda sozinho quando o app não tem permissão (nunca é executado pelo app). */
-    public static String comandoParaODono(Integer pid, Sinal sinal, AmbienteDeProcessos.Tipo tipo) {
-        int n = ValidadorDePid.exigir(pid);
-        return switch (tipo) {
-            case COMPUTADOR_WINDOWS -> "taskkill /PID " + n + " /T" + (sinal == Sinal.KILL ? " /F" : "") + "   (num terminal aberto como administrador)";
-            default -> "sudo kill -" + sinal.nome() + " " + n;
-        };
+    /** O comando que o USUÁRIO roda sozinho quando o app não tem permissão (nunca é executado pelo app): guardado pelo nome do programa. */
+    public static ComandoParaODono paraODono(Integer pid, String nome, Sinal sinal, AmbienteDeProcessos.Tipo tipo) {
+        return ComandoParaODono.doProcesso(pid, nome, sinal, tipo);
     }
 
-    /** O comando para o usuário rodar quando é um container e o usuário não alcança o Docker. */
-    public static String comandoDoContainerParaODono(Acao acao, String container) {
-        return "sudo docker " + (acao == Acao.REINICIAR ? "restart" : "stop") + " " + exigirContainer(container);
+    /** O comando para o usuário rodar quando é um container e o usuário não alcança o Docker: guardado pelo nome do container. */
+    public static ComandoParaODono paraODonoDoContainer(Acao acao, String container) {
+        return ComandoParaODono.doContainer(acao, container);
     }
 
     private static String exigirContainer(String container) {

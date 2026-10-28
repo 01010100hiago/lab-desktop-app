@@ -80,11 +80,7 @@ class ProcessosSemEfeitoSozinhoTest {
         assertEquals(List.of(), quemUsa(Pattern.compile("\\bcontrole\\.(encerrar|forcar|reiniciar)\\("), Set.of(ACOES)),
             "o controle só age pelo motor do diálogo de confirmação, montado em AcoesDaInterface");
         assertEquals(List.of(), quemUsa(Pattern.compile("\\bnew DialogoProcesso\\("), Set.of(ACOES)), "só AcoesDaInterface abre a confirmação");
-        String acoes = semComentarios(RAIZ.resolve(ACOES));
-        int i = acoes.indexOf("public void encerrarOuReiniciarProcesso(");
-        assertTrue(i > 0);
-        String corpo = acoes.substring(i, acoes.indexOf("controle.avaliar(alvo)", i));
-        assertTrue(corpo.contains("recusarSemAsAcoes()"), "a mesma trava das outras ações de escrita vale por dentro");
+        // que a trava vale por dentro (e que "Sem permissão", que só mostra um comando, passa por ela) é COMPORTAMENTO: ProcessosPelasAcoesDaJanelaTest clica com a trava fechada
     }
 
     @Test
@@ -93,7 +89,7 @@ class ProcessosSemEfeitoSozinhoTest {
         assertEquals(List.of(), quemUsa(Pattern.compile("\\bComandosDeProcessos\\b"), permitidos), "ninguém de fora monta o comando de sinal");
         assertEquals(List.of(), quemUsa(Pattern.compile("kill -(TERM|KILL|[0-9])"), permitidos));
         assertEquals(List.of(), quemUsa(Pattern.compile("\"taskkill\""), permitidos));
-        assertEquals(List.of(), quemUsa(Pattern.compile("\\.destroy(Forcibly)?\\(\\)"), Set.of("processos/ProcessosDoSistema.java", "terminal/TransporteLocal.java", "local/ProcessosLocais.java",
+        assertEquals(List.of(), quemUsa(Pattern.compile("\\.destroy(Forcibly)?\\(\\)"), Set.of("processos/ProcessosDoSistema.java", "processos/ControleLocal.java", "terminal/TransporteLocal.java", "local/ProcessosLocais.java",
             "terminal/SessaoTerminal.java", "ui/terminal/SshTtyConnector.java", "ui/terminal/PainelTerminal.java",
             "plataforma/ConsultaPorProcesso.java", "AutoTeste.java")), "ninguém mais mata processo do computador (as duas exceções encerram o PRÓPRIO processo filho que o app abriu, uma consulta de sistema e o autoteste)");
     }
@@ -105,8 +101,10 @@ class ProcessosSemEfeitoSozinhoTest {
             assertTrue(!Pattern.compile("\"sudo").matcher(codigo).find(), nome + " nunca monta um comando com sudo (o do usuário vem de ComandosDeProcessos, só para mostrar)");
         }
         String comandos = semComentarios(RAIZ.resolve("processos/ComandosDeProcessos.java"));
-        // as duas únicas aparições de sudo são os comandos que o USUÁRIO roda (nunca passam por executor)
-        assertEquals(2, Pattern.compile("\"sudo ").matcher(comandos).results().count(), "sudo só nas frases para o usuário");
+        assertEquals(0, Pattern.compile("sudo (kill|docker|sh)").matcher(comandos).results().count(), "nenhum comando que o app executa tem sudo");
+        // o sudo só existe no texto que o USUÁRIO copia e roda sozinho (nunca passa por executor): ComandoParaODono, e em mais nenhum arquivo do app
+        assertEquals(List.of(), quemUsa(Pattern.compile("sudo (kill|docker|sh)"), Set.of("processos/ComandoParaODono.java")).stream()
+            .filter(n -> n.startsWith("processos/")).toList(), "no pacote de processos o comando com sudo só está em ComandoParaODono");
     }
 
     @Test
@@ -140,8 +138,6 @@ class ProcessosSemEfeitoSozinhoTest {
             assertTrue(!assistente.contains(escrita), "o assistente não escreve nem prepara a publicação: " + escrita);
         }
         assertEquals(List.of(), quemUsa(Pattern.compile("\\bnew DialogoAdicionarDominio\\("), Set.of(ACOES)));
-        String acoes = semComentarios(RAIZ.resolve(ACOES));
-        int i = acoes.indexOf("public void adicionarDominio(");
-        assertTrue(acoes.substring(i, acoes.indexOf("public void adicionarDominioEscolhendoOProjeto", i)).contains("recusarSemAsAcoes()"));
+        // a trava vale por dentro: AdicionarDominioPelaInterfaceTest.semAsAcoesLigadasNadaAbreEOAppDiz clica com ela fechada
     }
 }

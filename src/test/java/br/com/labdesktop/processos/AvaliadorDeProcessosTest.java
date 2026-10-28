@@ -43,8 +43,24 @@ class AvaliadorDeProcessosTest {
         assertEquals(Oferta.Situacao.SEM_PERMISSAO, o.situacao());
         assertTrue(o.podeEncerrar(), "o botão abre o aviso com o comando");
         assertFalse(o.reiniciarLigado());
-        assertEquals("sudo kill -TERM 3200", o.comandoParaODono());
+        assertEquals("ps -o pid,user,lstart,comm -p 3200\nps -o comm= -p 3200 | grep -Eq '(^|/)postgres$' && sudo kill -TERM 3200", o.comandoParaODono());
         assertTrue(o.explicacao().contains("não usa sudo nem digita senha"));
+    }
+
+    @Test
+    void nomeEstranhoNaoViraComandoEATelaDizPorque() {
+        for (String ruim : new String[] {"nginx; rm -rf /", "a b", "$(id)", "x`id`", "a'b", "a\"b", "a|b", "a&b", "-rf", "a\nb"}) {
+            Oferta o = AvaliadorDeProcessos.avaliar(new ProcessoAlvo(3200, ruim, "postgres", null, null), SERVIDOR);
+            if (o.situacao() == Oferta.Situacao.PROTEGIDO) {
+                continue;
+            }
+            assertEquals(Oferta.Situacao.SEM_PERMISSAO, o.situacao(), ruim);
+            if (o.comandoParaODono().isBlank()) {
+                assertTrue(o.explicacao().contains("não monta o comando"), ruim + ": " + o.explicacao());
+            } else {
+                assertFalse(o.comandoParaODono().contains(ruim) && !ruim.matches("[A-Za-z0-9._-]+"), "o nome fora da regra nunca chega ao comando: " + ruim);
+            }
+        }
     }
 
     @Test
@@ -85,7 +101,9 @@ class AvaliadorDeProcessosTest {
         assertEquals(Oferta.Situacao.LIBERADO, AvaliadorDeProcessos.avaliar(new ProcessoAlvo(3000, "notepad.exe", "PC\\ANA", null, null), win).situacao());
         Oferta outro = AvaliadorDeProcessos.avaliar(new ProcessoAlvo(3001, "notepad.exe", "PC\\bia", null, null), win);
         assertEquals(Oferta.Situacao.SEM_PERMISSAO, outro.situacao());
-        assertTrue(outro.comandoParaODono().startsWith("taskkill /PID 3001 /T"), outro.comandoParaODono());
+        assertTrue(outro.comandoParaODono().contains("taskkill /PID 3001 /FI \"PID eq 3001\" /FI \"IMAGENAME eq notepad.exe\""), outro.comandoParaODono());
+        assertFalse(outro.explicacao().contains("SIGTERM") || outro.explicacao().contains("Ctrl+C"), "no Windows não há SIGTERM nem Ctrl+C");
+        assertFalse(AvaliadorDeProcessos.avaliar(new ProcessoAlvo(3000, "notepad.exe", "PC\\ana", null, null), win).explicacao().contains("SIGTERM"));
         assertFalse(outro.comandoParaODono().contains("sudo"));
     }
 }
