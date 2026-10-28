@@ -79,11 +79,11 @@ class SegurancaDesligarSenhaTest {
         for (Tema tema : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
             Visual.tema(tema);
             PaginaSeguranca nova = pagina(() -> { }, SaidasDeSeguranca.SSHD_COM_SENHA);
+            int altura = Visual.alturaPreferida(nova, 1100);
+            assertTrue(altura <= 700, "a aba de Segurança com o botão cabe numa janela de 1100 x 700 sem rolar (pede " + altura + " px)");
             List<String> achados = Visual.naEdt(() -> SemTransbordo.achados(nova));
-            Visual.alturaPreferida(nova, 1000);
-            achados = Visual.naEdt(() -> SemTransbordo.achados(nova));
             assertTrue(achados.isEmpty(), "transborda: " + achados);
-            Visual.salvar(Visual.renderizar(nova, 1000, Math.max(560, Visual.alturaPreferida(nova, 1000))), "seguranca-ssh-senha-ligada-" + tema.name().toLowerCase());
+            Visual.salvar(Visual.renderizar(nova, 1100, 700), "seguranca-ssh-senha-ligada-" + tema.name().toLowerCase());
         }
         Visual.tema(Tema.CLARO);
     }
@@ -99,7 +99,7 @@ class SegurancaDesligarSenhaTest {
         for (Tema tema : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
             Visual.tema(tema);
             PaginaSeguranca nova = pagina(() -> { }, SaidasDeSeguranca.SSHD_SEGURO);
-            Visual.salvar(Visual.renderizar(nova, 1000, Math.max(560, Visual.alturaPreferida(nova, 1000))), "seguranca-ssh-senha-desligada-" + tema.name().toLowerCase());
+            Visual.salvar(Visual.renderizar(nova, 1100, 700), "seguranca-ssh-senha-desligada-" + tema.name().toLowerCase());
         }
         Visual.tema(Tema.CLARO);
     }
@@ -118,7 +118,7 @@ class SegurancaDesligarSenhaTest {
         for (Tema tema : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
             Visual.tema(tema);
             PaginaSeguranca nova = pagina(() -> { }, parcial);
-            Visual.salvar(Visual.renderizar(nova, 1000, Math.max(560, Visual.alturaPreferida(nova, 1000))), "seguranca-ssh-senha-parcial-" + tema.name().toLowerCase());
+            Visual.salvar(Visual.renderizar(nova, 1100, 700), "seguranca-ssh-senha-parcial-" + tema.name().toLowerCase());
         }
         Visual.tema(Tema.CLARO);
     }

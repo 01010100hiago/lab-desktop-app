@@ -108,10 +108,14 @@ class DialogoDesligarSenhaTest {
         Visual.tema(Tema.CLARO);
     }
 
+    /** Sem transbordo na largura do diálogo (560) e numa janela de 1100 x 700 (o diálogo cresce de lado e continua sem sair de nenhum contêiner nem rolar para o lado). */
     private static void semTransbordo(DialogoDesligarSenha d) {
+        for (int largura : new int[] {560, 1100}) {
+            Visual.alturaPreferida(d.raiz(), largura);
+            List<String> achados = Visual.naEdt(() -> SemTransbordo.achados(d.raiz()));
+            assertTrue(achados.isEmpty(), "transborda em " + largura + " px: " + achados);
+        }
         Visual.alturaPreferida(d.raiz(), 560);
-        List<String> achados = Visual.naEdt(() -> SemTransbordo.achados(d.raiz()));
-        assertTrue(achados.isEmpty(), "transborda: " + achados);
     }
 
     private String copiado() throws Exception {
