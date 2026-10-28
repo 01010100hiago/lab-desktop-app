@@ -37,6 +37,12 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
     public boolean dockerParado;
     public boolean composeInstalado = true;
     public boolean gitInstalado = true;
+    /**
+     * O Mac sem as ferramentas de linha de comando da Apple: o único git é o ATALHO de /usr/bin, que ao rodar abre o aviso de instalação do
+     * sistema (aqui, {@link #avisoDoMacDisparado}). O app nunca pode rodá-lo.
+     */
+    public boolean gitSoOAtalhoDoMac;
+    public boolean avisoDoMacDisparado;
     public boolean wslInstalado = true;
     public boolean virtualizacaoLigada = true;
     public String versaoDoDocker = "29.6.2";
@@ -132,6 +138,10 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
             }
         }
         String programa = a.get(0);
+        if (programa.equals("git") && gitSoOAtalhoDoMac) {
+            avisoDoMacDisparado = true;
+            return erro(1, "xcode-select: note: No developer tools were found, requesting install.");
+        }
         if (programasAusentes.contains(programa) || (programa.equals("docker") && !dockerInstalado)
             || (programa.equals("git") && !gitInstalado) || (programa.equals("wsl") && !wslInstalado && false)) {
             throw new ProgramaNaoEncontradoException(programa);
@@ -145,6 +155,7 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
             case "winget" -> instalar("winget");
             case "xcode-select" -> {
                 gitInstalado = true;
+                gitSoOAtalhoDoMac = false;
                 yield ok("");
             }
             case "open", "colima" -> {

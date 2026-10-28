@@ -14,7 +14,7 @@ public final class SondaFalsa implements SondaDoComputador {
     public String sistema = "macOS 26.6";
     public String usuario = "ana";
     public final Set<Integer> portasOcupadas = new HashSet<>();
-    public final Set<String> programas = new HashSet<>(Set.of("brew"));
+    public final Set<String> programas = new HashSet<>(Set.of("brew", "git"));
     public final Set<String> caminhos = new HashSet<>();
 
     @Override

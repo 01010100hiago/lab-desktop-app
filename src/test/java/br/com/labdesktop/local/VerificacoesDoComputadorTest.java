@@ -241,6 +241,46 @@ class VerificacoesDoComputadorTest {
     }
 
     @Test
+    void noMacSemAsFerramentasDaAppleAConferenciaNuncaRodaOAtalhoDoGitQueAbreOAvisoDoSistema() throws Exception {
+        pc.gitSoOAtalhoDoMac = true; // só existe /usr/bin/git, o atalho
+        sonda.programas.remove("git"); // o localizador nunca devolve o atalho
+        RelatorioDoComputador r = verificar();
+        assertFalse(pc.avisoDoMacDisparado, "rodar git --version aqui abriria o aviso de instalação do macOS");
+        assertTrue(pc.comandos.stream().noneMatch(c -> c.get(0).equals("git")), "nem tentou: " + pc.comandos);
+        ResultadoDoComputador g = r.de(ItemDoComputador.GIT);
+        assertEquals(Estado.AVISO, g.estado());
+        assertFalse(r.bloqueado());
+        assertEquals(List.of(List.of("xcode-select", "--install")), g.planos().stream().filter(pl -> pl.id().equals("git-xcode")).findFirst().orElseThrow().comandos());
+    }
+
+    @Test
+    void noMacComGitDeVerdadeOHomebrewOuAsFerramentasDaAppleAConferenciaRodaOGit() throws Exception {
+        sonda.programas.add("git"); // achado em /opt/homebrew/bin ou nas ferramentas da Apple
+        assertEquals(Estado.OK, verificar().de(ItemDoComputador.GIT).estado());
+        assertTrue(pc.comandos.stream().anyMatch(c -> c.equals(List.of("git", "--version"))));
+        assertFalse(pc.avisoDoMacDisparado);
+    }
+
+    @Test
+    void oLocalizadorDoMacNuncaDevolveOAtalhoDeUsrBinEAchaOGitDeVerdade() {
+        java.util.Set<String> existentes = java.util.Set.of("/usr/bin/git", "/usr/bin/python3", "/usr/bin/open");
+        LocalizadorDeProgramas soAtalho = new LocalizadorDeProgramas(SistemaOperacional.MAC, List.of("/usr/bin", "/opt/homebrew/bin"),
+            p -> existentes.contains(p.toString()));
+        assertTrue(soAtalho.localizar("git").isEmpty(), "o atalho da Apple não conta como git instalado");
+        assertTrue(soAtalho.localizar("python3").isEmpty());
+        assertEquals("/usr/bin/open", soAtalho.localizar("open").orElseThrow().toString(), "o resto de /usr/bin continua valendo");
+        java.util.Set<String> comBrew = java.util.Set.of("/usr/bin/git", "/opt/homebrew/bin/git");
+        LocalizadorDeProgramas l = new LocalizadorDeProgramas(SistemaOperacional.MAC, List.of("/usr/bin", "/opt/homebrew/bin"), p -> comBrew.contains(p.toString()));
+        assertEquals("/opt/homebrew/bin/git", l.localizar("git").orElseThrow().toString());
+        java.util.Set<String> clt = java.util.Set.of("/usr/bin/git", "/Library/Developer/CommandLineTools/usr/bin/git");
+        assertEquals("/Library/Developer/CommandLineTools/usr/bin/git", new LocalizadorDeProgramas(SistemaOperacional.MAC,
+            new PlataformaLocal(SistemaOperacional.MAC, "/Users/ana", Map.of()).diretoriosDeProgramas(), p -> clt.contains(p.toString())).localizar("git").orElseThrow().toString());
+        // no Linux e no Windows /usr/bin/git é o git de verdade
+        assertEquals("/usr/bin/git", new LocalizadorDeProgramas(SistemaOperacional.LINUX, List.of("/usr/bin"), p -> p.toString().equals("/usr/bin/git"))
+            .localizar("git").orElseThrow().toString());
+    }
+
+    @Test
     void composeAusenteEAvisoEDependeDoDocker() throws Exception {
         pc.composeInstalado = false;
         assertEquals(Estado.AVISO, verificar().de(ItemDoComputador.COMPOSE).estado());

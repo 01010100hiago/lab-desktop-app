@@ -14,6 +14,13 @@ import java.util.function.Predicate;
  */
 public final class LocalizadorDeProgramas {
 
+    /**
+     * No Mac, estes nomes em {@code /usr/bin} são só ATALHOS da Apple: sem as ferramentas de linha de comando instaladas, rodá-los abre o aviso
+     * "instalar as ferramentas" do sistema. O app nunca os executa: procura o programa de verdade (Homebrew, ferramentas da Apple, Xcode).
+     */
+    static final java.util.Set<String> ATALHOS_DO_MAC = java.util.Set.of("git", "make", "clang", "gcc", "python3", "svn", "ld", "cc", "c++");
+    private static final Path PASTA_DOS_ATALHOS_DO_MAC = Path.of("/usr/bin");
+
     private final List<String> pastas;
     private final Predicate<Path> ehExecutavel;
     private final SistemaOperacional sistema;
@@ -54,12 +61,19 @@ public final class LocalizadorDeProgramas {
             }
             for (String nome : nomes) {
                 Path candidato = Path.of(pasta).resolve(nome);
+                if (ehAtalhoDoMac(candidato, nome)) {
+                    continue;
+                }
                 if (ehExecutavel.test(candidato)) {
                     return Optional.of(candidato);
                 }
             }
         }
         return Optional.empty();
+    }
+
+    private boolean ehAtalhoDoMac(Path candidato, String nome) {
+        return sistema == SistemaOperacional.MAC && ATALHOS_DO_MAC.contains(nome) && PASTA_DOS_ATALHOS_DO_MAC.equals(candidato.getParent());
     }
 
     /** As pastas onde se procura (para montar o PATH do processo filho). */

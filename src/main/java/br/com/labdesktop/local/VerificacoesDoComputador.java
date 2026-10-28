@@ -236,7 +236,13 @@ public final class VerificacoesDoComputador {
     }
 
     private ResultadoDoComputador git(SistemaOperacional so, boolean temBrew, boolean temWinget) throws InterruptedException {
+        // No Mac, /usr/bin/git sem as ferramentas da Apple é só um atalho que abre o aviso de instalação do sistema: o localizador nunca o devolve,
+        // e sem um git de verdade (Homebrew, ferramentas da Apple, Xcode) a conferência nem tenta rodar o git.
+        boolean podeRodar = so != SistemaOperacional.MAC || sonda.localizarPrograma("git").isPresent();
         try {
+            if (!podeRodar) {
+                throw new ProgramaNaoEncontradoException("git");
+            }
             ResultadoExec x = executor.executar(ComandosLocais.versaoDoGit(), LEITURA);
             if (x.status() == 0) {
                 return ResultadoDoComputador.ok(ItemDoComputador.GIT, TextoSeguro.truncar(TextoSeguro.limparLinha(x.stdout().strip()), 60) + " instalado.");

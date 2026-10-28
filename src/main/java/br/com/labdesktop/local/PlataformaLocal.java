@@ -69,7 +69,9 @@ public final class PlataformaLocal {
     /** As pastas onde os programas moram e que um aplicativo aberto pelo Finder ou pelo menu Iniciar não tem no PATH. */
     public List<String> diretoriosDeProgramas() {
         return switch (sistema) {
-            case MAC -> List.of("/usr/local/bin", "/opt/homebrew/bin", "/Applications/Docker.app/Contents/Resources/bin",
+            // o git (e outros) de /usr/bin é só atalho da Apple: ver LocalizadorDeProgramas.ATALHOS_DO_MAC; o de verdade está nas três primeiras
+            case MAC -> List.of("/opt/homebrew/bin", "/usr/local/bin", "/Library/Developer/CommandLineTools/usr/bin",
+                "/Applications/Xcode.app/Contents/Developer/usr/bin", "/Applications/Docker.app/Contents/Resources/bin",
                 casa + "/.docker/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin");
             case WINDOWS -> {
                 String pf = ambiente.getOrDefault("ProgramFiles", "C:\\Program Files");
