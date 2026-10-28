@@ -401,4 +401,52 @@ class LaboratorioLocalTest {
         }
         return l;
     }
+
+    // ----- as leituras do Docker que falham são ERRO, nunca "não existe" -----
+
+    @Test
+    void leituraQueFalhaAoCriarEErroENaoViraNaoExisteNemCriaNada() {
+        for (String leitura : List.of("network ls", "ps -a", "volume ls")) {
+            pc.consertar();
+            pc.falharEm(contem(leitura), 1, "permission denied while trying to connect to the Docker daemon socket");
+            ResultadoDaInstalacao r = criar();
+            assertEquals(Desfecho.FALHOU, r.desfecho(), leitura + ": " + r.erro());
+            assertTrue(r.erro().contains("Não consegui ler o estado do Docker"), r.erro());
+            assertFalse(pc.containers.containsKey("painel-lab"), "sem ler o estado não se cria o container (" + leitura + ")");
+            pc.containers.clear();
+            pc.redes.clear();
+            pc.imagens.clear();
+            pc.volumes.clear();
+        }
+    }
+
+    @Test
+    void leituraDaImagemQueFalhaPorOutroMotivoNaoViraImagemAusente() {
+        pc.falharEm(contem("image inspect"), 1, "Cannot connect to the Docker daemon");
+        ResultadoDaInstalacao r = criar();
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertTrue(pc.escritas().stream().noneMatch(c -> c.get(1).equals("build")), "não construiu por achar que a imagem não existia: " + pc.escritas());
+    }
+
+    @Test
+    void removerComALeituraDoContainerFalhandoNaoDizRemovidoENaoApagaNada() throws Exception {
+        assertEquals(Desfecho.CONCLUIDA, criar().desfecho());
+        pc.limparRegistro();
+        pc.falharEm(contem("ps -a"), 1, "Error response from daemon: boom");
+        ResultadoDaRemocao r = lab().remover(obs, Cancelamento.NUNCA);
+        assertFalse(r.removido());
+        assertTrue(r.avisos().stream().anyMatch(a -> a.contains("Não consegui ler o estado do Docker")), r.avisos().toString());
+        assertTrue(pc.escritas().isEmpty(), "nada foi apagado: " + pc.escritas());
+        assertTrue(pc.containers.containsKey("painel-lab"));
+    }
+
+    @Test
+    void removerComALeituraDaRedeFalhandoRemoveOAgenteMasNaoMentePelaRede() throws Exception {
+        assertEquals(Desfecho.CONCLUIDA, criar().desfecho());
+        pc.falharEm(contem("network ls"), 1, "boom");
+        ResultadoDaRemocao r = lab().remover(obs, Cancelamento.NUNCA);
+        assertTrue(r.removido(), "o agente saiu");
+        assertTrue(r.avisos().stream().anyMatch(a -> a.contains("Não consegui ler o estado do Docker")), r.avisos().toString());
+        assertTrue(pc.redes.containsKey("edge"), "a rede ficou: a leitura falhou");
+    }
 }

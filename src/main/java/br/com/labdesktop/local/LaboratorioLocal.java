@@ -70,6 +70,7 @@ public final class LaboratorioLocal {
     private boolean guardouOAnterior;
     private boolean anteriorRodava;
     private boolean interrompidoNoDesfazer;
+    private boolean containerRemovido;
 
     public LaboratorioLocal(ExecutorDeProcesso executor, ParametrosDoLaboratorio parametros, PlataformaLocal plataforma, PacoteDoAgente pacote,
                             GanchosDaInstalacao ganchos) {
@@ -130,6 +131,10 @@ public final class LaboratorioLocal {
         } catch (FalhaDePasso e) {
             obs.aoMudarPasso(atual, EstadoDoPasso.FALHOU, e.getMessage());
             return new ResultadoDaInstalacao(Desfecho.FALHOU, atual, e.getMessage(), desfazer());
+        } catch (LeituraDoDockerFalhouException e) {
+            String msg = e.getMessage() + " Não mudei nada além do que já estava feito; tente de novo quando o Docker estiver respondendo.";
+            obs.aoMudarPasso(atual, EstadoDoPasso.FALHOU, msg);
+            return new ResultadoDaInstalacao(Desfecho.FALHOU, atual, msg, desfazer());
         } catch (IOException e) {
             String msg = e instanceof ProgramaNaoEncontradoException ? "O Docker não foi encontrado neste computador."
                 : e instanceof ComandoDemorouException ? "O comando demorou demais e foi interrompido: " + Redator.redigir(e)
@@ -182,8 +187,8 @@ public final class LaboratorioLocal {
     }
 
     private boolean passoRede() throws IOException, InterruptedException, FalhaDePasso {
-        for (String linha : rodar(ComandosLocais.lerRede(parametros), LEITURA).stdout().split("\\R")) {
-            if (linha.strip().split("\\|", -1)[0].equals(parametros.rede())) {
+        for (LeituraDoDocker.Rede r : LeituraDoDocker.redes(ler(ComandosLocais.lerRede(parametros)))) {
+            if (r.nome().equals(parametros.rede())) {
                 return false;
             }
         }
@@ -193,7 +198,7 @@ public final class LaboratorioLocal {
     }
 
     private boolean passoImagem() throws IOException, InterruptedException, FalhaDePasso {
-        if (rodar(ComandosLocais.lerImagem(parametros, pacote.versao()), LEITURA).status() == 0) {
+        if (imagemExiste(pacote.versao())) {
             return false;
         }
         ResultadoExec x = rodar(ComandosLocais.construirImagem(parametros, pacote), pacote.conteudo(), BUILD);
@@ -204,38 +209,25 @@ public final class LaboratorioLocal {
         return true;
     }
 
-    private record DoDocker(String rotulo, String estado) {
-        boolean doApp() {
-            return !rotulo.isBlank();
-        }
-
-        boolean rodando() {
-            return "running".equals(estado);
-        }
-    }
-
-    private Map<String, DoDocker> containersDoApp() throws IOException, InterruptedException {
-        Map<String, DoDocker> m = new HashMap<>();
+    private Map<String, LeituraDoDocker.Container> containersDoApp() throws IOException, InterruptedException {
+        Map<String, LeituraDoDocker.Container> m = new HashMap<>();
         for (List<String> consulta : List.of(ComandosLocais.lerContainer(parametros), ComandosLocais.lerContainerPeloNome(parametros.containerAnterior()))) {
-            for (String linha : rodar(consulta, LEITURA).stdout().split("\\R")) {
-                String[] c = linha.strip().split("\\|", -1);
-                if (c.length >= 3) {
-                    m.put(c[0], new DoDocker(c[1].strip(), c[2].strip()));
-                }
+            for (LeituraDoDocker.Container c : LeituraDoDocker.containers(ler(consulta))) {
+                m.put(c.nome(), c);
             }
         }
         return m;
     }
 
     private boolean passoContainer() throws IOException, InterruptedException, FalhaDePasso {
-        Map<String, DoDocker> existentes = containersDoApp();
-        DoDocker atual = existentes.get(parametros.container());
-        DoDocker anterior = existentes.get(parametros.containerAnterior());
+        Map<String, LeituraDoDocker.Container> existentes = containersDoApp();
+        LeituraDoDocker.Container atual = existentes.get(parametros.container());
+        LeituraDoDocker.Container anterior = existentes.get(parametros.containerAnterior());
         if (atual != null && !atual.doApp()) {
             throw new FalhaDePasso("Já existe um container chamado " + parametros.container() + " que não foi criado por este app: não mexi nele. "
                 + "Escolha outro nome nas opções avançadas.");
         }
-        if (atual != null && atual.rotulo().equals(pacote.versao()) && atual.rodando()) {
+        if (atual != null && atual.rotuloDoAgente().equals(pacote.versao()) && atual.rodando()) {
             return false;
         }
         if (anterior != null) {
@@ -252,7 +244,7 @@ public final class LaboratorioLocal {
                     "Não consegui remover o agente antigo que sobrou");
             }
         }
-        boolean volumeExistia = rodar(ComandosLocais.lerVolume(parametros), LEITURA).stdout().lines().anyMatch(v -> v.strip().equals(parametros.volume()));
+        boolean volumeExistia = ler(ComandosLocais.lerVolume(parametros)).lines().anyMatch(v -> v.strip().equals(parametros.volume()));
         if (atual != null) {
             exigirSucesso(ComandosLocais.renomearContainer(parametros.container(), parametros.containerAnterior()), ESCRITA_CURTA, "Não consegui guardar o agente anterior");
             guardouOAnterior = true;
@@ -432,21 +424,32 @@ public final class LaboratorioLocal {
      * vazia). NÃO apaga a pasta dos projetos nem o Docker. O que falhar vira aviso e os outros passos seguem.
      */
     public ResultadoDaRemocao remover(ObservadorDaInstalacao observador, Cancelamento cancela) throws IOException, InterruptedException {
-        this.obs = observador == null ? ObservadorDaInstalacao.NENHUM : observador;
-        this.cancelamento = cancela == null ? Cancelamento.NUNCA : cancela;
         List<String> feito = new ArrayList<>();
         List<String> avisos = new ArrayList<>();
+        containerRemovido = false;
+        try {
+            return removerPassos(observador, cancela, feito, avisos);
+        } catch (LeituraDoDockerFalhouException e) {
+            // uma leitura falhou: o que veio depois dela não rodou, e o app não diz "removido" sem saber
+            avisos.add(e.getMessage() + " O que faltava remover ficou como estava: tente de novo quando o Docker estiver respondendo.");
+            return new ResultadoDaRemocao(containerRemovido, feito, avisos, false);
+        }
+    }
+
+    private ResultadoDaRemocao removerPassos(ObservadorDaInstalacao observador, Cancelamento cancela, List<String> feito, List<String> avisos)
+        throws IOException, InterruptedException {
+        this.obs = observador == null ? ObservadorDaInstalacao.NENHUM : observador;
+        this.cancelamento = cancela == null ? Cancelamento.NUNCA : cancela;
         if (rodar(ComandosLocais.versaoDoDocker(), LEITURA).status() != 0) {
             avisos.add("O Docker não está respondendo, então nada foi removido. Abra o Docker e tente de novo.");
             return new ResultadoDaRemocao(false, feito, avisos, false);
         }
         String doApp = null;
         boolean existe = false;
-        for (String linha : rodar(ComandosLocais.lerContainer(parametros), LEITURA).stdout().split("\\R")) {
-            String[] c = linha.strip().split("\\|", -1);
-            if (c.length >= 3 && c[0].equals(parametros.container())) {
+        for (LeituraDoDocker.Container c : LeituraDoDocker.containers(ler(ComandosLocais.lerContainer(parametros)))) {
+            if (c.nome().equals(parametros.container())) {
                 existe = true;
-                doApp = c[1].isBlank() ? null : c[1];
+                doApp = c.doApp() ? c.rotuloDoAgente() : null;
             }
         }
         if (existe && doApp == null) {
@@ -459,6 +462,7 @@ public final class LaboratorioLocal {
         if (existe) {
             ResultadoExec x = rodar(ComandosLocais.removerContainer(parametros.container()), ESCRITA_CURTA);
             removido = x.status() == 0;
+            containerRemovido = removido;
             if (removido) {
                 feito.add("Removi o agente " + parametros.container() + ".");
             } else {
@@ -470,7 +474,7 @@ public final class LaboratorioLocal {
         boolean eraDoApp = existe && doApp != null;
         String versao = eraDoApp && doApp.matches("^[A-Za-z0-9][A-Za-z0-9_.-]{0,40}$") ? doApp : pacote.versao();
         if (eraDoApp) {
-            boolean temVolume = rodar(ComandosLocais.lerVolume(parametros), LEITURA).stdout().lines().anyMatch(v -> v.strip().equals(parametros.volume()));
+            boolean temVolume = ler(ComandosLocais.lerVolume(parametros)).lines().anyMatch(v -> v.strip().equals(parametros.volume()));
             removerComAviso(PassoDaRemocaoLocal.DADOS, ComandosLocais.removerVolume(parametros), "os dados do agente",
                 "Apaguei os dados do agente (token e 2FA).", feito, avisos, temVolume);
             removerComAviso(PassoDaRemocaoLocal.IMAGEM, ComandosLocais.removerImagem(parametros, versao), "a imagem do agente",
@@ -489,11 +493,10 @@ public final class LaboratorioLocal {
         conferirCancelamento();
         boolean doApp = false;
         boolean existe = false;
-        for (String linha : rodar(ComandosLocais.lerRede(parametros), LEITURA).stdout().split("\\R")) {
-            String[] c = linha.strip().split("\\|", -1);
-            if (c[0].equals(parametros.rede())) {
+        for (LeituraDoDocker.Rede r : LeituraDoDocker.redes(ler(ComandosLocais.lerRede(parametros)))) {
+            if (r.nome().equals(parametros.rede())) {
                 existe = true;
-                doApp = c.length > 1 && !c[1].isBlank();
+                doApp = r.doApp();
             }
         }
         if (!existe) {
@@ -505,7 +508,7 @@ public final class LaboratorioLocal {
             avisos.add("A rede " + parametros.rede() + " não foi criada por este app: deixei como estava.");
             return;
         }
-        String dentro = rodar(ComandosLocais.lerContainersNaRede(parametros), LEITURA).stdout().strip();
+        String dentro = ler(ComandosLocais.lerContainersNaRede(parametros)).strip();
         if (!dentro.equals("0")) {
             obs.aoMudarPasso(PassoDaRemocaoLocal.REDE, EstadoDoPasso.JA_ESTAVA_FEITO, "");
             avisos.add("A rede " + parametros.rede() + " ainda tem containers ligados (projetos): deixei como estava.");
@@ -555,6 +558,26 @@ public final class LaboratorioLocal {
             registrar("[status " + x.status() + "]");
         }
         return x;
+    }
+
+    /** Uma LEITURA: o status diferente de 0 é erro (estado desconhecido), nunca "não existe". */
+    private String ler(List<String> comando) throws IOException, InterruptedException {
+        ResultadoExec x = rodar(comando, LEITURA);
+        if (x.status() != 0) {
+            throw new LeituraDoDockerFalhouException("Não consegui ler o estado do Docker (" + saidaDeErro(x) + ").");
+        }
+        return x.stdout();
+    }
+
+    private boolean imagemExiste(String versao) throws IOException, InterruptedException {
+        ResultadoExec x = rodar(ComandosLocais.lerImagem(parametros, versao), LEITURA);
+        if (x.status() == 0) {
+            return true;
+        }
+        if ((x.stderr() + x.stdout()).toLowerCase(java.util.Locale.ROOT).contains("no such")) {
+            return false;
+        }
+        throw new LeituraDoDockerFalhouException("Não consegui ler o estado do Docker (" + saidaDeErro(x) + ").");
     }
 
     private void exigirSucesso(List<String> comando, Duration prazo, String oQueFalhou) throws IOException, InterruptedException, FalhaDePasso {

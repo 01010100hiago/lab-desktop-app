@@ -26,7 +26,10 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
 
     /** Um container simulado. */
     public static final class Cont {
+        /** O rótulo do agente do app (a versão do pacote); vazio se não foi o app. */
         public String rotulo = "";
+        /** O rótulo do laboratório local ({@code br.com.labdesktop.local=1}); vazio se não foi ele. */
+        public String rotuloLocal = "";
         public String estado = "running";
         public int portaPublicada;
         public String imagem;
@@ -211,7 +214,7 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
             case "ps": {
                 String nome = filtro(a);
                 Cont c = containers.get(nome);
-                return ok(c == null ? "" : nome + "|" + c.rotulo + "|" + c.estado + "\n");
+                return ok(c == null ? "" : nome + "|" + rotulosDe(c) + "|" + c.estado + "\n");
             }
             case "volume": {
                 if (a.get(2).equals("ls")) {
@@ -283,7 +286,7 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
         switch (a.get(2)) {
             case "ls": {
                 String nome = filtro(a);
-                return ok(redes.containsKey(nome) ? nome + "|" + redes.get(nome) + "\n" : "");
+                return ok(redes.containsKey(nome) ? nome + "|" + (redes.get(nome).isBlank() ? "" : "br.com.labdesktop.local=" + redes.get(nome)) + "\n" : "");
             }
             case "create": {
                 String nome = a.get(a.size() - 1);
@@ -328,6 +331,9 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
             if (a.get(i).equals("--label") && a.get(i + 1).startsWith("br.com.labdesktop.agente=")) {
                 c.rotulo = a.get(i + 1).substring("br.com.labdesktop.agente=".length());
             }
+            if (a.get(i).equals("--label") && a.get(i + 1).startsWith("br.com.labdesktop.local=")) {
+                c.rotuloLocal = a.get(i + 1).substring("br.com.labdesktop.local=".length());
+            }
             if (a.get(i).equals("-p")) {
                 String[] p = a.get(i + 1).split(":");
                 c.portaPublicada = Integer.parseInt(p[1]);
@@ -338,6 +344,19 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
         }
         containers.put(nome, c);
         return ok("a1b2c3d4e5f6\n");
+    }
+
+    /** Como o {@code {{.Labels}}} do Docker mostra: {@code chave=valor,chave=valor}, com um rótulo alheio no meio para provar a leitura. */
+    private static String rotulosDe(Cont c) {
+        List<String> l = new ArrayList<>();
+        l.add("org.exemplo.alheio=a,b|c");
+        if (!c.rotulo.isBlank()) {
+            l.add("br.com.labdesktop.agente=" + c.rotulo);
+        }
+        if (!c.rotuloLocal.isBlank()) {
+            l.add("br.com.labdesktop.local=" + c.rotuloLocal);
+        }
+        return String.join(",", l);
     }
 
     private static String filtro(List<String> a) {

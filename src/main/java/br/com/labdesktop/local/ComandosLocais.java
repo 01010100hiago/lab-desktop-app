@@ -51,9 +51,12 @@ public final class ComandosLocais {
         return List.of("powershell", "-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance Win32_Processor).VirtualizationFirmwareEnabled");
     }
 
-    /** As redes com este nome exato (uma linha por rede, com o rótulo do app e quantos containers estão nela). */
+    /**
+     * As redes com este nome exato: {@code nome|rótulos}. SEM aspas no formato: no Windows o argumento com aspas chegaria quebrado ao docker.exe
+     * (ver {@link LeituraDoDocker}).
+     */
     public static List<String> lerRede(ParametrosDoLaboratorio p) {
-        return List.of(DOCKER, "network", "ls", "--filter", "name=^" + p.rede() + "$", "--format", "{{.Name}}|{{.Label \"" + ROTULO_LOCAL + "\"}}");
+        return List.of(DOCKER, "network", "ls", "--filter", "name=^" + p.rede() + "$", "--format", "{{.Name}}|{{.Labels}}");
     }
 
     /** Quantos containers estão ligados à rede (para não removê-la em uso). */
@@ -61,7 +64,7 @@ public final class ComandosLocais {
         return List.of(DOCKER, "network", "inspect", "-f", "{{len .Containers}}", p.rede());
     }
 
-    /** Os containers com este nome exato: {@code nome|versão do pacote que o criou (rótulo, vazio se não foi o app)|estado}. */
+    /** Os containers com este nome exato: {@code nome|rótulos|estado} (os rótulos do app dizem se foi ele que criou). */
     public static List<String> lerContainer(ParametrosDoLaboratorio p) {
         return lerContainerPeloNome(p.container());
     }
@@ -69,7 +72,7 @@ public final class ComandosLocais {
     /** O mesmo, para um nome só (o agente antigo guardado como {@code <nome>-anterior} numa atualização). */
     public static List<String> lerContainerPeloNome(String nome) {
         return List.of(DOCKER, "ps", "-a", "--filter", "name=^" + exigirNome(nome) + "$", "--format",
-            "{{.Names}}|{{.Label \"" + ComandosRemotos.ROTULO_DO_AGENTE + "\"}}|{{.State}}");
+            "{{.Names}}|{{.Labels}}|{{.State}}");
     }
 
     public static List<String> lerVolume(ParametrosDoLaboratorio p) {

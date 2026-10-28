@@ -32,6 +32,33 @@ class ComandosLocaisTest {
     }
 
     @Test
+    void nenhumArgumentoLevaAspasPoisNoWindowsElasChegamQuebradasAoDockerExe() {
+        List<List<String>> todos = new ArrayList<>(leituras());
+        todos.addAll(escritas());
+        for (List<String> c : todos) {
+            for (String a : c) {
+                assertFalse(a.contains("\"") || a.contains("'"), "argumento com aspas: " + a + " em " + c);
+            }
+        }
+    }
+
+    @Test
+    void osRotulosSaemPeloFormatoLabelsESaoLidosPeloTexto() {
+        assertEquals("1", LeituraDoDocker.rotulo("a=b,br.com.labdesktop.local=1,c=d", ComandosLocais.ROTULO_LOCAL));
+        assertEquals("", LeituraDoDocker.rotulo("a=b,xbr.com.labdesktop.local=1", ComandosLocais.ROTULO_LOCAL), "a chave tem de casar inteira");
+        assertEquals("", LeituraDoDocker.rotulo("", ComandosLocais.ROTULO_LOCAL));
+        List<LeituraDoDocker.Container> l = LeituraDoDocker.containers(
+            "painel-lab|org.x=a|b,br.com.labdesktop.agente=0.1.0,br.com.labdesktop.local=1|running\n");
+        assertEquals(1, l.size());
+        assertEquals("painel-lab", l.get(0).nome());
+        assertEquals("0.1.0", l.get(0).rotuloDoAgente());
+        assertEquals("1", l.get(0).rotuloLocal());
+        assertEquals("running", l.get(0).estado());
+        assertTrue(LeituraDoDocker.containers("").isEmpty());
+        assertTrue(LeituraDoDocker.redes("edge|\n").get(0).rotuloLocal().isEmpty());
+    }
+
+    @Test
     void todaLeituraELeituraEToda_escritaNao() {
         for (List<String> c : leituras()) {
             assertTrue(ComandosLocais.ehLeitura(c), "devia ser leitura: " + c);
