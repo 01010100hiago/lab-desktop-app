@@ -187,10 +187,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private final Botao cancelarNoPassoDaChave = Botoes.secundario("Cancelar", null);
     private final Botao testar = Botoes.secundario("Testar conexão", "rede");
     // o primeiro acesso por senha
-    private final JPasswordField senhaDoServidor = Campos.senha(24);
-    private final Rotulo rotuloDaSenha = Rotulo.rotuloDeCampo("Senha do usuário do servidor");
+    private final EntradaDaSenha entradaDaSenha = new EntradaDaSenha();
     private final Botao entrarComSenha = Botoes.primario("Entrar e instalar a chave", "chave");
-    private final TextoCorrido andamentoDaSenha = new TextoCorrido("", LARGURA_DO_TEXTO).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     /** A impressão digital que o usuário confirmou, para o endereço e a porta de agora (tentar a senha de novo não pergunta outra vez). */
     private ConfirmacaoDeHost hostConfirmado;
     private boolean senhaUsada;
@@ -299,7 +297,6 @@ public final class DialogoAdicionarServidor extends Dialogo {
         pilhaDeRodapes.add(rodape(voltar, cancelarNoPassoDaChave, entrarComSenha), PAGINA_CHAVE);
         pilhaDeRodapes.add(rodape(null, fecharConexao, agoraNao, instalarOAgente, substituirToken, tentarDeNovo, concluir), PAGINA_CONEXAO);
         pilhaDeRodapes.add(rodape(null, desligarASenha, manterASenha), PAGINA_SENHA);
-        andamentoDaSenha.setVisible(false);
         conteudoComRodape(pilha, pilhaDeRodapes);
 
         ligarEventos();
@@ -332,9 +329,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
     }
 
     private JComponent montarPaginaDaChave() {
-        senhaDoServidor.getAccessibleContext().setAccessibleName("Senha do usuário no servidor");
-        JComponent blocoDaSenha = Caixa.coluna(6, rotuloDaSenha, Caixa.linha(0, senhaDoServidor, Caixa.mola()), dicaCorrida(TEXTO_DA_SENHA), andamentoDaSenha,
-            estado, erro);
+        JComponent blocoDaSenha = entradaDaSenha.bloco(TEXTO_DA_SENHA, estado, erro);
         return Caixa.coluna(12,
             cabecalho("chave", "Chave deste servidor"),
             passo("Passo 2 de 3 · Chave de acesso"),
@@ -444,7 +439,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         continuar.addActionListener(e -> continuar());
         voltar.addActionListener(e -> {
             if (!ocupado) {
-                Campos.apagarSenha(senhaDoServidor); // a senha digitada para um servidor nunca fica esperando para ir a OUTRO
+                entradaDaSenha.apagar(); // a senha digitada para um servidor nunca fica esperando para ir a OUTRO
                 mostrarPagina(PAGINA_DADOS);
             }
         });
@@ -463,7 +458,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         senhaDoArquivo.addActionListener(e -> importarDoArquivoEscolhido());
         testar.addActionListener(e -> testar());
         entrarComSenha.addActionListener(e -> entrarComSenha());
-        senhaDoServidor.addActionListener(e -> entrarComSenha());
+        entradaDaSenha.campo().addActionListener(e -> entrarComSenha());
         manterASenha.addActionListener(e -> manterASenha());
         desligarASenha.addActionListener(e -> desligarASenha());
         cancelar.addActionListener(e -> aoCancelar());
@@ -478,7 +473,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     private void mostrarPagina(String nomeDaPagina) {
         if (PAGINA_CHAVE.equals(paginaAtual) && !PAGINA_CHAVE.equals(nomeDaPagina)) {
-            Campos.apagarSenha(senhaDoServidor); // saiu da página da senha: o campo não guarda mais nada
+            entradaDaSenha.apagar(); // saiu da página da senha: o campo não guarda mais nada
         }
         paginaAtual = nomeDaPagina;
         paginas.show(pilha, nomeDaPagina);
@@ -575,7 +570,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     /** O campo da senha do usuário no servidor (passo 2). */
     public JPasswordField campoDaSenhaDoServidor() {
-        return senhaDoServidor;
+        return entradaDaSenha.campo();
     }
 
     /** "Entrar e instalar a chave" (passo 2). */
@@ -595,7 +590,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     /** A frase de andamento do primeiro acesso por senha (entrando, instalando, provando). */
     public String andamentoDaSenha() {
-        return andamentoDaSenha.isVisible() ? andamentoDaSenha.getText() : "";
+        return entradaDaSenha.andamento();
     }
 
     /** O usuário usou a senha no passo 2 (então o último passo pergunta se desliga o login por senha). */
@@ -605,7 +600,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     /** O rótulo do campo da senha, com o usuário. */
     public String rotuloDoCampoDaSenha() {
-        return rotuloDaSenha.getText();
+        return entradaDaSenha.rotuloDoCampo();
     }
 
     public Botao botaoConcluir() {
@@ -762,11 +757,11 @@ public final class DialogoAdicionarServidor extends Dialogo {
         dizerErro(erroDosDados, "");
         String agoraDestino = destinoDaSenha();
         if (!agoraDestino.equals(destinoDaSenhaDigitada)) {
-            Campos.apagarSenha(senhaDoServidor); // endereço, porta ou usuário mudaram: a senha era de outro destino
+            entradaDaSenha.apagar(); // endereço, porta ou usuário mudaram: a senha era de outro destino
             hostConfirmado = null;
         }
         destinoDaSenhaDigitada = agoraDestino;
-        rotuloDaSenha.setText("Senha do usuário " + usuarioAtual() + " no servidor (usada só agora, não fica guardada)");
+        entradaDaSenha.rotularPara(usuarioAtual());
         mostrarPagina(PAGINA_CHAVE);
         garantirChaveGerada();
         atualizarCaixaDaChave();
@@ -892,7 +887,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         voltar.setEnabled(!ocupado);
         testar.setEnabled(!ocupado && !gerando && chaveEscolhidaAgora() != null);
         entrarComSenha.setEnabled(!ocupado && !gerando && chaveEscolhidaAgora() != null);
-        senhaDoServidor.setEnabled(!ocupado);
+        entradaDaSenha.habilitar(!ocupado);
         reajustar();
     }
 
@@ -1083,7 +1078,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         }
         if (senhaDigitada() == 0) {
             mostrarErro("Digite a senha do usuário " + usuarioAtual() + " no servidor, ou use as opções avançadas.");
-            senhaDoServidor.requestFocusInWindow();
+            entradaDaSenha.focar();
             return;
         }
         dizerErro(erro, "");
@@ -1114,20 +1109,16 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     /** Quantos caracteres há no campo da senha (a cópia que o campo entrega é zerada na hora). */
     private int senhaDigitada() {
-        char[] copia = senhaDoServidor.getPassword();
-        int n = copia.length;
-        Zeragem.zerar(copia);
-        return n;
+        return entradaDaSenha.digitados();
     }
 
     private void instalarComSenha(Dados dados, InfoChave daVez, Pin pin) {
-        char[] senha = senhaDoServidor.getPassword(); // uma cópia: do assistente em diante é dele zerá-la
-        if (senha.length == 0) {
+        if (entradaDaSenha.digitados() == 0) {
             mostrarErro("Digite a senha do usuário " + usuarioAtual() + " no servidor.");
-            senhaDoServidor.requestFocusInWindow();
+            entradaDaSenha.focar();
             return;
         }
-        Campos.apagarSenha(senhaDoServidor); // o campo não guarda mais nada: se falhar, o usuário digita de novo
+        char[] senha = entradaDaSenha.entregar(); // uma cópia (o campo já foi apagado: se falhar, o usuário digita de novo): do assistente em diante é dele zerá-la
         estado.setText("");
         mostrarAndamentoDaSenha(EtapaDoPrimeiroAcesso.ENTRANDO);
         ocupar(true, entrarComSenha);
@@ -1140,7 +1131,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
             }
         }, instalada -> {
             ocupar(false);
-            andamentoDaSenha.setVisible(false);
+            entradaDaSenha.esconderAndamento();
             if (jaFechou()) {
                 return;
             }
@@ -1151,29 +1142,28 @@ public final class DialogoAdicionarServidor extends Dialogo {
             cadastrar(dados, daVez, pin);
         }, falha -> {
             ocupar(false);
-            andamentoDaSenha.setVisible(false);
+            entradaDaSenha.esconderAndamento();
             aoFalharASenha(falha);
         });
     }
 
     private void mostrarAndamentoDaSenha(EtapaDoPrimeiroAcesso etapa) {
-        andamentoDaSenha.setText(etapa.rotulo() + "…");
-        andamentoDaSenha.setVisible(true);
+        entradaDaSenha.mostrarAndamento(etapa);
         reajustar();
     }
 
     /** A senha não deu: a frase diz o motivo, e o caminho de antes (a chave pública) abre sozinho quando é o que resolve. */
     private void aoFalharASenha(Throwable falha) {
-        if (falha instanceof FalhaDeEntradaPorSenha f) {
-            mostrarErro(f.getMessage());
-            switch (f.motivo()) {
-                case SERVIDOR_SEM_SENHA, SEM_LOGIN_POR_CHAVE -> opcoesAvancadas.definirAberta(true);
-                case HOST_MUDOU -> hostConfirmado = null;
-                case SENHA_INCORRETA, CONTA_BLOQUEADA, SENHA_EXPIRADA, MUITAS_TENTATIVAS -> senhaDoServidor.requestFocusInWindow();
-                default -> { /* a frase basta */ }
-            }
-        } else {
-            mostrarErro(MensagensDeErro.de(falha));
+        EntradaDaSenha.Reacao reacao = EntradaDaSenha.Reacao.de(falha);
+        mostrarErro(reacao.mensagem());
+        if (reacao.mostrarOCaminhoSemSenha()) {
+            opcoesAvancadas.definirAberta(true);
+        }
+        if (reacao.esquecerOHost()) {
+            hostConfirmado = null;
+        }
+        if (reacao.focarNaSenha()) {
+            entradaDaSenha.focar();
         }
         atualizarControlesDaChave();
     }
@@ -1413,7 +1403,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
             inscricaoDoEstado = null;
         }
         senhaDoArquivo.setText("");
-        Campos.apagarSenha(senhaDoServidor);
+        entradaDaSenha.apagar();
         hostConfirmado = null;
     }
 
