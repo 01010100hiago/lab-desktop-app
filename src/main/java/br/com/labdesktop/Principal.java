@@ -5,6 +5,7 @@ import br.com.labdesktop.cofre.CofreEmUsoException;
 import br.com.labdesktop.cofre.TravaDeInstancia;
 import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.ui.GerenciadorTema;
+import br.com.labdesktop.ui.JanelaDeAbertura;
 import br.com.labdesktop.ui.PreferenciasAtuais;
 import br.com.labdesktop.ui.componentes.Icones;
 import br.com.labdesktop.util.AparenciaDoSistema;
@@ -12,6 +13,7 @@ import br.com.labdesktop.util.CaminhosApp;
 import br.com.labdesktop.util.ConfiguracaoDeLog;
 import br.com.labdesktop.util.EdtWatchdog;
 import br.com.labdesktop.util.Fundo;
+import br.com.labdesktop.util.MedidaDaPartida;
 import br.com.labdesktop.util.NativosDoApp;
 import br.com.labdesktop.util.Preferencias;
 import br.com.labdesktop.util.SenhaDeTeste;
@@ -36,6 +38,7 @@ public final class Principal {
     private Principal() { }
 
     public static void main(String[] args) {
+        long entrada = System.currentTimeMillis();
         // Sem janela, sem pasta de dados, sem trava: para o instalador e o CI conferirem o app empacotado (ARQUITETURA 11.4).
         if (temOpcao(args, "--versao")) {
             System.out.println(Versao.NOME + " " + Versao.atual());
@@ -66,6 +69,9 @@ public final class Principal {
             System.exit(2);
             return;
         }
+        // A janelinha de abertura: só se a partida da última vez passou de 1 s (ou ainda não há medida). Vai na frente de todo o resto, que é o que demora.
+        JanelaDeAbertura abertura = MedidaDaPartida.passaDoLimite(MedidaDaPartida.ler(caminhos)) ? JanelaDeAbertura.mostrar() : null;
+        long inicioDaPartida = ProcessHandle.current().info().startInstant().map(java.time.Instant::toEpochMilli).orElse(entrada);
         try {
             ConfiguracaoDeLog.configurar(caminhos); // o PRIMEIRO passo: o slf4j-simple lê o destino do log uma vez, quando o primeiro logger nasce
         } catch (IOException e) {
@@ -135,6 +141,20 @@ public final class Principal {
             if (arquivoDaSenhaDeTesteFinal != null) {
                 app.comSenhaDeTeste(arquivoDaSenhaDeTesteFinal);
             }
+            app.aoAparecerAPrimeiraJanela(() -> {
+                if (abertura != null) {
+                    abertura.fechar();
+                }
+                long ms = System.currentTimeMillis() - inicioDaPartida;
+                log.info("Partida: {} ms até a primeira janela{}.", ms, abertura != null ? " (com a janelinha de abertura)" : "");
+                Fundo.emFundo(() -> { // E/S fora da EDT
+                    try {
+                        MedidaDaPartida.gravar(caminhos, ms);
+                    } catch (IOException e) {
+                        log.debug("Não consegui guardar a medida da partida: {}", e.toString());
+                    }
+                });
+            });
             app.iniciar();
         });
     }

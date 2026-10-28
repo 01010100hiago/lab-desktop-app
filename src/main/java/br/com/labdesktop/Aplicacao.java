@@ -56,6 +56,8 @@ public final class Aplicacao {
     private Runnable desfazerSono = () -> { };
     private VigiaDeRelogio vigiaDeRelogio;
     private boolean encerrando;
+    /** Roda UMA vez, quando a primeira janela de verdade aparece (fecha a janelinha de abertura e guarda a medida da partida). */
+    private Runnable aoAparecerAPrimeiraJanela = () -> { };
 
     /**
      * @param cofreExiste {@code true} se já há um cofre na pasta de dados (conferido fora da EDT, na partida)
@@ -75,6 +77,21 @@ public final class Aplicacao {
         this.cofreExiste = cofreExiste;
         this.abridor = abridor;
         this.aoEncerrar = aoEncerrar;
+    }
+
+    /**
+     * O que fazer quando a primeira janela (a da senha-mestra, ou a principal no modo de teste) está à vista: o {@code Principal} fecha a janelinha de
+     * abertura e grava quanto a partida levou. Roda uma só vez, na EDT.
+     */
+    public Aplicacao aoAparecerAPrimeiraJanela(Runnable acao) {
+        this.aoAparecerAPrimeiraJanela = acao == null ? () -> { } : acao;
+        return this;
+    }
+
+    private void primeiraJanelaApareceu() {
+        Runnable acao = aoAparecerAPrimeiraJanela;
+        aoAparecerAPrimeiraJanela = () -> { };
+        acao.run();
     }
 
     /** Liga tudo e mostra o diálogo da senha-mestra. Na EDT. */
@@ -136,6 +153,8 @@ public final class Aplicacao {
                 Fundo.naEdt(this::encerrar);
             }
         });
+        // postado ANTES de mostrar: o diálogo é modal e só volta ao fechar; o que foi postado roda com ele já à vista (a janelinha de abertura some sem vão)
+        javax.swing.SwingUtilities.invokeLater(this::primeiraJanelaApareceu);
         dialogo.mostrar(null);
     }
 
@@ -154,6 +173,7 @@ public final class Aplicacao {
 
         gerenciador.iniciarTodos();
         janela.setVisible(true);
+        primeiraJanelaApareceu(); // no modo de teste (senha do arquivo) a primeira janela é a principal; nos outros casos já rodou na da senha
         for (String aviso : aberto.avisos()) {
             janela.avisos().atencao(aviso);
         }

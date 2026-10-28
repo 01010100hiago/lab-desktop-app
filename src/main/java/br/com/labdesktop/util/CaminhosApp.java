@@ -133,6 +133,11 @@ public final class CaminhosApp {
         return pastaDados.resolve("preferencias.json");
     }
 
+    /** Quanto a última abertura do app levou, em milissegundos (um número só; decide se a janelinha de abertura aparece). */
+    public Path arquivoPartida() {
+        return pastaDados.resolve("partida.txt");
+    }
+
     public Path arquivoEstadoAvisos() {
         return pastaDados.resolve("estado-avisos.json");
     }
