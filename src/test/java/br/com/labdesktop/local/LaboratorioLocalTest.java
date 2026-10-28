@@ -663,4 +663,12 @@ class LaboratorioLocalTest {
         assertEquals(Desfecho.CONCLUIDA, r.desfecho(), r.erro());
         assertEquals(List.of(7099), portas);
     }
+
+    @Test
+    void oErroDoBuildMostraOFimDaSaidaOndeEstaOMotivo() {
+        pc.falharEm(c -> c.size() > 1 && c.get(1).equals("build"), 1, "passo 1\npasso 2\nnpm ERR! motivo de verdade da falha");
+        ResultadoDaInstalacao r = criar();
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertTrue(r.erro().contains("motivo de verdade da falha"), r.erro());
+    }
 }

@@ -4,12 +4,21 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
-/** Lê um fluxo de um processo até o fim guardando no máximo {@link #TETO} bytes (um programa que imprime sem parar não estoura a memória). */
+/**
+ * Lê um fluxo de um processo até o fim guardando no máximo {@link #TETO} bytes (um programa que imprime sem parar não estoura a memória): o
+ * COMEÇO e o FIM. O fim é o que importa num erro (o {@code docker build} diz o motivo da falha na última linha), então o que passa do teto
+ * fica só com os primeiros {@link #CABECA} bytes e os últimos {@link #CAUDA}, com uma marca no meio.
+ */
 final class CapturaDeSaida {
 
     static final int TETO = 64 * 1024;
+    static final int CABECA = 16 * 1024;
+    static final String MARCA = "\n[... saída cortada ...]\n";
+    static final int CAUDA = TETO - CABECA - MARCA.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
 
-    private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+    private final ByteArrayOutputStream cabeca = new ByteArrayOutputStream();
+    private final byte[] cauda = new byte[CAUDA];
+    private int caudaTotal; // quantos bytes já passaram pela cauda
     private boolean truncado;
     private final Thread leitora;
 
@@ -28,11 +37,15 @@ final class CapturaDeSaida {
     }
 
     private synchronized void guardar(byte[] b, int n) {
-        int cabe = Math.max(0, Math.min(n, TETO - buffer.size()));
-        if (cabe > 0) {
-            buffer.write(b, 0, cabe);
+        int paraACabeca = Math.max(0, Math.min(n, CABECA - cabeca.size()));
+        if (paraACabeca > 0) {
+            cabeca.write(b, 0, paraACabeca);
         }
-        if (cabe < n) {
+        for (int i = paraACabeca; i < n; i++) { // o resto entra no anel da cauda
+            cauda[caudaTotal % CAUDA] = b[i];
+            caudaTotal++;
+        }
+        if (caudaTotal > CAUDA) {
             truncado = true;
         }
     }
@@ -43,7 +56,17 @@ final class CapturaDeSaida {
     }
 
     synchronized byte[] bytes() {
-        return buffer.toByteArray();
+        ByteArrayOutputStream r = new ByteArrayOutputStream();
+        r.writeBytes(cabeca.toByteArray());
+        if (caudaTotal <= CAUDA) {
+            r.write(cauda, 0, caudaTotal);
+        } else {
+            r.writeBytes(MARCA.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            int inicio = caudaTotal % CAUDA; // o byte mais antigo do anel
+            r.write(cauda, inicio, CAUDA - inicio);
+            r.write(cauda, 0, inicio);
+        }
+        return r.toByteArray();
     }
 
     synchronized boolean truncado() {
