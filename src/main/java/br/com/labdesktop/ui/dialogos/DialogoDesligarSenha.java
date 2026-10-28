@@ -19,6 +19,7 @@ import br.com.labdesktop.ui.componentes.Campos;
 import br.com.labdesktop.ui.componentes.CopiadorDeTexto;
 import br.com.labdesktop.ui.componentes.Icones;
 import br.com.labdesktop.ui.componentes.Notificacoes;
+import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
 import br.com.labdesktop.ui.componentes.Selo;
 import br.com.labdesktop.ui.componentes.TextoCorrido;
@@ -27,6 +28,7 @@ import br.com.labdesktop.util.Fundo;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JTextField;
 
@@ -57,6 +59,9 @@ public final class DialogoDesligarSenha extends Dialogo {
 
     private static final int LARGURA = 520;
 
+    /** A segunda confirmação, além do nome do servidor: o usuário diz que tem como voltar a entrar se a chave deste app falhar. Desmarcada por padrão. */
+    public static final String TEXTO_DO_OUTRO_JEITO = "Tenho outro jeito de entrar neste servidor (outra chave instalada, painel do provedor ou acesso físico)";
+
     private final String nomeDoServidor;
     private final Motor motor;
     private final Notificacoes avisos;
@@ -71,8 +76,10 @@ public final class DialogoDesligarSenha extends Dialogo {
     private final Rotulo tituloDoEncontrado = new Rotulo("O que o app encontrou").negrito();
     private final TextoCorrido encontrado = new TextoCorrido("", LARGURA).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     private final TextoCorrido avisosDaLeitura = new TextoCorrido("", LARGURA).corDoToken(Tokens.ATENCAO).tamanho(12.5f);
-    private final Rotulo tituloDosRiscos = new Rotulo("O que você precisa saber").negrito();
-    private final TextoCorrido riscos = new TextoCorrido("", LARGURA).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
+    private final TextoCorrido riscos = new TextoCorrido("", LARGURA - 40).corDoToken(Tokens.TEXTO).tamanho(12.5f);
+    /** Os riscos ficam numa caixa em destaque (fundo âmbar suave): é o que o usuário precisa ler antes de confirmar. */
+    private final JComponent blocoDosRiscos;
+    private final JCheckBox outroJeitoDeEntrar = new JCheckBox(TEXTO_DO_OUTRO_JEITO);
     private final Rotulo tituloDoReverter = new Rotulo("Como reverter (guarde este comando)").negrito();
     private final TextoCorrido comandoDeReverter = new TextoCorrido("", LARGURA).mono(12f);
     private final Botao copiarComandoDeReverter;
@@ -110,16 +117,25 @@ public final class DialogoDesligarSenha extends Dialogo {
         desligar.setVisible(false);
         campoDaConfirmacao.putClientProperty("html.disable", Boolean.TRUE);
         campoDaConfirmacao.getAccessibleContext().setAccessibleName("Digite o nome do servidor para confirmar");
-        pedidoDeConfirmacao.setText("Para confirmar, digite o nome do servidor: " + nomeDoServidor);
+        pedidoDeConfirmacao.setText("Para confirmar, digite o nome do servidor exatamente como está escrito (maiúsculas e minúsculas contam): " + nomeDoServidor);
 
         oQueFaz.setText(textoDoQueFaz());
         riscos.setText(textoDosRiscos());
+        Rotulo tituloDestacado = new Rotulo("O que você precisa saber (leia antes de confirmar)").negrito();
+        Painel caixaDosRiscos = new Painel(new java.awt.BorderLayout()).fundo(Tokens.ATENCAO_SUAVE).borda(Tokens.ATENCAO).raio(10);
+        caixaDosRiscos.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 12, 10, 12));
+        caixaDosRiscos.add(Caixa.coluna(6, tituloDestacado, riscos), java.awt.BorderLayout.CENTER);
+        blocoDosRiscos = caixaDosRiscos;
+        outroJeitoDeEntrar.setOpaque(false);
+        outroJeitoDeEntrar.setSelected(false);
+        outroJeitoDeEntrar.getAccessibleContext().setAccessibleName(TEXTO_DO_OUTRO_JEITO);
         comandoDeReverter.setText(ComandosDoAcesso.comandoParaReverter());
         blocoDoReverter = Caixa.coluna(6, tituloDoReverter, comandoDeReverter, Caixa.linha(0, copiarComandoDeReverter, Caixa.mola()));
         blocoDoComandoManual = Caixa.coluna(6, tituloDoComando, comandoManual, Caixa.linha(0, copiarComandoManual, Caixa.mola()));
         // O BoxLayout deixa o espaço de um componente escondido: em vez de "espaço entre" (que sobra quando um bloco some), cada bloco leva o seu recuo em cima.
         blocoDaPrevia = Caixa.coluna(0, recuo(tituloDoQueFaz, 0), recuo(oQueFaz, 4), recuo(tituloDoEncontrado, 12), recuo(encontrado, 4), recuo(avisosDaLeitura, 10),
-            recuo(tituloDosRiscos, 12), recuo(riscos, 4), recuo(blocoDoReverter, 12), recuo(pedidoDeConfirmacao, 14), recuo(Caixa.linha(0, campoDaConfirmacao, Caixa.mola()), 4));
+            recuo(blocoDosRiscos, 12), recuo(blocoDoReverter, 12), recuo(outroJeitoDeEntrar, 14), recuo(pedidoDeConfirmacao, 10),
+            recuo(Caixa.linha(0, campoDaConfirmacao, Caixa.mola()), 4));
         blocoDosPassos = Caixa.coluna(4);
         for (Passo p : Passo.values()) {
             Rotulo r = new Rotulo(p.rotulo()).corDoToken(Tokens.TEXTO3).tamanho(12.5f);
@@ -141,6 +157,7 @@ public final class DialogoDesligarSenha extends Dialogo {
         fechar.addActionListener(e -> aoCancelar());
         desligar.addActionListener(e -> desligarAgora());
         campoDaConfirmacao.getDocument().addDocumentListener(new SimplesOuvinteDeDocumento(this::conferirAConfirmacao));
+        outroJeitoDeEntrar.addActionListener(e -> conferirAConfirmacao());
         ler();
     }
 
@@ -152,18 +169,24 @@ public final class DialogoDesligarSenha extends Dialogo {
 
     /** A lista numerada do que o app vai fazer, na ordem em que faz. */
     public static String textoDoQueFaz() {
-        return "1. Faz uma cópia datada do arquivo de configuração do SSH do servidor.\n"
-            + "2. Cria o arquivo " + ComandosDoAcesso.ARQUIVO_PROPRIO + " com duas linhas: PasswordAuthentication no e KbdInteractiveAuthentication no.\n"
-            + "3. Confere a configuração (sshd -t) antes de aplicar.\n"
-            + "4. Recarrega o SSH, sem reiniciar: a sua conexão atual continua aberta.\n"
-            + "5. Abre uma conexão nova só com a chave. Se ela não entrar, o app desfaz tudo sozinho e conta o que aconteceu.";
+        return "1. Guarda uma cópia datada do que vai mudar.\n"
+            + "2. Arma, no próprio servidor, um desfazer automático: se o app morrer ou a conexão cair, em 2 minutos o servidor apaga a regra e volta sozinho.\n"
+            + "3. Cria o arquivo " + ComandosDoAcesso.ARQUIVO_PROPRIO + " com PasswordAuthentication no, KbdInteractiveAuthentication no e ChallengeResponseAuthentication no.\n"
+            + "4. Confere a configuração (sshd -t) antes de aplicar.\n"
+            + "5. Recarrega o SSH, sem reiniciar: a sua conexão atual continua aberta.\n"
+            + "6. Abre uma conexão nova só com a chave. Se ela não entrar, o app desfaz tudo sozinho e conta o que aconteceu.\n"
+            + "7. Confere o resultado (a configuração geral, a do seu usuário e o que o servidor oferece numa conexão nova) e só então cancela o desfazer automático.";
     }
 
     /** Os riscos, em linguagem simples. */
     public static String textoDosRiscos() {
-        return "• Outras pessoas e outros computadores que entram neste servidor por senha deixam de conseguir entrar.\n"
-            + "• Se você perder a chave deste app (ela fica no cofre), só dá para entrar pelo painel do provedor ou ao lado do servidor.\n"
-            + "• Depois que der certo, o app NÃO liga a senha de novo sozinho. Para voltar atrás, rode o comando de reverter abaixo no servidor.\n"
+        return "• A chave existe só neste cofre, neste computador. Se você perder este computador ou o cofre, perde o acesso por aqui, e só sobra o painel do provedor ou "
+            + "o acesso ao lado do servidor.\n"
+            + "• Outras pessoas e outros computadores que entram neste servidor por senha deixam de conseguir entrar, inclusive outro computador seu (por exemplo, um Windows) "
+            + "que não tenha uma chave instalada.\n"
+            + "• Agentes do provedor (guest agent, droplet-agent, OS Login) podem reescrever o arquivo authorized_keys e apagar a chave do app; sem a senha, isso tranca você.\n"
+            + "• \"Remover servidor\" aqui no app tira a chave do authorized_keys: depois disso este app não entra mais.\n"
+            + "• O app NÃO liga a senha de novo sozinho. Para voltar atrás, rode o comando de reverter abaixo no servidor.\n"
             + "• Servidores gerenciados por outra ferramenta (cloud-init, painel do provedor) podem desfazer esta mudança sozinhos.";
     }
 
@@ -207,8 +230,8 @@ public final class DialogoDesligarSenha extends Dialogo {
                 tituloDoEncontrado.setVisible(false);
                 encontrado.setVisible(false);
                 avisosDaLeitura.setVisible(false);
-                tituloDosRiscos.setVisible(true);
-                riscos.setVisible(true);
+                blocoDosRiscos.setVisible(true);
+                outroJeitoDeEntrar.setVisible(false);
                 pedidoDeConfirmacao.setVisible(false);
                 campoDaConfirmacao.setVisible(false);
                 blocoDaPrevia.setVisible(true);
@@ -217,8 +240,8 @@ public final class DialogoDesligarSenha extends Dialogo {
                 encontrado.setText(marcadores(a.achados()));
                 tituloDoQueFaz.setVisible(false);
                 oQueFaz.setVisible(false);
-                tituloDosRiscos.setVisible(false);
-                riscos.setVisible(false);
+                blocoDosRiscos.setVisible(false);
+                outroJeitoDeEntrar.setVisible(false);
                 blocoDoReverter.setVisible(false);
                 pedidoDeConfirmacao.setVisible(false);
                 campoDaConfirmacao.setVisible(false);
@@ -242,8 +265,9 @@ public final class DialogoDesligarSenha extends Dialogo {
     }
 
     private void conferirAConfirmacao() {
+        // Exato: o nome com as mesmas letras (maiúsculas e minúsculas contam). Mais a segunda confirmação: o usuário diz que tem outro jeito de entrar.
         boolean digitouCerto = campoDaConfirmacao.getText().strip().equals(nomeDoServidor);
-        desligar.setEnabled(!ocupado && avaliacao != null && avaliacao.podeDesligar() && digitouCerto && resultado == null);
+        desligar.setEnabled(!ocupado && avaliacao != null && avaliacao.podeDesligar() && digitouCerto && outroJeitoDeEntrar.isSelected() && resultado == null);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -259,6 +283,7 @@ public final class DialogoDesligarSenha extends Dialogo {
         agiu = true;
         desligar.definirOcupado(true);
         campoDaConfirmacao.setEnabled(false);
+        outroJeitoDeEntrar.setEnabled(false);
         fechar.setEnabled(false);
         blocoDaPrevia.setVisible(false);
         blocoDosPassos.setVisible(true);
@@ -365,6 +390,11 @@ public final class DialogoDesligarSenha extends Dialogo {
         return campoDaConfirmacao;
     }
 
+    /** A caixa "Tenho outro jeito de entrar neste servidor". */
+    public JCheckBox caixaDeOutroJeito() {
+        return outroJeitoDeEntrar;
+    }
+
     public Botao botaoDesligar() {
         return desligar;
     }
@@ -406,7 +436,7 @@ public final class DialogoDesligarSenha extends Dialogo {
     }
 
     public String textoDosRiscosMostrado() {
-        return riscos.isVisible() && blocoDaPrevia.isVisible() ? riscos.getText() : "";
+        return blocoDosRiscos.isVisible() && blocoDaPrevia.isVisible() ? riscos.getText() : "";
     }
 
     public String comandoDeReverterMostrado() {

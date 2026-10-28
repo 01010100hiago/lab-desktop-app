@@ -126,17 +126,22 @@ class DialogoDesligarSenhaTest {
         assertTrue(d.avaliacao().podeDesligar());
         String faz = Visual.naEdt(d::textoDoQueFazMostrado);
         assertTrue(faz.contains("cópia datada") && faz.contains("PasswordAuthentication no") && faz.contains("sshd -t") && faz.contains("sem reiniciar"), faz);
+        assertTrue(faz.contains("desfazer automático") && faz.contains("em 2 minutos") && faz.contains("ChallengeResponseAuthentication no"), faz);
         assertTrue(faz.contains("só com a chave") && faz.contains("desfaz tudo sozinho"), faz);
         String riscos = Visual.naEdt(d::textoDosRiscosMostrado);
-        assertTrue(riscos.contains("entram neste servidor por senha deixam de conseguir entrar"), riscos);
-        assertTrue(riscos.contains("perder a chave deste app") && riscos.contains("painel do provedor ou ao lado do servidor"), riscos);
+        assertTrue(riscos.contains("outras pessoas e outros computadores") || riscos.contains("Outras pessoas e outros computadores"), riscos);
+        assertTrue(riscos.contains("A chave existe só neste cofre, neste computador") && riscos.contains("perder este computador ou o cofre") && riscos.contains("painel do provedor ou "), riscos);
+        assertTrue(riscos.contains("outro computador seu (por exemplo, um Windows)"), riscos);
+        assertTrue(riscos.contains("guest agent, droplet-agent, OS Login"), riscos);
+        assertTrue(riscos.contains("\"Remover servidor\" aqui no app tira a chave do authorized_keys"), riscos);
         assertTrue(riscos.contains("NÃO liga a senha de novo sozinho"), riscos);
         assertTrue(riscos.contains("cloud-init"), riscos);
         String achados = Visual.naEdt(d::textoDoEncontrado);
         assertTrue(achados.contains("Login por senha agora: ligado"), achados);
         assertTrue(Visual.naEdt(d::comandoDeReverterMostrado).contains("rm " + ComandosDoAcesso.ARQUIVO_PROPRIO), Visual.naEdt(d::comandoDeReverterMostrado));
         String tela = Visual.naEdt(() -> TextosDeTela.de(d.raiz()));
-        assertTrue(tela.contains("Para confirmar, digite o nome do servidor: lab"), tela);
+        assertTrue(tela.contains("Para confirmar, digite o nome do servidor exatamente como está escrito (maiúsculas e minúsculas contam): lab"), tela);
+        assertTrue(tela.contains(DialogoDesligarSenha.TEXTO_DO_OUTRO_JEITO), tela);
         assertTrue(tela.contains("Desligar a senha em lab"), tela);
         semTransbordo(d);
         nosDoisTemas("desligar-senha-previa", x -> { }, outro -> { });
@@ -156,14 +161,34 @@ class DialogoDesligarSenhaTest {
         assertEquals(List.of(), sshd.escritas, "um clique num botão desligado não escreve nada");
 
         Visual.naEdt(() -> d.campoDaConfirmacao().setText("lab"));
+        assertFalse(Visual.naEdt(() -> d.botaoDesligar().isEnabled()), "só o nome não basta: falta a segunda confirmação");
+        Visual.naEdt(() -> d.caixaDeOutroJeito().doClick());
         assertTrue(Visual.naEdt(() -> d.botaoDesligar().isEnabled()));
         assertEquals(List.of(), sshd.escritas, "digitar o nome também não escreve: só o clique");
     }
 
     @Test
+    void semMarcarQueTemOutroJeitoDeEntrarOBotaoContinuaDesabilitadoMesmoComONomeCerto() throws Exception {
+        DialogoDesligarSenha d = abrir();
+        assertFalse(Visual.naEdt(() -> d.caixaDeOutroJeito().isSelected()), "desmarcada por padrão");
+        assertEquals(DialogoDesligarSenha.TEXTO_DO_OUTRO_JEITO, Visual.naEdt(() -> d.caixaDeOutroJeito().getText()));
+        Visual.naEdt(() -> d.campoDaConfirmacao().setText("lab"));
+        assertFalse(Visual.naEdt(() -> d.botaoDesligar().isEnabled()));
+        Visual.naEdt(() -> d.botaoDesligar().doClick());
+        assertEquals(List.of(), sshd.escritas, "o clique no botão desabilitado não escreve nada");
+        Visual.naEdt(() -> d.caixaDeOutroJeito().doClick());
+        assertTrue(Visual.naEdt(() -> d.botaoDesligar().isEnabled()));
+        Visual.naEdt(() -> d.caixaDeOutroJeito().doClick()); // desmarcou de novo
+        assertFalse(Visual.naEdt(() -> d.botaoDesligar().isEnabled()));
+        Visual.naEdt(() -> d.campoDaConfirmacao().setText("LAB"));
+        Visual.naEdt(() -> d.caixaDeOutroJeito().doClick());
+        assertFalse(Visual.naEdt(() -> d.botaoDesligar().isEnabled()), "o nome é exato: maiúsculas e minúsculas contam");
+    }
+
+    @Test
     void depoisDoCliqueMostraOsPassosEOResultadoRealComOComandoDeReverter() throws Exception {
         DialogoDesligarSenha d = abrir();
-        Visual.naEdt(() -> d.campoDaConfirmacao().setText("lab"));
+        Visual.naEdt(() -> { d.campoDaConfirmacao().setText("lab"); d.caixaDeOutroJeito().doClick(); });
         Visual.naEdt(() -> d.botaoDesligar().doClick());
         Espera.ate(PRAZO, () -> "resultado (selo='" + Visual.naEdt(d::seloDoResultado) + "')", () -> !Visual.naEdt(d::seloDoResultado).isEmpty());
 
@@ -182,7 +207,7 @@ class DialogoDesligarSenhaTest {
         assertTrue(sshd.temArquivoNosso());
         semTransbordo(d);
         nosDoisTemas("desligar-senha-resultado", x -> { }, outro -> {
-            Visual.naEdt(() -> outro.campoDaConfirmacao().setText("lab"));
+            Visual.naEdt(() -> { outro.campoDaConfirmacao().setText("lab"); outro.caixaDeOutroJeito().doClick(); });
             Visual.naEdt(() -> outro.botaoDesligar().doClick());
             Espera.ate(PRAZO, "resultado", () -> !Visual.naEdt(outro::seloDoResultado).isEmpty());
         });
@@ -195,7 +220,7 @@ class DialogoDesligarSenhaTest {
     void provaQueFalhaMostraQueODesfezESemTransbordo() throws Exception {
         falhaDaProva = new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_LOGIN_POR_CHAVE, "O servidor não aceitou a chave.");
         DialogoDesligarSenha d = abrir();
-        Visual.naEdt(() -> d.campoDaConfirmacao().setText("lab"));
+        Visual.naEdt(() -> { d.campoDaConfirmacao().setText("lab"); d.caixaDeOutroJeito().doClick(); });
         Visual.naEdt(() -> d.botaoDesligar().doClick());
         Espera.ate(PRAZO, "resultado", () -> !Visual.naEdt(d::seloDoResultado).isEmpty());
 
@@ -205,7 +230,7 @@ class DialogoDesligarSenhaTest {
         assertFalse(sshd.temArquivoNosso(), "o arquivo foi apagado");
         semTransbordo(d);
         nosDoisTemas("desligar-senha-desfeito", x -> { }, outro -> {
-            Visual.naEdt(() -> outro.campoDaConfirmacao().setText("lab"));
+            Visual.naEdt(() -> { outro.campoDaConfirmacao().setText("lab"); outro.caixaDeOutroJeito().doClick(); });
             Visual.naEdt(() -> outro.botaoDesligar().doClick());
             Espera.ate(PRAZO, "resultado", () -> !Visual.naEdt(outro::seloDoResultado).isEmpty());
         });
@@ -251,7 +276,7 @@ class DialogoDesligarSenhaTest {
                 sshd = new SshdFalso(CARIMBO);
                 DialogoDesligarSenha d = abrir();
                 if (comResultado) {
-                    Visual.naEdt(() -> d.campoDaConfirmacao().setText("lab"));
+                    Visual.naEdt(() -> { d.campoDaConfirmacao().setText("lab"); d.caixaDeOutroJeito().doClick(); });
                     Visual.naEdt(() -> d.botaoDesligar().doClick());
                     Espera.ate(PRAZO, "resultado", () -> !Visual.naEdt(d::seloDoResultado).isEmpty());
                 }
@@ -282,7 +307,7 @@ class DialogoDesligarSenhaTest {
 
         segurar = new CountDownLatch(1);
         DialogoDesligarSenha segundo = abrir();
-        Visual.naEdt(() -> segundo.campoDaConfirmacao().setText("lab"));
+        Visual.naEdt(() -> { segundo.campoDaConfirmacao().setText("lab"); segundo.caixaDeOutroJeito().doClick(); });
         Visual.naEdt(() -> segundo.botaoDesligar().doClick());
         Espera.ate(PRAZO, "andando", () -> Visual.naEdt(segundo::ocupado) && sshd.recargas >= 1);
         assertFalse(Visual.naEdt(() -> segundo.botaoFechar().isEnabled()), "o botão não deixa fechar no meio");
