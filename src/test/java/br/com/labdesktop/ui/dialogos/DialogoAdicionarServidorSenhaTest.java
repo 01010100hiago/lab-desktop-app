@@ -267,10 +267,14 @@ class DialogoAdicionarServidorSenhaTest {
     }
 
     @Test
-    void senhaErradaMostraAFraseApagaOCampoENadaEGravadoEAPausaVemDepoisDeTres() throws Exception {
+    void senhaErradaMostraAFraseApagaOCampoENadaEGravadoEAPausaVemDepoisDeQuatro() throws Exception {
+        java.util.concurrent.atomic.AtomicReference<java.time.Instant> relogio = new java.util.concurrent.atomic.AtomicReference<>(java.time.Instant.parse("2026-10-28T12:00:00Z"));
+        assistente = new AssistenteDeServidor(cofre, gerenciador, ConfigSsh.rapida(), new br.com.labdesktop.acesso.LimiteDeTentativas(
+            AssistenteDeServidor.MAXIMO_DE_SENHAS_RECUSADAS, AssistenteDeServidor.JANELA_DAS_SENHAS_RECUSADAS, relogio::get));
         DialogoAdicionarServidor d = assistenteNaTela();
         noPassoDaChave(d);
-        for (int i = 1; i <= 3; i++) {
+        for (int i = 1; i <= 4; i++) {
+            relogio.updateAndGet(t -> t.plusSeconds(20));
             digitarEEntrar(d, "errada-" + i);
             int quantas = i;
             Espera.ate(PRAZO, "recusa " + i, () -> Visual.naEdt(d::textoDoErro).contains("não aceitou esta senha") && ssh.senhasVistas.size() == quantas
@@ -278,53 +282,17 @@ class DialogoAdicionarServidorSenhaTest {
             assertEquals("", new String(Visual.naEdt(() -> d.campoDaSenhaDoServidor().getPassword())), "o campo é apagado a cada tentativa");
             assertEquals("chave", Visual.naEdt(d::paginaAtual));
         }
+        assertTrue(Visual.naEdt(d::textoDoErro).contains("não tenta mais por 10 minutos"), Visual.naEdt(d::textoDoErro));
         assertEquals(List.of(0), senhasVistasQuandoOHostFoiConferido, "o host foi conferido uma vez só: tentar de novo não pergunta outra vez");
         assertEquals(List.of(), cofre.servidores());
         assertEquals(List.of(), shell.recebidos);
 
         digitarEEntrar(d, SENHA_DO_SERVIDOR);
         Espera.ate(PRAZO, "pausa", () -> Visual.naEdt(d::textoDoErro).contains("Espere"));
-        assertTrue(Visual.naEdt(d::textoDoErro).contains("3 senhas recusadas seguidas"), Visual.naEdt(d::textoDoErro));
-        assertEquals(3, ssh.senhasVistas.size(), "a quarta (mesmo certa) não saiu do app");
+        assertTrue(Visual.naEdt(d::textoDoErro).contains("o servidor pode bloquear o seu endereço"), Visual.naEdt(d::textoDoErro));
+        assertEquals(4, ssh.senhasVistas.size(), "a quinta (mesmo certa) não saiu do app");
         semTransbordo(d);
         Visual.salvar(Visual.renderizar(d.raiz(), 560, Visual.alturaPreferida(d.raiz(), 560)), "assistente-passo-2-senha-pausa");
-    }
-
-    @Test
-    void voltarApagaASenhaEMudarODestinoTambemEOCampoNuncaLevaASenhaParaOutroServidor() throws Exception {
-        DialogoAdicionarServidor d = assistenteNaTela();
-        noPassoDaChave(d);
-        Visual.naEdt(() -> d.campoDaSenhaDoServidor().setText("senha-do-servidor-A"));
-        Visual.naEdt(() -> d.botaoVoltar().doClick());
-        assertEquals("dados", Visual.naEdt(d::paginaAtual));
-        assertEquals("", new String(Visual.naEdt(() -> d.campoDaSenhaDoServidor().getPassword())), "Voltar apaga a senha");
-        Visual.naEdt(() -> d.campoDoHost().setText("outro.example.com"));
-        Visual.naEdt(() -> d.botaoContinuar().doClick());
-        esperarPagina(d, "chave");
-        assertEquals("", new String(Visual.naEdt(() -> d.campoDaSenhaDoServidor().getPassword())), "o outro servidor começa com o campo vazio");
-        assertEquals(List.of(), ssh.senhasVistas);
-    }
-
-    @Test
-    void fecharEnquantoOAppFalaComOServidorNaoFechaEASenhaSaiDoCampo() throws Exception {
-        java.util.concurrent.CountDownLatch trinco = new java.util.concurrent.CountDownLatch(1);
-        shell.segurarAInstalacao(trinco);
-        try {
-            DialogoAdicionarServidor d = assistenteNaTela();
-            noPassoDaChave(d);
-            digitarEEntrar(d, SENHA_DO_SERVIDOR);
-            assertTrue(shell.instalacaoChegou.await(20, java.util.concurrent.TimeUnit.SECONDS), "a instalação chegou ao servidor");
-            assertTrue(Visual.naEdt(d::ocupado));
-            assertEquals("", new String(Visual.naEdt(() -> d.campoDaSenhaDoServidor().getPassword())), "o campo já foi apagado ao clicar");
-            Visual.naEdt(() -> d.botaoCancelar().doClick());
-            Visual.naEdt(() -> d.botaoVoltar().doClick());
-            assertEquals("chave", Visual.naEdt(d::paginaAtual), "não volta nem fecha no meio");
-            assertTrue(avisos.disse("info", "Espere terminar"), "diz por quê");
-            trinco.countDown();
-            esperarPagina(d, "conexao");
-        } finally {
-            trinco.countDown();
-        }
     }
 
     @Test

@@ -134,9 +134,12 @@ public final class AssistenteDeServidor {
         }
     }
 
-    /** Quantas senhas recusadas seguidas o app aceita antes da pausa, e quanto dura a pausa. */
-    public static final int MAXIMO_DE_SENHAS_RECUSADAS = 3;
-    public static final Duration PAUSA_DEPOIS_DAS_TENTATIVAS = Duration.ofSeconds(30);
+    /**
+     * Quantas senhas recusadas o app aceita numa janela, e o tamanho da janela. O fail2ban padrão do servidor bane o endereço com 5 falhas em 10 minutos
+     * (maxretry=5): 4 numa janela de 10 minutos deixa uma de folga para o usuário errar por fora do app.
+     */
+    public static final int MAXIMO_DE_SENHAS_RECUSADAS = 4;
+    public static final Duration JANELA_DAS_SENHAS_RECUSADAS = Duration.ofMinutes(10);
 
     private final CofreDeChaves cofre;
     private final GerenciadorServidores gerenciador;
@@ -144,7 +147,7 @@ public final class AssistenteDeServidor {
     private final LimiteDeTentativas limiteDeSenha;
 
     public AssistenteDeServidor(CofreDeChaves cofre, GerenciadorServidores gerenciador, ConfigSsh cfgSsh) {
-        this(cofre, gerenciador, cfgSsh, new LimiteDeTentativas(MAXIMO_DE_SENHAS_RECUSADAS, PAUSA_DEPOIS_DAS_TENTATIVAS, Instant::now));
+        this(cofre, gerenciador, cfgSsh, new LimiteDeTentativas(MAXIMO_DE_SENHAS_RECUSADAS, JANELA_DAS_SENHAS_RECUSADAS, Instant::now));
     }
 
     /** Com o freio das senhas trocável (os testes controlam o relógio). */
@@ -326,8 +329,9 @@ public final class AssistenteDeServidor {
             var pausa = limiteDeSenha.pausaRestante(conta);
             if (pausa.isPresent()) {
                 throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.MUITAS_TENTATIVAS,
-                    "Foram " + MAXIMO_DE_SENHAS_RECUSADAS + " senhas recusadas seguidas. Espere " + Math.max(1, pausa.get().toSeconds() + 1)
-                        + " s antes de tentar de novo, para não bloquear a conta no servidor.");
+                    "Espere " + descreverEspera(pausa.get()) + " antes de tentar de novo: o servidor pode bloquear o seu endereço depois de várias senhas erradas."
+                        + (limiteDeSenha.restantes(conta) == 0 ? " O app já tentou " + MAXIMO_DE_SENHAS_RECUSADAS + " senhas nos últimos "
+                            + JANELA_DAS_SENHAS_RECUSADAS.toMinutes() + " minutos." : ""));
             }
             ChaveSsh daVez = cofre.chaveSsh(chave.id()).orElseThrow(() -> new CofreException("A chave deste servidor não está no cofre."));
             InstaladorDeChave.Resultado instalada;
@@ -348,6 +352,22 @@ public final class AssistenteDeServidor {
         }
     }
 
+    /** A frase do motivo com o que o usuário precisa saber do freio: a partir da 2ª recusa, quantas tentativas restam e que o servidor pode bloquear o endereço. */
+    private static FalhaDeEntradaPorSenha comAviso(FalhaDeEntradaPorSenha f, int restantes) {
+        if (restantes >= MAXIMO_DE_SENHAS_RECUSADAS - 1) {
+            return f; // 1ª recusa: sem alarde
+        }
+        String extra = restantes == 0
+            ? " O app não tenta mais por " + JANELA_DAS_SENHAS_RECUSADAS.toMinutes() + " minutos: o servidor pode bloquear o seu endereço depois de várias senhas erradas."
+            : " Restam " + restantes + (restantes == 1 ? " tentativa" : " tentativas") + ": o servidor pode bloquear o seu endereço depois de várias senhas erradas.";
+        return new FalhaDeEntradaPorSenha(f.motivo(), f.getMessage() + extra, f);
+    }
+
+    private static String descreverEspera(Duration d) {
+        long s = Math.max(1, d.toSeconds() + 1);
+        return s >= 120 ? (s + 59) / 60 + " minutos" : s + " s";
+    }
+
     private SessaoComSenha abrirComSenha(Dados dados, Pin pin, char[] senha, String conta) throws FalhaDeEntradaPorSenha {
         try {
             SessaoComSenha s = SessaoComSenha.abrir(dados.host().strip(), dados.porta(), dados.usuario().strip(), pin, senha, cfgSsh);
@@ -356,7 +376,10 @@ public final class AssistenteDeServidor {
             return s;
         } catch (FalhaDeEntradaPorSenha f) {
             switch (f.motivo()) {
-                case SENHA_INCORRETA, CONTA_BLOQUEADA, SENHA_EXPIRADA -> limiteDeSenha.registrarFalha(conta);
+                case SENHA_INCORRETA, CONTA_BLOQUEADA, SENHA_EXPIRADA -> {
+                    limiteDeSenha.registrarFalha(conta);
+                    throw comAviso(f, limiteDeSenha.restantes(conta));
+                }
                 default -> { /* sem senha enviada: não conta para a pausa */ }
             }
             throw f;

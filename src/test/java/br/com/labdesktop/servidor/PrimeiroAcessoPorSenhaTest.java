@@ -74,7 +74,7 @@ class PrimeiroAcessoPorSenhaTest {
         cofre = CofreDeChaves.criar(caminhos, SENHA_MESTRA.clone(), ParametrosKdf.MINIMO);
         gerenciador = new GerenciadorServidores(cofre, PedidoDeCodigo2fa.NUNCA, ConfigSsh.rapida());
         assistente = new AssistenteDeServidor(cofre, gerenciador, ConfigSsh.rapida(),
-            new LimiteDeTentativas(AssistenteDeServidor.MAXIMO_DE_SENHAS_RECUSADAS, AssistenteDeServidor.PAUSA_DEPOIS_DAS_TENTATIVAS, () -> agora));
+            new LimiteDeTentativas(AssistenteDeServidor.MAXIMO_DE_SENHAS_RECUSADAS, AssistenteDeServidor.JANELA_DAS_SENHAS_RECUSADAS, () -> agora));
     }
 
     @AfterEach
@@ -169,41 +169,66 @@ class PrimeiroAcessoPorSenhaTest {
         assertEquals(List.of(), cofre.servidores());
     }
 
+    private FalhaDeEntradaPorSenha errarComSenha(InfoChave chave, Pin pin, String senha) {
+        agora = agora.plus(Duration.ofSeconds(20)); // passa as pausas curtas entre uma recusa e outra
+        return assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.instalarAChaveComSenha(dados(), chave, pin, senha(senha), x -> { }));
+    }
+
     @Test
-    void tresSenhasRecusadasSeguidasPausamEDepoisDaPausaPodeTentarDeNovo() throws Exception {
+    void quatroRecusasNaJanelaDeDezMinutosPausamATentativaSeguinteEMesmoACertaNaoSai() throws Exception {
         InfoChave chave = assistente.gerarChave("lab");
         Pin pin = assistente.sondar("127.0.0.1", ssh.porta()).pin();
-        for (int i = 1; i <= 3; i++) {
-            char[] errada = senha("errada-" + i);
-            FalhaDeEntradaPorSenha e = assertThrows(FalhaDeEntradaPorSenha.class,
-                () -> assistente.instalarAChaveComSenha(dados(), chave, pin, errada, x -> { }));
-            assertEquals(Motivo.SENHA_INCORRETA, e.motivo());
-        }
-        char[] quarta = senha(SENHA_DO_SERVIDOR); // até a certa é segurada: a pausa existe para não martelar a conta
-        FalhaDeEntradaPorSenha pausa = assertThrows(FalhaDeEntradaPorSenha.class,
-            () -> assistente.instalarAChaveComSenha(dados(), chave, pin, quarta, x -> { }));
-        assertEquals(Motivo.MUITAS_TENTATIVAS, pausa.motivo());
-        assertTrue(pausa.getMessage().contains("Espere 31 s") || pausa.getMessage().contains("Espere 30 s"), pausa.getMessage());
-        exigirZerada(quarta);
-        assertEquals(List.of("errada-1", "errada-2", "errada-3"), ssh.senhasVistas, "a quarta senha NEM saiu do app");
+        assertEquals(Motivo.SENHA_INCORRETA, errarComSenha(chave, pin, "errada-1").motivo());
+        FalhaDeEntradaPorSenha segunda = errarComSenha(chave, pin, "errada-2");
+        assertTrue(segunda.getMessage().contains("Restam 2 tentativas"), segunda.getMessage());
+        assertTrue(segunda.getMessage().contains("o servidor pode bloquear o seu endereço depois de várias senhas erradas"), segunda.getMessage());
+        FalhaDeEntradaPorSenha terceira = errarComSenha(chave, pin, "errada-3");
+        assertTrue(terceira.getMessage().contains("Resta 1 tentativa") || terceira.getMessage().contains("Restam 1 tentativa"), terceira.getMessage());
+        FalhaDeEntradaPorSenha quarta = errarComSenha(chave, pin, "errada-4");
+        assertTrue(quarta.getMessage().contains("não tenta mais por 10 minutos"), quarta.getMessage());
 
-        agora = agora.plus(Duration.ofSeconds(31)); // a pausa curta passou
-        assertEquals(InstaladorDeChave.Resultado.ADICIONADA,
-            assistente.instalarAChaveComSenha(dados(), chave, pin, senha(SENHA_DO_SERVIDOR), x -> { }));
+        char[] quinta = senha(SENHA_DO_SERVIDOR); // até a certa é segurada: a pausa existe para não banir o endereço do usuário
+        agora = agora.plus(Duration.ofMinutes(3));
+        FalhaDeEntradaPorSenha pausa = assertThrows(FalhaDeEntradaPorSenha.class,
+            () -> assistente.instalarAChaveComSenha(dados(), chave, pin, quinta, x -> { }));
+        assertEquals(Motivo.MUITAS_TENTATIVAS, pausa.motivo());
+        assertTrue(pausa.getMessage().startsWith("Espere "), pausa.getMessage());
+        assertTrue(pausa.getMessage().contains("o servidor pode bloquear o seu endereço"), pausa.getMessage());
+        exigirZerada(quinta);
+        assertEquals(List.of("errada-1", "errada-2", "errada-3", "errada-4"), ssh.senhasVistas, "a quinta (mesmo certa) NEM saiu do app");
+
+        agora = agora.plus(Duration.ofMinutes(8)); // a primeira recusa saiu da janela
+        assertEquals(InstaladorDeChave.Resultado.ADICIONADA, assistente.instalarAChaveComSenha(dados(), chave, pin, senha(SENHA_DO_SERVIDOR), x -> { }));
+    }
+
+    @Test
+    void asRecusasContamAcumuladasMesmoComPausasEOHostEmMaiusculasEOMesmo() throws Exception {
+        InfoChave chave = assistente.gerarChave("lab");
+        Pin pin = assistente.sondar("127.0.0.1", ssh.porta()).pin();
+        for (int i = 1; i <= 4; i++) {
+            errarComSenha(chave, pin, "errada-" + i);
+        }
+        Dados maiusculo = new Dados("lab", "127.0.0.1 ", ssh.porta(), "LABUSER", agente.porta());
+        FalhaDeEntradaPorSenha e = assertThrows(FalhaDeEntradaPorSenha.class,
+            () -> assistente.instalarAChaveComSenha(maiusculo, chave, pin, senha(SENHA_DO_SERVIDOR), x -> { }));
+        assertEquals(Motivo.MUITAS_TENTATIVAS, e.motivo(), "o mesmo servidor e usuário escritos de outro jeito contam na mesma conta");
+        assertEquals(4, ssh.senhasVistas.size());
     }
 
     @Test
     void senhaCertaZeraAContaDeTentativas() throws Exception {
         InfoChave chave = assistente.gerarChave("lab");
         Pin pin = assistente.sondar("127.0.0.1", ssh.porta()).pin();
-        for (int i = 0; i < 2; i++) {
-            assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.instalarAChaveComSenha(dados(), chave, pin, senha("errada"), x -> { }));
+        for (int i = 0; i < 3; i++) {
+            errarComSenha(chave, pin, "errada");
         }
+        agora = agora.plus(Duration.ofSeconds(30));
         assistente.instalarAChaveComSenha(dados(), chave, pin, senha(SENHA_DO_SERVIDOR), x -> { });
-        for (int i = 0; i < 2; i++) {
-            assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.instalarAChaveComSenha(dados(), chave, pin, senha("errada"), x -> { }));
+        for (int i = 0; i < 3; i++) {
+            errarComSenha(chave, pin, "errada");
         }
-        // 2 + acerto + 2: nunca chegou a 3 seguidas, então não há pausa
+        // 3 + acerto + 3: o acerto zerou a conta, então nunca chegou a 4
+        agora = agora.plus(Duration.ofSeconds(30));
         assertEquals(InstaladorDeChave.Resultado.JA_EXISTIA,
             assistente.instalarAChaveComSenha(dados(), chave, pin, senha(SENHA_DO_SERVIDOR), x -> { }));
     }
