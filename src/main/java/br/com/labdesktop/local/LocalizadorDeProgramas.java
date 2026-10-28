@@ -44,7 +44,18 @@ public final class LocalizadorDeProgramas {
             }
         }
         return new LocalizadorDeProgramas(plataforma.sistema(), todas,
-            p -> Files.isRegularFile(p) && (plataforma.sistema() == SistemaOperacional.WINDOWS || Files.isExecutable(p)));
+            p -> ehProgramaDeVerdade(plataforma.sistema(), p));
+    }
+
+    /**
+     * No Mac e no Linux, um arquivo comum e executável. No Windows, só a existência: o {@code winget.exe} (e outros "app execution aliases" de
+     * {@code WindowsApps}) é um ponto de reparse que {@code Files.isRegularFile} costuma dizer que não é arquivo, embora rode.
+     */
+    static boolean ehProgramaDeVerdade(SistemaOperacional sistema, Path p) {
+        if (sistema == SistemaOperacional.WINDOWS) {
+            return Files.exists(p) && !Files.isDirectory(p);
+        }
+        return Files.isRegularFile(p) && Files.isExecutable(p);
     }
 
     /**

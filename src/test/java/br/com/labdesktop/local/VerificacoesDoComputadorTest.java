@@ -342,4 +342,34 @@ class VerificacoesDoComputadorTest {
         assertTrue(c.frase().contains("depende do Docker"));
         assertNull(c.comandoSugerido());
     }
+
+    @Test
+    void umaLeituraDaJvmQueFaltaNoAppEmpacotadoNaoDerrubaAConferencia() {
+        assertEquals(-1, SondaReal.lerSemCair(() -> {
+            throw new NoClassDefFoundError("com/sun/management/OperatingSystemMXBean");
+        }), "NoClassDefFoundError é LinkageError, não Exception");
+        assertEquals(-1, SondaReal.lerSemCair(() -> {
+            throw new UnsatisfiedLinkError("sem o módulo");
+        }));
+        assertEquals(-1, SondaReal.lerSemCair(() -> {
+            throw new IllegalStateException("x");
+        }));
+        assertEquals(42, SondaReal.lerSemCair(() -> 42));
+        assertTrue(new SondaReal(new LocalizadorDeProgramas(SistemaOperacional.MAC, List.of(), p -> false)).memoriaTotalBytes() > 0,
+            "na JVM de verdade a memória é lida");
+    }
+
+    @Test
+    void noWindowsOAtalhoDoWingetEOutrosAliasesContamPelaExistenciaENaoPorSerArquivoComum(@org.junit.jupiter.api.io.TempDir java.nio.file.Path tmp) throws Exception {
+        java.nio.file.Path alias = tmp.resolve("winget.exe");
+        java.nio.file.Files.writeString(alias, "x");
+        assertTrue(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.WINDOWS, alias));
+        assertFalse(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.WINDOWS, tmp), "uma pasta nunca é programa");
+        assertFalse(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.WINDOWS, tmp.resolve("nao-existe.exe")));
+        assertFalse(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.MAC, alias), "no Mac e no Linux precisa ser executável");
+        assertTrue(alias.toFile().setExecutable(true));
+        assertTrue(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.MAC, alias));
+        LocalizadorDeProgramas l = new LocalizadorDeProgramas(SistemaOperacional.WINDOWS, List.of(tmp.toString()), p -> LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.WINDOWS, p));
+        assertEquals(alias, l.localizar("winget").orElseThrow());
+    }
 }
