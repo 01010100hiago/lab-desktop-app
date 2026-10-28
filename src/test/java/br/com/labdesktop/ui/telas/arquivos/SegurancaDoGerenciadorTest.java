@@ -119,7 +119,7 @@ class SegurancaDoGerenciadorTest {
             });
             assertEquals(List.of(), azuis, "tema " + tema);
         }
-        assertNotNull(Tokens.ACENTO);
+        assertNotNull(Tokens.DESTAQUE);
     }
 
     private static boolean azul(Color c) {

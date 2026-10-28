@@ -12,8 +12,8 @@ import org.fife.ui.rsyntaxtextarea.SyntaxScheme;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
 
 /**
- * O {@code RSyntaxTextArea} do editor, com a paleta QUENTE do app no lugar da padrão (que usa azul e ciano, cores que cansam a vista
- * do usuário): palavras reservadas em bronze, texto entre aspas em verde-musgo, números em âmbar, comentários em cinza quente. As cores
+ * O {@code RSyntaxTextArea} do editor, com a paleta neutra do app no lugar da padrão (que usa azul e ciano, cores que cansam a vista
+ * do usuário): palavras reservadas na cor de destaque, texto entre aspas em verde discreto, números em marrom fosco, comentários em cinza. As cores
  * saem dos tokens a cada troca de tema ({@link #updateUI}) e a fonte do editor segue o fator de texto do usuário.
  *
  * <p>Ligações de segurança: links dentro do arquivo NÃO são clicáveis (o conteúdo é do servidor e não vira navegação), e o
@@ -87,13 +87,13 @@ final class AreaDeEdicao extends RSyntaxTextArea {
     void aplicarPaleta() {
         setBackground(Tokens.cor(Tokens.SUPERFICIE));
         setForeground(Tokens.cor(Tokens.TEXTO));
-        setCaretColor(Tokens.cor(Tokens.ACENTO));
-        setSelectionColor(Tokens.cor(Tokens.ACENTO_BORDA));
+        setCaretColor(Tokens.cor(Tokens.DESTAQUE));
+        setSelectionColor(Tokens.cor(Tokens.DESTAQUE_BORDA));
         setCurrentLineHighlightColor(Tokens.cor(Tokens.SUPERFICIE2));
         setMarkAllHighlightColor(Tokens.cor(Tokens.ATENCAO_SUAVE).darker());
-        setMatchedBracketBGColor(Tokens.cor(Tokens.ACENTO_SUAVE));
-        setMatchedBracketBorderColor(Tokens.cor(Tokens.ACENTO));
-        setHyperlinkForeground(Tokens.cor(Tokens.ACENTO));
+        setMatchedBracketBGColor(Tokens.cor(Tokens.DESTAQUE_SUAVE));
+        setMatchedBracketBorderColor(Tokens.cor(Tokens.DESTAQUE));
+        setHyperlinkForeground(Tokens.cor(Tokens.DESTAQUE));
         setTabLineColor(Tokens.cor(Tokens.BORDA));
         setSyntaxScheme(esquema());
     }
@@ -104,7 +104,7 @@ final class AreaDeEdicao extends RSyntaxTextArea {
         Color texto = Tokens.cor(Tokens.TEXTO);
         Color mudo = Tokens.cor(Tokens.TEXTO3);
         Color secundario = Tokens.cor(Tokens.TEXTO2);
-        Color bronze = Tokens.cor(Tokens.ACENTO);
+        Color destaque = Tokens.cor(Tokens.DESTAQUE);
         Color verde = Tokens.cor(Tokens.OK);
         Color ambar = Tokens.cor(Tokens.SERIE5);
         Color oliva = Tokens.cor(Tokens.SERIE6);
@@ -121,7 +121,7 @@ final class AreaDeEdicao extends RSyntaxTextArea {
                      TokenTypes.COMMENT_KEYWORD, TokenTypes.COMMENT_MARKUP, TokenTypes.MARKUP_COMMENT,
                      TokenTypes.MARKUP_DTD, TokenTypes.MARKUP_PROCESSING_INSTRUCTION -> mudo;
                 case TokenTypes.RESERVED_WORD, TokenTypes.RESERVED_WORD_2, TokenTypes.DATA_TYPE, TokenTypes.PREPROCESSOR,
-                     TokenTypes.ANNOTATION, TokenTypes.MARKUP_TAG_NAME -> bronze;
+                     TokenTypes.ANNOTATION, TokenTypes.MARKUP_TAG_NAME -> destaque;
                 case TokenTypes.LITERAL_STRING_DOUBLE_QUOTE, TokenTypes.LITERAL_CHAR, TokenTypes.LITERAL_BACKQUOTE,
                      TokenTypes.MARKUP_TAG_ATTRIBUTE_VALUE, TokenTypes.MARKUP_CDATA -> verde;
                 case TokenTypes.LITERAL_NUMBER_DECIMAL_INT, TokenTypes.LITERAL_NUMBER_FLOAT, TokenTypes.LITERAL_NUMBER_HEXADECIMAL,

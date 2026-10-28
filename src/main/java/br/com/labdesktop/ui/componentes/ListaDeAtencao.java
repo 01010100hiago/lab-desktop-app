@@ -57,7 +57,7 @@ public final class ListaDeAtencao extends Painel {
         return switch (g) {
             case PERIGO -> 3;
             case ATENCAO -> 2;
-            case ACENTO -> 1;
+            case DESTAQUE -> 1;
             case NEUTRO, OK -> 0;
         };
     }
@@ -132,7 +132,7 @@ public final class ListaDeAtencao extends Painel {
             frase = new Rotulo(item.texto()).tamanho(12.5f).truncavel();
             frase.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 22, 0, 0)); // alinhada com a palavra, depois do ícone
             frase.setToolTipText(item.texto());
-            destino = new Rotulo(item.destino() + " ›").corDoToken(Tokens.ACENTO).negrito().tamanho(12f);
+            destino = new Rotulo(item.destino() + " ›").corDoToken(Tokens.DESTAQUE).negrito().tamanho(12f);
             JPanel linhaDeCima = new Painel(new BorderLayout(8, 0));
             linhaDeCima.add(estado, BorderLayout.CENTER);
             linhaDeCima.add(destino, BorderLayout.EAST);

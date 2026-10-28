@@ -75,7 +75,7 @@ public final class AreaMonoespacada extends JTextArea {
 
     @Override
     public Color getSelectionColor() {
-        return Tokens.cor(Tokens.ACENTO_SUAVE);
+        return Tokens.cor(Tokens.DESTAQUE_SUAVE);
     }
 
     @Override

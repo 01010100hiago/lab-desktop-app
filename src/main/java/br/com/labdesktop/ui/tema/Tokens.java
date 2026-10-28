@@ -5,7 +5,8 @@ import java.util.List;
 import javax.swing.UIManager;
 
 /**
- * Os tokens de cor do painel web (DESIGN.md) como o código das telas os enxerga. A fonte da verdade são os
+ * Os tokens de cor como o código das telas os enxerga (paleta neutra e sóbria; o "destaque" é grafite no claro
+ * e quase-branco no escuro, sem matiz próprio). A fonte da verdade são os
  * arquivos {@code FlatMacLightLaf.properties} e {@code FlatMacDarkLaf.properties} (chaves {@code Lab.xxx}); aqui
  * só há os NOMES e o acesso. As cores são lidas na hora de pintar, nunca guardadas: a troca de tema (claro,
  * escuro, sistema) vale sem reiniciar e sem refazer componente.
@@ -27,12 +28,11 @@ public final class Tokens {
     public static final String TEXTO2 = "Lab.texto2";
     public static final String TEXTO3 = "Lab.texto3";
     public static final String TEXTO_INVERSO = "Lab.textoInverso";
-    public static final String ACENTO = "Lab.acento";
-    public static final String ACENTO_FORTE = "Lab.acentoForte";
-    public static final String ACENTO_TEXTO = "Lab.acentoTexto";
-    public static final String ACENTO_SUAVE = "Lab.acentoSuave";
-    public static final String ACENTO_BORDA = "Lab.acentoBorda";
-    public static final String ACENTO_BRILHO = "Lab.acentoBrilho";
+    public static final String DESTAQUE = "Lab.destaque";
+    public static final String DESTAQUE_FORTE = "Lab.destaqueForte";
+    public static final String DESTAQUE_TEXTO = "Lab.destaqueTexto";
+    public static final String DESTAQUE_SUAVE = "Lab.destaqueSuave";
+    public static final String DESTAQUE_BORDA = "Lab.destaqueBorda";
     public static final String OK = "Lab.ok";
     public static final String OK_SUAVE = "Lab.okSuave";
     public static final String ATENCAO = "Lab.atencao";
@@ -59,7 +59,7 @@ public final class Tokens {
     public static final List<String> TODAS = List.of(
         BG, BG2, SUPERFICIE, SUPERFICIE2, SUPERFICIE3, BORDA, BORDA_FORTE, BORDA_SUTIL,
         TEXTO, TEXTO2, TEXTO3, TEXTO_INVERSO,
-        ACENTO, ACENTO_FORTE, ACENTO_TEXTO, ACENTO_SUAVE, ACENTO_BORDA, ACENTO_BRILHO,
+        DESTAQUE, DESTAQUE_FORTE, DESTAQUE_TEXTO, DESTAQUE_SUAVE, DESTAQUE_BORDA,
         OK, OK_SUAVE, ATENCAO, ATENCAO_SUAVE, PERIGO, PERIGO_SUAVE, FOCO, TRILHO,
         SERIE5, SERIE6, SERIE7, SERIE8, LOGS_BG, LOGS_TEXTO, LOGS_TEXTO2, LOGS_BORDA,
         MODAL_FUNDO, ESQUELETO_A, ESQUELETO_B, QR_TINTA, QR_FUNDO);

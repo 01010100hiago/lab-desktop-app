@@ -39,7 +39,7 @@ final class CabecalhoDoServidor extends Painel {
 
     CabecalhoDoServidor(Runnable aoAtualizar) {
         super(new BorderLayout(0, 6));
-        nome.setIcon(Icones.colorido("servidor", 22, Tokens.ACENTO));
+        nome.setIcon(Icones.colorido("servidor", 22, Tokens.DESTAQUE));
         nome.setIconTextGap(10);
         add(Caixa.linha(12, nome, new AEsquerda(estado), Caixa.mola(), leitura, atualizar), BorderLayout.NORTH);
         add(Caixa.coluna(0, linhaDeBaixo, ficha), BorderLayout.CENTER);

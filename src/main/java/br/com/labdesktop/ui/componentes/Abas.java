@@ -17,7 +17,7 @@ import javax.swing.ButtonGroup;
 import javax.swing.JToggleButton;
 
 /**
- * As abas de uma tela: rótulos de texto numa fileira, a escolhida em negrito com um traço de acento embaixo, e uma
+ * As abas de uma tela: rótulos de texto numa fileira, a escolhida em negrito com um traço de destaque embaixo, e uma
  * linha fina na largura toda. Um {@code JTabbedPane} puxaria o visual do sistema; aqui é o tema do app. A escolhida
  * nunca é só cor: tem negrito e o traço.
  */
@@ -80,7 +80,7 @@ public final class Abas extends Painel {
                         g2.drawRoundRect(3, 3, getWidth() - 7, getHeight() - 8, 8, 8);
                     }
                     if (isSelected()) {
-                        g2.setColor(Tokens.cor(Tokens.ACENTO));
+                        g2.setColor(Tokens.cor(Tokens.DESTAQUE));
                         g2.fillRect(compacta ? 6 : 8, getHeight() - 3, getWidth() - (compacta ? 12 : 16), 3);
                     }
                 } finally {

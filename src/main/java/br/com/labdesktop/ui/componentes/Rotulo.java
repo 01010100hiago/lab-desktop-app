@@ -125,7 +125,7 @@ public class Rotulo extends JLabel {
         return new Rotulo(texto);
     }
 
-    /** Texto secundário (cinza quente), no tamanho pequeno do painel. */
+    /** Texto secundário (cinza neutro), no tamanho pequeno do painel. */
     public static Rotulo secundario(String texto) {
         return new Rotulo(texto).corDoToken(Tokens.TEXTO2);
     }

@@ -53,12 +53,86 @@ class ConfigTerminalTest {
     }
 
     @Test
-    void coresQuentesFundoETextoDosLogs() {
-        ConfigTerminal c = padrao();
-        assertEquals(new Color(0x12, 0x11, 0x0E), c.getDefaultBackground().toColor());
-        assertEquals(new Color(0xD8, 0xD2, 0xC6), c.getDefaultForeground().toColor());
-        var selecao = c.getSelectionColor();
-        assertEquals(new Color(0xC9, 0x9A, 0x3F), selecao.getBackground().toColor(), "seleção âmbar");
+    void fundoETextoSaoOsDaSuperficieDeCadaTema() {
+        ConfigTerminal escuro = new ConfigTerminal(Preferencias.padrao(), true);
+        assertEquals(new Color(0x1D, 0x20, 0x24), escuro.getDefaultBackground().toColor());
+        assertEquals(new Color(0xE6, 0xE8, 0xEA), escuro.getDefaultForeground().toColor());
+        assertEquals(new Color(0x4A, 0x4F, 0x54), escuro.getSelectionColor().getBackground().toColor(), "seleção cinza, sem âmbar");
+        ConfigTerminal claro = new ConfigTerminal(Preferencias.padrao(), false);
+        assertEquals(new Color(0xFF, 0xFF, 0xFF), claro.getDefaultBackground().toColor());
+        assertEquals(new Color(0x1B, 0x1F, 0x23), claro.getDefaultForeground().toColor());
+        assertEquals(new Color(0xC6, 0xCB, 0xD0), claro.getSelectionColor().getBackground().toColor());
+    }
+
+    @Test
+    void trocarOTemaTrocaAPaletaENaHoraNoMesmoConfig() {
+        ConfigTerminal c = new ConfigTerminal(Preferencias.padrao(), true);
+        PaletaTerminal escura = (PaletaTerminal) c.getTerminalColorPalette();
+        assertEquals(new Color(0xE6, 0xE8, 0xEA), c.getDefaultForeground().toColor());
+        c.definirEscuro(false);
+        assertFalse(c.escuro());
+        assertEquals(new Color(0x1B, 0x1F, 0x23), c.getDefaultForeground().toColor());
+        assertTrue(c.getTerminalColorPalette() != escura, "outra paleta");
+        assertEquals(new Color(0xB3, 0x37, 0x2F), c.getTerminalColorPalette().getForeground(TerminalColor.index(1)), "vermelho do tema claro");
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    void oEstiloPadraoNaoUsaOPretoEBrancoDaPaletaEAcompanhaOTema() {
+        // sem isto o texto escrito antes do primeiro "reset" do programa sairia com os índices 0 e 15 da paleta (caixas brancas no escuro)
+        ConfigTerminal c = new ConfigTerminal(Preferencias.padrao(), true);
+        var estilo = c.getDefaultStyle();
+        assertFalse(estilo.getForeground().isIndexed());
+        assertFalse(estilo.getBackground().isIndexed());
+        assertEquals(new Color(0xE6, 0xE8, 0xEA), estilo.getForeground().toColor());
+        assertEquals(new Color(0x1D, 0x20, 0x24), estilo.getBackground().toColor());
+        c.definirEscuro(false); // o MESMO estilo (as células o guardam) passa a valer no tema claro
+        assertEquals(new Color(0x1B, 0x1F, 0x23), estilo.getForeground().toColor());
+        assertEquals(new Color(0xFF, 0xFF, 0xFF), estilo.getBackground().toColor());
+    }
+
+    @Test
+    void oAnsiDoTemaClaroLeBemSobreOFundoBranco() {
+        for (int i = 1; i < 16; i++) {
+            if (i == 7 || i == 8) {
+                continue; // cinzas de apoio ("branco" e "preto vivo"), lidos como texto secundário
+            }
+            assertTrue(contraste(PaletaTerminal.rgbDoIndice(i, false), PaletaTerminal.FUNDO_CLARO) >= 4.5,
+                "ANSI " + i + " no claro: " + contraste(PaletaTerminal.rgbDoIndice(i, false), PaletaTerminal.FUNDO_CLARO));
+        }
+        for (int i : new int[] {7, 8}) {
+            assertTrue(contraste(PaletaTerminal.rgbDoIndice(i, false), PaletaTerminal.FUNDO_CLARO) >= 4.5, "ANSI " + i + " no claro");
+        }
+        assertTrue(contraste(PaletaTerminal.TEXTO_CLARO, PaletaTerminal.FUNDO_CLARO) >= 7);
+        assertTrue(contraste(PaletaTerminal.TEXTO_ESCURO, PaletaTerminal.FUNDO_ESCURO) >= 7);
+    }
+
+    @Test
+    void oAnsiDoTemaEscuroLeBemSobreOFundoEscuroForaOsDoisPretos() {
+        for (int i = 1; i < 16; i++) {
+            if (i == 8) {
+                assertTrue(contraste(PaletaTerminal.rgbDoIndice(i), PaletaTerminal.FUNDO_ESCURO) >= 3.5, "o preto vivo (texto de apoio) ainda se lê");
+                continue;
+            }
+            assertTrue(contraste(PaletaTerminal.rgbDoIndice(i), PaletaTerminal.FUNDO_ESCURO) >= 3.5,
+                "ANSI " + i + " no escuro: " + contraste(PaletaTerminal.rgbDoIndice(i), PaletaTerminal.FUNDO_ESCURO));
+        }
+    }
+
+    /** Contraste WCAG entre duas cores RGB. */
+    static double contraste(int a, int b) {
+        double la = luminancia(a);
+        double lb = luminancia(b);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    }
+
+    private static double luminancia(int rgb) {
+        double[] c = {(rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF};
+        for (int i = 0; i < 3; i++) {
+            double v = c[i] / 255.0;
+            c[i] = v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        }
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     }
 
     /** O critério REAL do TesteSemAzul (matiz de 165 a 275 graus, saturação de 0,15 e brilho de 0,15 para cima). */
@@ -70,6 +144,19 @@ class ConfigTerminalTest {
 
     /** As únicas cores da paleta que o critério acima pegaria: o azul e o ciano do ANSI (a ardósia), a exceção do desenho. */
     private static final java.util.Set<Integer> ANSI_AZULADOS = java.util.Set.of(4, 12);
+
+    @Test
+    void ansiDoTemaClaroTambemNaoTemAzulNemCianoForaDaArdosia() {
+        for (int i = 0; i < 16; i++) {
+            java.awt.Color cor = new java.awt.Color(PaletaTerminal.rgbDoIndice(i, false));
+            if (ANSI_AZULADOS.contains(i)) {
+                float[] hsb = java.awt.Color.RGBtoHSB(cor.getRed(), cor.getGreen(), cor.getBlue(), null);
+                assertTrue(hsb[1] <= PaletaTerminal.LIMITE_DE_SATURACAO && hsb[2] <= 0.75f, "ardósia do claro: ANSI " + i);
+            } else {
+                assertFalse(ehAzulOuCiano(cor), "ANSI " + i + " do claro é azul ou ciano");
+            }
+        }
+    }
 
     @Test
     void oVarredorEnxergaOAzulDeBrilhoCheioEOPastel() {

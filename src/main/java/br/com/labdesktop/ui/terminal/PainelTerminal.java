@@ -14,6 +14,7 @@ import br.com.labdesktop.ui.componentes.Rotulo;
 import br.com.labdesktop.ui.componentes.Teclas;
 import br.com.labdesktop.ui.tema.Tokens;
 import br.com.labdesktop.util.Fundo;
+import com.formdev.flatlaf.FlatLaf;
 import com.jediterm.core.util.TermSize;
 import com.jediterm.terminal.emulator.mouse.MouseMode;
 import com.jediterm.terminal.model.StyleState;
@@ -129,7 +130,7 @@ public final class PainelTerminal extends Painel {
         this.portao = new PortaoDeEntrada(ctx.agendador(), sessao::estado);
         fundo(Tokens.BG);
 
-        centro.setBackground(new Color(PaletaTerminal.FUNDO));
+        centro.fundo(Tokens.LOGS_BG); // o fundo do terminal é o da superfície do tema, e muda com ele
         centro.setOpaque(true);
         textoDaFaixa.corDoToken(Tokens.TEXTO);
         faixa.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
@@ -287,7 +288,8 @@ public final class PainelTerminal extends Painel {
 
     private JediTermWidget criarWidget() {
         JediTermWidget[] vaga = new JediTermWidget[1];
-        ConfigTerminal config = new ConfigTerminal(ctx.preferencias().get());
+        boolean escuro = FlatLaf.isLafDark();
+        ConfigTerminal config = new ConfigTerminal(ctx.preferencias().get(), escuro);
         JediTermWidget w = new JediTermWidget(TamanhoDeTerminal.PADRAO.colunas(), TamanhoDeTerminal.PADRAO.linhas(), config) {
             private static final long serialVersionUID = 1L;
 
@@ -367,7 +369,8 @@ public final class PainelTerminal extends Painel {
             }
         };
         vaga[0] = w;
-        w.setBackground(new Color(PaletaTerminal.FUNDO));
+        w.setBackground(new Color(PaletaTerminal.fundo(escuro)));
+        w.putClientProperty(CHAVE_DO_TEMA, new TemaDoWidget(config));
         w.addHyperlinkFilter(filtroDeLinks());
         w.getTerminalPanel().addCustomKeyListener(new KeyAdapter() {
             @Override
@@ -382,6 +385,35 @@ public final class PainelTerminal extends Painel {
         });
         w.getAccessibleContext().setAccessibleName(getAccessibleContext().getAccessibleName());
         return w;
+    }
+
+    /** As cores com que um widget foi criado: o que precisa mudar quando o usuário troca o tema do app. */
+    private record TemaDoWidget(ConfigTerminal config) { }
+
+    private static final String CHAVE_DO_TEMA = "labdesktop.temaDoWidget";
+
+    /**
+     * O Swing chama {@code updateUI} em todos os componentes quando o tema do app muda (claro, escuro, sistema): o terminal troca de
+     * cores NA HORA, sem reanexar nem perder o que está na tela (o shell não sobreviveria a uma reanexação).
+     */
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        if (centro != null) { // o construtor do Swing chama isto antes de os campos existirem
+            reaplicarOTema();
+        }
+    }
+
+    private void reaplicarOTema() {
+        boolean escuro = FlatLaf.isLafDark();
+        for (JediTermWidget w : new JediTermWidget[] {widget, widgetEmEspera}) {
+            if (w != null && w.getClientProperty(CHAVE_DO_TEMA) instanceof TemaDoWidget t && t.config().escuro() != escuro) {
+                t.config().definirEscuro(escuro); // as cores padrão do terminal são dinâmicas: o próximo desenho já sai no tema novo
+                w.setBackground(new Color(PaletaTerminal.fundo(escuro)));
+                w.getTerminalPanel().repaint();
+            }
+        }
+        centro.repaint();
     }
 
     private static void fecharWidget(JediTermWidget w) {

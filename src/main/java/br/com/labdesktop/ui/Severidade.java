@@ -3,11 +3,11 @@ package br.com.labdesktop.ui;
 import br.com.labdesktop.ui.tema.Tokens;
 
 /**
- * Cor de preenchimento de uma barra (ARQUITETURA 8.2): normal (acento), alta (âmbar, acima de 75 %) e crítica
+ * Cor de preenchimento de uma barra (ARQUITETURA 8.2): normal (destaque), alta (âmbar, acima de 75 %) e crítica
  * (terracota, acima de 90 %). A barra sempre vem com o número ao lado: severidade nunca é só cor.
  */
 public enum Severidade {
-    NORMAL(Tokens.ACENTO),
+    NORMAL(Tokens.DESTAQUE),
     ALTA(Tokens.ATENCAO),
     CRITICA(Tokens.PERIGO);
 

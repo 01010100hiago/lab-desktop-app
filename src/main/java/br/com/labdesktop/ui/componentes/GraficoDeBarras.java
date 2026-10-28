@@ -16,7 +16,7 @@ import java.util.function.DoubleFunction;
 
 /**
  * O gráfico de barras simples da página do projeto (os últimos 30 dias de consumo) em Java2D: uma barra por item, na cor de
- * acento do tema (lida a cada pintura, então a troca de tema repinta sozinha), o maior valor escrito no alto e o zero embaixo,
+ * destaque do tema (lida a cada pintura, então a troca de tema repinta sozinha), o maior valor escrito no alto e o zero embaixo,
  * três rótulos no eixo (primeiro, do meio e último) e a explicação de cada barra na dica ao passar o mouse. Dia sem valor
  * ganha só um traço no chão: zero não some, mas também não vira uma barra.
  *
@@ -152,7 +152,7 @@ public final class GraficoDeBarras extends ComponenteSimples {
             g2.setFont(fonte);
             FontMetrics fm = g2.getFontMetrics();
             int chao = h - ALTURA_DO_EIXO;
-            Color acento = Tokens.cor(Tokens.ACENTO);
+            Color acento = Tokens.cor(Tokens.DESTAQUE);
             Color trilho = Tokens.cor(Tokens.BORDA_FORTE);
             // linha do chão e a do topo (o maior valor)
             g2.setColor(Tokens.cor(Tokens.BORDA_SUTIL));
@@ -173,7 +173,7 @@ public final class GraficoDeBarras extends ComponenteSimples {
                     g2.fillRect(x, chao - 1, largura, 1);
                     continue;
                 }
-                g2.setColor(i == sobMouse ? Tokens.cor(Tokens.ACENTO_FORTE) : acento);
+                g2.setColor(i == sobMouse ? Tokens.cor(Tokens.DESTAQUE_FORTE) : acento);
                 g2.fill(new RoundRectangle2D.Float(x, chao - alt, largura, alt, 3, 3));
             }
             // três rótulos no eixo: o primeiro, o do meio e o último (nunca todos: 30 textos não cabem)

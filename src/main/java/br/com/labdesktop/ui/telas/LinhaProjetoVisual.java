@@ -462,7 +462,7 @@ final class LinhaProjetoVisual extends Painel {
             }
             case SESSAO_ABERTA -> {
                 // "aberta" e não "sessão aberta": a coluna já se chama Claude e a frase inteira quebrava o selo em duas linhas em 1100
-                seloClaude.atualizar("aberta", Gravidade.ACENTO, null);
+                seloClaude.atualizar("aberta", Gravidade.DESTAQUE, null);
                 seloClaude.setVisible(true);
                 seloClaude.setToolTipText("Sessão do Claude aberta");
                 if (c.desatualizada()) {

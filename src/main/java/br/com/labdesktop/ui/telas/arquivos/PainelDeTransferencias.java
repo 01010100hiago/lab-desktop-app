@@ -261,7 +261,7 @@ final class PainelDeTransferencias extends Painel {
                 case FALHOU -> Gravidade.PERIGO;
                 case COM_PROBLEMAS, ESPERANDO_VOCE -> Gravidade.ATENCAO;
                 case CANCELADA, NA_FILA -> Gravidade.NEUTRO;
-                case EM_ANDAMENTO -> Gravidade.ACENTO;
+                case EM_ANDAMENTO -> Gravidade.DESTAQUE;
             };
             String icone = switch (r.estado()) {
                 case CONCLUIDA -> "ok-circulo";

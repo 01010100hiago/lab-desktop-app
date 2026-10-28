@@ -19,7 +19,7 @@ public final class ApresentacaoDoEstado {
         Falha.Tipo falha = e.falha() == null ? null : e.falha().tipo();
         return switch (e.conexao()) {
             case DESCONECTADO -> new Apresentacao("Desconectado", "rede", Gravidade.NEUTRO);
-            case CONECTANDO -> new Apresentacao("Conectando…", "atualizar", Gravidade.ACENTO);
+            case CONECTANDO -> new Apresentacao("Conectando…", "atualizar", Gravidade.DESTAQUE);
             case CONECTADO -> e.agenteIncompativel()
                 ? new Apresentacao("Agente incompatível", "alerta", Gravidade.ATENCAO)
                 : new Apresentacao("Conectado", "ok-circulo", Gravidade.OK);

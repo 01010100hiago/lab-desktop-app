@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>O FlatLaf de fábrica é azul (acento {@code #2675BF}, seleção, foco, link) e o tema do macOS ainda lê a cor de
  * destaque do sistema; os arquivos {@code FlatMacLightLaf.properties} e {@code FlatMacDarkLaf.properties} do app
- * trocam tudo isso por bronze e âmbar. Este teste é a prova de que não sobrou nada.
+ * trocam tudo isso por grafite e cinzas neutros. Este teste é a prova de que não sobrou nada.
  */
 class TesteSemAzul {
 
@@ -109,7 +109,7 @@ class TesteSemAzul {
         assertTrue(ehAzulOuCiano(new Color(0x59ADC4)), "verde-água do macOS");
         assertTrue(ehAzulOuCiano(new Color(0x4B6EAF)), "azul do tema escuro do FlatLaf");
         // E o que é nosso não pode ser pego.
-        for (int cor : new int[] {0x87621A, 0xD4A64C, 0x2A7A54, 0x5FBE8E, 0xB03F37, 0xE8807A, 0xF5F2EB, 0x0E0D0B, 0x1C1A16}) {
+        for (int cor : new int[] {0x26292C, 0xECEEF0, 0x2B7550, 0x6FBF92, 0xB3372F, 0xE5817B, 0xF6F7F8, 0x16181B, 0x1B1F23, 0xD5D9DD, 0x60686F}) {
             assertEquals(false, ehAzulOuCiano(new Color(cor)), "falso positivo em #" + Integer.toHexString(cor));
         }
     }
@@ -125,14 +125,14 @@ class TesteSemAzul {
     }
 
     @Test
-    void osTokensDeAcentoEEstadoSaoOsDoPainel() throws Exception {
+    void osTokensDeDestaqueEEstadoSaoOsDaPaletaNeutra() throws Exception {
         instalar(Tema.CLARO);
-        assertEquals(new Color(0x87621A), Tokens.cor(Tokens.ACENTO));
-        assertEquals(new Color(0xF5F2EB), Tokens.cor(Tokens.BG));
-        assertEquals(new Color(0xB03F37), Tokens.cor(Tokens.PERIGO));
+        assertEquals(new Color(0x26292C), Tokens.cor(Tokens.DESTAQUE), "grafite cheio");
+        assertEquals(new Color(0xF6F7F8), Tokens.cor(Tokens.BG));
+        assertEquals(new Color(0xB3372F), Tokens.cor(Tokens.PERIGO));
         instalar(Tema.ESCURO);
-        assertEquals(new Color(0xD4A64C), Tokens.cor(Tokens.ACENTO));
-        assertEquals(new Color(0x0E0D0B), Tokens.cor(Tokens.BG));
-        assertEquals(new Color(0xE8807A), Tokens.cor(Tokens.PERIGO));
+        assertEquals(new Color(0xECEEF0), Tokens.cor(Tokens.DESTAQUE), "quase-branco");
+        assertEquals(new Color(0x16181B), Tokens.cor(Tokens.BG));
+        assertEquals(new Color(0xE5817B), Tokens.cor(Tokens.PERIGO));
     }
 }

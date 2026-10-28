@@ -239,7 +239,7 @@ public abstract class Dialogo {
 
     /** Ícone grande no canto e o título ao lado. */
     protected static JComponent cabecalho(String icone, String titulo) {
-        Rotulo marca = new Rotulo().icone(Icones.colorido(icone, 22, Tokens.ACENTO));
+        Rotulo marca = new Rotulo().icone(Icones.colorido(icone, 22, Tokens.DESTAQUE));
         return Caixa.linha(10, marca, Rotulo.titulo(titulo));
     }
 

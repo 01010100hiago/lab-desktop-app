@@ -11,11 +11,11 @@ import javax.swing.JButton;
 /**
  * O botão do app, nas variantes do painel web ({@code .btn-prim}, {@code .btn-sec}, {@code .btn-perigo},
  * {@code .btn-fantasma}, {@code .btn-mini}, {@code .btn-icone}). O visual vem do {@code FlatLaf} por
- * {@code FlatClientProperties.STYLE} com referências aos tokens ({@code $Lab.acento}), então claro, escuro e
+ * {@code FlatClientProperties.STYLE} com referências aos tokens ({@code $Lab.destaque}), então claro, escuro e
  * sistema trocam sozinhos. {@code html.disable} fica ligado (o texto de um botão pode vir do servidor).
  *
  * <p>O ícone (que segue a cor do texto do componente) enxerga a cor certa porque {@link #getForeground()} devolve o
- * token da variante: num botão primário, ícone e texto saem brancos sobre o bronze, nos dois temas.
+ * token da variante: num botão primário, ícone e texto saem com a cor de texto do destaque (branco sobre grafite, grafite sobre quase-branco).
  */
 public final class Botao extends JButton {
 
@@ -23,16 +23,16 @@ public final class Botao extends JButton {
 
     /** As variantes. */
     public enum Variante {
-        PRIMARIO("background: $Lab.acento; foreground: $Lab.acentoTexto; borderColor: $Lab.acento; "
-            + "hoverBackground: $Lab.acentoForte; pressedBackground: $Lab.acentoForte; "
-            + "hoverBorderColor: $Lab.acentoForte; focusedBorderColor: $Lab.acentoBrilho; "
+        PRIMARIO("background: $Lab.destaque; foreground: $Lab.destaqueTexto; borderColor: $Lab.destaque; "
+            + "hoverBackground: $Lab.destaqueForte; pressedBackground: $Lab.destaqueForte; "
+            + "hoverBorderColor: $Lab.destaqueForte; focusedBorderColor: $Lab.foco; "
             + "disabledBackground: $Lab.superficie3; disabledText: $Lab.texto3; disabledBorderColor: $Lab.borda",
-            Tokens.ACENTO_TEXTO, true),
+            Tokens.DESTAQUE_TEXTO, true),
         SECUNDARIO("", Tokens.TEXTO, false),
         PERIGO("foreground: $Lab.perigo; hoverBackground: $Lab.perigoSuave; hoverBorderColor: $Lab.perigo",
             Tokens.PERIGO, false),
-        LINK("buttonType: borderless; foreground: $Lab.acento; hoverForeground: $Lab.acentoForte; "
-            + "hoverBackground: null; pressedBackground: null; margin: 0,2,0,2", Tokens.ACENTO, false),
+        LINK("buttonType: borderless; foreground: $Lab.destaque; hoverForeground: $Lab.destaqueForte; "
+            + "hoverBackground: null; pressedBackground: null; margin: 0,2,0,2", Tokens.DESTAQUE, false),
         FANTASMA("buttonType: borderless; foreground: $Lab.texto2; hoverForeground: $Lab.texto; "
             + "hoverBackground: $Lab.superficie3; pressedBackground: $Lab.superficie3",
             Tokens.TEXTO2, false);

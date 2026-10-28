@@ -439,7 +439,7 @@ final class TabelaDeEntradas extends JTable {
             setForeground(cor);
             if (modeloDaColuna == 0) {
                 String icone = e.tipo() == EntradaRemota.Tipo.LINK_QUEBRADO ? "alerta" : e.ehPasta() ? "pasta" : e.link() ? "link" : "arquivo";
-                String token = selecionada ? Tokens.TEXTO : e.ehPasta() ? Tokens.ACENTO : Tokens.TEXTO3;
+                String token = selecionada ? Tokens.TEXTO : e.ehPasta() ? Tokens.DESTAQUE : Tokens.TEXTO3;
                 setIcon(iconeDe(icone, e.tipo() == EntradaRemota.Tipo.LINK_QUEBRADO ? Tokens.ATENCAO : token));
                 setIconTextGap(8);
             }

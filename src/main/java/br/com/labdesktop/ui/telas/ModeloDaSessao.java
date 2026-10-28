@@ -14,7 +14,7 @@ public final class ModeloDaSessao {
 
     /** Em que pé a sessão está. */
     public enum Situacao {
-        ABERTA("sessão aberta", Gravidade.ACENTO, null),
+        ABERTA("sessão aberta", Gravidade.DESTAQUE, null),
         FECHADA("sessão fechada", Gravidade.NEUTRO, null),
         PAUSADA_PELO_LIMITE("pausada pelo limite", Gravidade.PERIGO, "pausa"),
         PAUSADA_PELO_FREIO("pausada pelo freio", Gravidade.ATENCAO, "pausa");
@@ -45,7 +45,7 @@ public final class ModeloDaSessao {
     /** O que o Claude está fazendo (na tela da sessão aberta). */
     public enum Atividade {
         PERGUNTA_PENDENTE("pergunta pendente", Gravidade.ATENCAO, "alerta"),
-        EXECUTANDO("executando", Gravidade.ACENTO, "play"),
+        EXECUTANDO("executando", Gravidade.DESTAQUE, "play"),
         ESPERANDO_VOCE("esperando você", Gravidade.OK, "ok-circulo"),
         OCUPADO("ocupado", Gravidade.NEUTRO, "info");
 

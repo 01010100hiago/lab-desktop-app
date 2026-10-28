@@ -21,7 +21,7 @@ import java.awt.Font;
  *   <li>Copiar ao selecionar DESLIGADO (copiar sozinho sobrescreve a área de transferência sem avisar), e colar com o botão do meio
  *       também; só a preferência liga o primeiro.</li>
  *   <li>Sino mudo; buffer de 10.000 linhas; type-ahead desligado (o eco previsto atrapalha o tmux e o Claude).</li>
- *   <li>Fonte JetBrains Mono, 13 por padrão; cores quentes ({@link PaletaTerminal}); seleção âmbar; links sem azul.</li>
+ *   <li>Fonte JetBrains Mono, 13 por padrão; cores neutras nos dois temas ({@link PaletaTerminal}); seleção cinza; links sem azul.</li>
  * </ul>
  *
  * <p>Cmd é do app, o resto é do terminal: os atalhos nativos do JediTerm no macOS (Cmd+C, Cmd+V, Cmd+K, Cmd+setas) ficam como estão, e
@@ -36,24 +36,50 @@ public final class ConfigTerminal extends DefaultSettingsProvider {
         FlatJetBrainsMonoFont.install(); // idempotente: o app já a instala ao montar o tema; os testes não
     }
 
-    private static final ColorPalette PALETA = new PaletaTerminal();
-    private static final TerminalColor TEXTO = TerminalColor.rgb(r(PaletaTerminal.TEXTO), g(PaletaTerminal.TEXTO), b(PaletaTerminal.TEXTO));
-    private static final TerminalColor FUNDO = TerminalColor.rgb(r(PaletaTerminal.FUNDO), g(PaletaTerminal.FUNDO), b(PaletaTerminal.FUNDO));
+    private static final ColorPalette PALETA_ESCURA = new PaletaTerminal(true);
+    private static final ColorPalette PALETA_CLARA = new PaletaTerminal(false);
 
     private final float tamanhoDaFonte;
     private final boolean opcaoComoMeta;
     private final boolean copiarAoSelecionar;
     private final Font fonte;
+    /** O tema em que o terminal está pintando; muda na hora quando o usuário troca o tema do app ({@link #definirEscuro}). */
+    private volatile boolean escuro;
+    private final TerminalColor textoPadrao = new TerminalColor(() -> jediCor(PaletaTerminal.texto(escuro)));
+    private final TerminalColor fundoPadrao = new TerminalColor(() -> jediCor(PaletaTerminal.fundo(escuro)));
 
-    public ConfigTerminal(Preferencias prefs) {
+    public ConfigTerminal(Preferencias prefs, boolean escuro) {
         this.tamanhoDaFonte = prefs.tamanhoFonteTerminal();
         this.opcaoComoMeta = prefs.opcaoComoMeta();
         this.copiarAoSelecionar = prefs.copiarAoSelecionar();
         this.fonte = new Font(FlatJetBrainsMonoFont.FAMILY, Font.PLAIN, Math.round(tamanhoDaFonte));
+        this.escuro = escuro;
+    }
+
+    /** No tema escuro. */
+    public ConfigTerminal(Preferencias prefs) {
+        this(prefs, true);
     }
 
     public ConfigTerminal() {
         this(Preferencias.padrao());
+    }
+
+    /** Troca o tema das cores (a paleta, o texto e o fundo, a seleção). Quem pinta precisa repintar depois. */
+    public void definirEscuro(boolean novo) {
+        this.escuro = novo;
+    }
+
+    public boolean escuro() {
+        return escuro;
+    }
+
+    private static com.jediterm.core.Color jediCor(int rgb) {
+        return new com.jediterm.core.Color(r(rgb), g(rgb), b(rgb));
+    }
+
+    private static TerminalColor cor(int rgb) {
+        return TerminalColor.rgb(r(rgb), g(rgb), b(rgb));
     }
 
     private static int r(int rgb) {
@@ -80,38 +106,50 @@ public final class ConfigTerminal extends DefaultSettingsProvider {
 
     @Override
     public ColorPalette getTerminalColorPalette() {
-        return PALETA;
+        return escuro ? PALETA_ESCURA : PALETA_CLARA;
+    }
+
+    /**
+     * O estilo de quem não pediu cor nenhuma. Sem isto o JediTerm usa preto e branco da PALETA (índices 0 e 15), e o texto escrito antes
+     * do primeiro "reset" do programa (a mensagem do dia do servidor, o primeiro prompt) sairia como caixas brancas no tema escuro. As duas
+     * cores são DINÂMICAS (lidas a cada pintura): as células que as guardam seguem o tema quando o usuário o troca.
+     */
+    @Override
+    @SuppressWarnings("deprecation") // é o método que o StyleState do JediTerm 3.76 ainda lê; sem sobrescrevê-lo o padrão é preto e branco da paleta
+    public TextStyle getDefaultStyle() {
+        return new TextStyle(textoPadrao, fundoPadrao);
     }
 
     @Override
     public TerminalColor getDefaultForeground() {
-        return TEXTO;
+        return textoPadrao;
     }
 
     @Override
     public TerminalColor getDefaultBackground() {
-        return FUNDO;
+        return fundoPadrao;
     }
 
     @Override
     public TextStyle getSelectionColor() {
-        return new TextStyle(TerminalColor.rgb(r(PaletaTerminal.SELECAO_TEXTO), g(PaletaTerminal.SELECAO_TEXTO), b(PaletaTerminal.SELECAO_TEXTO)),
-            TerminalColor.rgb(r(PaletaTerminal.SELECAO_FUNDO), g(PaletaTerminal.SELECAO_FUNDO), b(PaletaTerminal.SELECAO_FUNDO)));
+        return escuro
+            ? new TextStyle(cor(PaletaTerminal.SELECAO_TEXTO_ESCURO), cor(PaletaTerminal.SELECAO_FUNDO_ESCURO))
+            : new TextStyle(cor(PaletaTerminal.SELECAO_TEXTO_CLARO), cor(PaletaTerminal.SELECAO_FUNDO_CLARO));
     }
 
     @Override
     public boolean useInverseSelectionColor() {
-        return false; // com a inversão ligada, a seleção âmbar acima seria ignorada
+        return false; // com a inversão ligada, a seleção cinza acima seria ignorada
     }
 
     @Override
     public TextStyle getFoundPatternColor() {
-        return new TextStyle(TerminalColor.rgb(0x12, 0x11, 0x0E), TerminalColor.rgb(0x8A, 0x6E, 0x34));
+        return escuro ? new TextStyle(cor(0x16181B), cor(0x9AA1A8)) : new TextStyle(cor(0x1B1F23), cor(0xAEB5BB));
     }
 
     @Override
     public TextStyle getHyperlinkColor() {
-        return new TextStyle(TerminalColor.rgb(0xE3, 0xB8, 0x66), FUNDO);
+        return new TextStyle(cor(escuro ? 0xF0F2F4 : 0x111315), getDefaultBackground());
     }
 
     @Override

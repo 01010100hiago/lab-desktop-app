@@ -94,7 +94,7 @@ class PaginaConsumoTest {
                 .comConsumo(FixturesDeApi.consumoSintetico());
             var g = Visual.naEdt(() -> c.tela.consumo().grafico());
             java.awt.image.BufferedImage img = Visual.renderizar(g, 600, 124);
-            int acento = Visual.contarPixels(img, br.com.labdesktop.ui.tema.Tokens.cor(br.com.labdesktop.ui.tema.Tokens.ACENTO), 4);
+            int acento = Visual.contarPixels(img, br.com.labdesktop.ui.tema.Tokens.cor(br.com.labdesktop.ui.tema.Tokens.DESTAQUE), 4);
             assertTrue(acento > 600, tema + ": as barras usam o acento do tema (" + acento + " pixels)");
         }
     }

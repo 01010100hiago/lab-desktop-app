@@ -379,7 +379,7 @@ final class ArvoreDePastas extends JTree {
             setBorder(BorderFactory.createEmptyBorder(0, 2, 0, 4));
             if (dado instanceof NoDePasta p) {
                 setText(p.rotulo());
-                setIcon(Icones.colorido("pasta", 16, sel ? Tokens.TEXTO : Tokens.ACENTO));
+                setIcon(Icones.colorido("pasta", 16, sel ? Tokens.TEXTO : Tokens.DESTAQUE));
                 setIconTextGap(6);
             } else if (dado instanceof Aviso a) {
                 setText(a.texto());

@@ -35,7 +35,7 @@ public final class Sparkline extends ComponenteSimples {
     private Double minimo;
     private Double maximo;
     private Double referencia;
-    private String tokenDaCor = Tokens.ACENTO;
+    private String tokenDaCor = Tokens.DESTAQUE;
     private int altura = 44;
 
     @SuppressWarnings("this-escape") // configurar o componente no construtor é o jeito do Swing

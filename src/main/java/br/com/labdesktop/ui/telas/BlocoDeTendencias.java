@@ -25,7 +25,7 @@ final class BlocoDeTendencias extends CaixaDoServidor {
     private static final long serialVersionUID = 1L;
     private static final int ALTURA_DO_GRAFICO = 40;
 
-    private final Serie serieCpu = new Serie("CPU", Tokens.ACENTO, 0.0, null, null);
+    private final Serie serieCpu = new Serie("CPU", Tokens.DESTAQUE, 0.0, null, null);
     private final Serie serieMemoria = new Serie("Memória", Tokens.SERIE6, 0.0, null, null);
     private final Serie serieDescida = new Serie("Descida", Tokens.SERIE5, 0.0, null, null);
     private final Serie serieSubida = new Serie("Subida", Tokens.SERIE8, 0.0, null, null);

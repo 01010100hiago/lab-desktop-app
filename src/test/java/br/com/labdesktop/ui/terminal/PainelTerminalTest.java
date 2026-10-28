@@ -128,6 +128,53 @@ class PainelTerminalTest {
     }
 
     @Test
+    void trocarOTemaDoAppRepintaOTerminalNaHoraSemReanexarENemPerderATela() throws Exception {
+        cenario = CenarioDeTerminal.conectado();
+        cenario.terminal.roteiro(s -> {
+            s.escrever("Olá, ação ✓\r\n");
+            // amostra do ANSI: as oito cores, normais e vivas, e o negrito
+            StringBuilder amostra = new StringBuilder("\u001b[1mnegrito\u001b[0m  ");
+            for (int i = 0; i < 8; i++) {
+                amostra.append("\u001b[3").append(i).append("mcor ").append(i).append("\u001b[0m ");
+            }
+            amostra.append("\r\n");
+            for (int i = 0; i < 8; i++) {
+                amostra.append("\u001b[9").append(i).append("mviva ").append(i).append("\u001b[0m ");
+            }
+            amostra.append("\r\n\u001b[41m erro \u001b[0m \u001b[42m ok \u001b[0m \u001b[43m atenção \u001b[0m\r\n");
+            s.escrever(amostra.toString());
+            ServidorDeTerminalFalso.roteiroQueNaoLe(s);
+        });
+        PainelTerminal p = doClaude(); // novoPainel instala o tema CLARO
+        abrir(p, 1000, 600);
+        esperarTela(p, "Olá, ação ✓");
+        Visual.salvar(Visual.renderizar(p, 900, 300), "terminal-claro");
+        java.awt.Color claroFundo = Visual.naEdt(() -> p.widget().getTerminalPanel().getBackground());
+        java.awt.Color claroTexto = Visual.naEdt(() -> p.widget().getTerminalPanel().getForeground());
+        assertEquals(new java.awt.Color(PaletaTerminal.FUNDO_CLARO), claroFundo, "no tema claro o terminal é a superfície clara");
+        assertEquals(new java.awt.Color(PaletaTerminal.TEXTO_CLARO), claroTexto);
+        var antes = Visual.naEdt(p::widget);
+        assertEquals(1, cenario.terminal.canaisAbertos.get());
+
+        Visual.tema(Tema.ESCURO); // o que o menu Aparência faz; o Swing manda o updateUI a todos os componentes de uma janela
+        Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(p));
+        assertEquals(new java.awt.Color(PaletaTerminal.FUNDO_ESCURO), Visual.naEdt(() -> p.widget().getTerminalPanel().getBackground()),
+            "o terminal trocou de cor na hora");
+        assertEquals(new java.awt.Color(PaletaTerminal.TEXTO_ESCURO), Visual.naEdt(() -> p.widget().getTerminalPanel().getForeground()));
+        java.awt.image.BufferedImage img = Visual.renderizar(p, 1000, 600);
+        Visual.salvar(Visual.renderizar(p, 900, 300), "terminal-escuro");
+        assertTrue(Visual.contarPixels(img, new java.awt.Color(PaletaTerminal.FUNDO_ESCURO), 2) > 100_000, "a área pintada é a escura");
+        assertEquals(0, Visual.contarPixels(img, java.awt.Color.WHITE, 0), "nada do fundo branco sobrou");
+        assertTrue(antes == Visual.naEdt(p::widget), "o mesmo widget: não reanexou");
+        assertEquals(1, cenario.terminal.canaisAbertos.get(), "e o canal é o mesmo (um shell não sobreviveria a uma reanexação)");
+        assertTrue(tela(p).contains("Olá, ação ✓"), "a tela continua");
+
+        Visual.tema(Tema.CLARO);
+        Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(p));
+        assertEquals(new java.awt.Color(PaletaTerminal.FUNDO_CLARO), Visual.naEdt(() -> p.widget().getTerminalPanel().getBackground()));
+    }
+
+    @Test
     void semMedidaUsa120Por32() throws Exception {
         cenario = CenarioDeTerminal.conectado();
         PainelTerminal p = doClaude();

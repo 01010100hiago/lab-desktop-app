@@ -118,7 +118,7 @@ public final class ConteudoDosAvisos {
                             + (e.versao().api() == null ? "desconhecida" : e.versao().api()) + ").", List.of());
                 }
                 if (e.semToken()) {
-                    yield new AvisoDeConexao(Gravidade.ACENTO, "chave", "Este Mac ainda não tem token em " + nome,
+                    yield new AvisoDeConexao(Gravidade.DESTAQUE, "chave", "Este Mac ainda não tem token em " + nome,
                         "O agente ainda aceita chamadas sem token, mas o token identifica este app (e é exigido depois do corte).",
                         List.of(Acao.REGISTRAR_TOKEN));
                 }

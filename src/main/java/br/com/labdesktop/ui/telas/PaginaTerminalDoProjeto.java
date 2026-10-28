@@ -109,7 +109,7 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
     private final JPanel areaPrincipal = new Painel(modos);
     private final Abas seletor = new Abas(true);
     private final Rotulo legendaDoShell = new Rotulo("Shell no servidor, na pasta do projeto").corDoToken(Tokens.TEXTO3).tamanho(12.5f).truncavel();
-    private final JPanel cartaoDoShell = new Painel(new BorderLayout());
+    private final Painel cartaoDoShell = new Painel(new BorderLayout());
     private final Rotulo mensagemDoShell = new Rotulo().corDoToken(Tokens.LOGS_TEXTO2).tamanho(13f).aoCentro();
     private JPanel blocoDeEstadoDoClaude;
     private JPanel cabecalhoDaTela;
@@ -171,7 +171,7 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
         seletor.botao(ID_SHELL).setToolTipText("Um shell do servidor, já na pasta do projeto");
         seletor.botao(ID_CLAUDE).setToolTipText("A sessão do Claude deste projeto");
         mensagemDoShell.setText("O terminal não está disponível: este servidor ainda não tem conexão.");
-        cartaoDoShell.setBackground(new java.awt.Color(br.com.labdesktop.ui.terminal.PaletaTerminal.FUNDO));
+        cartaoDoShell.fundo(Tokens.LOGS_BG);
         cartaoDoShell.setOpaque(true);
         cartaoDoShell.add(mensagemDoShell, BorderLayout.CENTER);
         terminal.setToolTipText("Abre o terminal do Claude aqui dentro. A tela em texto continua disponível.");

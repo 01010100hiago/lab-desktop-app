@@ -3,12 +3,12 @@ package br.com.labdesktop.ui;
 import br.com.labdesktop.ui.tema.Tokens;
 
 /**
- * O "peso" visual de um estado, na paleta do painel (DESIGN.md): acento bronze, verde-musgo (ok), âmbar escuro
+ * O "peso" visual de um estado, na paleta do painel (DESIGN.md): destaque neutro (grafite no claro, quase-branco no escuro), verde discreto (ok), âmbar fosco
  * (atenção) e terracota (perigo). A cor NUNCA é o único sinal: selo, faixa e linha sempre trazem ícone e texto.
  */
 public enum Gravidade {
     NEUTRO(Tokens.TEXTO3, Tokens.SUPERFICIE3, Tokens.BORDA),
-    ACENTO(Tokens.ACENTO, Tokens.ACENTO_SUAVE, Tokens.ACENTO_BORDA),
+    DESTAQUE(Tokens.DESTAQUE, Tokens.DESTAQUE_SUAVE, Tokens.DESTAQUE_BORDA),
     OK(Tokens.OK, Tokens.OK_SUAVE, Tokens.OK),
     ATENCAO(Tokens.ATENCAO, Tokens.ATENCAO_SUAVE, Tokens.ATENCAO),
     PERIGO(Tokens.PERIGO, Tokens.PERIGO_SUAVE, Tokens.PERIGO);

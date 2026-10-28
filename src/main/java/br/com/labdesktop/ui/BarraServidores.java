@@ -170,7 +170,7 @@ public final class BarraServidores extends Painel {
     // Itens
     // ---------------------------------------------------------------------------------------------
 
-    /** Base visual de um item clicável: fundo suave ao passar o mouse, tom de acento quando selecionado. */
+    /** Base visual de um item clicável: fundo suave ao passar o mouse, tom de destaque quando selecionado. */
     private abstract static class ItemClicavel extends Painel {
         private static final long serialVersionUID = 1L;
         private boolean selecionado;
@@ -233,8 +233,8 @@ public final class BarraServidores extends Painel {
         }
 
         private void atualizarFundo() {
-            fundo(selecionado ? Tokens.ACENTO_SUAVE : sobMouse ? Tokens.SUPERFICIE3 : null);
-            borda(selecionado ? Tokens.ACENTO_BORDA : null);
+            fundo(selecionado ? Tokens.DESTAQUE_SUAVE : sobMouse ? Tokens.SUPERFICIE3 : null);
+            borda(selecionado ? Tokens.DESTAQUE_BORDA : null);
             raio(10);
             repaint();
         }

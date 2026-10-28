@@ -26,7 +26,7 @@ public final class Botoes {
         return b;
     }
 
-    /** Ação principal (bronze). */
+    /** Ação principal (destaque cheio: grafite no claro, quase-branco no escuro). */
     public static Botao primario(String texto, String icone) {
         return criar(texto, icone, Variante.PRIMARIO, 16);
     }
@@ -76,8 +76,8 @@ public final class Botoes {
 
     private static String estiloMini(Variante v) {
         String base = switch (v) {
-            case PRIMARIO -> "background: $Lab.acento; foreground: $Lab.acentoTexto; borderColor: $Lab.acento; "
-                + "hoverBackground: $Lab.acentoForte; pressedBackground: $Lab.acentoForte; hoverBorderColor: $Lab.acentoForte; "
+            case PRIMARIO -> "background: $Lab.destaque; foreground: $Lab.destaqueTexto; borderColor: $Lab.destaque; "
+                + "hoverBackground: $Lab.destaqueForte; pressedBackground: $Lab.destaqueForte; hoverBorderColor: $Lab.destaqueForte; "
                 + "disabledBackground: $Lab.superficie3; disabledText: $Lab.texto3";
             case PERIGO -> "foreground: $Lab.perigo; hoverBackground: $Lab.perigoSuave; hoverBorderColor: $Lab.perigo";
             default -> "";
@@ -112,14 +112,14 @@ public final class Botoes {
         return b;
     }
 
-    /** Filtro rápido (Todos, No ar...): acende em âmbar suave quando marcado. */
+    /** Filtro rápido (Todos, No ar...): acende em destaque suave quando marcado. */
     public static JToggleButton filtro(String texto, String dica) {
         JToggleButton b = new JToggleButton() {
             private static final long serialVersionUID = 1L;
 
             @Override
             public java.awt.Color getForeground() {
-                return Tokens.cor(isSelected() ? Tokens.ACENTO : Tokens.TEXTO);
+                return Tokens.cor(isSelected() ? Tokens.DESTAQUE : Tokens.TEXTO);
             }
         };
         b.putClientProperty("html.disable", Boolean.TRUE);
@@ -129,8 +129,8 @@ public final class Botoes {
         }
         Fontes.aplicar(b, Fontes.TEXTO, Font.PLAIN, 13f);
         b.putClientProperty(FlatClientProperties.STYLE, "arc: 8; minimumHeight: " + ALTURA + "; margin: 2,12,2,12; "
-            + "selectedBackground: $Lab.acentoSuave; selectedForeground: $Lab.acento; "
-            + "pressedBackground: $Lab.acentoSuave");
+            + "selectedBackground: $Lab.destaqueSuave; selectedForeground: $Lab.destaque; "
+            + "pressedBackground: $Lab.destaqueSuave");
         b.addChangeListener(e -> {
             int estilo = b.isSelected() ? Font.BOLD : Font.PLAIN;
             if (b.getFont().getStyle() != estilo) {
@@ -145,7 +145,7 @@ public final class Botoes {
         return UIManager.getFont("Button.font");
     }
 
-    /** Um botão que parece link (texto bronze), para o endereço público do projeto, "Ver detalhes". */
+    /** Um botão que parece link (texto de destaque), para o endereço público do projeto, "Ver detalhes". */
     public static Botao link(String texto) {
         Botao b = new Botao(texto, Variante.LINK);
         Fontes.aplicar(b, Fontes.TEXTO, Font.PLAIN, 13f);

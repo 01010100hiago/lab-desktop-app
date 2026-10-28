@@ -319,7 +319,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
             Rotulo r = new Rotulo(e.rotulo()).corDoToken(Tokens.TEXTO3);
             Icon[] icones = {
                 Icones.colorido("relogio", 16, Tokens.TEXTO3),
-                Icones.colorido("atualizar", 16, Tokens.ACENTO),
+                Icones.colorido("atualizar", 16, Tokens.DESTAQUE),
                 Icones.colorido("ok-circulo", 16, Tokens.OK),
                 Icones.colorido("erro", 16, Tokens.PERIGO)
             };

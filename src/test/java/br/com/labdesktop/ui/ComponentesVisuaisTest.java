@@ -44,7 +44,7 @@ class ComponentesVisuaisTest {
                 Rotulo.secundario("Texto secundário e uma dica logo abaixo"),
                 Rotulo.dica("Dica em 12 pt"),
                 Caixa.linha(8, new Selo("no ar", Gravidade.OK), new Selo("parcial", Gravidade.ATENCAO),
-                    new Selo("parado", Gravidade.NEUTRO), new Selo("sessão aberta", Gravidade.ACENTO),
+                    new Selo("parado", Gravidade.NEUTRO), new Selo("sessão aberta", Gravidade.DESTAQUE),
                     new Selo("pausada pelo limite", Gravidade.PERIGO, "pausa")),
                 b1, b2, b3,
                 Caixa.linha(8, Botoes.primario("Salvar", "ok"), Botoes.secundario("Cancelar", null),
@@ -68,7 +68,7 @@ class ComponentesVisuaisTest {
             Visual.salvar(imagens[i], "componentes-" + tema.name().toLowerCase());
             // O fundo do cartão e o preenchimento da barra normal saem nas cores dos tokens do tema.
             assertTrue(Visual.contarPixels(imagens[i], Tokens.cor(Tokens.SUPERFICIE), 0) > 20_000, "cartão em " + tema);
-            assertTrue(Visual.contarPixels(imagens[i], Tokens.cor(Tokens.ACENTO), 6) > 400, "barra normal em " + tema);
+            assertTrue(Visual.contarPixels(imagens[i], Tokens.cor(Tokens.DESTAQUE), 6) > 400, "barra normal em " + tema);
             assertTrue(Visual.contarPixels(imagens[i], Tokens.cor(Tokens.ATENCAO), 6) > 200, "barra em 78% é âmbar em " + tema);
             assertTrue(Visual.contarPixels(imagens[i], Tokens.cor(Tokens.PERIGO), 6) > 200, "barra em 93% é terracota em " + tema);
             i++;
@@ -86,7 +86,7 @@ class ComponentesVisuaisTest {
         // numa janela de verdade o FlatLaf.updateUI() já faz isto; o componente solto do teste precisa pedir
         Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(p));
         BufferedImage escuro = Visual.renderizar(p, 560, 360);
-        assertTrue(Visual.contarPixels(escuro, new Color(0x161512), 0) > 20_000,
+        assertTrue(Visual.contarPixels(escuro, Tokens.cor(Tokens.SUPERFICIE), 0) > 20_000,
             "o MESMO cartão passou ao grafite do tema escuro, sem ser recriado");
         assertTrue(Visual.contarPixels(escuro, new Color(0xFFFFFF), 0) < 300, "não sobrou superfície branca do tema claro");
     }
@@ -98,8 +98,8 @@ class ComponentesVisuaisTest {
         JPanel linha = Visual.naEdt(() -> Caixa.linha(0, b));
         BufferedImage img = Visual.renderizar(linha, 140, 40);
         Visual.salvar(img, "botao-primario");
-        // texto e ícone brancos sobre o bronze: há pixels brancos e bronze, e nenhum azul
-        assertTrue(Visual.contarPixels(img, Tokens.cor(Tokens.ACENTO), 4) > 400);
+        // texto e ícone brancos sobre o grafite: há pixels brancos e grafite, e nenhum azul
+        assertTrue(Visual.contarPixels(img, Tokens.cor(Tokens.DESTAQUE), 4) > 400);
         assertTrue(Visual.contarPixels(img, Color.WHITE, 12) > 40);
     }
 

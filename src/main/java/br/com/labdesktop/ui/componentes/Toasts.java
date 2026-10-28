@@ -56,7 +56,7 @@ public final class Toasts implements Notificacoes {
 
     @Override
     public void info(String texto) {
-        mostrar(texto, Gravidade.ACENTO, "info", null, null, 5000);
+        mostrar(texto, Gravidade.DESTAQUE, "info", null, null, 5000);
     }
 
     @Override
