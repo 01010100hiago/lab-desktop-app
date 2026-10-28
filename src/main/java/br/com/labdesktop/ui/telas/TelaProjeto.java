@@ -374,6 +374,11 @@ public final class TelaProjeto extends Painel {
         return arquivos.temAlteracoesNaoSalvas();
     }
 
+    /** Editores com alterações não salvas e transferências ainda abertas desta página (para quem vai sair do app). */
+    public br.com.labdesktop.ui.Pendencias pendencias() {
+        return new br.com.labdesktop.ui.Pendencias(arquivos.transferenciasEmAberto(), arquivos.editoresComAlteracoes());
+    }
+
     /** A página saiu de vez: fecha o canal SFTP, os editores e os terminais. */
     public void encerrar() {
         soltar();

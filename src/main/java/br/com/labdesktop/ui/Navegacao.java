@@ -176,6 +176,15 @@ public final class Navegacao extends Painel {
         return t == null ? null : t.projetos();
     }
 
+    /** O que sair do app agora perderia, somado de todas as páginas de servidor. */
+    public Pendencias pendencias() {
+        Pendencias total = Pendencias.NENHUMAS;
+        for (TelaServidor t : telas.values()) {
+            total = total.somar(t.pendencias());
+        }
+        return total;
+    }
+
     /** A página do servidor, com as duas abas. */
     public TelaServidor telaServidorDe(String servidorId) {
         return telas.get(servidorId);

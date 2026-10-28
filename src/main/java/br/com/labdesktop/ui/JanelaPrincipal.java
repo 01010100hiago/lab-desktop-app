@@ -7,6 +7,7 @@ import br.com.labdesktop.servidor.GerenciadorServidores;
 import br.com.labdesktop.ui.componentes.Notificacoes;
 import br.com.labdesktop.ui.componentes.Toasts;
 import br.com.labdesktop.ui.dialogos.Apresentador;
+import br.com.labdesktop.ui.dialogos.DialogoConfirmar;
 import br.com.labdesktop.ui.dialogos.DialogoSobre;
 import br.com.labdesktop.util.Preferencias;
 import java.awt.Dimension;
@@ -78,7 +79,7 @@ public final class JanelaPrincipal extends JFrame {
             addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosing(WindowEvent e) {
-                    comportamento.sair().run();
+                    pedirParaSair();
                 }
             });
         }
@@ -89,8 +90,10 @@ public final class JanelaPrincipal extends JFrame {
         this.painel = new PainelPrincipal(gerenciador, assistente, avisos, apresentador, new Navegador(avisos), servicosDeArquivos,
             preferencias::get);
         setContentPane(painel);
+        // "Sair" do menu passa pela mesma pergunta de fechar a janela
+        ComportamentoDaJanela doMenu = comportamento.sair() == null ? comportamento : new ComportamentoDaJanela(comportamento.sistema(), this::pedirParaSair);
         setJMenuBar(new MenuApp(this, painel, tema, preferencias, bloquearCofre,
-            () -> apresentador.mostrar(new DialogoSobre()), comportamento).barra());
+            () -> apresentador.mostrar(new DialogoSobre()), doMenu).barra());
 
         aplicarTamanhoGuardado();
         this.gravarJanela = new Timer(700, e -> guardarTamanho());
@@ -214,6 +217,28 @@ public final class JanelaPrincipal extends JFrame {
 
     public Notificacoes avisos() {
         return avisos;
+    }
+
+    /**
+     * Sair do app (fechar a janela fora do Mac, "Sair" do menu, Cmd+Q): sem nada pendente sai direto; com transferência andando ou edição não salva pergunta antes, e o
+     * botão em destaque é Cancelar. Sem saída configurada (testes e o uso antigo) só esconde a janela.
+     */
+    public void pedirParaSair() {
+        Runnable sair = comportamento.sair();
+        if (sair == null) {
+            setVisible(false);
+            return;
+        }
+        Pendencias pendencias = painel.pendencias();
+        if (pendencias.vazio()) {
+            sair.run();
+            return;
+        }
+        apresentador.mostrar(new DialogoConfirmar("Sair do " + Versao.NOME + "?", "alerta", pendencias.texto(), "Sair mesmo assim", true, true, sim -> {
+            if (sim) {
+                sair.run();
+            }
+        }));
     }
 
     public Apresentador apresentador() {

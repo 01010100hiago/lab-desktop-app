@@ -203,8 +203,11 @@ public final class MenuApp {
         JMenu menuJanela = new JMenu("Janela");
         menuJanela.add(item("Minimizar", KeyStroke.getKeyStroke(KeyEvent.VK_M, atalho()),
             () -> janela.setExtendedState(janela.getExtendedState() | JFrame.ICONIFIED)));
-        menuJanela.add(item("Fechar a janela", KeyStroke.getKeyStroke(KeyEvent.VK_W, atalho()),
-            () -> janela.dispatchEvent(new java.awt.event.WindowEvent(janela, java.awt.event.WindowEvent.WINDOW_CLOSING))));
+        if (comportamento.fecharEscondeAJanela()) {
+            // Só onde fechar a janela é esconder (Mac): Cmd+W. Fora do Mac Ctrl+W NÃO existe (fechar a janela sai do app; quem quer sair usa "Sair" e a pergunta de pendências).
+            menuJanela.add(item("Fechar a janela", KeyStroke.getKeyStroke(KeyEvent.VK_W, atalho()),
+                () -> janela.dispatchEvent(new java.awt.event.WindowEvent(janela, java.awt.event.WindowEvent.WINDOW_CLOSING))));
+        }
         barra.add(menuJanela);
         atualizarHabilitacao();
         atualizarHabilitacaoDoNovoProjeto();

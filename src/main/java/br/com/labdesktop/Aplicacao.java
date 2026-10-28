@@ -205,7 +205,17 @@ public final class Aplicacao {
         }
     }
 
-    /** Cmd+Q: limpa tudo e encerra o app. */
+    /** Cmd+Q e "Sair": pergunta se houver transferência andando ou edição não salva; sem janela (cofre bloqueado) sai direto. */
+    private void pedirParaSair() {
+        JanelaPrincipal j = janela;
+        if (j == null) {
+            encerrar();
+        } else {
+            j.pedirParaSair();
+        }
+    }
+
+    /** Limpa tudo e encerra o app (o que vem depois da pergunta de Cmd+Q, "Sair" e fechar a janela). */
     public void encerrar() {
         if (encerrando) {
             return;
@@ -229,8 +239,9 @@ public final class Aplicacao {
         try {
             if (d.isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
                 d.setQuitHandler((e, resposta) -> {
-                    encerrar();
-                    resposta.performQuit();
+                    // Sempre cancela o pedido do sistema e sai pelo caminho do app: com transferência andando ou edição não salva ele pergunta antes.
+                    resposta.cancelQuit();
+                    Fundo.naEdt(this::pedirParaSair);
                 });
             }
             if (d.isSupported(Desktop.Action.APP_ABOUT)) {

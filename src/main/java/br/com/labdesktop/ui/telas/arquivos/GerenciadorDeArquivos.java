@@ -512,6 +512,16 @@ public final class GerenciadorDeArquivos extends Painel {
         return editores.values().stream().anyMatch(s -> s.painel.modificado());
     }
 
+    /** Quantos arquivos abertos no editor têm alterações não salvas. */
+    public int editoresComAlteracoes() {
+        return (int) editores.values().stream().filter(s -> s.painel.modificado()).count();
+    }
+
+    /** Quantas transferências ainda não terminaram (na fila ou andando). */
+    public int transferenciasEmAberto() {
+        return fila == null ? 0 : fila.emAberto();
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Escopo e primeira leitura
     // ---------------------------------------------------------------------------------------------

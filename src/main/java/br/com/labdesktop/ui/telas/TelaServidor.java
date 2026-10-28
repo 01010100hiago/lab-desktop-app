@@ -351,6 +351,18 @@ public final class TelaServidor extends Painel {
         repaint();
     }
 
+    /** O que sair do app agora perderia neste servidor: a aba Arquivos e as páginas de projeto (a aberta e as guardadas). */
+    public br.com.labdesktop.ui.Pendencias pendencias() {
+        br.com.labdesktop.ui.Pendencias p = new br.com.labdesktop.ui.Pendencias(arquivos.transferenciasEmAberto(), arquivos.editoresComAlteracoes());
+        if (projetoAberto != null) {
+            p = p.somar(projetoAberto.pendencias());
+        }
+        for (TelaProjeto guardada : projetosGuardados.values()) {
+            p = p.somar(guardada.pendencias());
+        }
+        return p;
+    }
+
     /** A página do projeto aberta agora, ou {@code null}. */
     public TelaProjeto projetoAberto() {
         return projetoAberto;

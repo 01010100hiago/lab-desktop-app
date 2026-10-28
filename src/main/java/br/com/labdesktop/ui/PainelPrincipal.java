@@ -209,6 +209,11 @@ public final class PainelPrincipal extends Painel {
         return todos.size() == 1 ? todos.get(0) : null;
     }
 
+    /** O que sair do app agora perderia (transferências andando, edições não salvas), somado de todos os servidores abertos. */
+    public Pendencias pendencias() {
+        return navegacao.pendencias();
+    }
+
     /** Solta tudo (a janela fechou ou o cofre foi bloqueado). */
     public void encerrar() {
         barra.encerrar();
