@@ -80,6 +80,7 @@ Colunas "Web" e "App" resumem a cadência; o detalhe está nas seções 3 e 4. T
 |---|---|---|---|---|---|
 | 1 | `GET /api/versao` (NOVA) | validar a credencial e a compatibilidade; marca CONECTADO | não existe | conexão | 5 s |
 | 2 | `GET /api/servidor` | métricas, histórico de 10 min, processos | 10 s, só com a faixa Servidor aberta | SERVIDOR | 20 s |
+| 26 | `GET /api/servidor/historico?janela=10m\|1h\|1d\|7d\|30d` (NOVA) | histórico de métricas de 10 min a 1 mês (3.2.1) | não existe | HISTORICO(janela) | 20 s |
 | 3 | `GET /api/servidor/detalhe` | tela Servidor completa | 10 s na página do servidor | SERVIDOR_DETALHE | 20 s |
 | 4 | `GET /api/limites` | limites do plano, freio, pausadas | 60 s em toda página | LIMITES (sempre ligado) | 15 s |
 | 5 | `GET /api/tokens` | consumo global | 1 vez na página de consumo | TOKENS | 15 s |
@@ -109,13 +110,13 @@ Fora do app: `POST /api/diag`, `GET /terminal/<p>/*` (HTTP e WebSocket do ttyd) 
 
 ### 3.1 `GET /api/versao` (nova, proposta)
 
-Resposta `200`: `{ "api": 1, "painel": "v22.x", "cliente": "mac-de-teste", "perfil": "lab", "recursos": { "claude": true, "projetos": true, "monitor": true, "guia_ia": true }, "agente": null }`.
+Resposta `200`: `{ "api": 1, "painel": "v22.x", "cliente": "mac-de-teste", "perfil": "lab", "recursos": { "claude": true, "projetos": true, "monitor": true, "guia_ia": true, "historico": true }, "agente": null }`.
 
 - `api`: versão do contrato; o app avisa "agente incompatível" se for diferente de 1.
 - `painel`: `process.version` do Node do agente.
 - `cliente`: o nome do dispositivo desta conexão, ou `null`.
 - `perfil`: `"lab"` (o painel completo do lab, o padrão) ou `"monitor"` (o agente que o app instala em qualquer servidor: só leitura da máquina). Aditivo: o contrato continua `api: 1`.
-- `recursos`: o que o servidor sabe fazer, `{ "claude": bool, "projetos": bool, "monitor": bool, "guia_ia": bool }`. Perfil `lab` = tudo `true`; perfil `monitor` = só `monitor`. **`guia_ia`**: o `POST /api/projetos/novo` entende `"guia_ia": false` (4.1); o app só mostra a caixa "Incluir guia para o Claude" quando `claude` E `guia_ia` são `true` (um agente mais antigo ignoraria o `false` e criaria o `CLAUDE.md` do mesmo jeito); ausente vale "não". **É o sinal "o servidor tem Claude"**: o app esconde o Claude (aba Terminal do projeto, Visão geral, lista de projetos, Consumo, faixa de crédito, tópico de limites) quando `claude` é falso, e a aba Projetos quando `projetos` é falso. Cada campo é anulável no app: **um agente que não manda `recursos` (agente antigo) mantém o comportamento de antes** (o Claude vale pela presença de `sessao` no detalhe do projeto, a aba Projetos fica), e desconhecido nunca esconde nada.
+- `recursos`: o que o servidor sabe fazer, `{ "claude": bool, "projetos": bool, "monitor": bool, "guia_ia": bool }`. Perfil `lab` = tudo `true`; perfil `monitor` = só `monitor`. **`guia_ia`**: o `POST /api/projetos/novo` entende `"guia_ia": false` (4.1); o app só mostra a caixa "Incluir guia para o Claude" quando `claude` E `guia_ia` são `true` (um agente mais antigo ignoraria o `false` e criaria o `CLAUDE.md` do mesmo jeito); ausente vale "não". **`historico`**: o agente grava o histórico de métricas e responde `GET /api/servidor/historico` (3.2.1); o app SÓ chama a rota nova quando é `true` (ausente vale "não": um agente de antes não a tem, e o app usa os 10 minutos de `/api/servidor`, sem erro). **É o sinal "o servidor tem Claude"**: o app esconde o Claude (aba Terminal do projeto, Visão geral, lista de projetos, Consumo, faixa de crédito, tópico de limites) quando `claude` é falso, e a aba Projetos quando `projetos` é falso. Cada campo é anulável no app: **um agente que não manda `recursos` (agente antigo) mantém o comportamento de antes** (o Claude vale pela presença de `sessao` no detalhe do projeto, a aba Projetos fica), e desconhecido nunca esconde nada.
 - `agente`: a versão do pacote do agente que o app instalou (`"0.1.0-abc1234"`, o texto do arquivo `VERSAO` do pacote), ou `null` (o servidor não tem o arquivo). Serve para "Atualizar agente" mostrar de qual versão para qual.
 
 Erros: `401` com o campo `erro` em JSON (credencial recusada, seção 6).
@@ -152,6 +153,26 @@ Uso no app: é o teste de saúde. A conexão só vira CONECTADO depois de um 200
 Web: a página inicial do front web (`carregarServidorDetalhe`), 10 s, só enquanto a faixa Servidor está aberta (padrão aberta) ou o modal Processos está aberto. Compara o JSON com o anterior e só então redesenha sparklines e processos. Erro é silencioso (os números básicos já vêm de `/api/projetos`).
 
 App: tópico SERVIDOR, assinado pela faixa Servidor da lista de projetos e pelo Monitor. `sessoes` pode não conter a sessão raiz; o app soma `lab` a partir de 3.8, como o front faz.
+
+#### 3.2.1 `GET /api/servidor/historico?janela=10m|1h|1d|7d|30d`
+
+Só leitura, nos perfis `lab` e `monitor`, com as mesmas regras de acesso dos outros `GET`. O agente grava sozinho (com o app fechado) o histórico de CPU, memória, uso do disco principal, escrita no disco e rede (ARQUITETURA 8.4) e responde uma janela por chamada.
+
+```jsonc
+{ "janela": "1h", "passo_s": 20,
+  "inicio": "2026-10-28T14:00:00.000Z", "fim": "2026-10-28T15:00:00.000Z", "quando": "2026-10-28T15:00:07.000Z",   // início da 1ª célula, fim da última, agora no agente
+  "cpu": [0.12, null, ...],                    // média de cada célula, fração de 0 a 1
+  "cpu_max": [0.4, null, ...],                 // o MAIOR valor visto na célula (a média esconde o pico)
+  "mem": [...], "disco_uso": [...],            // frações de 0 a 1 (disco: usado / total do disco principal, a raiz do servidor)
+  "disco_escrita_bps": [...], "disco_escrita_max_bps": [...],   // BYTES por segundo (soma dos discos inteiros de /proc/diskstats)
+  "rx_bps": [...], "tx_bps": [...] }           // BYTES por segundo (a interface mais ativa, como em /api/servidor)
+```
+
+- A resposta é uma **grade regular**: um valor por célula de `passo_s` segundos a partir de `inicio`; `null` onde não há dado (o agente estava parado, ou a métrica não tinha leitura). **Nunca mais de 300 células**: `10m` 60 de 10 s; `1h` 180 de 20 s; `1d` 288 de 5 min; `7d` 252 de 40 min; `30d` 240 de 3 h. As células maiores são a média das médias e o maior dos máximos.
+- Fonte por janela: `10m` e `1h` saem da faixa de 10 s (guardada por 1 h), `1d` da de 1 min (1 dia), `7d` da de 10 min (1 semana), `30d` da de 1 h (30 dias). O gráfico de 1 h só enche depois de uma hora com o agente no ar, e o de 1 mês depois de um mês.
+- Erros: `janela` ausente, repetida (`janela=1h&janela=1d`) ou desconhecida (`2h`, `1H`, `constructor`) é `400` com `{"erro":"Informe uma janela: janela=10m, 1h, 1d, 7d ou 30d.","validas":["10m","1h","1d","7d","30d"]}`; `401` como em toda rota (e a janela só é julgada DEPOIS do token); qualquer método que não seja `GET` cai no `404` de sempre (no perfil `monitor`, o `404` com a frase do perfil). A rota não escreve nada.
+- Agente de antes (sem `recursos.historico`): esta rota não existe (`404` em texto puro); o app nem a chama e usa o `historico` de 10 min de `/api/servidor`, que NÃO mudou (3.2).
+- Uso no app: tópico `HISTORICO(janela)` (ARQUITETURA 6.7), um por período, só o que está na tela; o `ClienteApi` recusa antes de ir à rede um código de janela fora dos cinco.
 
 ### 3.3 `GET /api/servidor/detalhe`
 
@@ -365,7 +386,7 @@ Web: botão "Tela em texto" da página da sessão (usa `fetch` direto). App: aç
 
 ### 3.12 O perfil `monitor` e as rotas só dele
 
-O agente no perfil `monitor` responde uma lista FECHADA de rotas, todas de leitura: `GET /api/versao`, `GET /api/servidor`, `GET /api/servidor/detalhe` (sem `consumo` por projeto: `[]`; processo de container fica sem dono de projeto), `GET /api/containers` e `GET /api/containers/:nome/logs?linhas=<50..2000>`. **Todo o resto responde `404`** em JSON, antes de tocar em Docker ou disco: `{"erro":"Esta rota não existe no perfil monitor do agente (só leitura do servidor).","perfil":"monitor"}`. Isso inclui projetos, sessões do Claude, consumo, limites, terminal web, páginas e TODA rota de escrita. No perfil `lab` (o padrão, e o do servidor) nada mudou: as duas rotas de containers abaixo NÃO existem lá (404 em texto puro, como qualquer rota desconhecida).
+O agente no perfil `monitor` responde uma lista FECHADA de rotas, todas de leitura: `GET /api/versao`, `GET /api/servidor`, `GET /api/servidor/historico` (3.2.1), `GET /api/servidor/detalhe` (sem `consumo` por projeto: `[]`; processo de container fica sem dono de projeto), `GET /api/containers` e `GET /api/containers/:nome/logs?linhas=<50..2000>`. **Todo o resto responde `404`** em JSON, antes de tocar em Docker ou disco: `{"erro":"Esta rota não existe no perfil monitor do agente (só leitura do servidor).","perfil":"monitor"}`. Isso inclui projetos, sessões do Claude, consumo, limites, terminal web, páginas e TODA rota de escrita. No perfil `lab` (o padrão, e o do servidor) nada mudou: as duas rotas de containers abaixo NÃO existem lá (404 em texto puro, como qualquer rota desconhecida).
 
 `GET /api/containers` → `{"containers":[{"nome","estado","status","portas","imagem","criado"(ISO|null),"compose"(nome do projeto compose|null),"cpu","mem","memLimite","net","bloco","pids"}]}` (`cpu`...`pids` são `null` sem leitura do `docker stats`, que roda a cada 15 s). `GET /api/containers/:nome/logs` → texto puro; o nome da URL só vai ao Docker se o `docker ps -a` o lista agora (senão `404 {"erro":"Container não existe."}`). **O app ainda não consome estas duas rotas** (a aba Containers do servidor continua lendo o resumo de `/api/servidor`); elas existem para a tela de containers do perfil monitor.
 
