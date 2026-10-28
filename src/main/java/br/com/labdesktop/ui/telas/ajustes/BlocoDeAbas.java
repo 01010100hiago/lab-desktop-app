@@ -49,7 +49,7 @@ final class BlocoDeAbas extends Painel {
         setOpaque(false);
         add(Paginas.cartao(linhas), BorderLayout.CENTER);
         restaurar.setToolTipText("Volta a ordem e as abas de " + nomeDaBarra + " ao que o app traz de fábrica");
-        restaurar.addActionListener(e -> mudar(OrdemDeAbas.PADRAO, null, null));
+        restaurar.addActionListener(e -> mudar(OrdemDeAbas.PADRAO, null, "restaurar"));
         add(Caixa.linha(0, restaurar, Caixa.mola()), BorderLayout.SOUTH);
         getAccessibleContext().setAccessibleName("Abas de " + nomeDaBarra);
         atualizar();
@@ -83,7 +83,7 @@ final class BlocoDeAbas extends Painel {
                 caixa.setToolTipText(aparece ? "Tira " + rotulo + " da barra (ela continua na lista, para voltar)" : "Põe " + rotulo + " de volta na barra");
             }
             caixa.getAccessibleContext().setAccessibleName(rotulo + (aparece ? ", aparece na barra" : ", escondida"));
-            caixa.addActionListener(e -> mudar(caixa.isSelected() ? o.mostrando(id) : o.escondendo(id), null, null));
+            caixa.addActionListener(e -> mudar(caixa.isSelected() ? o.mostrando(id) : o.escondendo(id), id, "caixa"));
             Botao sobe = Botoes.icone("seta-cima", "Subir " + rotulo);
             Botao desce = Botoes.icone("seta-baixo", "Descer " + rotulo);
             sobe.setEnabled(i > 0);
@@ -102,21 +102,41 @@ final class BlocoDeAbas extends Painel {
         linhas.repaint();
     }
 
+    /**
+     * Grava a mudança e refaz as linhas. As linhas são NOVAS (os controles de antes saem da tela), então o foco do teclado se perderia: ele volta ao controle equivalente.
+     * Subir e Descer: o botão da aba que se moveu (ou o do outro lado, se chegou na ponta). Caixa: a mesma caixa. Restaurar ordem padrão (que fica desabilitado, já que agora
+     * está no padrão): a primeira caixa da lista.
+     */
     private void mudar(OrdemDeAbas nova, String idParaFoco, String qual) {
         gravar.accept(nova);
         atualizar();
-        if (idParaFoco != null) {
-            Botao alvo = "sobe".equals(qual) ? sobem.get(idParaFoco) : descem.get(idParaFoco);
-            if (alvo == null || !alvo.isEnabled()) {
-                alvo = "sobe".equals(qual) ? descem.get(idParaFoco) : sobem.get(idParaFoco); // chegou na ponta: o foco vai para o botão do outro lado
+        JComponent alvo = null;
+        if ("sobe".equals(qual) || "desce".equals(qual)) {
+            Botao b = "sobe".equals(qual) ? sobem.get(idParaFoco) : descem.get(idParaFoco);
+            if (b == null || !b.isEnabled()) {
+                b = "sobe".equals(qual) ? descem.get(idParaFoco) : sobem.get(idParaFoco); // chegou na ponta: o foco vai para o botão do outro lado
             }
-            if (alvo != null) {
-                alvo.requestFocusInWindow();
-            }
+            alvo = b;
+        } else if ("caixa".equals(qual)) {
+            alvo = caixas.get(idParaFoco);
+        }
+        if (alvo == null || !alvo.isEnabled()) {
+            alvo = caixas.values().stream().filter(JCheckBox::isEnabled).findFirst().orElse(null);
+        }
+        if (alvo != null) {
+            focoPedido = alvo;
+            alvo.requestFocusInWindow();
         }
     }
 
+    /** Quem recebeu o último pedido de foco depois de uma mudança (os testes não têm janela de verdade para ler o foco). */
+    private JComponent focoPedido;
+
     // ---- para os testes ----
+
+    JComponent focoPedido() {
+        return focoPedido;
+    }
 
     /** Os nomes na ordem em que as linhas aparecem. */
     List<String> rotulosEmOrdem() {

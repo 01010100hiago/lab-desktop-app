@@ -200,6 +200,21 @@ public final class BarraServidores extends Painel {
         gerenciar.clicar();
     }
 
+    /** O item "Gerenciar servidores" (os testes de foco e de acessibilidade). */
+    public JComponent itemGerenciar() {
+        return gerenciar;
+    }
+
+    /** A engrenagem de Ajustes. */
+    public JComponent itemAjustes() {
+        return ajustes;
+    }
+
+    /** O item mostra o anel de foco agora? */
+    public static boolean mostraAnelDeFoco(JComponent item) {
+        return item instanceof ItemClicavel i && i.focado();
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Itens
     // ---------------------------------------------------------------------------------------------
@@ -209,6 +224,7 @@ public final class BarraServidores extends Painel {
         private static final long serialVersionUID = 1L;
         private boolean selecionado;
         private boolean sobMouse;
+        private boolean focado;
         private Runnable aoClicar = () -> { };
 
         ItemClicavel() {
@@ -237,6 +253,20 @@ public final class BarraServidores extends Painel {
                 }
             };
             addMouseListener(mouse);
+            // o anel de foco: com o teclado (Tab) o item precisa mostrar onde está, como os botões (2 px, token FOCO)
+            addFocusListener(new java.awt.event.FocusAdapter() {
+                @Override
+                public void focusGained(java.awt.event.FocusEvent e) {
+                    focado = true;
+                    repaint();
+                }
+
+                @Override
+                public void focusLost(java.awt.event.FocusEvent e) {
+                    focado = false;
+                    repaint();
+                }
+            });
             getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "clicar");
             getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0), "clicar");
             getActionMap().put("clicar", new javax.swing.AbstractAction() {
@@ -276,6 +306,76 @@ public final class BarraServidores extends Painel {
         @Override
         public Dimension getMaximumSize() {
             return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+        }
+
+        /** O anel de foco por cima de tudo (a borda do item selecionado também fica por baixo). */
+        @Override
+        protected void paintChildren(Graphics g) {
+            super.paintChildren(g);
+            if (focado) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(Tokens.cor(Tokens.FOCO));
+                    g2.setStroke(new java.awt.BasicStroke(2f));
+                    g2.draw(new java.awt.geom.RoundRectangle2D.Float(1f, 1f, getWidth() - 2f, getHeight() - 2f, 20f, 20f));
+                } finally {
+                    g2.dispose();
+                }
+            }
+        }
+
+        /** Para quem usa leitor de tela: o item é um BOTÃO (nome, ação de clicar, marcado quando selecionado), não um painel mudo. */
+        @Override
+        public javax.accessibility.AccessibleContext getAccessibleContext() {
+            if (accessibleContext == null) {
+                accessibleContext = new AccessibleItem();
+            }
+            return accessibleContext;
+        }
+
+        private final class AccessibleItem extends AccessibleJPanel implements javax.accessibility.AccessibleAction {
+            @Override
+            public javax.accessibility.AccessibleRole getAccessibleRole() {
+                return javax.accessibility.AccessibleRole.PUSH_BUTTON;
+            }
+
+            @Override
+            public javax.accessibility.AccessibleStateSet getAccessibleStateSet() {
+                javax.accessibility.AccessibleStateSet estados = super.getAccessibleStateSet();
+                if (selecionado) {
+                    estados.add(javax.accessibility.AccessibleState.SELECTED);
+                }
+                return estados;
+            }
+
+            @Override
+            public javax.accessibility.AccessibleAction getAccessibleAction() {
+                return this;
+            }
+
+            @Override
+            public int getAccessibleActionCount() {
+                return 1;
+            }
+
+            @Override
+            public String getAccessibleActionDescription(int i) {
+                return i == 0 ? "clicar" : null;
+            }
+
+            @Override
+            public boolean doAccessibleAction(int i) {
+                if (i != 0) {
+                    return false;
+                }
+                aoClicar.run();
+                return true;
+            }
+        }
+
+        boolean focado() {
+            return focado;
         }
     }
 

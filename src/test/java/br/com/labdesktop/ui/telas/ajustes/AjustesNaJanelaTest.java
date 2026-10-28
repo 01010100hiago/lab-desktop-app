@@ -17,6 +17,7 @@ import br.com.labdesktop.ui.DialogosGravados;
 import br.com.labdesktop.ui.GerenciadorTema;
 import br.com.labdesktop.ui.MenuApp;
 import br.com.labdesktop.ui.NavegadorGravado;
+import br.com.labdesktop.ui.BarraServidores;
 import br.com.labdesktop.ui.PainelPrincipal;
 import br.com.labdesktop.ui.PreferenciasAtuais;
 import br.com.labdesktop.ui.VerificaEdt;
@@ -295,6 +296,48 @@ class AjustesNaJanelaTest {
         assertEquals(List.of("resumo", "seguranca", "containers", "processos", "maquina", "projetos", "arquivos", "terminal", "cloudflare"), barraDoServidor());
         assertTrue(preferencias.get().abasDoServidor().ehPadrao());
         assertFalse(Visual.naEdt(() -> blocoDoServidor().botaoRestaurar().isEnabled()), "já está no padrão");
+    }
+
+    /** As linhas são refeitas a cada mudança, e o foco do teclado se perdia (quem usa Tab voltava ao começo da tela). */
+    @Test
+    void depoisDeMarcarCaixaOuRestaurarOFocoVoltaAoControleEquivalente() {
+        abrir(Secao.NAVEGACAO);
+        Visual.naEdt(() -> blocoDoServidor().caixaDe("seguranca").doClick());
+        assertEquals(Visual.naEdt(() -> blocoDoServidor().caixaDe("seguranca")), Visual.naEdt(() -> blocoDoServidor().focoPedido()), "a mesma caixa");
+        Visual.naEdt(() -> blocoDoServidor().caixaDe("seguranca").doClick());
+        Visual.naEdt(() -> blocoDoServidor().botaoDescer("resumo").doClick());
+        assertEquals(Visual.naEdt(() -> blocoDoServidor().botaoDescer("resumo")), Visual.naEdt(() -> blocoDoServidor().focoPedido()), "o botão da aba que se moveu");
+        Visual.naEdt(() -> blocoDoServidor().botaoRestaurar().doClick());
+        // o botão Restaurar ficou desabilitado (já está no padrão): o foco vai para a primeira caixa que aceita foco
+        assertTrue(Visual.naEdt(() -> blocoDoServidor().focoPedido() instanceof javax.swing.JCheckBox c && c.isEnabled()), "uma caixa que aceita foco");
+    }
+
+    /** Os itens da barra lateral tinham foco mas nenhum anel e o leitor de tela os via como painéis mudos. */
+    @Test
+    void itensDaBarraDeServidoresTemAnelDeFocoEPapelDeBotao() {
+        BarraServidores barra = Visual.naEdt(() -> painel.barra());
+        List<javax.swing.JComponent> itens = Visual.naEdt(() -> {
+            List<javax.swing.JComponent> l = new ArrayList<>();
+            l.add(barra.itemGerenciar());
+            l.add(barra.itemAjustes());
+            l.add(barra.item(CofreFalso.ID));
+            return l;
+        });
+        for (javax.swing.JComponent item : itens) {
+            assertEquals(javax.accessibility.AccessibleRole.PUSH_BUTTON, Visual.naEdt(() -> item.getAccessibleContext().getAccessibleRole()), "papel de botão");
+            assertTrue(Visual.naEdt(() -> item.getAccessibleContext().getAccessibleAction().getAccessibleActionCount()) == 1, "tem a ação clicar");
+            assertTrue(!Visual.naEdt(() -> BarraServidores.mostraAnelDeFoco(item)));
+            java.awt.image.BufferedImage sem = Visual.renderizar(item, BarraServidores.LARGURA - 24, 48);
+            int antes = Visual.contarPixels(sem, Visual.naEdt(() -> Tokens.cor(Tokens.FOCO)), 0);
+            Visual.naEdt(() -> { for (java.awt.event.FocusListener l : item.getFocusListeners()) { l.focusGained(new java.awt.event.FocusEvent(item, java.awt.event.FocusEvent.FOCUS_GAINED)); } });
+            assertTrue(Visual.naEdt(() -> BarraServidores.mostraAnelDeFoco(item)));
+            java.awt.image.BufferedImage com = Visual.renderizar(item, BarraServidores.LARGURA - 24, 48);
+            Visual.salvar(com, "barra-item-com-foco");
+            int depois = Visual.contarPixels(com, Visual.naEdt(() -> Tokens.cor(Tokens.FOCO)), 0);
+            assertTrue(depois - antes > 150, "o anel de 2 px do token FOCO aparece (" + antes + " -> " + depois + " pixels)");
+            Visual.naEdt(() -> { for (java.awt.event.FocusListener l : item.getFocusListeners()) { l.focusLost(new java.awt.event.FocusEvent(item, java.awt.event.FocusEvent.FOCUS_LOST)); } });
+            assertTrue(!Visual.naEdt(() -> BarraServidores.mostraAnelDeFoco(item)));
+        }
     }
 
     @Test
