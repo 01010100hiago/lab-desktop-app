@@ -4,7 +4,7 @@ import br.com.labdesktop.ui.MensagensDeErro;
 import br.com.labdesktop.ui.componentes.AreaDaPagina;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.telas.PaginaDoServidor.Esmaecivel;
-import br.com.labdesktop.ui.telas.PaginaDoServidor.Esqueleto;
+import br.com.labdesktop.ui.componentes.Carregando;
 import br.com.labdesktop.ui.telas.PaginaDoServidor.FaixaDeDados;
 import br.com.labdesktop.ui.telas.PaginaDoServidor.SemDados;
 import br.com.labdesktop.servidor.Inscricao;
@@ -36,7 +36,7 @@ abstract class PaginaDoProjeto extends Painel {
 
     protected final transient ContextoDoProjeto ctx;
     private final FaixaDeDados faixaDeDados = new FaixaDeDados();
-    private final Esqueleto esqueleto = new Esqueleto("do projeto");
+    private final Carregando esqueleto = new Carregando("o projeto");
     private final SemDados semDados;
     private final Esmaecivel corpo = new Esmaecivel();
     private final JPanel pilha = new Painel();
@@ -48,6 +48,7 @@ abstract class PaginaDoProjeto extends Painel {
         super(new BorderLayout());
         this.ctx = ctx;
         this.semDados = new SemDados(ctx.aoAtualizar == null ? () -> { } : ctx.aoAtualizar, "do projeto");
+        esqueleto.aoTentarDeNovo(ctx.aoAtualizar);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -203,6 +204,16 @@ abstract class PaginaDoProjeto extends Painel {
     // Desenho
     // ---------------------------------------------------------------------------------------------
 
+    /** O "carregando" aparece NA HORA em que a espera começa e para os relógios dele quando acaba (o prazo e o "tentar de novo" são dele). */
+    private void mostrarOEsqueleto(boolean ver) {
+        if (ver && !esqueleto.isVisible()) {
+            esqueleto.iniciar();
+        } else if (!ver && esqueleto.isVisible()) {
+            esqueleto.chegou();
+        }
+        esqueleto.setVisible(ver);
+    }
+
     /** Redesenha com o retrato do contexto (a {@link TelaProjeto} chama quando ele muda). */
     final void redesenhar() {
         if (rolagem == null) {
@@ -217,7 +228,7 @@ abstract class PaginaDoProjeto extends Painel {
             SituacaoDaVisao.Modo modo = situacao.modo();
             boolean semSsh = modo == SituacaoDaVisao.Modo.SEM_CONEXAO_SEM_DADOS || modo == SituacaoDaVisao.Modo.SEM_CONEXAO_COM_DADOS;
             faixaDeDados.mostrar(semSsh ? situacao : SituacaoDaVisao.de(null, true, null, ctx.agora(), ctx.fuso));
-            esqueleto.setVisible(false);
+            mostrarOEsqueleto(false);
             semDados.setVisible(false);
             corpo.setVisible(true);
             corpo.esmaecer(false);
@@ -229,7 +240,7 @@ abstract class PaginaDoProjeto extends Painel {
         }
         faixaDeDados.mostrar(situacao);
         boolean erro = ctx.erroSemDados != null && !tem;
-        esqueleto.setVisible(!tem && !erro && situacao.modo() == SituacaoDaVisao.Modo.CARREGANDO);
+        mostrarOEsqueleto(!tem && !erro && situacao.modo() == SituacaoDaVisao.Modo.CARREGANDO);
         semDados.setVisible(!tem && (erro || situacao.modo() != SituacaoDaVisao.Modo.CARREGANDO));
         semDados.mostrar(erro ? MensagensDeErro.daApi(ctx.erroSemDados) : null, ctx.estado == null ? null : situacao);
         corpo.setVisible(tem);
@@ -260,6 +271,11 @@ abstract class PaginaDoProjeto extends Painel {
 
     final FaixaDeDados faixaDeDados() {
         return faixaDeDados;
+    }
+
+    /** O "carregando" desta tela (para os testes conferirem a frase e o estado). */
+    Carregando indicadorDeCarga() {
+        return esqueleto;
     }
 
     final boolean mostraEsqueleto() {

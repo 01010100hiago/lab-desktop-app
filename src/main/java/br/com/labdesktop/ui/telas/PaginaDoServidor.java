@@ -14,6 +14,7 @@ import br.com.labdesktop.ui.MensagensDeErro;
 import br.com.labdesktop.ui.componentes.Botao;
 import br.com.labdesktop.ui.componentes.Botoes;
 import br.com.labdesktop.ui.componentes.Caixa;
+import br.com.labdesktop.ui.componentes.Carregando;
 import br.com.labdesktop.ui.componentes.ComponenteSimples;
 import br.com.labdesktop.ui.componentes.Icones;
 import br.com.labdesktop.ui.componentes.MioloRolavel;
@@ -55,7 +56,7 @@ public abstract class PaginaDoServidor extends Painel {
     private final transient ServidorLab servidor;
     private final transient Runnable aoAtualizar;
     private final FaixaDeDados faixaDeDados = new FaixaDeDados();
-    private final Esqueleto esqueleto = new Esqueleto();
+    private final Carregando esqueleto = new Carregando("as informações do servidor");
     private final SemDados semDados;
     private final Esmaecivel corpo = new Esmaecivel();
     private final JPanel pilha = new Painel();
@@ -85,6 +86,7 @@ public abstract class PaginaDoServidor extends Painel {
         this.servidor = servidor;
         this.aoAtualizar = aoAtualizar == null ? () -> { } : aoAtualizar;
         this.semDados = new SemDados(this.aoAtualizar);
+        esqueleto.aoTentarDeNovo(this.aoAtualizar);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -377,7 +379,7 @@ public abstract class PaginaDoServidor extends Painel {
             faixaDeDados.setVisible(false); // o cartão "sem dados" já diz isto, com o botão: sem repetir o mesmo aviso em cima
         }
         boolean erro = erroSemDados != null && !tem;
-        esqueleto.setVisible(!corpoVisivel && !erro && situacao.modo() == SituacaoDaVisao.Modo.CARREGANDO);
+        mostrarOEsqueleto(!corpoVisivel && !erro && situacao.modo() == SituacaoDaVisao.Modo.CARREGANDO);
         semDados.setVisible(!corpoVisivel && (erro || situacao.modo() != SituacaoDaVisao.Modo.CARREGANDO));
         semDados.mostrar(erro ? MensagensDeErro.daApi(erroSemDados) : null, estado == null ? null : situacao);
         corpo.setVisible(corpoVisivel);
@@ -386,6 +388,16 @@ public abstract class PaginaDoServidor extends Painel {
             atualizarConteudo();
         }
         refazerLayout();
+    }
+
+    /** O "carregando" aparece NA HORA em que a espera começa e para os relógios dele quando acaba; ele mesmo cuida do prazo e do "tentar de novo". */
+    private void mostrarOEsqueleto(boolean ver) {
+        if (ver && !esqueleto.isVisible()) {
+            esqueleto.iniciar();
+        } else if (!ver && esqueleto.isVisible()) {
+            esqueleto.chegou();
+        }
+        esqueleto.setVisible(ver);
     }
 
     final void refazerLayout() {
@@ -414,6 +426,11 @@ public abstract class PaginaDoServidor extends Painel {
 
     final FaixaDeDados faixaDeDados() {
         return faixaDeDados;
+    }
+
+    /** O "carregando" desta tela (para os testes conferirem a frase e o estado). */
+    Carregando indicadorDeCarga() {
+        return esqueleto;
     }
 
     final boolean mostraEsqueleto() {
@@ -624,50 +641,6 @@ public abstract class PaginaDoServidor extends Painel {
         @Override
         public Dimension getMaximumSize() {
             return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
-        }
-    }
-
-    /** Barras cinzas no lugar da aba, até a primeira resposta. */
-    static final class Esqueleto extends ComponenteSimples {
-        private static final long serialVersionUID = 1L;
-
-        Esqueleto() {
-            this("do servidor");
-        }
-
-        /** @param assunto "do servidor", "do projeto": de quem são as informações que estão chegando */
-        Esqueleto(String assunto) {
-            getAccessibleContext().setAccessibleName("Carregando as informações " + assunto);
-            setName("esqueleto");
-        }
-
-        @Override
-        public Dimension getPreferredSize() {
-            return new Dimension(400, 300);
-        }
-
-        @Override
-        public Dimension getMaximumSize() {
-            return new Dimension(Integer.MAX_VALUE, 300);
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            try {
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(Tokens.cor(Tokens.ESQUELETO_A));
-                int w = getWidth();
-                for (int b = 0; b < 3; b++) {
-                    int y = b * 96;
-                    g2.fillRoundRect(0, y, 160, 12, 6, 6);
-                    g2.fillRoundRect(0, y + 28, Math.max(80, w - 40), 10, 6, 6);
-                    g2.fillRoundRect(0, y + 48, Math.max(80, (w - 40) * 2 / 3), 10, 6, 6);
-                    g2.fillRoundRect(0, y + 68, Math.max(80, (w - 40) / 2), 10, 6, 6);
-                }
-            } finally {
-                g2.dispose();
-            }
         }
     }
 }

@@ -202,7 +202,8 @@ public final class GerenciadorDeArquivos extends Painel {
     private final JPanel areaDaLista = new Painel(cartoesDaLista);
     private final Esmaecivel tabelaEsmaecivel = new Esmaecivel();
     private final CartaoDeMensagem cartao = new CartaoDeMensagem();
-    private final EsqueletoDaLista esqueleto = new EsqueletoDaLista();
+    /** O "Carregando a pasta..." (na hora, com prazo e "Tentar de novo") no lugar da tabela até a primeira leitura. */
+    private final br.com.labdesktop.ui.componentes.Carregando esqueleto = new br.com.labdesktop.ui.componentes.Carregando("a pasta");
     private final PainelDeTransferencias painelDeTransferencias;
     private final JSplitPane divisor;
 
@@ -248,6 +249,7 @@ public final class GerenciadorDeArquivos extends Painel {
         instalarArraste();
         atualizarBotoes();
         getAccessibleContext().setAccessibleName(ctx.modoProjeto() ? "Arquivos do projeto " + ctx.projeto() : "Arquivos do servidor");
+        esqueleto.aoTentarDeNovo(this::atualizar);
         definirSituacao(Situacao.INICIANDO); // até a primeira leitura, o esqueleto da lista (nunca uma tabela em branco)
 
         if (ctx.observarEstado() != null) {
@@ -861,8 +863,16 @@ public final class GerenciadorDeArquivos extends Painel {
         if (nova == Situacao.SEM_PERMISSAO || nova == Situacao.NAO_ENCONTRADA || nova == Situacao.ERRO) {
             resumo.setText(""); // a contagem de "N pastas, N arquivos" era da pasta de antes
         }
+        if (nova != Situacao.INICIANDO && nova != Situacao.CARREGANDO) {
+            esqueleto.chegou(); // a leitura terminou (com dado, vazia ou com erro): o "carregando" para os relógios
+        }
         switch (nova) {
-            case INICIANDO, CARREGANDO -> cartoesDaLista.show(areaDaLista, CARTAO_ESQUELETO);
+            case INICIANDO, CARREGANDO -> {
+                if (!esqueleto.isShowing() || esqueleto.estado().fase() != br.com.labdesktop.ui.componentes.EstadoDeCarga.Fase.CARREGANDO) {
+                    esqueleto.iniciar(); // uma leitura nova de pasta recomeça a contagem do prazo
+                }
+                cartoesDaLista.show(areaDaLista, CARTAO_ESQUELETO);
+            }
             case NORMAL -> cartoesDaLista.show(areaDaLista, CARTAO_TABELA);
             case VAZIA -> cartoesDaLista.show(areaDaLista, CARTAO_MENSAGEM);
             case SEM_CONEXAO -> {

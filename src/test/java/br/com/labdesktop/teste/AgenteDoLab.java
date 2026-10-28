@@ -136,7 +136,20 @@ public final class AgenteDoLab implements AutoCloseable {
     // HTTP
     // ---------------------------------------------------------------------------------------------------
 
+    /** Quanto o agente demora para responder as LEITURAS de projetos e do servidor (a conexão e os limites respondem na hora): prova que o "carregando" aparece antes da resposta. */
+    public volatile long atrasoDasLeiturasMs;
+
     private Resposta atender(Pedido p) {
+        Resposta r = atenderSemAtraso(p);
+        String caminho = p.caminho();
+        if (atrasoDasLeiturasMs > 0 && "GET".equals(p.metodo()) && r.status() == 200
+            && (caminho.startsWith("/api/projetos") || caminho.startsWith("/api/servidor"))) {
+            return Resposta.comAtraso(r, atrasoDasLeiturasMs);
+        }
+        return r;
+    }
+
+    private Resposta atenderSemAtraso(Pedido p) {
         if (fora) {
             return Resposta.semResposta();
         }

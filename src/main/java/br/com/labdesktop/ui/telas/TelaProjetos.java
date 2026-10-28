@@ -19,6 +19,7 @@ import br.com.labdesktop.ui.componentes.Botao;
 import br.com.labdesktop.ui.componentes.Botoes;
 import br.com.labdesktop.ui.componentes.Caixa;
 import br.com.labdesktop.ui.componentes.Campos;
+import br.com.labdesktop.ui.componentes.Carregando;
 import br.com.labdesktop.ui.componentes.Icones;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
@@ -102,9 +103,12 @@ public final class TelaProjetos extends Painel {
     private final CardLayout cartoes = new br.com.labdesktop.ui.componentes.CartoesAjustaveis();
     private final JPanel corpo = new Painel(cartoes);
     private final JPanel linhasPanel = new Painel();
+    /** O "Carregando projetos..." de antes da primeira lista: na hora, com prazo e "Tentar de novo" (nunca fica preso). */
+    private final Carregando carregando = new Carregando("projetos");
     private CabecalhoDeColunas cabecalhoDeColunas;
     private final Rotulo mensagemDeErro = new Rotulo().corDoToken(Tokens.TEXTO2);
     private final Timer relogioDaTela;
+    private final Timer fimDoOcupado = new Timer(10_000, e -> atualizar.definirOcupado(false));
     private JScrollPane rolagemDaLista;
     private JPanel topo;
 
@@ -148,6 +152,7 @@ public final class TelaProjetos extends Painel {
             }
         }, java.time.Instant::now, fluxos.liberadas());
         this.relogioDaTela = new Timer(30_000, e -> reavaliarComOTempo());
+        fimDoOcupado.setRepeats(false);
         setBorder(javax.swing.BorderFactory.createEmptyBorder(20, 20, 16, 20));
 
         montar();
@@ -193,7 +198,12 @@ public final class TelaProjetos extends Painel {
         add(topo, BorderLayout.NORTH);
 
         linhasPanel.setLayout(new BoxLayout(linhasPanel, BoxLayout.Y_AXIS));
-        corpo.add(new Esqueleto(), CARTAO_ESQUELETO);
+        carregando.aoTentarDeNovo(() -> {
+            if (acoesUi != null) {
+                acoesUi.atualizar(servidor);
+            }
+        });
+        corpo.add(carregando, CARTAO_ESQUELETO);
         corpo.add(cartaoDeErro(), CARTAO_ERRO);
         corpo.add(cartaoVazio(), CARTAO_VAZIO);
         corpo.add(vazio("busca", "Nada encontrado", "Ajuste a busca ou o filtro rápido."), CARTAO_NADA);
@@ -382,7 +392,11 @@ public final class TelaProjetos extends Painel {
                 redesenhar();
             });
         }
-        atualizar.addActionListener(e -> acoesUi.atualizar(servidor));
+        atualizar.addActionListener(e -> {
+            atualizar.definirOcupado(true); // o clique mostra que o app está perguntando ao servidor; solta quando a leitura chega (ou em 10 s)
+            fimDoOcupado.restart();
+            acoesUi.atualizar(servidor);
+        });
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -394,6 +408,9 @@ public final class TelaProjetos extends Painel {
         if (inscricaoDoTopico != null) {
             return;
         }
+        if (!temDados) {
+            carregando.iniciar(); // a espera conta desde que a lista está à vista, e o "Carregando projetos..." já está na tela
+        }
         inscricaoDoTopico = servidor.assinar(servidor.topicoDeProjetos(), new OuvinteDeTopico<VisaoProjetos>() {
             @Override
             public void aoAtualizar(VisaoProjetos v) {
@@ -403,6 +420,11 @@ public final class TelaProjetos extends Painel {
             @Override
             public void aoFalhar(ErroApi erro) {
                 aoFalharConsulta(erro);
+            }
+
+            @Override
+            public void aoConfirmar() {
+                soltarOAtualizar(); // a leitura foi feita e nada mudou
             }
         });
         inscricaoDoEstado = servidor.observarEstado(this::aoMudarEstado);
@@ -421,6 +443,7 @@ public final class TelaProjetos extends Painel {
         inscricaoDoEstado = null;
         inscricaoDeOcupacao = null;
         relogioDaTela.stop();
+        soltarOAtualizar();
         faixa.parar();
     }
 
@@ -431,6 +454,8 @@ public final class TelaProjetos extends Painel {
     /** Recebe a lista (na EDT). Público para os testes alimentarem a tela com dados fixos. */
     public void aoReceberProjetos(VisaoProjetos visao) {
         this.temDados = true;
+        carregando.chegou();
+        soltarOAtualizar();
         this.raiz = visao.raiz();
         this.projetos = visao.lista() == null ? List.of() : visao.lista().projetos();
         limites.clear();
@@ -459,7 +484,14 @@ public final class TelaProjetos extends Painel {
         resumo.repaint();
     }
 
+    /** A leitura que o clique em "Atualizar" pediu chegou (ou falhou): o botão volta ao normal. */
+    private void soltarOAtualizar() {
+        fimDoOcupado.stop();
+        atualizar.definirOcupado(false);
+    }
+
     private void aoFalharConsulta(ErroApi erro) {
+        soltarOAtualizar();
         if (temDados || erro instanceof ErroApi.ErroRede) {
             return; // a faixa de conexão explica; a tela mantém a última leitura (nunca fica vazia)
         }
@@ -615,6 +647,11 @@ public final class TelaProjetos extends Painel {
         return credito;
     }
 
+    /** O "carregando" desta tela (para os testes conferirem a frase e o estado). */
+    Carregando indicadorDeCarga() {
+        return carregando;
+    }
+
     public String cartaoAtual() {
         return cartaoAtual;
     }
@@ -761,38 +798,6 @@ public final class TelaProjetos extends Painel {
         protected void paintComponent(Graphics g) {
             g.setColor(Tokens.cor(Tokens.BORDA_SUTIL));
             g.fillRect(0, 0, getWidth(), 1);
-        }
-    }
-
-    /** Três linhas cinzas no lugar da lista, até a primeira resposta. */
-    private static final class Esqueleto extends br.com.labdesktop.ui.componentes.ComponenteSimples {
-        private static final long serialVersionUID = 1L;
-
-        Esqueleto() {
-            getAccessibleContext().setAccessibleName("Carregando os projetos");
-        }
-
-        @Override
-        public Dimension getPreferredSize() {
-            return new Dimension(400, 3 * 64);
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            try {
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(Tokens.cor(Tokens.ESQUELETO_A));
-                for (int i = 0; i < 3; i++) {
-                    int y = i * 64 + 22;
-                    g2.fillRoundRect(ColunasDaLista.RECUO, y, 64, 12, 6, 6);
-                    g2.fillRoundRect(ColunasDaLista.RECUO + 92 + ColunasDaLista.ESPACO, y, 180, 12, 6, 6);
-                    g2.fillRoundRect(ColunasDaLista.RECUO + 92 + ColunasDaLista.ESPACO, y + 18, 120, 8, 4, 4);
-                    g2.fillRoundRect(Math.max(0, getWidth() - ColunasDaLista.RECUO - 120), y, 120, 12, 6, 6);
-                }
-            } finally {
-                g2.dispose();
-            }
         }
     }
 
