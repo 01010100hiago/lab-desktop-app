@@ -17,9 +17,12 @@ final class LeituraDoDocker {
 
     /** Um container lido por {@link ComandosLocais#lerContainerPeloNome}. */
     record Container(String nome, String rotuloDoAgente, String rotuloLocal, String estado) {
-        /** Foi o laboratório local que o criou: tem o rótulo do agente do app E o rótulo local. Um painel instalado por SSH só tem o primeiro. */
+        /**
+         * Foi o laboratório local que o criou: tem o rótulo do agente do app E o rótulo local. O instalador por SSH grava só o primeiro:
+         * num Debian usado como "Este computador", o painel instalado por SSH NÃO é deste laboratório e nunca é trocado nem removido.
+         */
         boolean doApp() {
-            return !rotuloDoAgente.isBlank();
+            return !rotuloDoAgente.isBlank() && "1".equals(rotuloLocal);
         }
 
         boolean rodando() {

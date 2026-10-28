@@ -276,6 +276,7 @@ class LaboratorioLocalTest {
     void atualizarGuardaOAgenteAntigoEDevolveSeONovoFalha() {
         Cont velho = new Cont();
         velho.rotulo = "0.0.9-velha";
+        velho.rotuloLocal = "1";
         pc.containers.put("painel-lab", velho);
         pc.volumes.add("painel-lab-dados");
         pc.redes.put("edge", "1");
@@ -299,6 +300,7 @@ class LaboratorioLocalTest {
     void atualizarQueDaCertoRemoveOAntigoSoNoFim() {
         Cont velho = new Cont();
         velho.rotulo = "0.0.9-velha";
+        velho.rotuloLocal = "1";
         pc.containers.put("painel-lab", velho);
         pc.volumes.add("painel-lab-dados");
         ResultadoDaInstalacao r = criar();
@@ -387,6 +389,7 @@ class LaboratorioLocalTest {
     void removerApagaAImagemDaVersaoQueEstavaInstalada() throws Exception {
         Cont velho = new Cont();
         velho.rotulo = "0.0.9-velha";
+        velho.rotuloLocal = "1";
         pc.containers.put("painel-lab", velho);
         pc.volumes.add("painel-lab-dados");
         pc.imagens.add("labdesktop-agente:0.0.9-velha");
@@ -448,5 +451,48 @@ class LaboratorioLocalTest {
         assertTrue(r.removido(), "o agente saiu");
         assertTrue(r.avisos().stream().anyMatch(a -> a.contains("Não consegui ler o estado do Docker")), r.avisos().toString());
         assertTrue(pc.redes.containsKey("edge"), "a rede ficou: a leitura falhou");
+    }
+
+    // ----- M1: o rótulo do instalador por SSH não basta; é preciso o rótulo local -----
+
+    private Cont painelInstaladoPorSsh() {
+        Cont c = new Cont();
+        c.rotulo = "0.1.0-abc1234"; // o instalador por SSH grava só o rótulo do agente
+        c.rotuloLocal = "";
+        c.imagem = "labdesktop-agente:0.1.0-abc1234";
+        pc.containers.put("painel-lab", c);
+        pc.volumes.add("painel-lab-dados");
+        pc.imagens.add("labdesktop-agente:0.1.0-abc1234");
+        return c;
+    }
+
+    @Test
+    void umPainelInstaladoPorSshNumDebianUsadoComoEsteComputadorNuncaETrocado() {
+        painelInstaladoPorSsh();
+        ResultadoDaInstalacao r = criar();
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertTrue(r.erro().contains("não foi criado por este app"), r.erro());
+        assertTrue(pc.containers.containsKey("painel-lab"), "o painel do SSH continua lá");
+        assertTrue(pc.escritas().stream().noneMatch(c -> c.get(1).equals("rm") || c.get(1).equals("rename") || c.get(1).equals("stop")),
+            "nada foi removido, renomeado nem parado: " + pc.escritas());
+    }
+
+    @Test
+    void removerNaoTocaNoPainelInstaladoPorSshNemNosDadosNemNaImagemDele() throws Exception {
+        painelInstaladoPorSsh();
+        ResultadoDaRemocao r = lab().remover(obs, Cancelamento.NUNCA);
+        assertTrue(r.recusada());
+        assertTrue(pc.containers.containsKey("painel-lab"));
+        assertTrue(pc.volumes.contains("painel-lab-dados"));
+        assertTrue(pc.imagens.contains("labdesktop-agente:0.1.0-abc1234"));
+        assertTrue(pc.escritas().isEmpty(), pc.escritas().toString());
+    }
+
+    @Test
+    void oContainerQueOAppCriaLevaOsDoisRotulos() {
+        criar();
+        Cont c = pc.containers.get("painel-lab");
+        assertEquals("0.1.0-abc1234", c.rotulo);
+        assertEquals("1", c.rotuloLocal);
     }
 }
