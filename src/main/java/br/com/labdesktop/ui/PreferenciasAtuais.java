@@ -18,10 +18,18 @@ public final class PreferenciasAtuais {
 
     private final CaminhosApp caminhos;
     private volatile Preferencias atual;
+    /** Uma gravação de cada vez, e sempre a mais nova: duas mudanças seguidas (as setas da tela Ajustes) não podem brigar pelo mesmo arquivo temporário. */
+    private final Object travaDaGravacao = new Object();
+    private Preferencias ultimaGravada;
 
     public PreferenciasAtuais(CaminhosApp caminhos, Preferencias inicial) {
         this.caminhos = caminhos;
         this.atual = inicial;
+    }
+
+    /** As pastas do app (a tela Sobre mostra a pasta de dados). */
+    public CaminhosApp caminhos() {
+        return caminhos;
     }
 
     public Preferencias get() {
@@ -35,12 +43,22 @@ public final class PreferenciasAtuais {
             return;
         }
         atual = nova;
-        Fundo.emFundo(() -> {
+        Fundo.emFundo(this::gravarAgora);
+    }
+
+    /** Grava a preferência MAIS NOVA, uma gravação por vez (quem chegar depois grava o que já estiver na memória e quem já não tem o que gravar sai). */
+    private void gravarAgora() {
+        synchronized (travaDaGravacao) {
+            Preferencias p = atual;
+            if (p.equals(ultimaGravada)) {
+                return;
+            }
             try {
-                nova.salvar(caminhos);
+                p.salvar(caminhos);
+                ultimaGravada = p;
             } catch (java.io.IOException e) {
                 LOG.warn("Não consegui gravar as preferências: {}", e.toString());
             }
-        });
+        }
     }
 }
