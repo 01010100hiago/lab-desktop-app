@@ -116,7 +116,8 @@ class SemInstalacaoAutomaticaTest {
         // novo projeto: o ServidorLab (que conecta sozinho) só MONTA o ambiente (nada roda ao montar), e quem o pede é a ação do clique
         assertEquals(List.of(), quemUsa(Pattern.compile("\\.ambienteDeProjetos\\("), Set.of("ui/AcoesDaInterface.java", "servidor/ServidorLab.java")));
         assertEquals(List.of(), quemUsa(Pattern.compile("\\bComandosDeProjeto\\."),
-            Set.of("projetos/CriadorNoAmbiente.java", "projetos/ImportadorDeProjeto.java", "projetos/EscritorDeCompose.java", "ui/dialogos/DialogoNovoProjeto.java")),
+            Set.of("projetos/CriadorNoAmbiente.java", "projetos/ImportadorDeProjeto.java", "projetos/EscritorDeCompose.java", "ui/dialogos/DialogoNovoProjeto.java",
+                "cloudflare/PublicadorNaInternet.java")),
             "clonar, mover, copiar, criar rede e conferir compose só nascem nas operações do Novo projeto");
         String lab = semComentarios(RAIZ.resolve("servidor/ServidorLab.java"));
         assertTrue(!lab.contains("new CriadorNoAmbiente(") && !lab.contains("new ImportadorDeProjeto(") && !lab.contains("new EscritorDeCompose("),

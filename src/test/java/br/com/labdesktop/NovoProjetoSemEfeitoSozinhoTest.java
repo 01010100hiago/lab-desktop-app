@@ -82,7 +82,8 @@ class NovoProjetoSemEfeitoSozinhoTest {
     @Test
     void osComandosDeProjetoSoSaoMontadosPelasOperacoes() throws IOException {
         assertEquals(List.of(), quemUsa(Pattern.compile("\\bComandosDeProjeto\\."),
-            Set.of("projetos/CriadorNoAmbiente.java", "projetos/ImportadorDeProjeto.java", "projetos/EscritorDeCompose.java", "ui/dialogos/DialogoNovoProjeto.java")),
+            Set.of("projetos/CriadorNoAmbiente.java", "projetos/ImportadorDeProjeto.java", "projetos/EscritorDeCompose.java", "ui/dialogos/DialogoNovoProjeto.java",
+                "cloudflare/PublicadorNaInternet.java")),
             "clonar, mover, copiar, criar rede e conferir compose só nascem das operações (o diálogo só MOSTRA o comando que o usuário confere)");
         // e o diálogo só usa os construtores de mover e copiar para MOSTRAR o comando no resumo
         String d = codigo(DIALOGO);
