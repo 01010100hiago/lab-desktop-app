@@ -55,6 +55,18 @@ class ProcessosLocaisTest {
     }
 
     @Test
+    void ambienteDoProcessoChegaDeVerdadeESoComNomeValido() throws Exception {
+        Path f = programa("Ambiente", "System.out.println(System.getenv(\"GIT_TERMINAL_PROMPT\") + \"|\" + System.getenv(\"GIT_ALLOW_PROTOCOL\"));");
+        ResultadoExec x = processos.executar(List.of(JAVA, f.toString()), Map.of("GIT_TERMINAL_PROMPT", "0", "GIT_ALLOW_PROTOCOL", "https:ssh"), new byte[0],
+            Duration.ofSeconds(60));
+        assertEquals(0, x.status(), x.stderr());
+        assertEquals("0|https:ssh\n", x.stdout());
+        for (String ruim : List.of("minuscula", "COM ESPACO", "A=B", "")) {
+            assertThrows(IllegalArgumentException.class, () -> processos.executar(List.of(JAVA, "-version"), Map.of(ruim, "x"), new byte[0], Duration.ofSeconds(30)), ruim);
+        }
+    }
+
+    @Test
     void stdinChegaAoProgramaEOStatusDeSaidaVolta() throws Exception {
         Path f = programa("Eco", "byte[] b = System.in.readAllBytes(); System.out.write(b); System.out.flush(); System.exit(b.length == 5 ? 7 : 0);");
         ResultadoExec x = processos.executar(List.of(JAVA, f.toString()), "olá!!".getBytes(StandardCharsets.UTF_8), Duration.ofSeconds(60));

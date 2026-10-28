@@ -33,6 +33,31 @@ class ModeloEErroApiTest {
     }
 
     @Test
+    void recursosGuiaIaEAcriacaoDeProjetoNoEstadoDoServidor() throws Exception {
+        VersaoAgente lab = Json.mapper().readValue("{\"api\":1,\"perfil\":\"lab\",\"recursos\":{\"claude\":true,\"projetos\":true,\"monitor\":true,\"guia_ia\":true}}", VersaoAgente.class);
+        assertTrue(lab.entendeGuiaIa());
+        assertEquals(br.com.labdesktop.api.modelo.RecursosDoAgente.TUDO_COM_GUIA_IA, lab.recursos());
+        // agente mais antigo (recursos sem guia_ia) ou de antes dos recursos: desconhecido vale como NÃO (a caixa não aparece)
+        assertFalse(Json.mapper().readValue("{\"api\":1,\"recursos\":{\"claude\":true,\"projetos\":true,\"monitor\":true}}", VersaoAgente.class).entendeGuiaIa());
+        assertFalse(Json.mapper().readValue("{\"api\":1}", VersaoAgente.class).entendeGuiaIa());
+        assertFalse(Json.mapper().readValue("{\"api\":1,\"recursos\":{\"guia_ia\":false}}", VersaoAgente.class).entendeGuiaIa());
+        // quem cria projeto: o lab (também o de antes dos recursos), nunca o monitor, nunca sem agente
+        var estado = (java.util.function.BiFunction<VersaoAgente, Boolean, br.com.labdesktop.servidor.EstadoServidor>) (v, local) ->
+            new br.com.labdesktop.servidor.EstadoServidor("s", "n", br.com.labdesktop.ssh.EstadoConexao.CONECTADO, null, 0, null, null, 1,
+                br.com.labdesktop.cofre.Estado2fa.DESLIGADO, null, v, null, br.com.labdesktop.servidor.SituacaoDoAgente.DESCONHECIDA, local);
+        assertTrue(estado.apply(lab, false).agenteCriaProjetos());
+        assertTrue(estado.apply(new VersaoAgente(1, "v22", false, null, "desligado"), false).agenteCriaProjetos(), "o lab de produção de antes dos recursos");
+        assertFalse(estado.apply(new VersaoAgente(1, "v22", false, null, "desligado", "monitor", br.com.labdesktop.api.modelo.RecursosDoAgente.SO_MONITOR, null), false).agenteCriaProjetos());
+        assertFalse(estado.apply(null, false).agenteCriaProjetos());
+        assertFalse(estado.apply(lab, true).agenteCriaProjetos(), "o local não tem agente de projetos (cria pela pasta)");
+        assertTrue(estado.apply(null, true).temProjetos(), "o local sempre tem projetos");
+        assertFalse(estado.apply(new VersaoAgente(1, "v22", false, null, "desligado", "monitor", br.com.labdesktop.api.modelo.RecursosDoAgente.SO_MONITOR, null), false).temProjetos());
+        br.com.labdesktop.api.modelo.RespostaNovoProjeto r = Json.mapper().readValue("{\"ok\":true,\"guia_ia\":false}", br.com.labdesktop.api.modelo.RespostaNovoProjeto.class);
+        assertEquals(Boolean.FALSE, r.guiaIa());
+        assertNull(Json.mapper().readValue("{\"ok\":true}", br.com.labdesktop.api.modelo.RespostaNovoProjeto.class).guiaIa());
+    }
+
+    @Test
     void versaoComPerfilERecursosParseiaOsDoisCasosENuncaEscondeSemOAgenteDizer() throws Exception {
         VersaoAgente monitor = Json.mapper().readValue("{\"api\":1,\"painel\":\"v22\",\"exigeToken\":false,\"cliente\":null,\"totp\":\"desligado\","
             + "\"perfil\":\"monitor\",\"recursos\":{\"claude\":false,\"projetos\":false,\"monitor\":true},\"agente\":\"0.1.0-abc1234\"}", VersaoAgente.class);

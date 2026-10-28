@@ -7,8 +7,9 @@ import java.util.Map;
 /**
  * Os arquivos de um projeto novo SEM o guia para IA: a única fonte desses textos no app. É o que o criador LOCAL ({@code CriadorLocal})
  * escreve no computador, e é, letra por letra, o que o agente do lab escreve quando recebe {@code "guia_ia": false} em
- * {@code POST /api/projetos/novo} ({@code arquivosSemGuiaIa} no código do agente; os testes dele e o
- * {@code GabaritoDoProjetoTest} daqui conferem os mesmos textos): mexeu num, mexa no outro.
+ * {@code POST /api/projetos/novo} ({@code arquivosSemGuiaIa} no código do agente; os testes dele e, aqui,
+ * {@code GabaritoIgualAoDoAgenteTest} (que roda a função do agente empacotado no {@code node} e compara arquivo por arquivo) conferem os
+ * mesmos textos): mexeu num, mexa no outro.
  *
  * <p>O que NÃO entra: {@code CLAUDE.md}, e qualquer frase sobre o Claude, o proxy de Docker ou o cloudflared do lab (o app fala com qualquer
  * servidor e com o computador local). O compose nasce como esqueleto ({@code services: {}}), a forma que o "Adicionar container" sabe
