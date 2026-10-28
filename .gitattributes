@@ -1,0 +1,17 @@
+# Fim de linha: SEMPRE LF no repositório e na cópia de trabalho, em qualquer sistema. Sem isto o Windows (core.autocrlf do Git for Windows, e o runner do GitHub)
+# entrega CRLF nos arquivos de texto: o gradlew e os .sh quebram, os testes que comparam texto de recurso falham, e o YAML dos workflows ganha CR.
+* text=auto eol=lf
+
+# o que é binário nunca é convertido
+*.png binary
+*.ico binary
+*.icns binary
+*.jar binary
+*.gz binary
+*.tar.gz binary
+*.zip binary
+*.dll binary
+*.exe binary
+*.ttf binary
+*.otf binary
+*.woff2 binary
