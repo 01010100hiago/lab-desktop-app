@@ -195,7 +195,11 @@ public final class VerificacoesDoComputador {
         return ResultadoDoComputador.ok(ItemDoComputador.MEMORIA, gigas(total) + " de memória (o mínimo é 4 GB).");
     }
 
-    /** Windows: virtualização ligada na BIOS e WSL 2. Só o código de saída do {@code wsl} vale (a saída dele é UTF-16). */
+    /**
+     * Windows: WSL 2 e virtualização. Só o código de saída do {@code wsl} vale (a saída dele é UTF-16). Com o WSL 2 respondendo ({@code wsl --status}
+     * sai com 0), a virtualização já está de pé e a checagem da BIOS NÃO vale: com o Hyper-V ou o WSL 2 funcionando, o hipervisor toma conta e o
+     * {@code VirtualizationFirmwareEnabled} do Windows diz {@code False} (um falso "desligada"). A BIOS só entra como dica quando o WSL falta.
+     */
     private ResultadoDoComputador virtualizacao() throws InterruptedException {
         boolean wslOk = false;
         try {
@@ -203,21 +207,22 @@ public final class VerificacoesDoComputador {
         } catch (IOException e) {
             // sem wsl: instalar
         }
-        if (!wslOk) {
-            return ResultadoDoComputador.problema(ItemDoComputador.VIRTUALIZACAO, "O WSL 2 não está instalado (o Docker Desktop precisa dele). O app não "
-                + "o instala: exige administrador e reiniciar o computador. Rode o comando abaixo no PowerShell como administrador, reinicie e "
-                + "clique em Verificar de novo.", "wsl --install", List.of(PlanosDeInstalacao.wsl()));
+        if (wslOk) {
+            return ResultadoDoComputador.ok(ItemDoComputador.VIRTUALIZACAO, "WSL 2 instalado e funcionando (a virtualização está ligada).");
         }
+        String dicaDaBios = "";
         try {
             ResultadoExec x = executor.executar(ComandosLocais.virtualizacaoDoWindows(), LEITURA);
             if (x.status() == 0 && x.stdout().strip().equalsIgnoreCase("False")) {
-                return ResultadoDoComputador.problema(ItemDoComputador.VIRTUALIZACAO, "O WSL 2 está instalado, mas a virtualização está desligada na BIOS "
-                    + "do computador. Reinicie, entre na BIOS (a tecla aparece ao ligar) e ligue a virtualização (Intel VT-x ou AMD-V/SVM).", null, List.of());
+                dicaDaBios = " O Windows também diz que a virtualização está desligada na BIOS (ou que o Hyper-V está usando): se depois de instalar o "
+                    + "WSL o Docker reclamar de virtualização, reinicie, entre na BIOS e ligue-a (Intel VT-x ou AMD-V/SVM).";
             }
         } catch (IOException e) {
-            // não deu para ler a virtualização: o WSL 2 respondeu, então segue
+            // não deu para ler a BIOS: só perde a dica
         }
-        return ResultadoDoComputador.ok(ItemDoComputador.VIRTUALIZACAO, "WSL 2 instalado e virtualização ligada.");
+        return ResultadoDoComputador.problema(ItemDoComputador.VIRTUALIZACAO, "O WSL 2 não está instalado (o Docker Desktop precisa dele). O app não "
+            + "o instala: exige administrador e reiniciar o computador. Rode o comando abaixo no PowerShell como administrador, reinicie e "
+            + "clique em Verificar de novo." + dicaDaBios, "wsl --install", List.of(PlanosDeInstalacao.wsl()));
     }
 
     private int portaSugerida(int pedida) {

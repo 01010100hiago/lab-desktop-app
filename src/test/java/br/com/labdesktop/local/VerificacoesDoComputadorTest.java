@@ -216,14 +216,27 @@ class VerificacoesDoComputadorTest {
     }
 
     @Test
-    void windowsComVirtualizacaoDesligadaNaBiosBloqueia() throws Exception {
+    void windowsComWslFuncionandoNaoAcusaVirtualizacaoDesligadaMesmoSeOWindowsDizFalse() throws Exception {
         plataforma = new PlataformaLocal(SistemaOperacional.WINDOWS, "C:\\Users\\ana", Map.of());
+        pc.virtualizacaoLigada = false; // com o Hyper-V ou o WSL 2 de pé o Windows diz False: um falso "desligada"
+        ResultadoDoComputador v = verificar().de(ItemDoComputador.VIRTUALIZACAO);
+        assertEquals(Estado.OK, v.estado(), v.frase());
+        assertTrue(pc.comandos.stream().noneMatch(c -> c.get(0).equals("powershell")), "com o WSL respondendo nem olha a BIOS");
+        pc.virtualizacaoLigada = true;
+        assertEquals(Estado.OK, verificar().de(ItemDoComputador.VIRTUALIZACAO).estado());
+    }
+
+    @Test
+    void windowsSemWslEComABiosDesligadaAContaVemComoDicaSemMudarOQueFazer() throws Exception {
+        plataforma = new PlataformaLocal(SistemaOperacional.WINDOWS, "C:\\Users\\ana", Map.of());
+        pc.wslInstalado = false;
         pc.virtualizacaoLigada = false;
         ResultadoDoComputador v = verificar().de(ItemDoComputador.VIRTUALIZACAO);
         assertEquals(Estado.PROBLEMA, v.estado());
+        assertEquals("wsl --install", v.comandoSugerido());
         assertTrue(v.frase().contains("BIOS"), v.frase());
         pc.virtualizacaoLigada = true;
-        assertEquals(Estado.OK, verificar().de(ItemDoComputador.VIRTUALIZACAO).estado());
+        assertFalse(verificar().de(ItemDoComputador.VIRTUALIZACAO).frase().contains("BIOS"));
     }
 
     @Test

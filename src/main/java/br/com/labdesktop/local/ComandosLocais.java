@@ -49,7 +49,10 @@ public final class ComandosLocais {
         return List.of("wsl", "--status");
     }
 
-    /** Se a virtualização está ligada na BIOS (Windows): imprime {@code True} ou {@code False}. Texto FIXO do PowerShell. */
+    /**
+     * O que o Windows diz da virtualização da BIOS: imprime {@code True} ou {@code False}. Texto FIXO do PowerShell. Com o Hyper-V ou o WSL 2
+     * funcionando ele diz {@code False} (o hipervisor tomou conta), então só serve de dica quando o WSL falta: nunca bloqueia sozinho.
+     */
     public static List<String> virtualizacaoDoWindows() {
         return List.of("powershell", "-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance Win32_Processor).VirtualizationFirmwareEnabled");
     }
