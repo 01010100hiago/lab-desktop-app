@@ -17,7 +17,7 @@ public final class CaminhosLocais {
     }
 
     public static CaminhosLocais doSistema() {
-        return new CaminhosLocais(System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win"));
+        return new CaminhosLocais(br.com.labdesktop.plataforma.SistemaOperacional.detectar() == br.com.labdesktop.plataforma.SistemaOperacional.WINDOWS);
     }
 
     public boolean windows() {

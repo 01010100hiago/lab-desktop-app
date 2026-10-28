@@ -52,7 +52,7 @@ public final class TransporteLocal implements TransporteDeTerminal {
     }
 
     public static TransporteLocal doSistema(ConexaoDoServidor conexao) {
-        boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+        boolean windows = br.com.labdesktop.plataforma.SistemaOperacional.detectar() == br.com.labdesktop.plataforma.SistemaOperacional.WINDOWS;
         return new TransporteLocal(conexao, windows, System.getenv(), Path.of(System.getProperty("user.home")));
     }
 

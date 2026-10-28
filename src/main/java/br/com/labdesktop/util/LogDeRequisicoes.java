@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory;
 /**
  * O log de requisições do app (modo debug), que serve para PROVAR a carga no servidor: com a tela
  * visível, uma consulta de {@code /api/projetos} a cada cerca de 10 s; com a janela minimizada, só {@code /api/limites}
- * a cada 60 s. Cada chamada ao agente vira uma linha em {@code ~/Library/Logs/LabDesktop/lab-desktop.log}:
+ * a cada 60 s. Cada chamada ao agente vira uma linha em {@code lab-desktop.log} da pasta de logs do sistema ({@link CaminhosApp}: no Mac {@code ~/Library/Logs/LabDesktop}):
  *
  * <pre>[lab] GET /api/projetos -> 200 em 54 ms</pre>
  *
