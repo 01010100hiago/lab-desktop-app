@@ -32,6 +32,12 @@ import java.util.Set;
 final class ConteudoCofre {
 
     static final int VERSAO = 1;
+    /**
+     * O conteúdo que tem o servidor "Este computador" (transporte {@code local}, sem chave SSH). Um app mais antigo lê isto como
+     * "servidor que aponta para chave inexistente" (cofre corrompido); com a versão 2 ele diz com clareza que não suporta esta versão, e o
+     * cofre sem servidor local continua versão 1, legível por qualquer app.
+     */
+    static final int VERSAO_COM_SERVIDOR_LOCAL = 2;
 
     @JsonProperty("versao")
     int versao = VERSAO;
@@ -138,6 +144,9 @@ final class ConteudoCofre {
      */
     static ConteudoCofre de(ConteudoEmMemoria memoria) {
         ConteudoCofre json = new ConteudoCofre();
+        if (memoria.servidores.stream().anyMatch(s -> s.config.ehLocal())) {
+            json.versao = VERSAO_COM_SERVIDOR_LOCAL;
+        }
         for (ChaveSsh c : memoria.chaves) {
             ChaveJson j = new ChaveJson();
             j.id = c.id();
@@ -191,7 +200,7 @@ final class ConteudoCofre {
      * o que já tinha criado, para não deixar chave solta na memória.
      */
     ConteudoEmMemoria paraMemoria() throws CofreCorrompidoException {
-        if (versao != VERSAO) {
+        if (versao != VERSAO && versao != VERSAO_COM_SERVIDOR_LOCAL) {
             throw new CofreCorrompidoException("Versão do conteúdo do cofre não suportada: " + versao + ".");
         }
         List<ChaveSsh> chavesProntas = new ArrayList<>();

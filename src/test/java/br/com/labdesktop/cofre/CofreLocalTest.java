@@ -89,4 +89,18 @@ class CofreLocalTest {
         }
         assertThrows(IllegalArgumentException.class, () -> new AgenteInstalado("Painel Ruim; rm", false));
     }
+
+    @Test
+    void ocofreComServidorLocalGravaVersao2ParaUmAppAntigoDizerClaroQueNaoSuportaESemLocalContinuaVersao1(@TempDir Path tmp) throws Exception {
+        ConteudoEmMemoria semLocal = ConteudoEmMemoria.vazio();
+        assertEquals(1, ConteudoCofre.de(semLocal).versao);
+        ConfigServidor local = ConfigServidor.novoLocal("Este computador", 7070);
+        ConteudoEmMemoria comLocal = semLocal.comServidor(new ConteudoEmMemoria.ServidorGuardado(local, null));
+        ConteudoCofre json = ConteudoCofre.de(comLocal);
+        assertEquals(2, json.versao, "um app mais antigo vê 'versão não suportada', não 'chave inexistente'");
+        assertEquals(local, json.paraMemoria().servidores.get(0).config, "e este app lê a versão 2");
+        ConteudoCofre futuro = ConteudoCofre.de(comLocal);
+        futuro.versao = 3;
+        assertThrows(CofreCorrompidoException.class, futuro::paraMemoria);
+    }
 }

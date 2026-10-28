@@ -82,7 +82,7 @@ class ConteudoCofreTest {
     void conteudoInvalidoViraCorrompido() throws Exception {
         String ok = chaveJson("k1");
         String[] ruins = {
-            "{\"versao\":2,\"chaves\":[],\"servidores\":[]}",
+            "{\"versao\":3,\"chaves\":[],\"servidores\":[]}",
             "{\"versao\":1,\"chaves\":[" + ok + "," + ok + "],\"servidores\":[]}",                         // id de chave repetido
             "{\"versao\":1,\"chaves\":[" + chaveJson("K1") + "],\"servidores\":[]}",                       // id inválido
             "{\"versao\":1,\"chaves\":[" + ok.replace("ssh-ed25519\",\"priv", "ssh-rsa\",\"priv") + "],\"servidores\":[]}", // algoritmo
