@@ -87,7 +87,9 @@ public final class DialogoDesligarSenha extends Dialogo {
     private final JTextField campoDaConfirmacao = Campos.mono(30, "digite o nome do servidor");
     private final Botao desligar;
     private final Botao fechar = Botoes.primario("Cancelar", null);
-    private final Map<Passo, Rotulo> linhas = new EnumMap<>(Passo.class);
+    /** Cada passo: o ícone do estado e o texto, que QUEBRA em linhas (uma frase longa nunca é cortada na borda do diálogo). */
+    private final Map<Passo, Rotulo> iconesDosPassos = new EnumMap<>(Passo.class);
+    private final Map<Passo, TextoCorrido> linhas = new EnumMap<>(Passo.class);
     private final JComponent blocoDosPassos;
     private final Selo selo = new Selo("", Gravidade.NEUTRO);
     private final TextoCorrido textoDoResultado = new TextoCorrido("", LARGURA).corDoToken(Tokens.TEXTO).tamanho(13f);
@@ -138,11 +140,14 @@ public final class DialogoDesligarSenha extends Dialogo {
             recuo(Caixa.linha(0, campoDaConfirmacao, Caixa.mola()), 4));
         blocoDosPassos = Caixa.coluna(4);
         for (Passo p : Passo.values()) {
-            Rotulo r = new Rotulo(p.rotulo()).corDoToken(Tokens.TEXTO3).tamanho(12.5f);
-            r.setIcon(Icones.colorido("relogio", 14, Tokens.TEXTO3));
-            r.setIconTextGap(8);
-            linhas.put(p, r);
-            blocoDosPassos.add(r);
+            Rotulo icone = new Rotulo();
+            icone.setIcon(Icones.colorido("relogio", 14, Tokens.TEXTO3));
+            icone.setVerticalAlignment(javax.swing.SwingConstants.TOP);
+            icone.setBorder(javax.swing.BorderFactory.createEmptyBorder(2, 0, 0, 0));
+            TextoCorrido texto = new TextoCorrido(p.rotulo(), LARGURA_DO_TEXTO).corDoToken(Tokens.TEXTO3).tamanho(12.5f);
+            iconesDosPassos.put(p, icone);
+            linhas.put(p, texto);
+            blocoDosPassos.add(Caixa.linha(8, icone, texto));
         }
         blocoDoResultado = Caixa.coluna(0, Caixa.linha(8, selo, Caixa.mola()), recuo(textoDoResultado, 8), recuo(detalhes, 8));
         for (JComponent c : List.of(blocoDaPrevia, bloqueio, blocoDoComandoManual, blocoDosPassos, blocoDoResultado)) {
@@ -296,7 +301,7 @@ public final class DialogoDesligarSenha extends Dialogo {
     }
 
     private void mostrarPasso(Passo passo, Estado estado, String frase) {
-        Rotulo r = linhas.get(passo);
+        TextoCorrido r = linhas.get(passo);
         String icone = switch (estado) {
             case ANDANDO -> "relogio";
             case FEITO -> "ok-circulo";
@@ -309,7 +314,8 @@ public final class DialogoDesligarSenha extends Dialogo {
             case FALHOU -> Tokens.PERIGO;
             case DESFEITO -> Tokens.ATENCAO;
         };
-        r.setIcon(Icones.colorido(icone, 14, token));
+        iconesDosPassos.get(passo).setIcon(Icones.colorido(icone, 14, token));
+        r.corDoToken(token == Tokens.TEXTO2 ? Tokens.TEXTO2 : Tokens.TEXTO);
         r.setText(passo.rotulo() + (frase == null || frase.isEmpty() ? "" : " — " + resumir(frase)));
         r.setToolTipText(frase);
         reajustar();

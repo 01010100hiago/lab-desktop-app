@@ -115,7 +115,9 @@ public final class AuditoriaDeCores {
 
     /** O anel de foco: o que MUDA na área do componente quando ele passa a ter o foco (o FlatLaf o desenha na borda, ou em volta do quadradinho de uma caixa de marcar). Quanto o pixel que mais mudou contrasta com o que havia. */
     private static Medida medirAnel(JComponent c, JComponent raiz, BufferedImage semFoco, BufferedImage comFoco) {
-        Rectangle r = ondeEsta(c, raiz).intersection(new Rectangle(0, 0, semFoco.getWidth(), semFoco.getHeight()));
+        // o campo de dentro de um seletor numérico (JSpinner) tem o foco, mas quem desenha o anel é o seletor inteiro
+        Component focado = SwingUtilities.getAncestorOfClass(javax.swing.JSpinner.class, c);
+        Rectangle r = ondeEsta(focado instanceof JComponent j ? j : c, raiz).intersection(new Rectangle(0, 0, semFoco.getWidth(), semFoco.getHeight()));
         if (r.isEmpty()) {
             return null;
         }
