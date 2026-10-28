@@ -49,6 +49,22 @@ class ProvisionadorRemotoTest {
     }
 
     @Test
+    void agenteInstaladoPeloAppUsaOnomeDoContainerEOSudoQuandoOUsuarioSoChegaAoDockerPorEle() throws Exception {
+        Fake fake = new Fake();
+        TokenAgente token = TokenAgente.gerar();
+        ProvisionadorRemoto.para(fake, "painel-teste", "docker").registrarToken(token.hashSha256Hex(), "mac", Instant.now());
+        ProvisionadorRemoto.para(fake, "painel-lab", "sudo -n docker").revogarToken("mac");
+        assertEquals(List.of("docker exec -i painel-teste node acesso.js token-registrar", "sudo -n docker exec -i painel-lab node acesso.js token-revogar"),
+            fake.comandos);
+        for (String ruim : new String[] {"a;b", "A", "a b", "", "-x", "a$(id)"}) {
+            assertThrows(IllegalArgumentException.class, () -> ProvisionadorRemoto.para(fake, ruim, "docker"), ruim);
+        }
+        for (String ruim : new String[] {"docker; id", "sudo docker", "", "sudo -n docker run"}) {
+            assertThrows(IllegalArgumentException.class, () -> ProvisionadorRemoto.para(fake, "painel-lab", ruim), ruim);
+        }
+    }
+
+    @Test
     void registrarTokenMandaOHashPorStdinNuncaPorArgumento() throws Exception {
         Fake fake = new Fake();
         fake.stdout = "{\"ok\":true,\"ja_existia\":false}\n";

@@ -85,7 +85,7 @@ public final class PreVerificacoes {
 
         // A ordem da tela é a do enum Item: a lista já está nela, exceto onde a leitura exigiu antecipar o Docker.
         r.sort((a, b) -> Integer.compare(a.item().ordinal(), b.item().ordinal()));
-        return new RelatorioDeVerificacao(r, modo, comandoDocker, adm, id, dockerPresente);
+        return new RelatorioDeVerificacao(r, modo, comandoDocker, adm, id, dockerPresente, "ausente".equals(dockerEstado));
     }
 
     // =====================================================================================================

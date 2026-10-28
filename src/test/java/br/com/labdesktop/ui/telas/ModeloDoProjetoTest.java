@@ -27,6 +27,22 @@ class ModeloDoProjetoTest {
     }
 
     @Test
+    void oAgenteDiz_seOServidorTemClaude_eIssoManda_sobreAPresencaDeSessao() {
+        // sem o que o agente diz (agente antigo): vale a presença de sessao no detalhe, como antes
+        assertTrue(padrao().temClaude());
+        assertTrue(padrao().indicadores().stream().anyMatch(k -> k.chave().equals("consumo")));
+        // com recursos.claude = false, mesmo um detalhe que traz sessao não mostra nada do Claude
+        ModeloDoProjeto semClaude = ModeloDoProjeto.de(FixturesDeApi.detalheDoProjetoSintetico(), false);
+        assertFalse(semClaude.temClaude());
+        assertFalse(semClaude.oferecerAbrirClaude());
+        assertEquals(4, semClaude.indicadores().size(), "sem Claude não há indicador de consumo nem de limite");
+        assertTrue(semClaude.indicadores().stream().noneMatch(k -> k.chave().equals("consumo")));
+        // com recursos.claude = true, vale o que o agente diz
+        assertTrue(ModeloDoProjeto.de(FixturesDeApi.detalheDoProjetoSintetico(), true).temClaude());
+        assertEquals(5, ModeloDoProjeto.de(FixturesDeApi.detalheDoProjetoSintetico(), true).indicadores().size());
+    }
+
+    @Test
     void estadoSegueARegraDaLista() {
         assertEquals(EstadoProjeto.PARCIAL, padrao().estado(), "3 de 4 containers rodando");
         assertEquals(Gravidade.ATENCAO, padrao().gravidade());

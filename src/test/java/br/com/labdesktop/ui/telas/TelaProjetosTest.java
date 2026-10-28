@@ -75,6 +75,50 @@ class TelaProjetosTest {
         Visual.salvar(Visual.renderizar(tela, 1280, 820), "tela-projetos-somente-leitura");
     }
 
+    private static br.com.labdesktop.servidor.EstadoServidor estadoComRecursos(String perfil, br.com.labdesktop.api.modelo.RecursosDoAgente r) {
+        return new EstadoServidor("s1", "lab", EstadoConexao.CONECTADO, null, 0, null, null, 1, Estado2fa.DESLIGADO, "mac-de-teste",
+            new br.com.labdesktop.api.modelo.VersaoAgente(1, "v22", false, "mac", "desligado", perfil, r, null), null);
+    }
+
+    /** Servidor que o agente diz não ter Claude: a coluna, os filtros e as frases dele somem da lista (e voltam se o agente diz que tem). */
+    @Test
+    void semClaudeAListaEscondeAColunaOsFiltrosEAsFrasesDele() {
+        Visual.tema(Tema.CLARO);
+        TelaProjetos tela = nova(new AvisosGravados(), new DialogosGravados(), true);
+        Visual.naEdt(() -> {
+            tela.aoMudarEstado(estado(EstadoConexao.CONECTADO));
+            tela.aoReceberProjetos(visaoDoMock());
+        });
+        assertTrue(tela.mostraOClaude(), "sem o agente dizer, tudo como antes");
+        assertTrue(Visual.naEdt(() -> tela.botaoDeFiltro(Filtro.COM_CLAUDE).isVisible()));
+        String claude = tela.nomesExibidos().stream().filter(n -> Visual.naEdt(() -> tela.linha(n).botaoAbrirClaude().isVisible())).findFirst().orElse(null);
+        assertNotNull(claude, "com as ações liberadas, há linha com Abrir Claude");
+        Visual.naEdt(() -> tela.botaoDeFiltro(Filtro.PAUSADOS).doClick());
+
+        Visual.naEdt(() -> tela.aoMudarEstado(estadoComRecursos("monitor", br.com.labdesktop.api.modelo.RecursosDoAgente.SO_MONITOR)));
+
+        assertFalse(tela.mostraOClaude());
+        assertFalse(Visual.naEdt(() -> tela.botaoDeFiltro(Filtro.COM_CLAUDE).isVisible()));
+        assertFalse(Visual.naEdt(() -> tela.botaoDeFiltro(Filtro.PAUSADOS).isVisible()));
+        assertTrue(Visual.naEdt(() -> tela.botaoDeFiltro(Filtro.TODOS).isSelected()), "o filtro que sumiu volta para Todos");
+        assertEquals(visaoDoMock().lista().projetos().size(), tela.nomesExibidos().size(), "e a lista mostra todos de novo");
+        for (String nome : tela.nomesExibidos()) {
+            LinhaProjetoVisual l = tela.linha(nome);
+            assertFalse(Visual.naEdt(() -> l.botaoAbrirClaude().isVisible()), nome + ": sem Abrir Claude");
+            assertFalse(Visual.naEdt(() -> l.seloClaude().isShowing() || l.seloClaude().isVisible() && l.seloClaude().getParent().isVisible()
+                && l.seloClaude().getParent().getParent().isVisible()), nome + ": sem o selo do Claude à vista");
+        }
+        assertFalse(tela.textoDoResumo().contains("Claude"), tela.textoDoResumo());
+        assertFalse(Visual.naEdt(() -> tela.credito().isVisible()), "sem Claude não há 'Plano do Claude' à vista");
+        Visual.salvar(Visual.renderizar(tela, 1280, 820), "tela-projetos-sem-claude-claro");
+
+        Visual.naEdt(() -> tela.aoMudarEstado(estadoComRecursos("lab", br.com.labdesktop.api.modelo.RecursosDoAgente.TUDO)));
+        assertTrue(tela.mostraOClaude());
+        assertTrue(Visual.naEdt(() -> tela.botaoDeFiltro(Filtro.COM_CLAUDE).isVisible()));
+        assertTrue(tela.textoDoResumo().contains("com Claude aberto"));
+        assertTrue(Visual.naEdt(() -> tela.credito().isVisible()));
+    }
+
     @Test
     void comAsAcoesLiberadasOsBotoesVoltam() {
         Visual.tema(Tema.CLARO);

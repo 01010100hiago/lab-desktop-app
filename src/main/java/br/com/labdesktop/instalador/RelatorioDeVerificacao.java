@@ -13,9 +13,10 @@ import java.util.List;
  * @param administrador     {@code root}, {@code sudo} (sudo sem senha) ou {@code nenhum}
  * @param distribuicao      o {@code ID} de {@code /etc/os-release} ({@code debian}, {@code ubuntu}...); vazio se não deu para ler
  * @param dockerPresente    o Docker está instalado e responde (sozinho ou com sudo)
+ * @param dockerAusente     o servidor não tem o Docker instalado (diferente de "instalado e sem permissão" ou "parado")
  */
 public record RelatorioDeVerificacao(List<ResultadoDaVerificacao> resultados, ModoDaInstalacao modo, String docker,
-                                     Administrador administrador, String distribuicao, boolean dockerPresente) {
+                                     Administrador administrador, String distribuicao, boolean dockerPresente, boolean dockerAusente) {
 
     /** Quem executa o que exige administração. */
     public enum Administrador {

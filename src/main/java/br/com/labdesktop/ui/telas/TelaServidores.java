@@ -247,7 +247,9 @@ public final class TelaServidores extends Painel {
             estadoDaConexao.setText(a.texto());
             estadoDaConexao.corDoToken(a.gravidade().tokenDoTexto());
             estadoDaConexao.setHorizontalAlignment(SwingConstants.RIGHT);
-            String detalhe = e.falha() != null ? e.falha().mensagem()
+            boolean semAgenteInstalado = e.conexao() == br.com.labdesktop.ssh.EstadoConexao.SSH_OK_SEM_AGENTE && e.situacaoDoAgente().oferecerInstalar();
+            String detalhe = semAgenteInstalado ? "" // o aviso fixo abaixo explica; repetir "o agente não responde" confundiria
+                : e.falha() != null ? e.falha().mensagem()
                 : e.semConexaoDesde() != null ? "sem conexão desde " + Formato.fmtHora(e.semConexaoDesde()).substring(0, 5)
                 : e.versao() != null && e.versao().perfilMonitor()
                     ? "agente monitor" + (e.versao().agente() == null ? "" : " " + e.versao().agente())

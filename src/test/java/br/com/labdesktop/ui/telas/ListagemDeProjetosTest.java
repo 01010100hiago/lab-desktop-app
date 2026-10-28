@@ -48,6 +48,14 @@ class ListagemDeProjetosTest {
     }
 
     @Test
+    void semClaudeOResumoNaoFalaDeSessoesNemDePausas() {
+        ListaProjetos um = FixturesDeApi.de("{\"projetos\":[{\"nome\":\"a\",\"rodando\":true,\"sessaoClaude\":true,"
+            + "\"limite\":{\"teto_pct\":1,\"usado_pp\":2,\"estado\":\"pausado\"}}],\"servidor\":{}}", ListaProjetos.class);
+        assertEquals(List.of("1 projeto", "1 no ar"), ListagemDeProjetos.partesDoResumo(um.projetos(), false));
+        assertEquals(List.of("1 projeto", "1 no ar", "1 com Claude aberto", "1 pausado"), ListagemDeProjetos.partesDoResumo(um.projetos(), true));
+    }
+
+    @Test
     void resumoNoSingularEPlural() {
         ListaProjetos um = FixturesDeApi.de("{\"projetos\":[{\"nome\":\"a\",\"rodando\":true,\"sessaoClaude\":true,"
             + "\"limite\":{\"teto_pct\":1,\"usado_pp\":2,\"estado\":\"pausado\"}}],\"servidor\":{}}", ListaProjetos.class);

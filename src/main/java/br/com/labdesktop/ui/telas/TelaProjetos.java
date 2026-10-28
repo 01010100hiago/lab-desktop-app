@@ -363,6 +363,7 @@ public final class TelaProjetos extends Painel {
 
     /** Mostra ou esconde tudo do Claude na lista: a coluna, os filtros "Com Claude" e "Pausados", as frases do resumo. */
     private void aplicarOClaude() {
+        credito.setVisible(comClaude); // "Plano do Claude": sem Claude não há plano a mostrar
         cabecalhoDeColunas.mostrarClaude(comClaude);
         botoesDeFiltro.get(Filtro.COM_CLAUDE).setVisible(comClaude);
         botoesDeFiltro.get(Filtro.PAUSADOS).setVisible(comClaude);

@@ -74,10 +74,13 @@ public final class MenuDoServidor {
         if (c == EstadoConexao.AGUARDANDO_2FA) {
             itens.add(Item.DIGITAR_CODIGO);
         }
-        if (c.permiteExec() && (e.semToken() || c == EstadoConexao.TOKEN_RECUSADO)) {
+        // Token e 2FA são do agente (docker exec no container dele): sem o agente instalado não há onde registrar nem configurar, e o botão
+        // só levaria a um erro de container que não existe. O primeiro passo é Instalar agente.
+        boolean semAgente = c == EstadoConexao.SSH_OK_SEM_AGENTE && e.situacaoDoAgente().oferecerInstalar();
+        if (!semAgente && c.permiteExec() && (e.semToken() || c == EstadoConexao.TOKEN_RECUSADO)) {
             itens.add(Item.REGISTRAR_TOKEN);
         }
-        if (c.permiteExec() || c == EstadoConexao.CONECTADO) {
+        if (!semAgente && (c.permiteExec() || c == EstadoConexao.CONECTADO)) {
             itens.add(e.estado2fa() == Estado2fa.ATIVO ? Item.DESATIVAR_2FA : Item.CONFIGURAR_2FA);
         }
         if (c == EstadoConexao.SSH_OK_SEM_AGENTE && e.situacaoDoAgente().oferecerInstalar()) {

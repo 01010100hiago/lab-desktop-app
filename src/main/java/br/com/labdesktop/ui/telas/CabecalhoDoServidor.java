@@ -59,7 +59,10 @@ final class CabecalhoDoServidor extends Painel {
             estado.atualizar("Lendo…", br.com.labdesktop.ui.Gravidade.NEUTRO, "atualizar");
         }
         if (info == null) {
-            linhaDeBaixo.setText("Esperando a primeira leitura do servidor…");
+            boolean semAgente = e != null && e.conexao() == br.com.labdesktop.ssh.EstadoConexao.SSH_OK_SEM_AGENTE
+                && e.situacaoDoAgente().oferecerInstalar();
+            linhaDeBaixo.setText(semAgente ? "Sem o agente não há leituras de CPU, memória, containers nem projetos."
+                : "Esperando a primeira leitura do servidor…");
             linhaDeBaixo.setVisible(true);
             ficha.definir(List.of());
             leitura.setText("");

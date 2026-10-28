@@ -162,6 +162,7 @@ public final class DialogoDoAgente extends Dialogo {
         this.avisos = avisos;
         this.copiador = copiador;
         this.parametros = ParametrosDaInstalacao.padrao(alvo.portaDoAgente());
+        campoDoContainer.setText(parametros.container());
         this.instalador = fabrica.apply(parametros);
 
         boolean remover = acao == Acao.REMOVER;
@@ -307,7 +308,15 @@ public final class DialogoDoAgente extends Dialogo {
 
     @Override
     protected void antesDeMostrar() {
-        if (acao != Acao.REMOVER) {
+        iniciarConferencia();
+    }
+
+    /**
+     * Começa a conferência (só leitura) quando a janela aparece. Remover não confere nada: vai direto à confirmação. Público para os testes
+     * (sem janela de verdade, {@code antesDeMostrar} não roda).
+     */
+    public void iniciarConferencia() {
+        if (acao != Acao.REMOVER && relatorio == null && !executando) {
             conferir();
         }
     }
@@ -496,11 +505,10 @@ public final class DialogoDoAgente extends Dialogo {
         if (bloqueado) {
             aviso = "Há " + (r.problemas().size() == 1 ? "um problema" : r.problemas().size() + " problemas") + " que impede"
                 + (r.problemas().size() == 1 ? "" : "m") + " de continuar. O app não tenta resolver isto sozinho: resolva no servidor e "
-                + (r.de(ResultadoDaVerificacao.Item.DOCKER) != null && r.de(ResultadoDaVerificacao.Item.DOCKER).bloqueia()
-                    && !r.vaiInstalarODocker() ? "clique em Já instalei, continuar." : "clique em Conferir de novo.");
+                + (r.dockerAusente() && !r.vaiInstalarODocker() ? "clique em Já instalei, continuar." : "clique em Conferir de novo.");
         }
         dizerErro(avisoDeBloqueio, aviso);
-        boolean pedeJaInstalei = bloqueado && !r.dockerPresente() && !r.vaiInstalarODocker();
+        boolean pedeJaInstalei = bloqueado && r.dockerAusente() && !r.vaiInstalarODocker();
         conferirDeNovo.setText(pedeJaInstalei ? "Já instalei, continuar" : "Conferir de novo");
         String atual = alvo.versaoInstalada();
         versaoAtual.setVisible(acao == Acao.ATUALIZAR);
@@ -595,6 +603,7 @@ public final class DialogoDoAgente extends Dialogo {
             try {
                 parametros = new ParametrosDaInstalacao(nome, parametros.porta(), parametros.pasta());
             } catch (IllegalArgumentException e) {
+                opcoesAvancadas.definirAberta(true); // o erro mora lá dentro: abre a seção para o usuário vê-lo
                 dizerErro(erroDoContainer, e.getMessage());
                 reajustar();
                 return;

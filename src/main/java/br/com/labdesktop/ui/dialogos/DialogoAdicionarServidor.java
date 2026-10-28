@@ -995,6 +995,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         instalarOAgente.setVisible(false);
         agoraNao.setVisible(false);
         perguntandoDoAgente = false;
+        concluir.setVisible(true);
         concluir.setEnabled(false);
         tentarDeNovo.setEnabled(false);
         instrucaoNaConexao.esconder();
@@ -1034,6 +1035,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         }
         tentarDeNovo.setVisible(false);
         concluir.setEnabled(false);
+        concluir.setVisible(false); // o rodapé não tem largura para tantos botões; Concluir volta quando o assistente terminar
         boolean comAgente = br.com.labdesktop.instalador.PacoteDoAgente.disponivel();
         instalarOAgente.setVisible(comAgente);
         agoraNao.setVisible(true);

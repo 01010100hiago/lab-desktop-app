@@ -340,6 +340,9 @@ public abstract class PaginaDoServidor extends Painel {
         situacao = SituacaoDaVisao.de(estado, tem, leitura(), relogio.get(), fuso);
         atualizarTopo();
         faixaDeDados.mostrar(situacao);
+        if (!tem && situacao.modo() == SituacaoDaVisao.Modo.AGENTE_NAO_INSTALADO) {
+            faixaDeDados.setVisible(false); // o cartão "sem dados" já diz isto, com o botão: sem repetir o mesmo aviso em cima
+        }
         boolean erro = erroSemDados != null && !tem;
         esqueleto.setVisible(!tem && !erro && situacao.modo() == SituacaoDaVisao.Modo.CARREGANDO);
         semDados.setVisible(!tem && (erro || situacao.modo() != SituacaoDaVisao.Modo.CARREGANDO));

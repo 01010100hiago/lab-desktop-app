@@ -51,6 +51,8 @@ class CaixaDoServidor extends Painel {
 
     final void trocarTitulo(String texto) {
         titulo.setText(texto);
+        getAccessibleContext().setAccessibleName(texto);
+        setName("bloco-" + texto);
     }
 
     /** Esvazia o corpo (antes de refazê-lo). */

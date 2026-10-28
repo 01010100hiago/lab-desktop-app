@@ -33,6 +33,41 @@ class ModeloEErroApiTest {
     }
 
     @Test
+    void versaoComPerfilERecursosParseiaOsDoisCasosENuncaEscondeSemOAgenteDizer() throws Exception {
+        VersaoAgente monitor = Json.mapper().readValue("{\"api\":1,\"painel\":\"v22\",\"exigeToken\":false,\"cliente\":null,\"totp\":\"desligado\","
+            + "\"perfil\":\"monitor\",\"recursos\":{\"claude\":false,\"projetos\":false,\"monitor\":true},\"agente\":\"0.1.0-abc1234\"}", VersaoAgente.class);
+        assertTrue(monitor.perfilMonitor());
+        assertEquals(Boolean.FALSE, monitor.temClaude());
+        assertFalse(monitor.temProjetos());
+        assertEquals("0.1.0-abc1234", monitor.agente());
+        assertEquals(br.com.labdesktop.api.modelo.RecursosDoAgente.SO_MONITOR, monitor.recursos());
+
+        VersaoAgente lab = Json.mapper().readValue("{\"api\":1,\"painel\":\"v22\",\"perfil\":\"lab\",\"recursos\":{\"claude\":true,\"projetos\":true,\"monitor\":true},"
+            + "\"agente\":null}", VersaoAgente.class);
+        assertFalse(lab.perfilMonitor());
+        assertEquals(Boolean.TRUE, lab.temClaude());
+        assertTrue(lab.temProjetos());
+
+        // agente de antes dos recursos: o app assume o comportamento de antes (desconhecido nunca esconde nada)
+        VersaoAgente antigo = Json.mapper().readValue("{\"api\":1,\"painel\":\"v22\",\"exigeToken\":false,\"cliente\":null,\"totp\":\"desligado\"}", VersaoAgente.class);
+        assertNull(antigo.perfil());
+        assertNull(antigo.recursos());
+        assertNull(antigo.temClaude());
+        assertTrue(antigo.temProjetos());
+        assertFalse(antigo.perfilMonitor());
+
+        // recursos parcial: o que falta é desconhecido
+        VersaoAgente parcial = Json.mapper().readValue("{\"api\":1,\"recursos\":{\"monitor\":true}}", VersaoAgente.class);
+        assertNull(parcial.temClaude());
+        assertTrue(parcial.temProjetos());
+        // campo desconhecido de um agente mais novo não derruba
+        VersaoAgente novo = Json.mapper().readValue("{\"api\":1,\"recursos\":{\"claude\":true,\"coisa-nova\":1},\"outro\":2}", VersaoAgente.class);
+        assertEquals(Boolean.TRUE, novo.temClaude());
+        // texto do servidor é limpo na construção
+        assertEquals("monitor", new VersaoAgente(1, "v", false, null, "x", "monitor\u202E", null, null).perfil());
+    }
+
+    @Test
     void fracaoDoTetoSoComTetoELeitura() {
         assertEquals(0.5, new Limite(20, 10.0, "ok", false, null, null, null).fracaoDoTeto());
         assertNull(new Limite(null, 10.0, "ok", false, null, null, null).fracaoDoTeto());
