@@ -104,10 +104,11 @@ public final class DialogoInstalarChave extends Dialogo {
         this.abertura = paragrafo("O servidor " + alvo.nome() + " recusou a chave deste app. Digite a senha do usuário " + alvo.usuario()
             + " no servidor, uma vez: o app instala a chave deste computador e volta a entrar só pela chave.");
         entrada.rotularPara(alvo.usuario());
-        ficha.definir(List.of(
-            FichaRotulada.Item.de("Servidor", alvo.endereco()),
-            FichaRotulada.Item.de(rotuloDaImpressao(), impressaoDoServidor()),
-            FichaRotulada.Item.de("Chave deste app (a que será instalada)", alvo.nomeDaChave() + "  " + alvo.impressaoDaChave())));
+        List<FichaRotulada.Item> itens = new java.util.ArrayList<>();
+        itens.add(FichaRotulada.Item.de("Servidor", alvo.endereco()));
+        itens.addAll(itensDasImpressoes());
+        itens.add(FichaRotulada.Item.de("Chave deste app (a que será instalada)", alvo.nomeDaChave() + "  " + alvo.impressaoDaChave()));
+        ficha.definir(itens);
         blocoDaSenha = entrada.bloco(TEXTO_DA_SENHA);
         selo.setVisible(true);
         blocoDoFim = Caixa.coluna(8, selo, textoDoFim, ondeDesligarASenha);
@@ -134,14 +135,20 @@ public final class DialogoInstalarChave extends Dialogo {
         }
     }
 
-    private String rotuloDaImpressao() {
+    /**
+     * UMA linha por impressão digital guardada, cada uma com o seu algoritmo: o servidor pode ter mais de uma (uma por tipo de chave) e a conexão vale se bater com QUALQUER delas,
+     * então o usuário precisa ver todas, não só a primeira.
+     */
+    private List<FichaRotulada.Item> itensDasImpressoes() {
         List<Pin> pins = alvo.impressoesDoServidor();
-        return pins == null || pins.isEmpty() ? "Impressão digital do servidor" : "Impressão digital do servidor (" + pins.get(0).algoritmo() + ", a que você confirmou)";
-    }
-
-    private String impressaoDoServidor() {
-        List<Pin> pins = alvo.impressoesDoServidor();
-        return pins == null || pins.isEmpty() ? SEM_IMPRESSAO : pins.get(0).impressao();
+        if (pins == null || pins.isEmpty()) {
+            return List.of(FichaRotulada.Item.de("Impressão digital do servidor", SEM_IMPRESSAO));
+        }
+        List<FichaRotulada.Item> itens = new java.util.ArrayList<>();
+        for (Pin p : pins) {
+            itens.add(FichaRotulada.Item.de("Impressão digital do servidor (" + p.algoritmo() + ", a que você confirmou)", p.impressao()));
+        }
+        return itens;
     }
 
     // ---------------------------------------------------------------------------------------------

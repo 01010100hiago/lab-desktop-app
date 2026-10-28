@@ -103,7 +103,8 @@ final class EntradaDaSenha {
      * @param mostrarOCaminhoSemSenha o servidor não aceita senha ou não honrou a chave: no assistente abre as "Opções avançadas" (a chave pública e o comando)
      * @param esquecerOHost       a chave do servidor não era a confirmada: nada vale mais, a conferência tem de ser refeita
      * @param focarNaSenha        o usuário pode digitar de novo (senha errada, conta bloqueada, senha vencida, pausa)
-     * @param parar               a tela não oferece tentar de novo (host que mudou, sem impressão, sem senha no servidor): o caminho é outro
+     * @param parar               a tela não oferece tentar de novo (host que mudou, sem impressão, sem senha no servidor, servidor que não honra a chave): o caminho é outro; o assistente de Adicionar
+     *                            não usa este campo (ele abre as Opções avançadas)
      */
     record Reacao(String mensagem, boolean mostrarOCaminhoSemSenha, boolean esquecerOHost, boolean focarNaSenha, boolean parar) {
 
@@ -112,8 +113,8 @@ final class EntradaDaSenha {
                 return new Reacao(MensagensDeErro.de(falha), false, false, false, false);
             }
             return switch (f.motivo()) {
-                case SERVIDOR_SEM_SENHA, SEM_LOGIN_POR_CHAVE -> new Reacao(f.getMessage(), true, false, false, f.motivo() == FalhaDeEntradaPorSenha.Motivo.SERVIDOR_SEM_SENHA);
-                case HOST_MUDOU, SEM_IMPRESSAO_CONFIRMADA -> new Reacao(f.getMessage(), false, true, false, true);
+                case SERVIDOR_SEM_SENHA, SEM_LOGIN_POR_CHAVE -> new Reacao(f.getMessage(), true, false, false, true);
+                case HOST_MUDOU, SEM_IMPRESSAO_CONFIRMADA, HOST_DA_PROVA_DIFERENTE -> new Reacao(f.getMessage(), false, true, false, true);
                 case SENHA_INCORRETA, CONTA_BLOQUEADA, SENHA_EXPIRADA, MUITAS_TENTATIVAS -> new Reacao(f.getMessage(), false, false, true, false);
                 default -> new Reacao(f.getMessage(), false, false, false, false);
             };

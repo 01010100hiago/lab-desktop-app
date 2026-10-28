@@ -219,6 +219,73 @@ class DialogoInstalarChaveTest {
     }
 
     @Test
+    void servidorQueNaoHonraAChaveParaEOferecaSoFecharECopiarAChavePublica() {
+        nosDoisTemas("7-servidor-nao-honra-a-chave", () -> {
+            DialogoInstalarChave d = abrir(ALVO, falhando(Motivo.SEM_LOGIN_POR_CHAVE,
+                "O servidor não aceitou a chave. Confira se ele permite login por chave. A chave já foi gravada em ~/.ssh/authorized_keys do servidor; o app não a removeu."));
+            digitarEClicar(d);
+            Espera.ate(PRAZO, "parou", () -> Visual.naEdt(d::parado));
+            assertTrue(Visual.naEdt(d::textoDoErro).contains("o app não a removeu"));
+            assertFalse(Visual.naEdt(() -> d.botaoInstalar().isVisible()), "repetir só gastaria mais uma senha e mais uma chave recusada no servidor");
+            assertTrue(Visual.naEdt(() -> d.botaoFechar().isVisible()));
+            assertTrue(Visual.naEdt(() -> d.botaoCopiarChave().isVisible()), "a chave pública continua à mão para quem administra o servidor");
+            assertFalse(Visual.naEdt(() -> d.campoDaSenha().isEnabled()));
+            return d;
+        });
+    }
+
+    @Test
+    void hostDaProvaDiferenteParaComAFraseDeQueAChaveJaFoiInstalada() {
+        DialogoInstalarChave d = abrir(ALVO, falhando(Motivo.HOST_DA_PROVA_DIFERENTE, AssistenteDeServidor.TEXTO_DO_HOST_DA_PROVA_DIFERENTE));
+        digitarEClicar(d);
+        Espera.ate(PRAZO, "parou", () -> Visual.naEdt(d::parado));
+        assertTrue(Visual.naEdt(d::textoDoErro).startsWith("A chave foi instalada, mas o servidor da prova não é o mesmo que você confirmou"));
+        assertFalse(Visual.naEdt(d::textoDoErro).contains("NÃO foi enviada"));
+        assertFalse(Visual.naEdt(() -> d.botaoInstalar().isVisible()));
+    }
+
+    @Test
+    void comMaisDeUmaImpressaoGuardadaTodasAparecemCadaUmaComOSeuAlgoritmo() {
+        Pin rsa = new Pin("rsa-sha2-512", "SHA256:PDJMKx5RZeUbqJRHPx/mbRG5pGRMsgqnfvKEvXX1C00");
+        DialogoInstalarChave.Alvo dois = new DialogoInstalarChave.Alvo("lab", "labuser", "192.0.2.5", 2222, List.of(PIN, rsa), "lab", ALVO.impressaoDaChave(), ALVO.chavePublica());
+        DialogoInstalarChave d = abrir(dois, (s, p) -> InstaladorDeChave.Resultado.ADICIONADA);
+        String textos = Visual.naEdt(() -> textosDe(d.raiz()));
+        assertTrue(textos.contains(PIN.impressao()) && textos.contains(rsa.impressao()), "o usuário confere as duas: " + textos);
+        assertTrue(textos.contains("ssh-ed25519") && textos.contains("rsa-sha2-512"), textos);
+        assertEquals(1 + 2 + 1, Visual.naEdt(() -> d.ficha().getComponentCount()), "servidor, duas impressões e a chave do app");
+        semTransbordo(d);
+    }
+
+    @Test
+    void bloquearOCofreFechaOsDialogosAbertosZerandoASenhaDigitada() {
+        CountDownLatch segurar = new CountDownLatch(1);
+        DialogoInstalarChave parado = abrir(ALVO, (s, p) -> InstaladorDeChave.Resultado.ADICIONADA);
+        DialogoInstalarChave trabalhando = abrir(ALVO, (s, p) -> {
+            segurar.await(PRAZO.toSeconds(), TimeUnit.SECONDS);
+            return InstaladorDeChave.Resultado.ADICIONADA;
+        });
+        Visual.naEdt(() -> {
+            parado.marcarAberto(); // o mostrar() faz isto; o Swing sem cabeça não cria a janela
+            trabalhando.marcarAberto();
+            parado.campoDaSenha().setText(SENHA);
+        });
+        int antes = Visual.naEdt(Dialogo::quantosAbertos);
+        digitarEClicar(trabalhando);
+        Espera.ate(PRAZO, "trabalhando", () -> Visual.naEdt(trabalhando::ocupado));
+        Visual.naEdt(() -> parado.campoDaSenha().setText(SENHA));
+        assertTrue(antes >= 2);
+
+        Visual.naEdt(Dialogo::fecharTodosOsAbertos); // o que o app faz ao bloquear o cofre (Aplicacao.liberar)
+
+        assertEquals(0, Visual.naEdt(() -> parado.campoDaSenha().getPassword().length), "a senha digitada some do campo");
+        assertTrue(Visual.naEdt(parado::jaFechouParaTeste));
+        assertTrue(Visual.naEdt(trabalhando::jaFechouParaTeste), "até o que está falando com o servidor");
+        assertEquals(0, Visual.naEdt(Dialogo::quantosAbertos));
+        segurar.countDown();
+        Espera.naoAcontece(Duration.ofMillis(500), "o resultado de um diálogo fechado mexer na tela", () -> Visual.naEdt(trabalhando::pronto));
+    }
+
+    @Test
     void pausaDoFreioDeixaTentarDepois() {
         DialogoInstalarChave d = abrir(ALVO, falhando(Motivo.MUITAS_TENTATIVAS, "Espere 8 minutos antes de tentar de novo: o servidor pode bloquear o seu endereço depois de várias senhas erradas."));
         digitarEClicar(d);

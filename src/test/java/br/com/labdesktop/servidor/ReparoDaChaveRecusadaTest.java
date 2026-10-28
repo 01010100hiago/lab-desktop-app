@@ -26,6 +26,7 @@ import br.com.labdesktop.ssh.FalhaDeEntradaPorSenha;
 import br.com.labdesktop.ssh.FalhaDeEntradaPorSenha.Motivo;
 import br.com.labdesktop.ssh.ProvaPorChave;
 import br.com.labdesktop.teste.AgenteDoLab;
+import br.com.labdesktop.teste.ProxyTcp;
 import br.com.labdesktop.teste.ServidorSshDeTeste;
 import br.com.labdesktop.teste.ShellDeTeste;
 import br.com.labdesktop.util.CaminhosApp;
@@ -69,6 +70,7 @@ class ReparoDaChaveRecusadaTest {
     private GerenciadorServidores gerenciador;
     private AssistenteDeServidor assistente;
     private Instant agora = Instant.parse("2026-10-28T12:00:00Z");
+    private LimiteDeTentativas limite;
 
     @BeforeEach
     void montar() throws Exception {
@@ -79,8 +81,8 @@ class ReparoDaChaveRecusadaTest {
         shell = new ShellDeTeste(Files.createDirectories(tmp.resolve("home")), ssh).outrosComandos(agente.comandosPorSsh());
         cofre = CofreDeChaves.criar(CaminhosApp.de(tmp.resolve("dados"), tmp.resolve("logs")), SENHA_MESTRA.clone(), ParametrosKdf.MINIMO);
         gerenciador = new GerenciadorServidores(cofre, PedidoDeCodigo2fa.NUNCA, ConfigSsh.rapida());
-        assistente = new AssistenteDeServidor(cofre, gerenciador, ConfigSsh.rapida(),
-            new LimiteDeTentativas(AssistenteDeServidor.MAXIMO_DE_SENHAS_RECUSADAS, AssistenteDeServidor.JANELA_DAS_SENHAS_RECUSADAS, () -> agora));
+        limite = new LimiteDeTentativas(AssistenteDeServidor.MAXIMO_DE_SENHAS_RECUSADAS, AssistenteDeServidor.JANELA_DAS_SENHAS_RECUSADAS, () -> agora);
+        assistente = new AssistenteDeServidor(cofre, gerenciador, ConfigSsh.rapida(), limite);
     }
 
     @AfterEach
@@ -264,15 +266,185 @@ class ReparoDaChaveRecusadaTest {
         assertEquals(InstaladorDeChave.Resultado.ADICIONADA, assistente.repararAChaveComSenha(lab, senha(SENHA_DO_SERVIDOR), x -> { }));
     }
 
+    /** Espera o número de pedidos de autenticação do servidor parar de mudar (duas leituras iguais com folga) e devolve o valor final. */
+    private int pedidosEstabilizados() throws InterruptedException {
+        int anterior = -1;
+        for (int i = 0; i < 100; i++) {
+            int atual = ssh.pedidosDeAutenticacao.get();
+            if (atual == anterior) {
+                return atual;
+            }
+            anterior = atual;
+            Thread.sleep(150);
+        }
+        throw new AssertionError("os pedidos de autenticação não pararam de crescer: " + anterior);
+    }
+
     @Test
-    void naoHaNovaTentativaDeChaveEmLoopDepoisDeUmaRecusaDoReparo() throws Exception {
+    void depoisDoSucessoEDepoisDaFalhaNaoHaNovaTentativaDeChaveEmLoop() throws Exception {
         ServidorLab lab = servidorRecusado();
-        int autenticacoesAntes = ssh.pedidosDeAutenticacao.get();
+        int base = pedidosEstabilizados();
+
+        // falha: uma senha recusada = exatamente UM pedido de autenticação a mais, e depois disso NADA (nem retentativa do app)
         errar(lab, "errada-1");
-        // uma recusa do reparo não reconecta nada: o único pedido novo é o da própria senha
-        assertEquals(autenticacoesAntes + 1, ssh.pedidosDeAutenticacao.get());
-        Espera.naoAcontece(Duration.ofMillis(400), "o app reconectar sozinho depois da senha recusada",
-            () -> ssh.pedidosDeAutenticacao.get() > autenticacoesAntes + 1);
+        int aposAFalha = pedidosEstabilizados();
+        assertEquals(base + 1, aposAFalha, "a senha recusada é um pedido só");
+        Espera.naoAcontece(Duration.ofSeconds(1), "mais um pedido de autenticação depois da senha recusada", () -> ssh.pedidosDeAutenticacao.get() != aposAFalha);
+
+        // sucesso: a senha, a prova e a reconexão; depois que conecta, nenhuma tentativa nova, por mais que se espere
+        assistente.repararAChaveComSenha(lab, senha(SENHA_DO_SERVIDOR), x -> { });
+        Espera.ate(PRAZO, "conectado", () -> lab.estado().conexao() == EstadoConexao.CONECTADO);
+        int aposOSucesso = pedidosEstabilizados();
+        assertTrue(aposOSucesso > aposAFalha, "a senha, a prova e a reconexão pediram autenticação");
+        Espera.naoAcontece(Duration.ofSeconds(1), "mais um pedido de autenticação com o servidor já conectado", () -> ssh.pedidosDeAutenticacao.get() != aposOSucesso);
+        assertEquals(EstadoConexao.CONECTADO, lab.estado().conexao());
+    }
+
+    @Test
+    void provaQueFalhaContaNoFreioSemZerarERepetirNaoDaLoginsSemLimite() throws Exception {
+        ServidorLab lab = servidorRecusado();
+        shell.honrarAuthorizedKeys(false); // o servidor aceita a senha e grava a linha, mas não honra a chave (AuthorizedKeysFile, StrictModes...)
+        int base = pedidosEstabilizados();
+        int porCiclo = 0;
+        for (int i = 1; i <= 4; i++) {
+            agora = agora.plus(Duration.ofSeconds(20));
+            FalhaDeEntradaPorSenha f = assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.repararAChaveComSenha(lab, senha(SENHA_DO_SERVIDOR), x -> { }));
+            assertEquals(Motivo.SEM_LOGIN_POR_CHAVE, f.motivo(), "tentativa " + i);
+            assertTrue(f.getMessage().contains("A chave já foi gravada em ~/.ssh/authorized_keys do servidor; o app não a removeu."), f.getMessage());
+            int agoraPedidos = pedidosEstabilizados();
+            if (i == 1) {
+                porCiclo = agoraPedidos - base;
+                assertTrue(porCiclo >= 2, "cada clique é um login por senha e uma chave recusada: " + porCiclo);
+            }
+            assertEquals(base + i * porCiclo, agoraPedidos, "cada tentativa gasta o mesmo número de autenticações");
+            assertEquals(4 - i, limite.restantes(LimiteDeTentativas.chave("127.0.0.1", ssh.porta(), USUARIO)), "a prova que falha conta no freio e não zera");
+        }
+        assertEquals(4, ssh.senhasVistas.size());
+
+        // a quinta, mesmo com a senha certa, nem sai do app: o servidor recebeu 4 senhas e 4 chaves recusadas, não mais
+        int antes = ssh.pedidosDeAutenticacao.get();
+        FalhaDeEntradaPorSenha pausa = assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.repararAChaveComSenha(lab, senha(SENHA_DO_SERVIDOR), x -> { }));
+        assertEquals(Motivo.MUITAS_TENTATIVAS, pausa.motivo());
+        assertEquals(antes, ssh.pedidosDeAutenticacao.get());
+        assertEquals(4, ssh.senhasVistas.size());
+
+        // quando o servidor passa a honrar a chave, a prova passa e SÓ então a conta zera
+        shell.honrarAuthorizedKeys(true);
+        agora = agora.plus(Duration.ofMinutes(11));
+        assertEquals(InstaladorDeChave.Resultado.JA_EXISTIA, assistente.repararAChaveComSenha(lab, senha(SENHA_DO_SERVIDOR), x -> { }));
+        assertEquals(4, limite.restantes(LimiteDeTentativas.chave("127.0.0.1", ssh.porta(), USUARIO)));
+    }
+
+    @Test
+    void hostDaProvaDiferenteDizQueAChaveJaFoiInstaladaENaoContaNoFreio() throws Exception {
+        InfoChave chave = assistente.gerarChave("lab");
+        try (ProxyTcp proxy = new ProxyTcp(ssh.porta()); ServidorSshDeTeste outro = ServidorSshDeTeste.ed25519()) {
+            Pin pin = assistente.sondar("127.0.0.1", proxy.porta()).pin();
+            ServidorLab lab = assistente.cadastrar(new Dados("lab", "127.0.0.1", proxy.porta(), USUARIO, agente.porta()), chave.id(), pin);
+            char[] digitada = senha(SENHA_DO_SERVIDOR);
+
+            // entre a senha e a prova o endereço passa a levar a OUTRA máquina
+            FalhaDeEntradaPorSenha e = assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.repararAChaveComSenha(lab, digitada, etapa -> {
+                if (etapa == EtapaDoPrimeiroAcesso.PROVANDO) {
+                    proxy.trocarDestino(outro.porta());
+                }
+            }));
+
+            assertEquals(Motivo.HOST_DA_PROVA_DIFERENTE, e.motivo());
+            assertEquals(AssistenteDeServidor.TEXTO_DO_HOST_DA_PROVA_DIFERENTE, e.getMessage());
+            assertTrue(e.getMessage().startsWith("A chave foi instalada, mas o servidor da prova não é o mesmo que você confirmou"), e.getMessage());
+            assertFalse(e.getMessage().contains("NÃO foi enviada"), "aqui a senha FOI enviada, ao servidor confirmado");
+            exigirZerada(digitada);
+            assertEquals(List.of(SENHA_DO_SERVIDOR), ssh.senhasVistas, "a senha foi ao servidor confirmado");
+            assertTrue(Files.readString(shell.authorizedKeys()).contains(chave.publica().split(" ")[1]), "e a chave ficou nele");
+            assertEquals(0, outro.pedidosDeAutenticacao.get(), "a outra máquina nunca viu pedido de autenticação, nem senha");
+            assertEquals(List.of(), outro.senhasVistas);
+            assertEquals(List.of(pin), cofre.servidor(lab.id()).orElseThrow().pins(), "o app não trocou a impressão guardada");
+            assertEquals(4, limite.restantes(LimiteDeTentativas.chave("127.0.0.1", proxy.porta(), USUARIO)), "um host diferente não é senha errada nem chave recusada: não conta");
+        }
+    }
+
+    @Test
+    void oFreioSobreviveATrocarOAssistenteEIssoEComoOAppBloqueiaEDesbloqueiaOCofre() throws Exception {
+        ServidorLab lab = servidorRecusado();
+        assertEquals(Motivo.SENHA_INCORRETA, errar(lab, "errada-1").motivo());
+        assertEquals(Motivo.SENHA_INCORRETA, errar(lab, "errada-2").motivo());
+        // o cofre travou e destravou: o app cria um assistente NOVO, mas passa o mesmo freio
+        AssistenteDeServidor novo = new AssistenteDeServidor(cofre, gerenciador, ConfigSsh.rapida(), limite);
+        for (String senha : List.of("errada-3", "errada-4")) {
+            agora = agora.plus(Duration.ofSeconds(20));
+            assertThrows(FalhaDeEntradaPorSenha.class, () -> novo.repararAChaveComSenha(lab, senha(senha), x -> { }));
+        }
+        agora = agora.plus(Duration.ofSeconds(20));
+        FalhaDeEntradaPorSenha pausa = assertThrows(FalhaDeEntradaPorSenha.class, () -> novo.repararAChaveComSenha(lab, senha(SENHA_DO_SERVIDOR), x -> { }));
+        assertEquals(Motivo.MUITAS_TENTATIVAS, pausa.motivo(), "a conta continuou: o assistente novo não deu mais 4 tentativas");
+        assertEquals(4, ssh.senhasVistas.size());
+        // e o freio padrão é UM objeto por pedido, para quem o guarda (a Aplicacao) o passar adiante
+        assertTrue(AssistenteDeServidor.novoFreioDeSenhas() != AssistenteDeServidor.novoFreioDeSenhas());
+    }
+
+    @Test
+    void doisServidoresComOMesmoEnderecoEUsuarioComMaiusculaDividemAMesmaConta() throws Exception {
+        ServidorLab primeiro = servidorRecusado();
+        InfoChave outraChave = assistente.gerarChave("outra");
+        Pin pin = cofre.servidor(primeiro.id()).orElseThrow().pins().get(0);
+        ServidorLab segundo = assistente.cadastrar(new Dados("lab2", "127.0.0.1", ssh.porta(), "LABUSER", agente.porta()), outraChave.id(), pin);
+        assertEquals(2, cofre.servidores().size());
+        errar(primeiro, "errada-1");
+        agora = agora.plus(Duration.ofSeconds(20));
+        assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.repararAChaveComSenha(segundo, senha("errada-2"), x -> { }));
+        errar(primeiro, "errada-3");
+        agora = agora.plus(Duration.ofSeconds(20));
+        assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.repararAChaveComSenha(segundo, senha("errada-4"), x -> { }));
+        FalhaDeEntradaPorSenha e = assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.repararAChaveComSenha(segundo, senha(SENHA_DO_SERVIDOR), x -> { }));
+        assertEquals(Motivo.MUITAS_TENTATIVAS, e.motivo(), "dois cadastros do mesmo servidor e usuário (maiúsculas à parte) dividem o freio");
+        FalhaDeEntradaPorSenha daOutra = assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.repararAChaveComSenha(primeiro, senha(SENHA_DO_SERVIDOR), x -> { }));
+        assertEquals(Motivo.MUITAS_TENTATIVAS, daOutra.motivo());
+        assertEquals(4, ssh.senhasVistas.size());
+    }
+
+    @Test
+    void senhaVaziaOuNulaNaoAbreConexaoEAindaNaoMexeEmNada() throws Exception {
+        ServidorLab lab = servidorRecusado();
+        int pedidos = pedidosEstabilizados();
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> assistente.repararAChaveComSenha(lab, new char[0], x -> { }));
+        assertEquals("Digite a senha do usuário labuser no servidor.", e.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> assistente.repararAChaveComSenha(lab, null, x -> { }));
+        assertEquals(pedidos, pedidosEstabilizados(), "nenhuma conexão para uma senha vazia");
+        assertEquals(List.of(), ssh.senhasVistas);
+        assertEquals(4, limite.restantes(LimiteDeTentativas.chave("127.0.0.1", ssh.porta(), USUARIO)));
+    }
+
+    @Test
+    void authorizedKeysQueNaoSeEscreveDizQueAChavePodeTerFicadoPelaMetadeENadaMaisEMexido() throws Exception {
+        ServidorLab lab = servidorRecusado();
+        Path ssh = Files.createDirectories(tmp.resolve("home").resolve(".ssh"));
+        Files.createDirectory(ssh.resolve("authorized_keys")); // um diretório no lugar do arquivo: a gravação da linha falha (saída 6)
+        char[] digitada = senha(SENHA_DO_SERVIDOR);
+
+        FalhaDeEntradaPorSenha e = assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.repararAChaveComSenha(lab, digitada, x -> { }));
+
+        assertEquals(Motivo.FALHOU_AO_INSTALAR, e.motivo());
+        assertTrue(e.getMessage().contains("não consegui gravar a linha no authorized_keys") && e.getMessage().contains("só em parte"), e.getMessage());
+        exigirZerada(digitada);
+        assertEquals(List.of(ComandosDoAcesso.instalarChave()), shell.recebidos, "só a instalação rodou: nada de prova, de token nem de limpeza");
+        assertEquals(EstadoConexao.ERRO_AUTENTICACAO, lab.estado().conexao());
+    }
+
+    @Test
+    void execNegadoNoServidorFalhaComFraseSimplesSemUsarSftpENadaMaisEMexido() throws Exception {
+        ServidorLab lab = servidorRecusado();
+        ssh.comandoRemoto((linha, stdin, saida) -> 126); // o servidor não deixa rodar o comando (shell restrito, ForceCommand...); SFTP nem está ligado neste servidor
+        char[] digitada = senha(SENHA_DO_SERVIDOR);
+
+        FalhaDeEntradaPorSenha e = assertThrows(FalhaDeEntradaPorSenha.class, () -> assistente.repararAChaveComSenha(lab, digitada, x -> { }));
+
+        assertEquals(Motivo.FALHOU_AO_INSTALAR, e.motivo());
+        assertTrue(e.getMessage().contains("código 126") && e.getMessage().contains("Confira o authorized_keys"), e.getMessage());
+        exigirZerada(digitada);
+        assertEquals(List.of(SENHA_DO_SERVIDOR), ssh.senhasVistas);
+        assertFalse(Files.exists(shell.authorizedKeys()));
+        assertEquals(EstadoConexao.ERRO_AUTENTICACAO, lab.estado().conexao());
     }
 
     @Test

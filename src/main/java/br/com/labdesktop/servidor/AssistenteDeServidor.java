@@ -149,7 +149,15 @@ public final class AssistenteDeServidor {
     private final LimiteDeTentativas limiteDeSenha;
 
     public AssistenteDeServidor(CofreDeChaves cofre, GerenciadorServidores gerenciador, ConfigSsh cfgSsh) {
-        this(cofre, gerenciador, cfgSsh, new LimiteDeTentativas(MAXIMO_DE_SENHAS_RECUSADAS, JANELA_DAS_SENHAS_RECUSADAS, Instant::now));
+        this(cofre, gerenciador, cfgSsh, novoFreioDeSenhas());
+    }
+
+    /**
+     * O freio das senhas com o relógio de verdade. Quem cria um assistente novo a cada vez que o cofre abre (o app o refaz ao bloquear e desbloquear) guarda UM freio até o app
+     * fechar e o passa a cada assistente: se cada assistente trouxesse o seu, travar e destravar o cofre zeraria a conta e o usuário teria mais 4 senhas contra o servidor.
+     */
+    public static LimiteDeTentativas novoFreioDeSenhas() {
+        return new LimiteDeTentativas(MAXIMO_DE_SENHAS_RECUSADAS, JANELA_DAS_SENHAS_RECUSADAS, Instant::now);
     }
 
     /** Com o freio das senhas trocável (os testes controlam o relógio). */
@@ -339,6 +347,17 @@ public final class AssistenteDeServidor {
         + "volta a confiar sozinho: se você reinstalou o servidor, use \"Remover servidor\" e adicione-o de novo para conferir a impressão digital outra vez. Se não "
         + "reinstalou, não continue: pode ser outra máquina.";
 
+    /** A frase que o usuário lê quando a prova da chave falha: a linha da chave JÁ ficou no servidor e o app não a removeu. */
+    public static final String TEXTO_DA_CHAVE_JA_GRAVADA = "A chave já foi gravada em ~/.ssh/authorized_keys do servidor; o app não a removeu.";
+
+    /**
+     * O que o usuário lê quando é a PROVA (a conexão nova só por chave) que encontra uma chave de servidor diferente da confirmada: a senha já tinha sido aceita pelo servidor
+     * confirmado e a chave já estava gravada nele.
+     */
+    public static final String TEXTO_DO_HOST_DA_PROVA_DIFERENTE = "A chave foi instalada, mas o servidor da prova não é o mesmo que você confirmou: a senha foi aceita pelo servidor "
+        + "confirmado e a chave ficou no authorized_keys dele (o app não a removeu), mas a conexão de conferência caiu em outra máquina. Não continue: confira o endereço e a porta e "
+        + "fale com quem administra o servidor.";
+
     /** O que o usuário lê quando o servidor que já existe ainda não tem impressão digital confirmada. */
     public static final String TEXTO_SEM_IMPRESSAO = "Este servidor ainda não tem a impressão digital confirmada, e o app não manda senha a um servidor que você não conferiu. "
         + "Feche esta janela e use \"Conferir a impressão do servidor\" primeiro.";
@@ -349,6 +368,11 @@ public final class AssistenteDeServidor {
 
     /** Quem é o servidor para a tela "Instalar a chave com a senha": a chave do cofre que o app oferece e a impressão digital guardada do host. */
     public record AcessoDoServidor(ConfigServidor config, InfoChave chave) { }
+
+    /** O cadastro do servidor no cofre (para a tela separar "o servidor sumiu da lista" de "a chave sumiu do cofre"). */
+    public java.util.Optional<ConfigServidor> cadastroDe(ServidorLab lab) {
+        return cofre.servidor(lab.id());
+    }
 
     /** A chave do cofre que o app oferece a este servidor (sem a parte privada), ou vazio se o servidor é "Este computador" ou a chave sumiu do cofre. */
     public java.util.Optional<AcessoDoServidor> acessoDo(ServidorLab lab) {
@@ -430,11 +454,20 @@ public final class AssistenteDeServidor {
         try {
             new ProvaPorChave(dados.host().strip(), dados.porta(), dados.usuario().strip(), daVez.paraKeyPair(), pins, cfgSsh).provar();
         } catch (FalhaDeEntradaPorSenha f) {
-            if (f.motivo() == FalhaDeEntradaPorSenha.Motivo.SEM_LOGIN_POR_CHAVE && !permissoesRuins.isEmpty()) {
-                throw new FalhaDeEntradaPorSenha(f.motivo(), f.getMessage() + " Achei isto: " + String.join(" ", permissoesRuins), f);
+            switch (f.motivo()) {
+                case SEM_LOGIN_POR_CHAVE -> {
+                    // a senha entrou e a chave foi gravada, mas o servidor não a honra: para o fail2ban isso é uma falha de chave por tentativa. Conta no freio SEM zerar
+                    // (só a prova que PASSA zera a conta), senão repetir o botão daria logins por senha e chaves recusadas sem limite.
+                    limiteDeSenha.registrarFalha(conta);
+                    String achados = permissoesRuins.isEmpty() ? "" : " Achei isto: " + String.join(" ", permissoesRuins);
+                    throw comAviso(new FalhaDeEntradaPorSenha(f.motivo(), f.getMessage() + " " + TEXTO_DA_CHAVE_JA_GRAVADA + achados, f),
+                        limiteDeSenha.restantes(conta));
+                }
+                case HOST_MUDOU -> throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.HOST_DA_PROVA_DIFERENTE, TEXTO_DO_HOST_DA_PROVA_DIFERENTE, f);
+                default -> throw f;
             }
-            throw f;
         }
+        limiteDeSenha.registrarSucesso(conta); // a chave entrou numa conexão nova: agora sim a conta zera
         LOG.debug("Primeiro acesso: chave {} ({}).", daVez.id(), instalada);
         return instalada;
     }
@@ -472,8 +505,7 @@ public final class AssistenteDeServidor {
         try {
             SessaoComSenha s = SessaoComSenha.abrir(dados.host().strip(), dados.porta(), dados.usuario().strip(), pins, senha, cfgSsh);
             Zeragem.zerar(senha); // já autenticou: a senha não serve mais a ninguém, nem ao resto da operação
-            limiteDeSenha.registrarSucesso(conta);
-            return s;
+            return s; // a conta só zera quando a PROVA da chave passa (entrarInstalarEProvar), não só porque a senha entrou
         } catch (FalhaDeEntradaPorSenha f) {
             switch (f.motivo()) {
                 case SENHA_INCORRETA, CONTA_BLOQUEADA, SENHA_EXPIRADA -> {

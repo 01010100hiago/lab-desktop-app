@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class ProxyTcp implements AutoCloseable {
 
     private final ServerSocket escuta;
-    private final int portaDestino;
+    private volatile int portaDestino;
     private final List<Ligacao> ligacoes = new CopyOnWriteArrayList<>();
     private volatile boolean fechado;
     private volatile boolean recusandoNovas;
@@ -34,6 +34,11 @@ public final class ProxyTcp implements AutoCloseable {
 
     public int porta() {
         return escuta.getLocalPort();
+    }
+
+    /** Daqui em diante as conexões NOVAS vão para outro destino (as abertas seguem onde estão): é um servidor que "mudou" entre uma conexão e a próxima. */
+    public void trocarDestino(int novaPorta) {
+        this.portaDestino = novaPorta;
     }
 
     /** As conexões já abertas viram buraco negro para sempre; as novas passam. */

@@ -30,7 +30,9 @@ public final class FalhaDeEntradaPorSenha extends Exception {
         /** Pausa de proteção: tentativas demais seguidas. */
         MUITAS_TENTATIVAS,
         /** Um servidor que já existe e ainda não tem impressão digital confirmada: o app não manda senha a quem não conferiu. */
-        SEM_IMPRESSAO_CONFIRMADA
+        SEM_IMPRESSAO_CONFIRMADA,
+        /** A senha entrou e a chave foi gravada, mas a conexão de prova caiu num servidor com outra chave de host (a senha JÁ foi aceita, a chave JÁ está no servidor confirmado). */
+        HOST_DA_PROVA_DIFERENTE
     }
 
     private final Motivo motivo;

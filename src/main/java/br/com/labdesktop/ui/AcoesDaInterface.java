@@ -1040,11 +1040,19 @@ public final class AcoesDaInterface {
         }
         var acesso = assistente == null ? java.util.Optional.<AssistenteDeServidor.AcessoDoServidor>empty() : assistente.acessoDo(lab);
         if (acesso.isEmpty()) {
-            avisos.erro("A chave deste servidor não está mais no cofre. Remova o servidor e adicione-o de novo.");
+            avisos.erro(frasePorFaltaDeAcesso(assistente != null && assistente.cadastroDe(lab).isPresent()));
             return;
         }
         apresentador.mostrar(new DialogoInstalarChave(DialogoInstalarChave.Alvo.de(acesso.get().config(), acesso.get().chave()),
             (senha, progresso) -> assistente.repararAChaveComSenha(lab, senha, progresso), CopiadorDeTexto.doSistema(), avisos));
+    }
+
+    /**
+     * Por que não há o que instalar: o servidor saiu da lista, ou (cofre com defeito, que a API do cofre não deixa acontecer) o cadastro existe e a chave sumiu dele. São dois
+     * problemas com dois caminhos, e a frase não pode misturá-los.
+     */
+    static String frasePorFaltaDeAcesso(boolean cadastroExiste) {
+        return cadastroExiste ? "A chave deste servidor não está mais no cofre. Remova o servidor e adicione-o de novo." : "Esse servidor não está mais na lista.";
     }
 
     /**

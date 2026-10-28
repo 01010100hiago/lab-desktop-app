@@ -81,6 +81,15 @@ class SenhaSemEfeitoSozinhoTest {
     }
 
     @Test
+    void oFreioDasSenhasViveNaAplicacaoEBloquearOCofreFechaOsDialogosAbertos() throws IOException {
+        String aplicacao = semComentarios(RAIZ.resolve("Aplicacao.java"));
+        assertTrue(aplicacao.contains("AssistenteDeServidor.novoFreioDeSenhas()") && aplicacao.contains("ConfigSsh.padrao(), freioDeSenhas)"),
+            "a Aplicacao guarda UM freio até o app fechar e o passa a cada assistente (travar e destravar o cofre não zera a conta)");
+        assertEquals(List.of(), quemUsa(Pattern.compile("\\bnew LimiteDeTentativas\\("), Set.of("servidor/AssistenteDeServidor.java")), "só o assistente cria o freio padrão");
+        assertTrue(aplicacao.contains("Dialogo.fecharTodosOsAbertos()"), "ao bloquear o cofre os diálogos abertos fecham (e zeram o que o usuário digitou)");
+    }
+
+    @Test
     void oClienteNormalNaoTemFatorDeSenha() throws IOException {
         String fabrica = semComentarios(RAIZ.resolve("ssh/ClienteSshFactory.java"));
         assertTrue(!fabrica.contains("Password") && !fabrica.contains("EntradaPorSenha"), "ClienteSshFactory continua só com publickey");

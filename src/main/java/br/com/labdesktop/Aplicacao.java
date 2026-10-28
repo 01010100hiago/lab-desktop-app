@@ -50,6 +50,8 @@ public final class Aplicacao {
     private boolean cofreExiste;
 
     private CofreDeChaves cofre;
+    /** O freio das senhas do servidor vive até o app fechar: bloquear e desbloquear o cofre cria um assistente novo, mas a conta de senhas recusadas continua (ARQUITETURA 6.10). */
+    private final br.com.labdesktop.acesso.LimiteDeTentativas freioDeSenhas = AssistenteDeServidor.novoFreioDeSenhas();
     private GerenciadorServidores gerenciador;
     private JanelaPrincipal janela;
     private MonitorDeSono monitorDeSono;
@@ -163,7 +165,7 @@ public final class Aplicacao {
         this.cofreExiste = true;
         Apresentador apresentadorTardio = dialogo -> dialogo.mostrar(janelaDeDialogos());
         gerenciador = new GerenciadorServidores(aberto, new PedidoDeCodigoPorDialogo(apresentadorTardio));
-        AssistenteDeServidor assistente = new AssistenteDeServidor(aberto, gerenciador, ConfigSsh.padrao());
+        AssistenteDeServidor assistente = new AssistenteDeServidor(aberto, gerenciador, ConfigSsh.padrao(), freioDeSenhas);
         janela = new JanelaPrincipal(gerenciador, assistente, tema, preferencias, this::bloquearCofre,
             br.com.labdesktop.arquivos.ServicosDeArquivos.de(caminhos), br.com.labdesktop.ui.ComportamentoDaJanela.doSistema(this::encerrar));
 
@@ -202,6 +204,7 @@ public final class Aplicacao {
 
     /** Solta telas e conexões, zera os segredos do cofre. */
     private void liberar() {
+        br.com.labdesktop.ui.dialogos.Dialogo.fecharTodosOsAbertos(); // antes de a janela pai cair: cada diálogo zera o que o usuário digitou
         JanelaPrincipal j = janela;
         GerenciadorServidores g = gerenciador;
         CofreDeChaves c = cofre;

@@ -246,6 +246,27 @@ class ChaveRecusadaNaJanelaTest {
         dialogos.ultimoComo(DialogoInstalarChave.class);
     }
 
+    @Test
+    void servidorQueSumiuDaListaEChaveQueSumiuDoCofreTemFrasesDiferentes() throws Exception {
+        ServidorLab lab = servidorRecusado();
+        abrirAJanela();
+
+        assertEquals("A chave deste servidor não está mais no cofre. Remova o servidor e adicione-o de novo.", AcoesDaInterface.frasePorFaltaDeAcesso(true));
+        assertEquals("Esse servidor não está mais na lista.", AcoesDaInterface.frasePorFaltaDeAcesso(false));
+        assertTrue(assistente.acessoDo(lab).isPresent() && assistente.cadastroDe(lab).isPresent());
+
+        Visual.naEdt(() -> {
+            try {
+                cofre.removerServidor(lab.id());
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        Visual.naEdt(() -> painel.acoes().instalarChaveComSenha(lab));
+        assertEquals("Esse servidor não está mais na lista.", avisos.textos().get(avisos.textos().size() - 1));
+        assertTrue(dialogos.mostrados.isEmpty());
+    }
+
     private static String textosDe(java.awt.Component c) {
         StringBuilder sb = new StringBuilder();
         if (c instanceof javax.swing.text.JTextComponent t) {

@@ -52,6 +52,9 @@ public abstract class Dialogo {
     /** Só os testes mexem: a altura da tela "de mentira" (0 ou menos volta a perguntar à tela de verdade). */
     private static volatile int alturaDaTelaParaTeste;
 
+    /** Os diálogos que já foram mostrados e ainda não fecharam (só a EDT mexe; o cofre que bloqueia os fecha, para nenhum segredo digitado ficar esperando). */
+    private static final java.util.Set<Dialogo> ABERTOS = new java.util.LinkedHashSet<>();
+
     private final String titulo;
     private final Painel raiz = new Painel(new BorderLayout());
     private JDialog janela;
@@ -157,8 +160,30 @@ public abstract class Dialogo {
         return botaoPadrao;
     }
 
+    /** Registra o diálogo como aberto (o {@link #mostrar} chama; os testes chamam direto, porque o Swing sem cabeça não cria {@code JDialog}). */
+    final void marcarAberto() {
+        ABERTOS.add(this);
+    }
+
+    /**
+     * Fecha TODOS os diálogos abertos, como se o usuário os tivesse fechado: cada um passa por {@link #aoFechar()} (a senha digitada é zerada) e só depois a janela some. O app chama
+     * isto ao bloquear o cofre (e ao sair): com o cofre travado a janela principal desaparece, e um diálogo modal que ficasse para trás seria derrubado junto com ela, sem
+     * passar por aqui, deixando o campo da senha cheio. Na EDT.
+     */
+    public static void fecharTodosOsAbertos() {
+        for (Dialogo d : new java.util.ArrayList<>(ABERTOS)) {
+            d.fechar();
+        }
+    }
+
+    /** Quantos diálogos estão abertos agora (para os testes). */
+    public static int quantosAbertos() {
+        return ABERTOS.size();
+    }
+
     /** Mostra o diálogo modal sobre {@code pai} e só volta quando ele fechar. Na EDT. */
     public final void mostrar(Window pai) {
+        marcarAberto();
         janela = new JDialog(pai, titulo, Dialog.ModalityType.APPLICATION_MODAL);
         br.com.labdesktop.ui.IconesDoApp.aplicar(janela); // sem janela pai (a senha-mestra) o diálogo aparece na barra de tarefas do Windows: com o ícone do app
         janela.setContentPane(raiz);
@@ -200,6 +225,7 @@ public abstract class Dialogo {
             return;
         }
         fechado = true;
+        ABERTOS.remove(this);
         try {
             aoFechar();
         } finally {
