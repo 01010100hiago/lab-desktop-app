@@ -96,6 +96,19 @@ public final class DialogoNovoProjeto extends Dialogo {
 
         /** O seletor de pastas do sistema; vazio se o usuário cancelou. */
         Optional<Path> escolherPasta();
+
+        /**
+         * O git responde onde os projetos ficam? Só LÊ ({@code git --version}); bloqueia (rodar fora da EDT). Vazio: não dá para saber (o aviso "sem git" não aparece, e o clone diz
+         * o que houve se falhar).
+         */
+        default Optional<Boolean> gitInstalado() {
+            return Optional.empty();
+        }
+
+        /** Abre o "Instalar o Git" deste servidor (a confirmação com os comandos); {@code depois} roda (na EDT) quando algo mudou. {@code false}: este motor não sabe instalar. */
+        default boolean instalarGit(Runnable depois) {
+            return false;
+        }
     }
 
     /**
@@ -165,6 +178,9 @@ public final class DialogoNovoProjeto extends Dialogo {
     private final Rotulo caminhoImportar = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f);
     private final TextoCorrido oQueVaiAcontecer = new TextoCorrido("", LARGURA).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     private final TextoCorrido falhaDeImportar = erroCorrido();
+    /** O aviso "o git não está instalado" e o botão que leva à instalação (só aparece quando sabemos que falta). */
+    private final TextoCorrido avisoDoGit = new TextoCorrido("", LARGURA_DO_TEXTO).corDoToken(Tokens.ATENCAO).tamanho(12.5f);
+    private final Botao instalarGit = Botoes.mini("Instalar o Git…", "baixar");
     private final AreaMonoespacada comandoDaFalha = new AreaMonoespacada("Comando para rodar no servidor", true);
     private final JScrollPane comandoRolavel = AreaMonoespacada.emRolagem(comandoDaFalha);
     private final JPanel blocoDoComando;
@@ -272,7 +288,16 @@ public final class DialogoNovoProjeto extends Dialogo {
         painelDeOrigem.add(Caixa.coluna(6, new Rotulo("Endereço do repositório").negrito(), campoUrl, erroDaUrl,
             dicaCorrida("Cole o endereço do GitHub ou do GitLab: https://… ou git@github.com:usuario/repositorio.git. Se o repositório é privado, "
                 + (motor.local() ? "este computador precisa estar logado nele (gh auth login ou uma chave SSH)." : "o servidor precisa estar logado nele (gh auth login ou uma chave de deploy).")
-                + " O app nunca pede nem guarda senha.")), Origem.GIT.name());
+                + " O app nunca pede nem guarda senha."), avisoDoGit, Caixa.linha(8, instalarGit, Caixa.mola())), Origem.GIT.name());
+        avisoDoGit.setVisible(false);
+        instalarGit.setVisible(false);
+        instalarGit.setName("instalar-git");
+        instalarGit.addActionListener(e -> {
+            if (motor.instalarGit(this::conferirOGit)) {
+                reajustar();
+            }
+        });
+        conferirOGit();
 
         escolherPasta.addActionListener(e -> escolherAPastaDoComputador());
         painelDeOrigem.add(Caixa.coluna(6, new Rotulo("Pasta do seu computador").negrito(), Caixa.linha(8, escolherPasta, pastaEscolhida), levarGit, levarEnv,
@@ -286,6 +311,24 @@ public final class DialogoNovoProjeto extends Dialogo {
         Rotulo nome = new Rotulo("Nome do projeto").negrito();
         return Caixa.coluna(8, abasDeOrigem, painelDeOrigem, Caixa.espacoVertical(2), nome, campoNomeImportar, erroDoNomeImportar, caminhoImportar,
             new Rotulo("O que vai acontecer").negrito(), oQueVaiAcontecer, progresso, progressoTexto, falhaDeImportar, blocoDoComando);
+    }
+
+    /** Pergunta ao motor (em segundo plano, só leitura) se o git responde; se SABE que falta, mostra o aviso e o botão que leva à instalação. */
+    private void conferirOGit() {
+        Tarefas.rodar(motor::gitInstalado, r -> {
+            if (jaFechou()) {
+                return;
+            }
+            mostrarAvisoDoGit(r.isPresent() && !r.get());
+        }, falha -> { });
+    }
+
+    private void mostrarAvisoDoGit(boolean falta) {
+        avisoDoGit.setText(falta ? "O git não está instalado " + (motor.local() ? "neste computador" : "neste servidor") + ", e sem ele o app não consegue clonar o repositório. "
+            + "O app mostra os comandos antes de instalar e só roda depois do seu clique." : "");
+        avisoDoGit.setVisible(falta);
+        instalarGit.setVisible(falta);
+        reajustar();
     }
 
     private void ligarCampos() {
@@ -704,6 +747,9 @@ public final class DialogoNovoProjeto extends Dialogo {
             }
             if (falha instanceof FalhaDoProjeto f) {
                 dizerErro(falhaDeImportar, f.mensagem());
+                if (f.tipo() == FalhaDoProjeto.Tipo.GIT_AUSENTE) {
+                    mostrarAvisoDoGit(true); // em vez de só falhar, oferece instalar
+                }
                 if (f.comandoParaCopiar() != null) {
                     comandoDaFalha.setText(f.comandoParaCopiar());
                     blocoDoComando.setVisible(true);
@@ -828,6 +874,15 @@ public final class DialogoNovoProjeto extends Dialogo {
 
     public String textoDaFalhaDeCriar() {
         return falhaDeCriar.getText();
+    }
+
+    public Botao botaoInstalarGit() {
+        return instalarGit;
+    }
+
+    /** O aviso "o git não está instalado" (vazio se não aparece). */
+    public String textoDoAvisoDoGit() {
+        return avisoDoGit.isVisible() ? avisoDoGit.getText() : "";
     }
 
     public String textoDaFalhaDeImportar() {

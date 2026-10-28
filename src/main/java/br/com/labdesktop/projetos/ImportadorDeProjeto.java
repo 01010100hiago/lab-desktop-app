@@ -120,8 +120,8 @@ public final class ImportadorDeProjeto {
             throw e;
         } catch (br.com.labdesktop.local.ProgramaNaoEncontradoException e) {
             limparQuieto(provisoria);
-            throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.OUTRO, "O git não está instalado neste computador. Veja \"Preparar este computador\" (o git aparece como aviso, "
-                + "com o jeito de instalar) e tente de novo.", null, e);
+            throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.GIT_AUSENTE, "O git não está instalado neste computador. Use Instalar o Git (ou \"Preparar este computador\", que mostra o jeito "
+                + "de instalar) e tente de novo.", null, e);
         } catch (IOException e) {
             limparQuieto(provisoria);
             throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.OUTRO, "Não consegui rodar o git (a conexão caiu ou o servidor não respondeu).", null, e);
@@ -133,6 +133,10 @@ public final class ImportadorDeProjeto {
             if (r.status() == STATUS_DO_TIMEOUT && !ambiente.local()) {
                 throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.OUTRO, "O clone demorou mais de " + PRAZO_DO_CLONE.toMinutes()
                     + " minutos e foi parado (a pasta incompleta foi apagada). O repositório é muito grande ou a conexão está lenta.");
+            }
+            String erroDoGit = r.stderr().toLowerCase(java.util.Locale.ROOT);
+            if (r.status() == 127 || erroDoGit.contains("git: command not found") || erroDoGit.contains("git: not found") || erroDoGit.contains("git: não encontrado")) {
+                throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.GIT_AUSENTE, ExplicadorDeErrosDeGit.explicar(r.stderr(), ambiente.local()));
             }
             throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.RECUSADO, ExplicadorDeErrosDeGit.explicar(r.stderr(), ambiente.local()));
         }

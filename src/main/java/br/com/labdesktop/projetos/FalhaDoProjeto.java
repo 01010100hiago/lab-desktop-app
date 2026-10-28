@@ -22,6 +22,8 @@ public final class FalhaDoProjeto extends Exception {
         CANCELADO,
         /** Sem permissão para escrever na pasta (a tela pode mostrar o comando exato). */
         SEM_PERMISSAO,
+        /** O git não está instalado onde os projetos ficam: a tela oferece "Instalar o Git". */
+        GIT_AUSENTE,
         /** Qualquer outra falha. */
         OUTRO
     }

@@ -57,6 +57,8 @@ class DialogoNovoProjetoTest {
     private volatile FiltroDeEnvio filtroRecebido;
     private volatile Cancelamento cancelamentoRecebido;
     private volatile boolean teimoso;
+    private volatile Optional<Boolean> gitInstalado = Optional.empty();
+    private final List<Runnable> pedidosDeInstalarGit = new CopyOnWriteArrayList<>();
 
     private final DialogoNovoProjeto.Motor motor = new DialogoNovoProjeto.Motor() {
         @Override
@@ -131,6 +133,17 @@ class DialogoNovoProjetoTest {
         @Override
         public Optional<Path> escolherPasta() {
             return pastaEscolhida;
+        }
+
+        @Override
+        public Optional<Boolean> gitInstalado() {
+            return gitInstalado;
+        }
+
+        @Override
+        public boolean instalarGit(Runnable depois) {
+            pedidosDeInstalarGit.add(depois);
+            return true;
         }
 
         private void aguardar() {
@@ -541,6 +554,52 @@ class DialogoNovoProjetoTest {
         Espera.ate(PRAZO, "o resultado chegou pela janela principal", () -> !concluidos.isEmpty());
         assertEquals("meu-app", concluidos.get(0).nome());
         assertEquals(1, criacoes.get());
+    }
+
+    @Test
+    void semGitSabidoOAvisoApareceComOBotaoQueLevaAInstalar() {
+        gitInstalado = Optional.of(false);
+        DialogoNovoProjeto d = abrir();
+        Visual.naEdt(() -> d.escolherAPagina(DialogoNovoProjeto.Pagina.IMPORTAR));
+        Espera.ate(PRAZO, "o aviso", () -> !ed(d::textoDoAvisoDoGit).isEmpty());
+        assertTrue(ed(d::textoDoAvisoDoGit).contains("O git não está instalado neste servidor"), ed(d::textoDoAvisoDoGit));
+        assertTrue(ed(d::textoDoAvisoDoGit).contains("só roda depois do seu clique"));
+        assertTrue(ed(() -> d.botaoInstalarGit().isVisible()));
+        assertEquals(List.of(), pedidosDeInstalarGit, "só aparece: nada foi pedido");
+        fotografar(d, "dialogo-novo-projeto-importar-sem-git");
+        Visual.naEdt(() -> d.botaoInstalarGit().doClick());
+        assertEquals(1, pedidosDeInstalarGit.size());
+        // o git passou a existir: quem abriu o "Instalar o Git" avisa, e o aviso some depois da releitura
+        gitInstalado = Optional.of(true);
+        Visual.naEdt(() -> pedidosDeInstalarGit.get(0).run());
+        Espera.ate(PRAZO, "o aviso sumiu", () -> ed(d::textoDoAvisoDoGit).isEmpty());
+        assertFalse(ed(() -> d.botaoInstalarGit().isVisible()));
+    }
+
+    @Test
+    void comGitOuSemSaberNaoHaAvisoNemBotao() {
+        for (Optional<Boolean> estado : List.of(Optional.of(true), Optional.<Boolean>empty())) {
+            gitInstalado = estado;
+            DialogoNovoProjeto d = abrir();
+            Visual.naEdt(() -> d.escolherAPagina(DialogoNovoProjeto.Pagina.IMPORTAR));
+            Espera.dormir(150);
+            assertEquals("", ed(d::textoDoAvisoDoGit), estado.toString());
+            assertFalse(ed(() -> d.botaoInstalarGit().isVisible()));
+        }
+    }
+
+    @Test
+    void cloneQueFalhaPorFaltaDeGitEmVezDeSoFalharOfereceInstalar() {
+        falhaNoImportar = new FalhaDoProjeto(FalhaDoProjeto.Tipo.GIT_AUSENTE, "O git não está instalado onde os projetos ficam. Use Instalar o Git e tente de novo.");
+        DialogoNovoProjeto d = abrir();
+        Visual.naEdt(() -> d.escolherAPagina(DialogoNovoProjeto.Pagina.IMPORTAR));
+        digitar(d.campoUrl(), "https://github.com/usuario/repo.git");
+        Visual.naEdt(() -> d.botaoPrincipal().doClick());
+        Espera.ate(PRAZO, "falhou", () -> !ed(d::textoDaFalhaDeImportar).isEmpty());
+        assertTrue(ed(d::textoDaFalhaDeImportar).contains("Use Instalar o Git"));
+        assertTrue(ed(() -> d.botaoInstalarGit().isVisible()), "o botão aparece mesmo sem a conferência de antes");
+        Visual.naEdt(() -> d.botaoInstalarGit().doClick());
+        assertEquals(1, pedidosDeInstalarGit.size());
     }
 
     @Test

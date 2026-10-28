@@ -42,7 +42,7 @@ public final class ExplicadorDeErrosDeGit {
         }
         if (m.contains("git: command not found") || m.contains("git: não encontrado") || m.contains("git: not found")
             || m.contains("executable file not found") || m.contains("no such file or directory") && m.contains("git")) {
-            return "O git não está instalado onde os projetos ficam. Instale o git e tente de novo.";
+            return "O git não está instalado onde os projetos ficam. Use Instalar o Git e tente de novo.";
         }
         if (m.contains("no space left on device")) {
             return esteComputador ? "Acabou o espaço em disco neste computador." : "Acabou o espaço em disco no servidor.";

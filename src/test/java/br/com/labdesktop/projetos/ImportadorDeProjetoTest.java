@@ -158,7 +158,24 @@ class ImportadorDeProjetoTest {
         FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.local()).clonar(URL, "repo", ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA));
         assertTrue(f.mensagem().contains("O git não está instalado neste computador"), f.mensagem());
         assertTrue(f.mensagem().contains("Preparar este computador"), f.mensagem());
+        assertEquals(FalhaDoProjeto.Tipo.GIT_AUSENTE, f.tipo(), "a tela oferece Instalar o Git em vez de só falhar");
         assertFalse(Files.exists(a.raiz.resolve("repo")));
+    }
+
+    @Test
+    void semGitNoServidorOClonePedeInstalarEmVezDeSoFalhar() throws Exception {
+        AmbienteFalso a = new AmbienteFalso(tmp);
+        a.roteiro = c -> {
+            if (c.argumentos().contains("git")) {
+                Files.createDirectories(Path.of(c.argumentos().get(c.argumentos().size() - 1)));
+                return AmbienteFalso.erro(127, "sh: 1: git: not found");
+            }
+            return AmbienteFalso.ok("");
+        };
+        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).clonar(URL, "repo", ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA));
+        assertEquals(FalhaDoProjeto.Tipo.GIT_AUSENTE, f.tipo());
+        assertTrue(f.mensagem().contains("Instalar o Git"), f.mensagem());
+        assertFalse(Files.exists(a.raiz.resolve("repo")), "a pasta provisória foi apagada");
     }
 
     @Test
