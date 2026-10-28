@@ -64,7 +64,8 @@ final class CabecalhoDoServidor extends Painel {
             linhaDeBaixo.setText(semAgente ? (e.local() ? "Sem o laboratório local não há leituras de CPU, memória, containers nem projetos."
                 : "Sem o agente não há leituras de CPU, memória, containers nem projetos.")
                 : "Esperando a primeira leitura do servidor…");
-            linhaDeBaixo.setVisible(true);
+            // sem o agente o aviso logo abaixo (ou o cartão "sem dados") já diz isto: repetir gastaria uma linha que o Registro precisa (o Resumo cabe em 1100 x 700)
+            linhaDeBaixo.setVisible(!semAgente);
             ficha.definir(List.of());
             leitura.setText("");
         } else {

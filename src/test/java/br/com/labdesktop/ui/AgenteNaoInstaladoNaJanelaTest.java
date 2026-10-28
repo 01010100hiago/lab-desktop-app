@@ -201,7 +201,10 @@ class AgenteNaoInstaladoNaJanelaTest {
         Espera.ate(PRAZO, "o aviso aparece no Resumo", () -> Visual.naEdt(() -> textosDe(tela)).contains("O agente ainda não está instalado neste servidor"));
 
         String texto = Visual.naEdt(() -> textosDe(tela));
-        assertTrue(texto.contains(ConteudoDosAvisos.TEXTO_DO_AGENTE_NAO_INSTALADO), texto);
+        // o aviso ocupa UMA linha (título e botão): a explicação inteira vai na dica, para sobrar altura ao Registro
+        java.awt.Component faixa = Visual.naEdt(() -> porNome(tela, "faixa-de-dados"));
+        assertEquals(ConteudoDosAvisos.TEXTO_DO_AGENTE_NAO_INSTALADO, Visual.naEdt(() -> ((javax.swing.JComponent) faixa).getToolTipText()));
+        assertEquals(ConteudoDosAvisos.TEXTO_DO_AGENTE_NAO_INSTALADO, Visual.naEdt(() -> tela.resumo().situacao().texto()));
         assertFalse(texto.toLowerCase().replace("erros", "").contains("erro"), "é uma pergunta, não um erro (o botão de filtro \"Erros\" do Registro não conta): " + texto);
         assertTrue(texto.contains("Instale o agente para ver a tendência."), "as Tendências dizem o que fazer, sem vermelho: " + texto);
         assertTrue(texto.contains("Registro do servidor"), "o Registro continua (pelo SSH): " + texto);
@@ -209,6 +212,9 @@ class AgenteNaoInstaladoNaJanelaTest {
         Visual.naEdt(() -> botoes(tela, new ArrayList<>()).stream().filter(b -> "Instalar agente".equals(b.getText())).forEach(instalar::add));
         assertFalse(instalar.isEmpty(), "o botão Instalar agente está à mão no Resumo");
         assertTrue(dialogos.mostrados.isEmpty());
+        // em 1100 x 700 o Resumo deste estado também cabe sem rolagem (o aviso de uma linha deixa a altura para as Tendências e o Registro)
+        int largura = 1100 - br.com.labdesktop.ui.BarraServidores.LARGURA;
+        assertTrue(Visual.alturaPreferida(tela, largura) <= 700 - 28, "pede " + Visual.alturaPreferida(tela, largura) + " px");
         Visual.salvar(Visual.renderizar(tela, 1100, 700), "servidor-resumo-agente-nao-instalado-claro");
         Visual.tema(Tema.ESCURO);
         Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(tela));
@@ -300,5 +306,20 @@ class AgenteNaoInstaladoNaJanelaTest {
         Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(tela));
         Visual.salvar(Visual.renderizar(tela, 1100, 700), "servidor-agente-monitor-sem-projetos-escuro");
         Visual.tema(Tema.CLARO);
+    }
+
+    private static java.awt.Component porNome(java.awt.Component c, String nome) {
+        if (nome.equals(c.getName())) {
+            return c;
+        }
+        if (c instanceof java.awt.Container k) {
+            for (java.awt.Component filho : k.getComponents()) {
+                java.awt.Component achou = porNome(filho, nome);
+                if (achou != null) {
+                    return achou;
+                }
+            }
+        }
+        return null;
     }
 }

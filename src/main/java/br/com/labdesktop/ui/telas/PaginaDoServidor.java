@@ -487,10 +487,15 @@ public abstract class PaginaDoServidor extends Painel {
         private final Botao instalar = Botoes.miniPrimario("Instalar agente", "servidor");
         private Runnable aoInstalar;
 
+        private final JPanel linhaDoTitulo = new Painel(new BorderLayout(10, 0));
+
         public FaixaDeDados() {
             super(new BorderLayout(0, 4));
             setBorder(javax.swing.BorderFactory.createEmptyBorder(9, 14, 9, 14));
-            add(titulo, BorderLayout.NORTH);
+            // o botão mora na linha do título (à direita): o aviso "agente não instalado" ocupa UMA linha e deixa a altura para o Registro (o Resumo cabe em 1100 x 700)
+            linhaDoTitulo.add(titulo, BorderLayout.CENTER);
+            linhaDoTitulo.add(instalar, BorderLayout.EAST);
+            add(linhaDoTitulo, BorderLayout.NORTH);
             add(texto, BorderLayout.CENTER);
             instalar.setVisible(false);
             instalar.addActionListener(e -> {
@@ -498,7 +503,6 @@ public abstract class PaginaDoServidor extends Painel {
                     aoInstalar.run();
                 }
             });
-            add(Caixa.linha(0, instalar, Caixa.mola()), BorderLayout.SOUTH);
             setVisible(false);
             setName("faixa-de-dados");
         }
@@ -526,6 +530,12 @@ public abstract class PaginaDoServidor extends Painel {
             titulo.setIcon(Icones.colorido(s.icone() == null ? "alerta" : s.icone(), 16, g.tokenDoTexto()));
             titulo.setIconTextGap(8);
             texto.setText(s.texto());
+            // agente que falta (ou laboratório a preparar): o título e o botão bastam numa linha só; a explicação inteira fica na dica
+            boolean umaLinha = s.modo().naoInstalado() || s.modo() == SituacaoDaVisao.Modo.LOCAL_A_PREPARAR;
+            texto.setVisible(!umaLinha);
+            String dica = umaLinha ? s.texto() : null;
+            setToolTipText(dica);
+            titulo.setToolTipText(dica);
         }
 
         public String textoDoTitulo() {
