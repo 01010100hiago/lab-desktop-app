@@ -1,5 +1,6 @@
 package br.com.labdesktop.seguranca;
 
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -28,6 +29,17 @@ public final class ValidadorDeNomes {
     public static final Pattern USUARIO_SSH = Pattern.compile("^[A-Za-z_][A-Za-z0-9_.-]{0,31}$");
     /** Host: nome DNS, IPv4 ou IPv6 sem colchetes. Sem espaço, controle ou hífen na frente. */
     public static final Pattern HOST = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9.:_-]{0,252}$");
+
+    /** Id de conta ou de zona da Cloudflare: 32 caracteres hexadecimais em minúsculas. */
+    public static final Pattern ID_CLOUDFLARE = Pattern.compile("^[0-9a-f]{32}$");
+    /** UUID de um túnel da Cloudflare. */
+    public static final Pattern UUID_DO_TUNEL = Pattern.compile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
+    /** Um rótulo de DNS (um trecho do nome entre pontos): minúsculas, números e hífen, 1 a 63, sem hífen nas pontas. */
+    public static final Pattern ROTULO_DNS = Pattern.compile("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$");
+    /** Um domínio (zona) com pelo menos dois rótulos, como {@code example.com}; até 253 caracteres no total (conferido à parte). */
+    public static final Pattern ZONA_DNS = Pattern.compile("^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.){1,126}[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$");
+    /** Caminho absoluto num servidor, só de caracteres seguros para uma linha de comando (sem espaço, aspas nem símbolo de shell). */
+    public static final Pattern CAMINHO_SEGURO = Pattern.compile("^/[A-Za-z0-9_.,@%+=:~/-]{1,300}$");
 
     /** Nomes que o agente reserva e que nunca são projeto comum. */
     public static final Set<String> PROJETOS_RESERVADOS = Set.of("infra", "painel");
@@ -60,6 +72,27 @@ public final class ValidadorDeNomes {
 
     public static boolean hostValido(String host) {
         return casa(HOST, host);
+    }
+
+    public static boolean idCloudflareValido(String id) {
+        return casa(ID_CLOUDFLARE, id);
+    }
+
+    public static boolean uuidDoTunelValido(String uuid) {
+        return casa(UUID_DO_TUNEL, uuid);
+    }
+
+    public static boolean rotuloDnsValido(String rotulo) {
+        return casa(ROTULO_DNS, rotulo);
+    }
+
+    public static boolean zonaDnsValida(String zona) {
+        return zona != null && zona.length() <= 253 && casa(ZONA_DNS, zona);
+    }
+
+    /** Caminho absoluto de caracteres seguros, sem {@code ..} nem barra dupla. */
+    public static boolean caminhoSeguroValido(String caminho) {
+        return casa(CAMINHO_SEGURO, caminho) && !caminho.contains("//") && Arrays.stream(caminho.split("/")).noneMatch(".."::equals);
     }
 
     /**

@@ -109,11 +109,45 @@ final class ConteudoCofre {
         String agenteContainer;
         @JsonProperty("agenteComSudo")
         Boolean agenteComSudo;
+        /** O token de API da Cloudflare (base64 de bytes, como os outros segredos) e a escolha do usuário; opcionais, ausentes valem "nunca conectou". */
+        @JsonProperty("cloudflareToken")
+        byte[] cloudflareToken;
+        @JsonProperty("cloudflare")
+        CloudflareJson cloudflare;
 
         @Override
         public String toString() {
             return "ServidorJson[redigido]";
         }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY, getterVisibility = JsonAutoDetect.Visibility.NONE,
+        isGetterVisibility = JsonAutoDetect.Visibility.NONE, setterVisibility = JsonAutoDetect.Visibility.NONE)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    static final class CloudflareJson {
+        @JsonProperty("contaId")
+        String contaId;
+        @JsonProperty("contaNome")
+        String contaNome;
+        @JsonProperty("zonaId")
+        String zonaId;
+        @JsonProperty("zonaNome")
+        String zonaNome;
+        @JsonProperty("tunelId")
+        String tunelId;
+        @JsonProperty("tunelNome")
+        String tunelNome;
+        @JsonProperty("tipo")
+        String tipo;
+        @JsonProperty("prefixo")
+        String prefixo;
+        @JsonProperty("caminhoDoConfig")
+        String caminhoDoConfig;
+        @JsonProperty("containerDoCloudflared")
+        String containerDoCloudflared;
+        @JsonProperty("caminhoNoContainer")
+        String caminhoNoContainer;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -190,6 +224,23 @@ final class ConteudoCofre {
                 j.agenteContainer = s.agente.container();
                 j.agenteComSudo = s.agente.comSudo() ? Boolean.TRUE : null;
             }
+            j.cloudflareToken = s.cloudflareToken == null ? null : s.cloudflareToken.bytesInternos();
+            if (s.cloudflare != null) {
+                ConfiguracaoCloudflare c = s.cloudflare;
+                CloudflareJson cj = new CloudflareJson();
+                cj.contaId = c.contaId();
+                cj.contaNome = c.contaNome();
+                cj.zonaId = c.zonaId();
+                cj.zonaNome = c.zonaNome();
+                cj.tunelId = c.tunelId();
+                cj.tunelNome = c.tunelNome();
+                cj.tipo = c.tipo() == ConfiguracaoCloudflare.Tipo.API ? "api" : "arquivo";
+                cj.prefixo = c.prefixo();
+                cj.caminhoDoConfig = c.caminhoDoConfig();
+                cj.containerDoCloudflared = c.containerDoCloudflared();
+                cj.caminhoNoContainer = c.caminhoNoContainer();
+                j.cloudflare = cj;
+            }
             json.servidores.add(j);
         }
         return json;
@@ -238,13 +289,21 @@ final class ConteudoCofre {
                         throw new CofreCorrompidoException("Cofre com token do agente inválido.", e);
                     }
                 }
+                TokenCloudflare cfToken = null;
                 try {
                     AgenteInstalado agente = j.agenteContainer == null ? null
                         : new AgenteInstalado(j.agenteContainer, Boolean.TRUE.equals(j.agenteComSudo));
-                    servidoresProntos.add(new ServidorGuardado(configDe(j), token, agente));
+                    ConfiguracaoCloudflare cf = j.cloudflare == null ? null : cloudflareDe(j.cloudflare);
+                    if (j.cloudflareToken != null) {
+                        cfToken = TokenCloudflare.adotar(j.cloudflareToken);
+                    }
+                    servidoresProntos.add(new ServidorGuardado(configDe(j), token, agente, cfToken, cf));
                 } catch (IllegalArgumentException e) {
                     if (token != null) {
                         token.zerar();
+                    }
+                    if (cfToken != null) {
+                        cfToken.zerar();
                     }
                     throw new CofreCorrompidoException("Cofre com servidor inválido: " + e.getMessage(), e);
                 }
@@ -253,6 +312,7 @@ final class ConteudoCofre {
         } catch (CofreCorrompidoException | RuntimeException e) {
             chavesProntas.forEach(ChaveSsh::zerar);
             servidoresProntos.stream().filter(s -> s.token != null).forEach(s -> s.token.zerar());
+            servidoresProntos.stream().filter(s -> s.cloudflareToken != null).forEach(s -> s.cloudflareToken.zerar());
             zerarArrays();
             if (e instanceof CofreCorrompidoException corrompido) {
                 throw corrompido;
@@ -280,6 +340,16 @@ final class ConteudoCofre {
             case "importada" -> InfoChave.Origem.IMPORTADA;
             default -> InfoChave.Origem.DESCONHECIDA;
         };
+    }
+
+    private static ConfiguracaoCloudflare cloudflareDe(CloudflareJson c) {
+        ConfiguracaoCloudflare.Tipo tipo = switch (c.tipo == null ? "" : c.tipo) {
+            case "api" -> ConfiguracaoCloudflare.Tipo.API;
+            case "arquivo" -> ConfiguracaoCloudflare.Tipo.ARQUIVO;
+            default -> throw new IllegalArgumentException("tipo de túnel desconhecido");
+        };
+        return new ConfiguracaoCloudflare(c.contaId, c.contaNome, c.zonaId, c.zonaNome, c.tunelId, c.tunelNome, tipo, c.prefixo, c.caminhoDoConfig,
+            c.containerDoCloudflared, c.caminhoNoContainer);
     }
 
     private static ConfigServidor configDe(ServidorJson j) {
@@ -315,6 +385,7 @@ final class ConteudoCofre {
             for (ServidorJson s : servidores) {
                 if (s != null) {
                     Zeragem.zerar(s.tokenAgente);
+                    Zeragem.zerar(s.cloudflareToken);
                 }
             }
         }

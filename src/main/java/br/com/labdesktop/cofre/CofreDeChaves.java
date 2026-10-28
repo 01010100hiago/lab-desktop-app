@@ -612,6 +612,9 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
                 if (s.token != null && !novo.temTokenInstancia(s.token)) {
                     s.token.zerar();
                 }
+                if (s.cloudflareToken != null && !novo.temTokenCloudflareInstancia(s.cloudflareToken)) {
+                    s.cloudflareToken.zerar();
+                }
             }
         }
     }
@@ -778,7 +781,7 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
         mutar(atual -> {
             ServidorGuardado antigo = atual.servidor(servidorId)
                 .orElseThrow(() -> new IllegalArgumentException("Servidor desconhecido."));
-            ServidorGuardado novo = new ServidorGuardado(antigo.config.comNomeDoDispositivo(nomeDoDispositivo), token, antigo.agente);
+            ServidorGuardado novo = antigo.comConfig(antigo.config.comNomeDoDispositivo(nomeDoDispositivo)).comToken(token);
             return atual.substituindoServidor(novo);
         });
     }
@@ -797,6 +800,58 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
                 return atual;
             }
             return atual.substituindoServidor(antigo.comAgente(agente));
+        });
+    }
+
+    @Override
+    public Optional<TokenCloudflare> tokenCloudflare(String servidorId) {
+        return exigirAberto().servidor(servidorId).map(s -> s.cloudflareToken);
+    }
+
+    @Override
+    public Optional<ConfiguracaoCloudflare> configuracaoCloudflare(String servidorId) {
+        return exigirAberto().servidor(servidorId).map(s -> s.cloudflare);
+    }
+
+    @Override
+    public void gravarCloudflare(String servidorId, TokenCloudflare token, ConfiguracaoCloudflare configuracao) throws CofreException {
+        Objects.requireNonNull(token, "token");
+        Objects.requireNonNull(configuracao, "configuracao");
+        if (token.estaZerado()) {
+            throw new IllegalArgumentException("O token da Cloudflare já foi zerado.");
+        }
+        mutar(atual -> {
+            ServidorGuardado antigo = atual.servidor(servidorId)
+                .orElseThrow(() -> new IllegalArgumentException("Servidor desconhecido."));
+            return atual.substituindoServidor(antigo.comCloudflare(token, configuracao));
+        });
+    }
+
+    @Override
+    public void gravarConfiguracaoCloudflare(String servidorId, ConfiguracaoCloudflare configuracao) throws CofreException {
+        Objects.requireNonNull(configuracao, "configuracao");
+        mutar(atual -> {
+            ServidorGuardado antigo = atual.servidor(servidorId)
+                .orElseThrow(() -> new IllegalArgumentException("Servidor desconhecido."));
+            if (antigo.cloudflareToken == null) {
+                throw new IllegalArgumentException("A Cloudflare não está conectada neste servidor.");
+            }
+            if (configuracao.equals(antigo.cloudflare)) {
+                return atual;
+            }
+            return atual.substituindoServidor(antigo.comCloudflare(antigo.cloudflareToken, configuracao));
+        });
+    }
+
+    @Override
+    public void removerCloudflare(String servidorId) throws CofreException {
+        mutar(atual -> {
+            ServidorGuardado antigo = atual.servidor(servidorId)
+                .orElseThrow(() -> new IllegalArgumentException("Servidor desconhecido."));
+            if (antigo.cloudflareToken == null && antigo.cloudflare == null) {
+                return atual;
+            }
+            return atual.substituindoServidor(antigo.comCloudflare(null, null));
         });
     }
 

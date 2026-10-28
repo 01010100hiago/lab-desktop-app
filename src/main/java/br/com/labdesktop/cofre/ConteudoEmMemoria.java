@@ -13,33 +13,48 @@ import java.util.Optional;
  */
 final class ConteudoEmMemoria {
 
-    /** Um servidor e o token dele (que pode não existir ainda). Não é record: segura segredo. */
+    /** Um servidor, o token dele (que pode não existir ainda) e a Cloudflare (token e escolha). Não é record: segura segredo. */
     static final class ServidorGuardado {
         final ConfigServidor config;
         final TokenAgente token;
         /** Como falar com o agente que o app instalou neste servidor; {@code null} se nunca instalou. Não é segredo. */
         final AgenteInstalado agente;
+        /** O token de API da Cloudflare deste servidor; {@code null} se o usuário nunca o conectou. SEGREDO. */
+        final TokenCloudflare cloudflareToken;
+        /** O que o usuário escolheu (conta, domínio, túnel); {@code null} se nunca conectou. Não é segredo. */
+        final ConfiguracaoCloudflare cloudflare;
 
         ServidorGuardado(ConfigServidor config, TokenAgente token) {
             this(config, token, null);
         }
 
         ServidorGuardado(ConfigServidor config, TokenAgente token, AgenteInstalado agente) {
+            this(config, token, agente, null, null);
+        }
+
+        ServidorGuardado(ConfigServidor config, TokenAgente token, AgenteInstalado agente, TokenCloudflare cloudflareToken,
+                         ConfiguracaoCloudflare cloudflare) {
             this.config = config;
             this.token = token;
             this.agente = agente;
+            this.cloudflareToken = cloudflareToken;
+            this.cloudflare = cloudflare;
         }
 
         ServidorGuardado comConfig(ConfigServidor nova) {
-            return new ServidorGuardado(nova, token, agente);
+            return new ServidorGuardado(nova, token, agente, cloudflareToken, cloudflare);
         }
 
         ServidorGuardado comToken(TokenAgente novo) {
-            return new ServidorGuardado(config, novo, agente);
+            return new ServidorGuardado(config, novo, agente, cloudflareToken, cloudflare);
         }
 
         ServidorGuardado comAgente(AgenteInstalado novo) {
-            return new ServidorGuardado(config, token, novo);
+            return new ServidorGuardado(config, token, novo, cloudflareToken, cloudflare);
+        }
+
+        ServidorGuardado comCloudflare(TokenCloudflare novoToken, ConfiguracaoCloudflare nova) {
+            return new ServidorGuardado(config, token, agente, novoToken, nova);
         }
 
         @Override
@@ -110,6 +125,9 @@ final class ConteudoEmMemoria {
             if (s.token != null) {
                 s.token.zerar();
             }
+            if (s.cloudflareToken != null) {
+                s.cloudflareToken.zerar();
+            }
         }
     }
 
@@ -125,6 +143,15 @@ final class ConteudoEmMemoria {
     boolean temTokenInstancia(TokenAgente t) {
         for (ServidorGuardado s : servidores) {
             if (s.token == t) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    boolean temTokenCloudflareInstancia(TokenCloudflare t) {
+        for (ServidorGuardado s : servidores) {
+            if (s.cloudflareToken == t) {
                 return true;
             }
         }

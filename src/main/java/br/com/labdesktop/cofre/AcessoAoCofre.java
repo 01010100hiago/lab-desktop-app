@@ -95,6 +95,31 @@ public interface AcessoAoCofre {
     default void gravarAgenteInstalado(String servidorId, AgenteInstalado agente) throws CofreException { }
 
     /**
+     * O token de API da Cloudflare deste servidor, ou vazio se o usuário nunca o conectou. PERTENCE ao cofre: não o zere; use {@code copia()}. A
+     * implementação padrão não lembra nada (fakes de teste).
+     */
+    default Optional<TokenCloudflare> tokenCloudflare(String servidorId) {
+        return Optional.empty();
+    }
+
+    /** O que o usuário escolheu na tela da Cloudflare (conta, domínio, túnel), ou vazio. */
+    default Optional<ConfiguracaoCloudflare> configuracaoCloudflare(String servidorId) {
+        return Optional.empty();
+    }
+
+    /**
+     * Guarda o token da Cloudflare e a escolha do usuário, numa gravação só (troca o que havia). O cofre passa a ser o responsável pelo {@code token} (zera quando
+     * ele for trocado, apagado ou o cofre for bloqueado).
+     */
+    default void gravarCloudflare(String servidorId, TokenCloudflare token, ConfiguracaoCloudflare configuracao) throws CofreException { }
+
+    /** Troca só a escolha (por exemplo, o caminho do arquivo dentro do container que o app descobriu); o token fica. */
+    default void gravarConfiguracaoCloudflare(String servidorId, ConfiguracaoCloudflare configuracao) throws CofreException { }
+
+    /** Apaga o token e a escolha da Cloudflare deste servidor (desconectar). O token é zerado. */
+    default void removerCloudflare(String servidorId) throws CofreException { }
+
+    /**
      * Pede para ser avisado quando o cofre for bloqueado (menu, auto-bloqueio, encerramento): é o gancho para
      * fechar canais e sessões SSH e descartar terminais (ARQUITETURA 5.6, passo 3). O {@code ouvinte} roda UMA vez,
      * numa thread qualquer, DEPOIS de os segredos terem sido zerados; se o cofre já estiver bloqueado, roda na hora.
