@@ -15,3 +15,7 @@
 *.ttf binary
 *.otf binary
 *.woff2 binary
+
+# o gradlew.bat precisa de CRLF para o cmd.exe
+*.bat text eol=crlf
+*.cmd text eol=crlf
