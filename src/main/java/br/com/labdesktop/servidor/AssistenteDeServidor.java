@@ -48,6 +48,8 @@ public final class AssistenteDeServidor {
      * painel ainda mostra, por alguns instantes, o veredito de antes.
      */
     public static final Duration FOLGA_PARA_REVALIDAR_O_AGENTE = Duration.ofSeconds(3);
+    /** Quanto esperar a leitura (por SSH) que diz se o agente está instalado, antes de tratar o silêncio dele como "agente fora". */
+    public static final Duration PRAZO_DO_DIAGNOSTICO = Duration.ofSeconds(15);
     private static final long PASSO_DA_ESPERA_MS = 100;
 
     /** Os dados do formulário "Adicionar servidor". Validados pelas mesmas regras do cofre. */
@@ -97,6 +99,13 @@ public final class AssistenteDeServidor {
             return rotulo;
         }
     }
+
+    /**
+     * Como a conclusão terminou quando NÃO deu erro. {@link #AGENTE_NAO_INSTALADO} não é falha: o SSH conectou e o servidor ainda não
+     * tem o agente. A tela pergunta ao usuário se quer instalar (ou usar só por SSH); o registro do token só roda depois que o agente
+     * existir, para não gerar o erro de container inexistente.
+     */
+    public enum Conclusao { PRONTO, AGENTE_NAO_INSTALADO }
 
     /** Por que a conclusão parou; a tela escolhe a mensagem e a ação (tentar de novo, conferir o host...). */
     public static final class ErroDoAssistente extends Exception {
@@ -240,15 +249,20 @@ public final class AssistenteDeServidor {
      * @param progresso         recebe cada etapa (chamado nesta thread)
      * @throws ErroDoAssistente    a conexão não chegou lá (chave recusada, host sem pin, prazo, painel do servidor sem o
      *                             acesso do app por publicar)
+     * @return {@link Conclusao#AGENTE_NAO_INSTALADO} se o SSH conectou e o servidor não tem o agente (a pergunta "quer instalar?" é da
+     *         tela; nada foi registrado nem escrito no servidor), ou {@link Conclusao#PRONTO}
      * @throws ErroProvisionamento o registro do token falhou ({@code token_conflito}: o nome já existe no agente)
      */
-    public void concluir(ServidorLab lab, String nomeDoDispositivo, Consumer<Etapa> progresso)
+    public Conclusao concluir(ServidorLab lab, String nomeDoDispositivo, Consumer<Etapa> progresso)
         throws ErroDoAssistente, ErroProvisionamento, CofreException {
         progresso.accept(Etapa.CONECTANDO);
         EstadoConexao antes = lab.estado().conexao();
         iniciarOuRepetir(lab);
         esperarSairDoErro(lab, antes);
         esperarConexaoComSessao(lab);
+        if (agenteNaoInstalado(lab)) {
+            return Conclusao.AGENTE_NAO_INSTALADO;
+        }
         exigirAgenteAtualizado(lab);
 
         if (lab.estado().semToken()) {
@@ -258,9 +272,43 @@ public final class AssistenteDeServidor {
 
         progresso.accept(Etapa.TESTANDO_AGENTE);
         esperar(lab, PRAZO_PARA_LER_LIMITES, "o agente não ficou de pé", e -> e.conexao() == EstadoConexao.CONECTADO);
-        progresso.accept(Etapa.LENDO_LIMITES);
-        esperar(lab, PRAZO_PARA_LER_LIMITES, "os limites do plano não chegaram", e -> e.limites() != null);
+        if (!Boolean.FALSE.equals(lab.estado().temClaude())) { // o agente do perfil monitor não tem limites do plano
+            progresso.accept(Etapa.LENDO_LIMITES);
+            esperar(lab, PRAZO_PARA_LER_LIMITES, "os limites do plano não chegaram", e -> e.limites() != null);
+        }
         progresso.accept(Etapa.PRONTO);
+        return Conclusao.PRONTO;
+    }
+
+    /**
+     * O SSH está de pé e o agente não existe neste servidor? Espera a leitura do servidor (só leitura) que decide entre "ainda não
+     * instalado" e "instalado e sem resposta", sem passar de {@link #PRAZO_DO_DIAGNOSTICO}. Só devolve {@code true} quando o
+     * servidor mesmo disse que o agente falta.
+     */
+    private boolean agenteNaoInstalado(ServidorLab lab) {
+        long limite = System.nanoTime() + PRAZO_DO_DIAGNOSTICO.toNanos();
+        while (true) {
+            EstadoServidor e = lab.estado();
+            if (e.conexao() == EstadoConexao.CONECTADO || agenteDesatualizado(e)) {
+                return false;
+            }
+            if (e.conexao() == EstadoConexao.SSH_OK_SEM_AGENTE) {
+                if (e.situacaoDoAgente().oferecerInstalar()) {
+                    return true;
+                }
+                if (e.situacaoDoAgente() != SituacaoDoAgente.DESCONHECIDA) {
+                    return false; // o agente existe e não responde: segue a espera normal e, se não vier, o erro de sempre
+                }
+            }
+            if (e.conexao() != EstadoConexao.SSH_OK_SEM_AGENTE && e.conexao() != EstadoConexao.CONECTANDO
+                && e.conexao() != EstadoConexao.RECONECTANDO) {
+                return false; // token recusado, 2FA etc.: o fluxo de sempre trata
+            }
+            if (System.nanoTime() > limite) {
+                return false;
+            }
+            dormir();
+        }
     }
 
     /**

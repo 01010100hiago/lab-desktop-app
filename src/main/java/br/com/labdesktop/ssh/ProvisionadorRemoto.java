@@ -35,10 +35,35 @@ public final class ProvisionadorRemoto {
     static final String PREFIXO = "docker exec -i painel-lab node acesso.js ";
     private static final Duration PRAZO = Duration.ofSeconds(30);
 
-    private final Executor executor;
+    private static final java.util.regex.Pattern CONTAINER = java.util.regex.Pattern.compile("^[a-z0-9][a-z0-9_.-]{0,40}$");
 
+    private final Executor executor;
+    private final String prefixo;
+
+    /** O agente do lab. */
     public ProvisionadorRemoto(Executor executor) {
+        this(executor, PREFIXO);
+    }
+
+    private ProvisionadorRemoto(Executor executor, String prefixo) {
         this.executor = executor;
+        this.prefixo = prefixo;
+    }
+
+    /**
+     * Para um agente instalado pelo app, que pode ter outro nome de container (para testar ao lado do agente do lab) e, se o usuário
+     * só chega ao Docker por sudo sem senha, o prefixo {@code sudo -n}. O nome passa por regex curta antes de entrar na linha.
+     *
+     * @param docker {@code docker} ou {@code sudo -n docker}
+     */
+    public static ProvisionadorRemoto para(Executor executor, String container, String docker) {
+        if (container == null || !CONTAINER.matcher(container).matches()) {
+            throw new IllegalArgumentException("Nome de container inválido.");
+        }
+        if (!"docker".equals(docker) && !"sudo -n docker".equals(docker)) {
+            throw new IllegalArgumentException("Comando do Docker inválido.");
+        }
+        return new ProvisionadorRemoto(executor, docker + " exec -i " + container + " node acesso.js ");
     }
 
     /**
@@ -187,7 +212,7 @@ public final class ProvisionadorRemoto {
     private JsonNode rodar(String comando, String stdin) throws ErroProvisionamento {
         ResultadoExec exec;
         try {
-            exec = executor.executar(PREFIXO + comando, stdin.getBytes(StandardCharsets.UTF_8), PRAZO);
+            exec = executor.executar(prefixo + comando, stdin.getBytes(StandardCharsets.UTF_8), PRAZO);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ErroProvisionamento(ErroProvisionamento.SEM_RESPOSTA, "Interrompido.", e);

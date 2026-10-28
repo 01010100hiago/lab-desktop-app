@@ -1,0 +1,20 @@
+{
+  "versao": "0.1.0-8a948b9",
+  "commit": "8a948b9302d0092c2b8dc42b2701cfebe95b4f86",
+  "arquivo": "agente-0.1.0-8a948b9.tar.gz",
+  "sha256": "e6f8958c53cbc6422c669358ca241cdc45fb04906b301f66d19ee1a995a09a42",
+  "arquivos": [
+    "Dockerfile.monitor",
+    "acesso.js",
+    "docker-proxy.js",
+    "guarda.js",
+    "historico.js",
+    "painel.js",
+    "precos.json",
+    "tokens.js",
+    "totp.js",
+    "VERSAO"
+  ],
+  "sintetico": true,
+  "aviso": "Pacote SINTETICO de teste: NAO e o agente de verdade. Veja LEIAME.txt desta pasta."
+}

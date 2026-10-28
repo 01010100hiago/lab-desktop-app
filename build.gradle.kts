@@ -182,3 +182,23 @@ tasks.register<Exec>("jpackageApp") {
         )
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Pacote do agente do perfil monitor (o que o instalador envia ao servidor). Montagem MANUAL, só quando se muda o commit fixado:
+//   ./gradlew empacotarAgente -PpainelDir=<pasta do repositório do agente> -PagenteCommit=<hash de 40 dígitos>
+//   (usa agenteVersaoBase de gradle.properties). O repositório do agente é opcional e fica fora deste repositório: sem ele o app compila e roda sem o pacote.
+// Lê cada arquivo com `git show <commit>:<arquivo>` (nunca a pasta de trabalho), grava src/main/resources/agente/ e o build normal só
+// CONFERE o que está lá (PacoteDoAgenteTest). É Java, não bash: a CI do Windows monta igual. Veja ARQUITETURA, "Instalador do agente".
+// ---------------------------------------------------------------------------------------------
+tasks.register<JavaExec>("empacotarAgente") {
+    group = "empacotamento"
+    description = "Monta src/main/resources/agente/agente-<versao>.tar.gz a partir do repositório do agente no commit indicado em -PagenteCommit."
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass = "br.com.labdesktop.instalador.MontadorDoPacote"
+    doFirst {
+        val painel = providers.gradleProperty("painelDir").orNull ?: throw GradleException("Falta a pasta do repositório do agente: passe -PpainelDir=<pasta>")
+        val commit = providers.gradleProperty("agenteCommit").orNull ?: throw GradleException("Falta o commit do agente: passe -PagenteCommit=<hash de 40 dígitos do repositório do agente>")
+        val base = providers.gradleProperty("agenteVersaoBase").orNull ?: throw GradleException("Falta agenteVersaoBase em gradle.properties")
+        args(painel, commit, base, layout.projectDirectory.dir("src/main/resources/agente").asFile.absolutePath)
+    }
+}

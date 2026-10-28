@@ -15,6 +15,11 @@ import br.com.labdesktop.cofre.ConfigServidor;
 import br.com.labdesktop.cofre.Estado2fa;
 import br.com.labdesktop.cofre.InfoChave;
 import br.com.labdesktop.cofre.TokenAgente;
+import br.com.labdesktop.instalador.ExecutorSsh;
+import br.com.labdesktop.instalador.GanchosDaInstalacao;
+import br.com.labdesktop.instalador.InstaladorDeAgente;
+import br.com.labdesktop.instalador.PacoteDoAgente;
+import br.com.labdesktop.instalador.ParametrosDaInstalacao;
 import br.com.labdesktop.seguranca.Redator;
 import br.com.labdesktop.seguranca.ValidadorDeNomes;
 import br.com.labdesktop.ssh.ConexaoSsh;
@@ -36,6 +41,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
@@ -81,7 +87,11 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private final ProvisionadorRemoto provisionador;
     /** A leitura de segurança (SSH exec, somente leitura) deste servidor, com o tópico que a entrega às telas. */
     private final Topico<ResumoDeSeguranca> topicoDeSeguranca;
-    private final Inscricao assinaturaDeLimites;
+    private final OuvinteDeTopico<LimitesConta> ouvinteDeLimites;
+    private final Executor trabalho;
+    /** Sob "trava": a assinatura de {@code LIMITES}, que só existe enquanto o servidor tem Claude (ou ainda não disse que não). */
+    private Inscricao assinaturaDeLimites;
+    private final AtomicBoolean diagnosticando = new AtomicBoolean();
     private final Runnable desinscreverConexao;
 
     private final List<Consumer<EstadoServidor>> observadores = new CopyOnWriteArrayList<>();
@@ -112,6 +122,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         this.cofre = cofre;
         this.pedidoDeCodigo = pedidoDeCodigo == null ? PedidoDeCodigo2fa.NUNCA : pedidoDeCodigo;
         this.entrega = entrega;
+        this.trabalho = trabalho;
         ConfigServidor config = cofre.servidor(servidorId)
             .orElseThrow(() -> new IllegalArgumentException("Servidor desconhecido no cofre: " + servidorId));
         this.ultimaConfig = config;
@@ -126,12 +137,13 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         this.provisionador = new ProvisionadorRemoto(conexao::executar);
         this.topicoDeSeguranca = Topico.seguranca(new LeitorDeSegurancaPorSsh(conexao::executar, Instant::now));
         this.desinscreverConexao = conexao.observar(this::aoMudarConexao);
-        this.assinaturaDeLimites = sondador.assinar(Topico.LIMITES, new OuvinteDeTopico<LimitesConta>() {
+        this.ouvinteDeLimites = new OuvinteDeTopico<LimitesConta>() {
             @Override
             public void aoAtualizar(LimitesConta limites) {
                 atualizarEstado(e -> e.comLimites(limites));
             }
-        });
+        };
+        this.assinaturaDeLimites = sondador.assinar(Topico.LIMITES, ouvinteDeLimites);
     }
 
     // =====================================================================================================
@@ -284,7 +296,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         synchronized (trava) {
             encerrado = true;
         }
-        assinaturaDeLimites.close();
+        soltarLimites();
         sondador.close();
         descartarApi();
         CompletableFuture<Void> pronto = conexao.fechar();
@@ -357,6 +369,10 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
 
     private void aoMudarConexao(InfoConexao info) {
         atualizarEstado(e -> e.comConexao(info));
+        if (info.estado() == br.com.labdesktop.ssh.EstadoConexao.SSH_OK_SEM_AGENTE
+            && (info.falha() == null || info.falha().tipo() != br.com.labdesktop.ssh.Falha.Tipo.AGENTE_DESATUALIZADO)) {
+            diagnosticarOAgente();
+        }
         switch (info.estado()) {
             case CONECTADO -> sondador.definirApi(apiAtual());
             default -> {
@@ -371,6 +387,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private void aoReceberVersao(VersaoAgente v) {
         Estado2fa lido = Estado2fa.deRotulo(v.totp());
         atualizarEstado(e -> e.comVersao(v, lido));
+        ajustarLimites(v);
         try {
             if (cofre.servidor(id).map(ConfigServidor::estado2fa).orElse(lido) != lido) {
                 cofre.gravarEstado2fa(id, lido); // só uma dica: a fonte da verdade é o agente
@@ -410,6 +427,120 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
                 entrega.execute(() -> o.accept(novo));
             }
         }
+    }
+
+    /**
+     * Servidor sem Claude (agente do perfil monitor) não tem {@code /api/limites}: o tópico deixa de ser consultado (senão daria 404 a
+     * cada minuto) e os limites em memória somem. Desconhecido ({@code recursos} ausente: agente antigo) mantém o de antes.
+     */
+    private void ajustarLimites(VersaoAgente v) {
+        Boolean claude = v.temClaude();
+        if (Boolean.FALSE.equals(claude)) {
+            soltarLimites();
+            atualizarEstado(e -> e.comLimites(null));
+            return;
+        }
+        synchronized (trava) {
+            if (assinaturaDeLimites == null && !encerrado) {
+                assinaturaDeLimites = sondador.assinar(Topico.LIMITES, ouvinteDeLimites);
+            }
+        }
+    }
+
+    private void soltarLimites() {
+        Inscricao antiga;
+        synchronized (trava) {
+            antiga = assinaturaDeLimites;
+            assinaturaDeLimites = null;
+        }
+        if (antiga != null) {
+            antiga.close();
+        }
+    }
+
+    // =====================================================================================================
+    // O agente existe? (uma LEITURA por SSH, nunca escrita)
+    // =====================================================================================================
+
+    /**
+     * O SSH está de pé e o agente não responde: pergunta ao servidor, por UMA leitura fixa, se o agente está instalado. O resultado
+     * vai para o estado ({@link SituacaoDoAgente}) e é o que faz o app mostrar "agente não instalado" com o botão Instalar agente,
+     * em vez de "agente fora". Só lê: instalar é sempre do usuário, com clique e confirmação.
+     */
+    private void diagnosticarOAgente() {
+        if (estado().situacaoDoAgente() != SituacaoDoAgente.DESCONHECIDA || !diagnosticando.compareAndSet(false, true)) {
+            return;
+        }
+        trabalho.execute(() -> {
+            try {
+                SituacaoDoAgente lida = new LeitorDaSituacaoDoAgente(conexao::executar, ParametrosDaInstalacao.CONTAINER_PADRAO).ler();
+                atualizarEstado(e -> e.conexao() == br.com.labdesktop.ssh.EstadoConexao.SSH_OK_SEM_AGENTE
+                    ? e.comSituacaoDoAgente(lida) : e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (RuntimeException e) {
+                LOG.warn("Não consegui descobrir se o agente de {} está instalado: {}", id, Redator.redigir(e));
+            } finally {
+                diagnosticando.set(false);
+            }
+        });
+    }
+
+    // =====================================================================================================
+    // Instalar, atualizar e remover o agente (só pelo clique do usuário; bloqueia: SSH)
+    // =====================================================================================================
+
+    /**
+     * Monta o instalador do agente deste servidor. NÃO instala nada: quem o aciona é a tela de confirmação, depois do clique do usuário.
+     * Os ganchos ligam o instalador ao túnel (sondar o agente) e ao cofre (registrar o token deste Mac).
+     */
+    public InstaladorDeAgente instaladorDoAgente(ParametrosDaInstalacao parametros, PacoteDoAgente pacote) {
+        return new InstaladorDeAgente(new ExecutorSsh(conexao), parametros, pacote, ganchosDeInstalacao());
+    }
+
+    /** O instalador terminou (instalou, atualizou ou removeu): repete o teste do agente para o estado refletir o que há no servidor. */
+    public void aoMudarOAgenteNoServidor() {
+        atualizarEstado(e -> e.comSituacaoDoAgente(SituacaoDoAgente.DESCONHECIDA));
+        descartarApi(); // o agente é outro (ou sumiu): a próxima API nasce limpa
+        conexao.tentarAgora();
+    }
+
+    private GanchosDaInstalacao ganchosDeInstalacao() {
+        return new GanchosDaInstalacao() {
+            @Override
+            public Sonda sondar() {
+                TunelSsh tunel = conexao.tunel().orElse(null);
+                if (tunel == null) {
+                    return Sonda.NAO_RESPONDE;
+                }
+                try {
+                    VersaoAgente v = apiParaTunel(tunel).versao();
+                    aoReceberVersao(v);
+                    return Sonda.RESPONDE;
+                } catch (NaoAutorizado e) {
+                    return e.totpRequerido() ? Sonda.RESPONDE : Sonda.TOKEN_RECUSADO;
+                } catch (ErroApi e) {
+                    return Sonda.NAO_RESPONDE;
+                } catch (CofreBloqueadoException e) {
+                    return Sonda.NAO_RESPONDE;
+                }
+            }
+
+            @Override
+            public boolean registrarToken(ParametrosDaInstalacao parametros, String docker) throws ErroProvisionamento, CofreException {
+                Sonda agora = sondar();
+                if (agora == Sonda.RESPONDE && !estado().semToken()) {
+                    return false; // o token do app já vale neste agente (atualização: os dados e o token ficaram)
+                }
+                String nome = nomeDoDispositivoAtual();
+                if (nome == null) {
+                    nome = ValidadorDeNomes.sugerirNomeDeDispositivo(br.com.labdesktop.util.NomeDoMac.hostname());
+                }
+                ProvisionadorRemoto prov = ProvisionadorRemoto.para(conexao::executar, parametros.container(), docker);
+                reprovisionarTokenCom(prov, nome);
+                return true;
+            }
+        };
     }
 
     // =====================================================================================================
@@ -491,6 +622,10 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * @param nomeDoDispositivo {@code ^[a-z0-9-]{1,40}$}; por exemplo {@code ValidadorDeNomes.sugerirNomeDeDispositivo(NomeDoMac.hostname())}
      */
     public void registrarToken(String nomeDoDispositivo) throws ErroProvisionamento, CofreException {
+        registrarTokenCom(provisionador, nomeDoDispositivo);
+    }
+
+    private void registrarTokenCom(ProvisionadorRemoto prov, String nomeDoDispositivo) throws ErroProvisionamento, CofreException {
         if (!ValidadorDeNomes.dispositivoValido(nomeDoDispositivo)) {
             throw new IllegalArgumentException("Nome do dispositivo inválido (a-z, 0-9 e hífen, até 40).");
         }
@@ -499,7 +634,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         boolean registrado = false;
         boolean entregueAoCofre = false;
         try {
-            provisionador.registrarToken(novo.hashSha256Hex(), nomeDoDispositivo, Instant.now());
+            prov.registrarToken(novo.hashSha256Hex(), nomeDoDispositivo, Instant.now());
             registrado = true;
             testarToken(tunel, novo, nomeDoDispositivo);
             cofre.gravarToken(id, novo, nomeDoDispositivo); // o cofre passa a ser o responsável pelo token
@@ -508,7 +643,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             if (!entregueAoCofre) {
                 novo.zerar();
                 if (registrado) {
-                    revogarSemFalhar(nomeDoDispositivo);
+                    revogarSemFalhar(prov, nomeDoDispositivo);
                 }
             }
         }
@@ -533,18 +668,22 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * da revogação, o estado é o mesmo de "token perdido" e o usuário pode tentar de novo.
      */
     public void reprovisionarToken(String nomeDoDispositivo) throws ErroProvisionamento, CofreException {
+        reprovisionarTokenCom(provisionador, nomeDoDispositivo);
+    }
+
+    private void reprovisionarTokenCom(ProvisionadorRemoto prov, String nomeDoDispositivo) throws ErroProvisionamento, CofreException {
         if (!ValidadorDeNomes.dispositivoValido(nomeDoDispositivo)) {
             throw new IllegalArgumentException("Nome do dispositivo inválido (a-z, 0-9 e hífen, até 40).");
         }
         tunelParaRegistrarToken(); // sem sessão SSH, nem revoga: não se deixa o usuário sem token por nada
         try {
-            provisionador.revogarToken(nomeDoDispositivo);
+            prov.revogarToken(nomeDoDispositivo);
         } catch (ErroProvisionamento e) {
             if (!ErroProvisionamento.TOKEN_INEXISTENTE.equals(e.codigo())) {
                 throw e;
             }
         }
-        registrarToken(nomeDoDispositivo);
+        registrarTokenCom(prov, nomeDoDispositivo);
     }
 
     private TunelSsh tunelParaRegistrarToken() throws ErroProvisionamento {
@@ -614,9 +753,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         }
     }
 
-    private void revogarSemFalhar(String nome) {
+    private void revogarSemFalhar(ProvisionadorRemoto prov, String nome) {
         try {
-            provisionador.revogarToken(nome);
+            prov.revogarToken(nome);
         } catch (ErroProvisionamento e) {
             LOG.warn("Não consegui revogar o registro órfão '{}': {}", nome, e.getMessage());
         }

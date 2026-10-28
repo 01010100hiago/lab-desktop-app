@@ -1,0 +1,11 @@
+Esta pasta recebe o pacote do agente do perfil monitor (agente-<versao>.tar.gz e agente.json).
+
+O pacote NAO vem neste repositorio. Ele e montado a partir do repositorio do agente (opcional, a parte deste repositorio) num commit fixado:
+
+    ./gradlew empacotarAgente -PpainelDir=<pasta do repositorio do agente> -PagenteCommit=<hash>
+
+(usa agenteVersaoBase de gradle.properties e o commit de -PagenteCommit=<hash de 40 dígitos>). Sem o pacote o app abre e funciona, mas "Instalar agente" avisa que o
+pacote nao esta no app, e a tela Ajustes > Sobre mostra "nao incluido".
+
+Os testes usam um pacote SINTETICO que existe so no classpath de teste (src/test/resources/agente-teste/): ele NAO e o agente. Os testes que
+conferem o conteudo do agente de verdade ficam ignorados enquanto o pacote for o sintetico.
