@@ -67,6 +67,48 @@ class GerenciadorTemaTest {
         assertEquals(Tema.SISTEMA, seguindo.escolha(), "SISTEMA continua SISTEMA depois de seguir o sistema");
     }
 
+    /** De Escuro para Sistema, com o computador escuro, o app não pode ir ao claro (valor velho do sistema) e voltar. */
+    @Test
+    void escolherSistemaLeOComputadorAntesEntaoNaoPisca() throws Exception {
+        Visual.preparar();
+        java.util.concurrent.CountDownLatch resposta = new java.util.concurrent.CountDownLatch(1);
+        GerenciadorTema g = new GerenciadorTema(Tema.ESCURO, false, false).comConsultaDoSistema(() -> {
+            try {
+                resposta.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return true; // o computador está escuro
+        });
+        Visual.naEdt(g::instalar);
+        java.util.List<Boolean> trocas = new java.util.concurrent.CopyOnWriteArrayList<>();
+        Visual.naEdt(() -> g.aoMudar(() -> trocas.add(g.escuroAgora())));
+        java.util.concurrent.atomic.AtomicBoolean pronto = new java.util.concurrent.atomic.AtomicBoolean();
+        Visual.naEdt(() -> g.escolher(Tema.SISTEMA, () -> pronto.set(true)));
+        assertTrue(escuro(), "enquanto o computador não responde, nada muda na tela");
+        assertFalse(pronto.get());
+        assertEquals(Tema.ESCURO, g.escolha(), "a escolha só vale com a resposta do computador");
+        resposta.countDown();
+        br.com.labdesktop.Espera.ate(java.time.Duration.ofSeconds(5), "a escolha Sistema valer", pronto::get);
+        assertEquals(Tema.SISTEMA, g.escolha());
+        assertTrue(g.sistemaEstaEscuro());
+        assertTrue(escuro());
+        assertTrue(trocas.isEmpty(), "o tema não foi ao claro e voltou: " + trocas);
+    }
+
+    @Test
+    void conferirSistemaGuardaARespostaMesmoComClaroOuEscuroEscolhidoEAvisaQuemMostraAFrase() throws Exception {
+        Visual.preparar();
+        GerenciadorTema g = new GerenciadorTema(Tema.CLARO, false, false).comConsultaDoSistema(() -> true);
+        Visual.naEdt(g::instalar);
+        java.util.concurrent.atomic.AtomicInteger avisos = new java.util.concurrent.atomic.AtomicInteger();
+        Visual.naEdt(() -> g.aoMudar(avisos::incrementAndGet));
+        Visual.naEdt(g::conferirSistema);
+        br.com.labdesktop.Espera.ate(java.time.Duration.ofSeconds(5), "o sistema ser lido", g::sistemaEstaEscuro);
+        assertFalse(escuro(), "a escolha clara continua clara");
+        assertEquals(1, avisos.get());
+    }
+
     @Test
     void escolhaNulaViraSistema() {
         assertEquals(Tema.SISTEMA, new GerenciadorTema(null, false).escolha());

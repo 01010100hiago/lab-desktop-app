@@ -36,6 +36,7 @@ import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import javax.swing.KeyStroke;
 import org.junit.jupiter.api.AfterEach;
@@ -58,6 +59,8 @@ class AjustesNaJanelaTest {
     private final AvisosGravados avisos = new AvisosGravados();
     private PainelPrincipal painel;
     private GerenciadorTema tema;
+    /** Como o computador responde (o teste decide; nada de rodar o comando do sistema). */
+    private final java.util.concurrent.atomic.AtomicBoolean sistemaFalsoEscuro = new java.util.concurrent.atomic.AtomicBoolean(false);
     private PreferenciasAtuais preferencias;
     private CaminhosApp caminhos;
     private final Clipboard area = new Clipboard("teste");
@@ -71,7 +74,7 @@ class AjustesNaJanelaTest {
         caminhos = CaminhosApp.comPasta(pasta);
         preferencias = new PreferenciasAtuais(caminhos, Preferencias.padrao());
         // o sistema está CLARO neste teste; a escolha é a padrão das preferências (Sistema)
-        tema = new GerenciadorTema(Preferencias.padrao().tema(), false, false);
+        tema = new GerenciadorTema(Preferencias.padrao().tema(), false, false).comConsultaDoSistema(sistemaFalsoEscuro::get);
         Visual.naEdt(tema::instalar);
         painel = Visual.naEdt(() -> new PainelPrincipal(cenario.gerenciador, null, avisos, new DialogosGravados(), new NavegadorGravado(avisos), br.com.labdesktop.arquivos.ServicosDeArquivos.descartaveis(),
             preferencias::get));
@@ -177,11 +180,32 @@ class AjustesNaJanelaTest {
         assertEquals(fundoClaro, Visual.naEdt(() -> Tokens.cor(Tokens.BG)));
 
         Visual.naEdt(() -> a.opcaoDoTema(Tema.SISTEMA).doClick());
-        assertEquals(Tema.SISTEMA, preferencias.get().tema());
+        Espera.ate(Duration.ofSeconds(5), "a escolha Sistema valer", () -> preferencias.get().tema() == Tema.SISTEMA);
         Visual.naEdt(() -> tema.definirSistemaEscuro(true));
         assertTrue(Visual.naEdt(tema::escuroAgora), "com Sistema, o tema segue o computador");
         assertEquals("Agora o sistema está usando o modo escuro.", Visual.naEdt(a::textoDoSistemaAgora), "e a frase acompanha, sem reabrir a tela");
         gravado(p -> p.tema() == Tema.SISTEMA);
+    }
+
+    @Test
+    void escolherSistemaComOComputadorEscuroNaoPiscaNemMostraAFraseErrada() {
+        abrir(Secao.APARENCIA);
+        SecaoAparencia a = Visual.naEdt(() -> ajustes.aparencia());
+        Visual.naEdt(() -> a.opcaoDoTema(Tema.ESCURO).doClick());
+        assertTrue(Visual.naEdt(tema::escuroAgora));
+        // o computador está ESCURO, mas o app ainda acha que está claro (nunca perguntou: o usuário tinha escolhido Escuro)
+        sistemaFalsoEscuro.set(true);
+        assertFalse(Visual.naEdt(tema::sistemaEstaEscuro));
+        List<String> vistos = new ArrayList<>();
+        Visual.naEdt(() -> tema.aoMudar(() -> vistos.add((tema.escuroAgora() ? "escuro" : "claro") + " | " + a.textoDoSistemaAgora())));
+        Visual.naEdt(() -> a.opcaoDoTema(Tema.SISTEMA).doClick());
+        Espera.ate(Duration.ofSeconds(5), "a escolha Sistema valer", () -> preferencias.get().tema() == Tema.SISTEMA);
+        assertTrue(Visual.naEdt(tema::escuroAgora), "continua escuro: era o que o computador usa");
+        assertEquals("Agora o sistema está usando o modo escuro.", Visual.naEdt(a::textoDoSistemaAgora));
+        for (String v : vistos) {
+            assertFalse(v.startsWith("claro"), "o app piscou no claro: " + vistos);
+            assertFalse(v.contains("modo claro"), "a frase ficou errada por um instante: " + vistos);
+        }
     }
 
     @Test

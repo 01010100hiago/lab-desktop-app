@@ -20,8 +20,11 @@ public interface ControleDeAjustes {
     /** Muda as preferências (na memória na hora e no disco em segundo plano). */
     void atualizarPreferencias(UnaryOperator<Preferencias> mudanca);
 
-    /** Troca o tema na hora, sem reiniciar, e lembra a escolha. */
-    void trocarTema(Tema tema);
+    /**
+     * Troca o tema na hora, sem reiniciar, e lembra a escolha. Claro e escuro valem já; "Sistema" lê o computador antes (um instante, fora da EDT) para o tema nascer certo.
+     * {@code depois} roda na EDT quando a escolha já está na tela e gravada.
+     */
+    void trocarTema(Tema tema, Runnable depois);
 
     /** O sistema está no modo escuro agora? (o que "Sistema" segue) */
     boolean sistemaEstaEscuro();

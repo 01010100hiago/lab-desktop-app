@@ -53,10 +53,12 @@ public final class AjustesDoApp implements ControleDeAjustes {
     }
 
     @Override
-    public void trocarTema(Tema novo) {
-        tema.definirEscolha(novo);
-        preferencias.atualizar(p -> p.comTema(novo));
-        tema.conferirSistema();
+    public void trocarTema(Tema novo, Runnable depois) {
+        // "Sistema" espera a resposta do computador antes de valer (sem piscar no tema errado); a preferência é gravada quando a escolha já está na tela
+        tema.escolher(novo, () -> {
+            preferencias.atualizar(p -> p.comTema(novo));
+            depois.run();
+        });
     }
 
     @Override

@@ -61,8 +61,7 @@ final class SecaoAparencia extends Painel {
         temas.put(tema, r);
         r.addActionListener(e -> {
             if (!atualizando) {
-                controle.trocarTema(tema);
-                atualizar();
+                controle.trocarTema(tema, this::atualizar);
             }
         });
         return br.com.labdesktop.ui.componentes.Caixa.coluna(2, r, new Rotulo(explicacao).corDoToken(Tokens.TEXTO2).tamanho(12.5f));

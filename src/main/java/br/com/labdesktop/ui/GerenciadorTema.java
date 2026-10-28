@@ -14,6 +14,7 @@ import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BooleanSupplier;
 import javax.swing.UIManager;
 
 /**
@@ -40,6 +41,7 @@ public final class GerenciadorTema {
     private final boolean animar;
     private final EstiloDeLaf estilo;
     private final List<Runnable> ouvintes = new CopyOnWriteArrayList<>();
+    private BooleanSupplier consultaDoSistema = AparenciaDoSistema::escuro;
 
     /**
      * @param escolha tema pedido (claro, escuro ou o do sistema)
@@ -63,6 +65,12 @@ public final class GerenciadorTema {
         this.escolha = escolha == null ? Tema.SISTEMA : escolha;
         this.sistemaEscuro = sistemaEscuroInicial;
         this.animar = animar;
+    }
+
+    /** Troca quem diz como o sistema está (um processo, rodado fora da EDT): os testes põem uma resposta que controlam, em vez de rodar o comando do sistema. */
+    public GerenciadorTema comConsultaDoSistema(BooleanSupplier consulta) {
+        this.consultaDoSistema = consulta;
+        return this;
     }
 
     /**
@@ -129,29 +137,56 @@ public final class GerenciadorTema {
         return sistemaEscuro;
     }
 
-    /** Troca a escolha e aplica. Na EDT. */
+    /** Troca a escolha e aplica, sem consultar o sistema (para escolha de claro ou escuro, ou quando o sistema acabou de ser lido). Na EDT. */
     public void definirEscolha(Tema nova) {
         this.escolha = nova == null ? Tema.SISTEMA : nova;
         aplicar(efetivoEscuro());
     }
 
-    /** O sistema mudou de claro para escuro (ou o contrário); só tem efeito com a escolha em {@code SISTEMA}. Na EDT. */
+    /**
+     * A escolha do usuário na tela de Ajustes. Para "Sistema" o claro ou escuro do computador é lido ANTES (num processo, fora da EDT) e só então a escolha vale, já com o
+     * tema certo: aplicar a escolha com o valor velho do sistema e corrigir depois fazia o app piscar no tema errado. Claro e escuro valem na hora.
+     * {@code depois} roda na EDT, depois de a escolha estar aplicada (é onde quem chamou grava a preferência e atualiza a tela). Chame na EDT.
+     */
+    public void escolher(Tema nova, Runnable depois) {
+        Tema pedida = nova == null ? Tema.SISTEMA : nova;
+        if (pedida != Tema.SISTEMA) {
+            definirEscolha(pedida);
+            depois.run();
+            return;
+        }
+        Fundo.emFundoComResultado(consultaDoSistema::getAsBoolean).whenComplete((escuro, erro) -> Fundo.naEdt(() -> {
+            if (erro == null) {
+                this.sistemaEscuro = escuro; // antes de aplicar a escolha: o tema já nasce certo e a frase "o sistema está usando" nunca fica errada (sem avisar ninguém: o depois() atualiza a tela)
+            }
+            definirEscolha(pedida);
+            depois.run();
+        }));
+    }
+
+    /** O sistema mudou de claro para escuro (ou o contrário). Só muda o tema com a escolha em {@code SISTEMA}; com outra, só guarda (a frase dos Ajustes usa). Na EDT. */
     public void definirSistemaEscuro(boolean escuro) {
-        this.sistemaEscuro = escuro;
+        registrarSistema(escuro);
         if (escolha == Tema.SISTEMA) {
             aplicar(escuro);
         }
     }
 
+    private void registrarSistema(boolean escuro) {
+        boolean mudou = escuro != sistemaEscuro;
+        this.sistemaEscuro = escuro;
+        if (mudou && escolha != Tema.SISTEMA) {
+            ouvintes.forEach(Runnable::run); // o tema não mudou, mas quem mostra "o sistema está usando..." precisa saber (com Sistema o aplicar() avisa)
+        }
+    }
+
     /**
-     * Pergunta ao sistema (num processo, fora da EDT) e aplica na EDT. Chame na abertura e quando a janela ganha
-     * foco; é barato se nada mudou.
+     * Pergunta ao sistema (num processo, fora da EDT) e guarda na EDT: com a escolha em {@code SISTEMA} o tema acompanha. Chame na abertura e quando a janela ganha
+     * foco; é barato se nada mudou. Consulta mesmo com claro ou escuro escolhido, para a frase dos Ajustes ("agora o sistema está usando...") e a próxima escolha de Sistema
+     * já saberem a resposta.
      */
     public void conferirSistema() {
-        if (escolha != Tema.SISTEMA) {
-            return;
-        }
-        Fundo.emFundoComResultado(AparenciaDoSistema::escuro)
+        Fundo.emFundoComResultado(consultaDoSistema::getAsBoolean)
             .thenAccept(escuro -> Fundo.naEdt(() -> definirSistemaEscuro(escuro)));
     }
 
