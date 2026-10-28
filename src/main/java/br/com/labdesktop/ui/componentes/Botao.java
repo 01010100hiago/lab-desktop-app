@@ -88,6 +88,38 @@ public final class Botao extends JButton {
         }
     }
 
+    /**
+     * O botão LINK (o "Veja também", "Ver detalhes"...) tem aparência de link: o texto leva um sublinhado de 1 px na cor do texto do botão (token), pintado por baixo da
+     * letra. O texto sozinho na cor de destaque parecia um rótulo qualquer.
+     */
+    @Override
+    protected void paintComponent(java.awt.Graphics g) {
+        super.paintComponent(g);
+        String texto = getText();
+        if (variante != Variante.LINK || texto == null || texto.isEmpty()) {
+            return;
+        }
+        java.awt.FontMetrics fm = getFontMetrics(getFont());
+        java.awt.Rectangle area = new java.awt.Rectangle(0, 0, getWidth(), getHeight());
+        java.awt.Insets in = getInsets();
+        area.x += in.left;
+        area.y += in.top;
+        area.width -= in.left + in.right;
+        area.height -= in.top + in.bottom;
+        java.awt.Rectangle icone = new java.awt.Rectangle();
+        java.awt.Rectangle rotulo = new java.awt.Rectangle();
+        javax.swing.SwingUtilities.layoutCompoundLabel(this, fm, texto, getIcon(), getVerticalAlignment(), getHorizontalAlignment(), getVerticalTextPosition(),
+            getHorizontalTextPosition(), area, icone, rotulo, getIconTextGap());
+        java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+        try {
+            g2.setColor(getForeground());
+            int y = rotulo.y + fm.getAscent() + 2;
+            g2.fillRect(rotulo.x, y, Math.min(rotulo.width, fm.stringWidth(texto)), 1);
+        } finally {
+            g2.dispose();
+        }
+    }
+
     @Override
     public void setText(String texto) {
         super.setText(texto == null ? null : TextoSeguro.limparLinha(texto));

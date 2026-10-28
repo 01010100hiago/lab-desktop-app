@@ -130,4 +130,35 @@ class EstadosDoBotaoTest {
             assertTrue(AuditoriaDeCores.contraste(seta, botao) >= 3.0, tema + ": seta sem contraste");
         }
     }
+
+    /** O "Veja também" tinha cara de rótulo; o botão de link leva sublinhado na cor do texto dele. */
+    @Test
+    void oBotaoDeLinkTemSublinhado() {
+        for (Tema tema : TEMAS) {
+            Visual.tema(tema);
+            br.com.labdesktop.ui.componentes.Botao link = Visual.naEdt(() -> Botoes.link("Projetos"));
+            Painel p = Visual.naEdt(() -> {
+                Painel pp = new Painel(new FlowLayout(FlowLayout.LEFT, 16, 16));
+                pp.fundo(Tokens.SUPERFICIE);
+                pp.add(link);
+                return pp;
+            });
+            BufferedImage img = Visual.renderizar(p, 200, 60);
+            Visual.salvar(img, "botao-link-" + tema.name().toLowerCase());
+            java.awt.Rectangle r = Visual.naEdt(() -> link.getBounds());
+            Color tinta = Visual.naEdt(() -> link.getForeground());
+            // a linha do sublinhado: uma linha de pixels da cor do texto, cobrindo quase toda a largura do texto
+            int melhor = 0;
+            for (int y = r.y; y < r.y + r.height; y++) {
+                int n = 0;
+                for (int x = r.x; x < r.x + r.width; x++) {
+                    if (img.getRGB(x, y) == tinta.getRGB()) {
+                        n++;
+                    }
+                }
+                melhor = Math.max(melhor, n);
+            }
+            assertTrue(melhor >= 40, tema + ": nenhuma linha de " + AuditoriaDeCores.hex(tinta) + " do tamanho do texto (maior: " + melhor + " px)");
+        }
+    }
 }
