@@ -22,8 +22,8 @@ import javax.swing.event.MenuListener;
 /**
  * O menu do app (a barra de menus do macOS, por {@code apple.laf.useScreenMenuBar}). Regra de ouro (ARQUITETURA 7.4):
  * Cmd é do app e o resto é do terminal, e os atalhos nativos do JediTerm (Cmd+C, Cmd+V, Cmd+K, Cmd+Setas) NÃO viram
- * item de menu, para o menu da tela do macOS não engolir o atalho. Aqui só entram Cmd+N, Cmd+R, Cmd+1 a Cmd+6, Cmd+W,
- * Cmd+M e Cmd+Shift+L (bloquear o cofre).
+ * item de menu, para o menu da tela do macOS não engolir o atalho. Aqui só entram Cmd+N, Cmd+Shift+N (Novo projeto), Cmd+R, Cmd+1 a
+ * Cmd+6, Cmd+W, Cmd+M e Cmd+Shift+L (bloquear o cofre); "Cmd" é a tecla de comando do sistema (Ctrl no Windows e no Linux).
  *
  * <p>"Servidor" age sobre o servidor em foco (o da lista na tela, ou o único cadastrado) e só habilita o que faz
  * sentido para o estado dele: o "Configurar 2FA" daqui vale para o servidor selecionado (a tela Servidor tem o mesmo botão).

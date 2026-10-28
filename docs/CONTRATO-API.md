@@ -89,7 +89,7 @@ Colunas "Web" e "App" resumem a cadência; o detalhe está nas seções 3 e 4. T
 | 9 | `GET /api/projetos/:p/logs` | logs de um container | ao abrir/trocar; 5 s se "atualizar" | LOGS(p,c,n) | 25 s |
 | 10 | `GET /api/projetos/:p/claude/tela` | tela do Claude já analisada | 2 s na página da sessão | TELA(p) | 10 s |
 | 11 | `GET /api/projetos/:p/claude/texto` | tela em texto puro | sob demanda | ação | 15 s |
-| 12 | `POST /api/projetos/novo` | criar projeto | modal Novo projeto | ação | 60 s |
+| 12 | `POST /api/projetos/novo` | criar projeto (corpo `{"nome", "guia_ia"?}`, 4.1) | modal Novo projeto | ação | 60 s |
 | 13 | `POST /api/projetos/:p/iniciar` ou `parar` ou `reiniciar` | compose up, down, restart | botões | ação | 12 min |
 | 14 | `POST /api/projetos/:p/containers/:c/reiniciar` | `docker restart` de um container | tabela de containers | ação | 3 min |
 | 15 | `POST /api/projetos/:p/claude/abrir` | abre a sessão do Claude | botões | ação | 6 min |
@@ -109,13 +109,13 @@ Fora do app: `POST /api/diag`, `GET /terminal/<p>/*` (HTTP e WebSocket do ttyd) 
 
 ### 3.1 `GET /api/versao` (nova, proposta)
 
-Resposta `200`: `{ "api": 1, "painel": "v22.x", "cliente": "mac-de-teste", "perfil": "lab", "recursos": { "claude": true, "projetos": true, "monitor": true }, "agente": null }`.
+Resposta `200`: `{ "api": 1, "painel": "v22.x", "cliente": "mac-de-teste", "perfil": "lab", "recursos": { "claude": true, "projetos": true, "monitor": true, "guia_ia": true }, "agente": null }`.
 
 - `api`: versão do contrato; o app avisa "agente incompatível" se for diferente de 1.
 - `painel`: `process.version` do Node do agente.
 - `cliente`: o nome do dispositivo desta conexão, ou `null`.
 - `perfil`: `"lab"` (o painel completo do lab, o padrão) ou `"monitor"` (o agente que o app instala em qualquer servidor: só leitura da máquina). Aditivo: o contrato continua `api: 1`.
-- `recursos`: o que o servidor sabe fazer, `{ "claude": bool, "projetos": bool, "monitor": bool }`. Perfil `lab` = tudo `true`; perfil `monitor` = só `monitor`. **É o sinal "o servidor tem Claude"**: o app esconde o Claude (aba Terminal do projeto, Visão geral, lista de projetos, Consumo, faixa de crédito, tópico de limites) quando `claude` é falso, e a aba Projetos quando `projetos` é falso. Cada campo é anulável no app: **um agente que não manda `recursos` (agente antigo) mantém o comportamento de antes** (o Claude vale pela presença de `sessao` no detalhe do projeto, a aba Projetos fica), e desconhecido nunca esconde nada.
+- `recursos`: o que o servidor sabe fazer, `{ "claude": bool, "projetos": bool, "monitor": bool, "guia_ia": bool }`. Perfil `lab` = tudo `true`; perfil `monitor` = só `monitor`. **`guia_ia`**: o `POST /api/projetos/novo` entende `"guia_ia": false` (4.1); o app só mostra a caixa "Incluir guia para o Claude" quando `claude` E `guia_ia` são `true` (um agente mais antigo ignoraria o `false` e criaria o `CLAUDE.md` do mesmo jeito); ausente vale "não". **É o sinal "o servidor tem Claude"**: o app esconde o Claude (aba Terminal do projeto, Visão geral, lista de projetos, Consumo, faixa de crédito, tópico de limites) quando `claude` é falso, e a aba Projetos quando `projetos` é falso. Cada campo é anulável no app: **um agente que não manda `recursos` (agente antigo) mantém o comportamento de antes** (o Claude vale pela presença de `sessao` no detalhe do projeto, a aba Projetos fica), e desconhecido nunca esconde nada.
 - `agente`: a versão do pacote do agente que o app instalou (`"0.1.0-abc1234"`, o texto do arquivo `VERSAO` do pacote), ou `null` (o servidor não tem o arquivo). Serve para "Atualizar agente" mostrar de qual versão para qual.
 
 Erros: `401` com o campo `erro` em JSON (credencial recusada, seção 6).
@@ -378,9 +378,13 @@ O app NUNCA reenvia POST ou PUT sozinho depois de uma falha de rede: o resultado
 
 ### 4.1 `POST /api/projetos/novo`
 
-Corpo `{ "nome": "meu-projeto" }`. O agente aplica `trim` e minúsculas. `400 {"erro":"Informe um nome."}` (corpo inválido ou sem `nome`); `400 {"erro":"Nome inválido: use letras minúsculas, números e hífen (ex.: meu-projeto)."}`; `400 {"erro":"Esse nome é reservado pela infraestrutura do lab."}`; `400 {"erro":"Já existe um projeto com esse nome."}`; `400 {"erro":"Não consegui criar a pasta: ..."}`. `200 {"ok":true}`. Cria pasta, esqueleto (compose vazio, `CLAUDE.md`, `.gitignore`, `.env.example`, `STATUS.md`, `README.md`) e a rede `<nome>_default`.
+Corpo `{ "nome": "meu-projeto", "guia_ia": true }`. O agente aplica `trim` e minúsculas ao `nome` (o app já manda um nome válido: a regra é `^[a-z0-9][a-z0-9-]{0,48}$`, de 1 a **49** caracteres, e o app ainda recusa hífen no fim). **`guia_ia`** (aditivo; a rota continua `api: 1`): booleano opcional. **Ausente (ou `null`) vale `true`, o comportamento de sempre**: o esqueleto leva o `CLAUDE.md`, e o compose e o README falam do Claude. `false` cria o projeto SEM `CLAUDE.md` e sem nada sobre o Claude, com os mesmos cinco arquivos que o app escreve ao criar um projeto no computador local (`docker-compose.yml` esqueleto com `services: {}`, `.gitignore`, `.env.example`, `STATUS.md`, `README.md`; o `GabaritoDoProjeto` do app e o `arquivosSemGuiaIa` do o agente têm o MESMO texto, conferido por `projetos.test.js` e pelo `GabaritoIgualAoDoAgenteTest`). Qualquer valor que não seja booleano: `400 {"erro":"guia_ia deve ser true ou false."}` e nada é criado.
 
-Web: modal Novo projeto na página inicial do front web; erro aparece no campo, sucesso recarrega a lista. App: DialogoNovoProjeto; validar localmente com a mesma regex antes de enviar.
+Erros: `400 {"erro":"Informe um nome."}` (corpo inválido ou sem `nome`); `400 {"erro":"Nome inválido: use letras minúsculas, números e hífen (ex.: meu-projeto)."}`; `400 {"erro":"Esse nome é reservado pela infraestrutura do lab."}` (`infra`, `painel`, `lab`); `400 {"erro":"Já existe um projeto com esse nome."}`; `400 {"erro":"Não consegui criar a pasta: ..."}`. **`200 {"ok":true,"guia_ia":<o que valeu>}`** (o campo `guia_ia` da resposta é novo: um agente de antes devolve só `{"ok":true}`, e o app usa isso para avisar o usuário que pediu "sem guia" e o agente criou o `CLAUDE.md` mesmo assim). Cria a pasta, o esqueleto e a rede `<nome>_default` (com os rótulos do compose, falha de rede só vai para o log).
+
+Web: modal Novo projeto na página inicial do front web; erro aparece no campo, sucesso recarrega a lista. App: `DialogoNovoProjeto` valida o nome a cada letra com a mesma regra, mostra a frase do 400 como TEXTO (nunca HTML) e, num prazo estourado (ou 5xx), NÃO repete o pedido: relê `GET /api/projetos` e diz "talvez já tenha sido criado, confira a lista" (ou "criado", se o projeto já aparece).
+
+**Não há `POST /api/projetos/importar`**: importar (git clone, pasta do computador, pasta do servidor) e "Adicionar container" não passam pelo agente (ARQUITETURA 7.10 explica a escolha: o clone roda por SSH com a identidade do usuário, que o container do agente não tem).
 
 ### 4.2 `POST /api/projetos/:p/iniciar` | `parar` | `reiniciar`
 

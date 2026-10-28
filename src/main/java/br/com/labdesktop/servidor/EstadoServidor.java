@@ -123,6 +123,9 @@ public record EstadoServidor(
      * não disse (agente antigo, ou ainda não respondeu): quem pergunta decide o que assume.
      */
     public Boolean temClaude() {
+        if (local) {
+            return Boolean.FALSE; // as sessões do Claude do laboratório local ficam DESLIGADAS (opção avançada; tudo funciona sem IA)
+        }
         return versao == null ? null : versao.temClaude();
     }
 
