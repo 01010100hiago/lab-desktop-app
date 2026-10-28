@@ -152,6 +152,11 @@ public abstract class Dialogo {
         }
     }
 
+    /** O botão que responde ao Enter (o botão padrão da janela), ou {@code null}: os testes de cor o ligam a um {@code JRootPane} para ver como o FlatLaf o pinta. */
+    public final JButton botaoDoEnter() {
+        return botaoPadrao;
+    }
+
     /** Mostra o diálogo modal sobre {@code pai} e só volta quando ele fechar. Na EDT. */
     public final void mostrar(Window pai) {
         janela = new JDialog(pai, titulo, Dialog.ModalityType.APPLICATION_MODAL);

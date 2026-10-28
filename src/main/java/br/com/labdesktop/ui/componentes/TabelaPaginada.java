@@ -432,7 +432,9 @@ public final class TabelaPaginada<T> extends Painel {
         b.setHorizontalTextPosition(SwingConstants.LEADING);
         b.setIconTextGap(4);
         if (ativa) {
-            b.setIcon(Icones.colorido(crescente ? "seta-cima" : "seta-baixo", 12, Tokens.TEXTO));
+            javax.swing.Icon seta = Icones.colorido(crescente ? "seta-cima" : "seta-baixo", 12, Tokens.TEXTO);
+            b.setIcon(seta);
+            b.setDisabledIcon(seta); // o cinza de foto que o Swing gera para o ícone apagado não segue o tema
         }
         b.setToolTipText("Ordenar por " + c.titulo().toLowerCase(Locale.forLanguageTag("pt-BR"))
             + (ativa ? (crescente ? " (do menor para o maior)" : " (do maior para o menor)") : ""));

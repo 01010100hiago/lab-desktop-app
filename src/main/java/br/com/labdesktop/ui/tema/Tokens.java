@@ -39,6 +39,7 @@ public final class Tokens {
     public static final String ATENCAO_SUAVE = "Lab.atencaoSuave";
     public static final String PERIGO = "Lab.perigo";
     public static final String PERIGO_SUAVE = "Lab.perigoSuave";
+    public static final String PERIGO_FORTE = "Lab.perigoForte";
     public static final String FOCO = "Lab.foco";
     public static final String TRILHO = "Lab.trilho";
     public static final String SERIE5 = "Lab.serie5";
@@ -60,7 +61,7 @@ public final class Tokens {
         BG, BG2, SUPERFICIE, SUPERFICIE2, SUPERFICIE3, BORDA, BORDA_FORTE, BORDA_SUTIL,
         TEXTO, TEXTO2, TEXTO3, TEXTO_INVERSO,
         DESTAQUE, DESTAQUE_FORTE, DESTAQUE_TEXTO, DESTAQUE_SUAVE, DESTAQUE_BORDA,
-        OK, OK_SUAVE, ATENCAO, ATENCAO_SUAVE, PERIGO, PERIGO_SUAVE, FOCO, TRILHO,
+        OK, OK_SUAVE, ATENCAO, ATENCAO_SUAVE, PERIGO, PERIGO_SUAVE, PERIGO_FORTE, FOCO, TRILHO,
         SERIE5, SERIE6, SERIE7, SERIE8, LOGS_BG, LOGS_TEXTO, LOGS_TEXTO2, LOGS_BORDA,
         MODAL_FUNDO, ESQUELETO_A, ESQUELETO_B, QR_TINTA, QR_FUNDO);
 

@@ -54,7 +54,7 @@ public final class Botoes {
     /** Botão mini ainda mais baixo (28 px), para dentro de LINHAS de tabela: 32 px em cada linha deixaria a tabela comprida. */
     public static Botao miniBaixo(String texto, String icone) {
         Botao b = miniDe(texto, icone, Variante.SECUNDARIO);
-        b.putClientProperty(FlatClientProperties.STYLE, "arc: 8; minimumHeight: 28; margin: 1,10,1,10");
+        b.putClientProperty(FlatClientProperties.STYLE, "arc: 8; minimumHeight: 28; margin: 1,10,1,10; " + Variante.SECUNDARIO.estilo());
         return b;
     }
 
@@ -75,14 +75,7 @@ public final class Botoes {
     }
 
     private static String estiloMini(Variante v) {
-        String base = switch (v) {
-            case PRIMARIO -> "background: $Lab.destaque; foreground: $Lab.destaqueTexto; borderColor: $Lab.destaque; "
-                + "hoverBackground: $Lab.destaqueForte; pressedBackground: $Lab.destaqueForte; hoverBorderColor: $Lab.destaqueForte; "
-                + "disabledBackground: $Lab.superficie3; disabledText: $Lab.texto3";
-            case PERIGO -> "foreground: $Lab.perigo; hoverBackground: $Lab.perigoSuave; hoverBorderColor: $Lab.perigo";
-            default -> "";
-        };
-        return "arc: 8; minimumHeight: " + ALTURA + "; margin: 2,12,2,12; " + base;
+        return "arc: 8; minimumHeight: " + ALTURA + "; margin: 2,12,2,12; " + v.estilo();
     }
 
     /** Botão quadrado só com ícone (32 px), com a dica como tooltip e nome acessível. */
@@ -103,8 +96,7 @@ public final class Botoes {
         b.setIcon(Icones.de(icone, 14));
         b.setToolTipText(dica);
         b.getAccessibleContext().setAccessibleName(dica);
-        String estilo = variante == Variante.PRIMARIO ? estiloMini(variante) : "arc: 8; margin: 0,0,0,0; "
-            + (variante == Variante.FANTASMA ? "buttonType: borderless; hoverBackground: $Lab.superficie3" : "");
+        String estilo = variante == Variante.PRIMARIO ? estiloMini(variante) : "arc: 8; margin: 0,0,0,0; " + variante.estilo();
         b.putClientProperty(FlatClientProperties.STYLE, estilo + "; minimumWidth: " + ALTURA + "; minimumHeight: " + ALTURA + "; margin: 0,0,0,0");
         b.setPreferredSize(new Dimension(ALTURA, ALTURA));
         b.setMinimumSize(new Dimension(ALTURA, ALTURA));
@@ -119,6 +111,9 @@ public final class Botoes {
 
             @Override
             public java.awt.Color getForeground() {
+                if (!isEnabled()) {
+                    return Tokens.cor(Tokens.TEXTO3); // o mesmo cinza apagado do botão desabilitado (Botao)
+                }
                 return Tokens.cor(isSelected() ? Tokens.DESTAQUE : Tokens.TEXTO);
             }
         };

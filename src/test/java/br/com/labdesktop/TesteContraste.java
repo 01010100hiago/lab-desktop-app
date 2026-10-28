@@ -88,6 +88,9 @@ class TesteContraste {
         l.add(new Par(Tokens.PERIGO, Tokens.PERIGO_SUAVE, TEXTO));
         l.add(new Par(Tokens.DESTAQUE_TEXTO, Tokens.DESTAQUE, TEXTO)); // texto da ação primária
         l.add(new Par(Tokens.DESTAQUE_TEXTO, Tokens.DESTAQUE_FORTE, TEXTO)); // e dela com o mouse em cima
+        l.add(new Par(Tokens.DESTAQUE_TEXTO, Tokens.PERIGO, TEXTO)); // botão do Enter de uma pergunta que apaga: texto de destaque sobre vermelho
+        l.add(new Par(Tokens.DESTAQUE_TEXTO, Tokens.PERIGO_FORTE, TEXTO)); // e dele com o mouse em cima
+        l.add(new Par(Tokens.TEXTO3, Tokens.SUPERFICIE3, TEXTO)); // botão desabilitado: texto apagado (também o ícone) sobre o fundo do desabilitado
         l.add(new Par(Tokens.LOGS_TEXTO, Tokens.LOGS_BG, TEXTO));
         l.add(new Par(Tokens.LOGS_TEXTO2, Tokens.LOGS_BG, TEXTO));
         l.add(new Par(Tokens.FOCO, Tokens.SUPERFICIE, COMPONENTE)); // anel de foco: componente, não texto

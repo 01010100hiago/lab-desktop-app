@@ -21,20 +21,32 @@ public final class Botao extends JButton {
 
     private static final long serialVersionUID = 1L;
 
-    /** As variantes. */
+    /**
+     * As variantes. O estilo de cada uma diz a cor do fundo, do texto e da borda em TODOS os estados que o FlatLaf pinta (normal, mouse em cima,
+     * apertado, desabilitado e botão padrão do diálogo, o do Enter), sempre por token. Deixar um estado de fora faz o FlatLaf pintá-lo com as cores
+     * dele (o botão padrão sai grafite com o texto da variante, ilegível: era o "botão de confirmação preto").
+     */
     public enum Variante {
         PRIMARIO("background: $Lab.destaque; foreground: $Lab.destaqueTexto; borderColor: $Lab.destaque; "
             + "hoverBackground: $Lab.destaqueForte; pressedBackground: $Lab.destaqueForte; "
             + "hoverBorderColor: $Lab.destaqueForte; focusedBorderColor: $Lab.foco; "
-            + "disabledBackground: $Lab.superficie3; disabledText: $Lab.texto3; disabledBorderColor: $Lab.borda",
+            + DESABILITADO
+            + padrao("$Lab.destaque", "$Lab.destaqueTexto", "$Lab.destaque", "$Lab.destaqueForte", "$Lab.destaqueForte", "$Lab.destaqueForte"),
             Tokens.DESTAQUE_TEXTO, true),
-        SECUNDARIO("", Tokens.TEXTO, false),
-        PERIGO("foreground: $Lab.perigo; hoverBackground: $Lab.perigoSuave; hoverBorderColor: $Lab.perigo",
+        SECUNDARIO(DESABILITADO
+            + padrao("$Button.background", "$Lab.texto", "$Lab.destaque", "$Button.hoverBackground", "$Button.pressedBackground", "$Lab.destaque"),
+            Tokens.TEXTO, false),
+        PERIGO("foreground: $Lab.perigo; hoverBackground: $Lab.perigoSuave; pressedBackground: $Lab.perigoSuave; hoverBorderColor: $Lab.perigo; "
+            + DESABILITADO
+            // o botão do Enter de uma pergunta que apaga ou desfaz: cheio em vermelho com o texto de destaque (branco no claro, grafite no escuro)
+            + padrao("$Lab.perigo", "$Lab.destaqueTexto", "$Lab.perigo", "$Lab.perigoForte", "$Lab.perigoForte", "$Lab.perigoForte"),
             Tokens.PERIGO, false),
         LINK("buttonType: borderless; foreground: $Lab.destaque; hoverForeground: $Lab.destaqueForte; "
-            + "hoverBackground: null; pressedBackground: null; margin: 0,2,0,2", Tokens.DESTAQUE, false),
+            + "hoverBackground: null; pressedBackground: null; margin: 0,2,0,2; "
+            + padrao("null", "$Lab.destaque", "null", "null", "null", "null"), Tokens.DESTAQUE, false),
         FANTASMA("buttonType: borderless; foreground: $Lab.texto2; hoverForeground: $Lab.texto; "
-            + "hoverBackground: $Lab.superficie3; pressedBackground: $Lab.superficie3",
+            + "hoverBackground: $Lab.superficie3; pressedBackground: $Lab.superficie3; "
+            + padrao("null", "$Lab.texto2", "null", "$Lab.superficie3", "$Lab.superficie3", "null"),
             Tokens.TEXTO2, false);
 
         private final String estilo;
@@ -46,6 +58,19 @@ public final class Botao extends JButton {
             this.tokenDoTexto = tokenDoTexto;
             this.negrito = negrito;
         }
+
+        /** O estilo FlatLaf completo da variante (sem tamanho nem margem): quem monta um botão de outro tamanho junta o seu à frente. */
+        public String estilo() {
+            return estilo;
+        }
+    }
+
+    private static final String DESABILITADO = "disabledBackground: $Lab.superficie3; disabledText: $Lab.texto3; disabledBorderColor: $Lab.borda; ";
+
+    private static String padrao(String fundo, String texto, String borda, String fundoEmCima, String fundoApertado, String bordaEmCima) {
+        return "default.background: " + fundo + "; default.foreground: " + texto + "; default.borderColor: " + borda
+            + "; default.hoverBackground: " + fundoEmCima + "; default.pressedBackground: " + fundoApertado
+            + "; default.hoverBorderColor: " + bordaEmCima + "; default.focusedBorderColor: $Lab.foco; default.focusColor: $Lab.foco";
     }
 
     private final Variante variante;
@@ -73,10 +98,24 @@ public final class Botao extends JButton {
         super.setToolTipText(texto == null || texto.isBlank() ? null : TextoSeguro.limparLinha(texto));
     }
 
+    /**
+     * A cor do texto E do ícone (o ícone pinta com a cor do componente) no estado de agora, uma só conta para todo botão: desabilitado é o texto
+     * apagado (o ícone branco do primário sobre o fundo cinza do desabilitado sumia), o botão do Enter de uma pergunta que apaga é texto de destaque sobre
+     * vermelho, e o resto é o token da variante. Lida na hora de pintar: a troca de tema vale sem refazer o botão.
+     */
     @Override
     public Color getForeground() {
         // o construtor do JButton já pergunta a cor (installUI) antes de o campo existir
-        return variante == null ? super.getForeground() : Tokens.cor(variante.tokenDoTexto);
+        if (variante == null) {
+            return super.getForeground();
+        }
+        if (!isEnabled()) {
+            return Tokens.cor(Tokens.TEXTO3);
+        }
+        if (variante == Variante.PERIGO && isDefaultButton()) {
+            return Tokens.cor(Tokens.DESTAQUE_TEXTO);
+        }
+        return Tokens.cor(variante.tokenDoTexto);
     }
 
     public Variante variante() {
@@ -111,7 +150,7 @@ public final class Botao extends JButton {
             pararAnimacao = () -> { };
             ocupado = false;
             super.setIcon(iconeDeRepouso);
-            setDisabledIcon(null);
+            setDisabledIcon(iconeDeRepouso);
             super.setEnabled(habilitadoAntes);
         }
     }
@@ -132,6 +171,9 @@ public final class Botao extends JButton {
             iconeDeRepouso = icone;
         } else {
             super.setIcon(icone);
+            // o ícone apagado que o Swing gera sozinho é um cinza de foto, sem relação com o tema; o mesmo ícone, pintado com a cor do botão
+            // desabilitado (getForeground), sai no cinza do texto apagado
+            setDisabledIcon(icone);
         }
     }
 
