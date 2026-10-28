@@ -17,18 +17,29 @@ final class ConteudoEmMemoria {
     static final class ServidorGuardado {
         final ConfigServidor config;
         final TokenAgente token;
+        /** Como falar com o agente que o app instalou neste servidor; {@code null} se nunca instalou. Não é segredo. */
+        final AgenteInstalado agente;
 
         ServidorGuardado(ConfigServidor config, TokenAgente token) {
+            this(config, token, null);
+        }
+
+        ServidorGuardado(ConfigServidor config, TokenAgente token, AgenteInstalado agente) {
             this.config = config;
             this.token = token;
+            this.agente = agente;
         }
 
         ServidorGuardado comConfig(ConfigServidor nova) {
-            return new ServidorGuardado(nova, token);
+            return new ServidorGuardado(nova, token, agente);
         }
 
         ServidorGuardado comToken(TokenAgente novo) {
-            return new ServidorGuardado(config, novo);
+            return new ServidorGuardado(config, novo, agente);
+        }
+
+        ServidorGuardado comAgente(AgenteInstalado novo) {
+            return new ServidorGuardado(config, token, novo);
         }
 
         @Override

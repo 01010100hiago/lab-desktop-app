@@ -98,6 +98,11 @@ final class ConteudoCofre {
         String nomeDoDispositivo;
         @JsonProperty("estado2fa")
         String estado2fa;
+        /** Container do agente que o app instalou (ausente: nunca instalou aqui) e se o Docker só responde por sudo. Opcionais. */
+        @JsonProperty("agenteContainer")
+        String agenteContainer;
+        @JsonProperty("agenteComSudo")
+        Boolean agenteComSudo;
 
         @Override
         public String toString() {
@@ -150,9 +155,9 @@ final class ConteudoCofre {
             ServidorJson j = new ServidorJson();
             j.id = cfg.id();
             j.nome = cfg.nome();
-            j.host = cfg.host();
+            j.host = cfg.ehLocal() ? null : cfg.host(); // o servidor local não tem endereço, porta nem usuário de SSH
             j.porta = cfg.porta();
-            j.usuario = cfg.usuario();
+            j.usuario = cfg.ehLocal() ? null : cfg.usuario();
             j.chaveId = cfg.chaveId();
             j.portaAgente = cfg.portaAgente();
             j.tokenAgente = s.token == null ? null : s.token.bytesInternos();
@@ -163,11 +168,19 @@ final class ConteudoCofre {
                 j.pins.add(pj);
             }
             TransporteJson tj = new TransporteJson();
-            tj.tipo = cfg.transporte().tipo() == Transporte.Tipo.DIRETO ? "direto" : "cloudflared";
+            tj.tipo = switch (cfg.transporte().tipo()) {
+                case DIRETO -> "direto";
+                case CLOUDFLARED -> "cloudflared";
+                case LOCAL -> "local";
+            };
             tj.hostname = cfg.transporte().hostname();
             j.transporte = tj;
             j.nomeDoDispositivo = cfg.nomeDoDispositivo();
             j.estado2fa = cfg.estado2fa().rotulo();
+            if (s.agente != null) {
+                j.agenteContainer = s.agente.container();
+                j.agenteComSudo = s.agente.comSudo() ? Boolean.TRUE : null;
+            }
             json.servidores.add(j);
         }
         return json;
@@ -204,7 +217,8 @@ final class ConteudoCofre {
                 if (j == null || !idsDeServidor.add(j.id)) {
                     throw new CofreCorrompidoException("Cofre com servidor de id repetido.");
                 }
-                if (!idsDeChave.contains(j.chaveId)) {
+                boolean local = j.transporte != null && "local".equals(j.transporte.tipo);
+                if (!local && !idsDeChave.contains(j.chaveId)) {
                     throw new CofreCorrompidoException("Cofre com servidor que aponta para chave inexistente.");
                 }
                 TokenAgente token = null;
@@ -216,7 +230,9 @@ final class ConteudoCofre {
                     }
                 }
                 try {
-                    servidoresProntos.add(new ServidorGuardado(configDe(j), token));
+                    AgenteInstalado agente = j.agenteContainer == null ? null
+                        : new AgenteInstalado(j.agenteContainer, Boolean.TRUE.equals(j.agenteComSudo));
+                    servidoresProntos.add(new ServidorGuardado(configDe(j), token, agente));
                 } catch (IllegalArgumentException e) {
                     if (token != null) {
                         token.zerar();
@@ -269,6 +285,7 @@ final class ConteudoCofre {
             transporte = switch (j.transporte.tipo) {
                 case "direto" -> Transporte.DIRETO;
                 case "cloudflared" -> Transporte.cloudflared(j.transporte.hostname);
+                case "local" -> Transporte.LOCAL;
                 default -> throw new IllegalArgumentException("transporte desconhecido");
             };
         }

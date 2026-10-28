@@ -84,6 +84,17 @@ public interface AcessoAoCofre {
     Optional<InfoChave> infoDaChave(String chaveId);
 
     /**
+     * Como falar com o agente que este app instalou no servidor (container e sudo), ou vazio se ele nunca o instalou aqui (o agente do lab, por
+     * exemplo: vale o padrão {@code docker exec -i painel-lab}). A implementação padrão não lembra nada (fakes de teste).
+     */
+    default Optional<AgenteInstalado> agenteInstalado(String servidorId) {
+        return Optional.empty();
+    }
+
+    /** Guarda como falar com o agente instalado ({@code null} apaga: o agente foi removido). Sem mudança, não regrava o arquivo. */
+    default void gravarAgenteInstalado(String servidorId, AgenteInstalado agente) throws CofreException { }
+
+    /**
      * Pede para ser avisado quando o cofre for bloqueado (menu, auto-bloqueio, encerramento): é o gancho para
      * fechar canais e sessões SSH e descartar terminais (ARQUITETURA 5.6, passo 3). O {@code ouvinte} roda UMA vez,
      * numa thread qualquer, DEPOIS de os segredos terem sido zerados; se o cofre já estiver bloqueado, roda na hora.

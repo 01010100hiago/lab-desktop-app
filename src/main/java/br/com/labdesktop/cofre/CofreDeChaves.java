@@ -570,6 +570,9 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
         ConteudoEmMemoria c = exigirAberto();
         ServidorGuardado servidor = c.servidor(servidorId)
             .orElseThrow(() -> new IllegalArgumentException("Servidor desconhecido."));
+        if (servidor.config.ehLocal()) {
+            throw new CofreException("Este computador não usa chave SSH.");
+        }
         ChaveSsh chave = c.chave(servidor.config.chaveId())
             .orElseThrow(() -> new CofreException("O servidor aponta para uma chave que não está no cofre."));
         return chave.paraKeyPair();
@@ -646,7 +649,7 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
                 throw new IllegalArgumentException("Chave desconhecida.");
             }
             for (ServidorGuardado s : atual.servidores) {
-                if (s.config.chaveId().equals(chaveId)) {
+                if (chaveId.equals(s.config.chaveId())) {
                     throw new CofreException("A chave ainda é usada pelo servidor \"" + s.config.nome() + "\".");
                 }
             }
@@ -666,7 +669,11 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
             if (atual.servidor(config.id()).isPresent()) {
                 throw new IllegalArgumentException("Já existe um servidor com este id.");
             }
-            if (atual.chave(config.chaveId()).isEmpty()) {
+            if (config.ehLocal()) {
+                if (atual.servidores.stream().anyMatch(s -> s.config.ehLocal())) {
+                    throw new IllegalArgumentException("Já existe o servidor \"Este computador\".");
+                }
+            } else if (atual.chave(config.chaveId()).isEmpty()) {
                 throw new IllegalArgumentException("A chave do servidor não está no cofre.");
             }
             return atual.comServidor(new ServidorGuardado(config, token));
@@ -679,7 +686,7 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
         mutar(atual -> {
             ServidorGuardado antigo = atual.servidor(config.id())
                 .orElseThrow(() -> new IllegalArgumentException("Servidor desconhecido."));
-            if (atual.chave(config.chaveId()).isEmpty()) {
+            if (!config.ehLocal() && atual.chave(config.chaveId()).isEmpty()) {
                 throw new IllegalArgumentException("A chave do servidor não está no cofre.");
             }
             if (antigo.config.equals(config)) {
@@ -709,9 +716,13 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
             ConteudoEmMemoria restante = atual.semServidor(servidorId);
             ConteudoEmMemoria novo = restante;
             String chaveId = servidor.config.chaveId();
+            if (chaveId == null) {
+                return novo; // o servidor local não tem chave
+            }
             String impressao = atual.chave(chaveId).map(ChaveSsh::impressao).orElse(null);
-            boolean outroUsa = restante.servidores.stream().anyMatch(s -> s.config.chaveId().equals(chaveId)
-                || (impressao != null && restante.chave(s.config.chaveId()).map(c -> impressao.equals(c.impressao())).orElse(false)));
+            boolean outroUsa = restante.servidores.stream().anyMatch(s -> chaveId.equals(s.config.chaveId())
+                || (impressao != null && s.config.chaveId() != null
+                    && restante.chave(s.config.chaveId()).map(c -> impressao.equals(c.impressao())).orElse(false)));
             if (apagarAChaveSeLivre && !outroUsa && novo.chave(chaveId).isPresent()) {
                 novo = novo.semChave(chaveId);
                 chaveApagada[0] = true;
@@ -729,7 +740,7 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
             if (!nova.id().equals(servidorId)) {
                 throw new IllegalArgumentException("A edição não pode mudar o id do servidor.");
             }
-            if (chave(nova.chaveId()).isEmpty()) {
+            if (!nova.ehLocal() && chave(nova.chaveId()).isEmpty()) {
                 throw new IllegalArgumentException("A chave do servidor não está no cofre.");
             }
             return nova;
@@ -767,8 +778,25 @@ public final class CofreDeChaves implements AcessoAoCofre, AutoCloseable {
         mutar(atual -> {
             ServidorGuardado antigo = atual.servidor(servidorId)
                 .orElseThrow(() -> new IllegalArgumentException("Servidor desconhecido."));
-            ServidorGuardado novo = new ServidorGuardado(antigo.config.comNomeDoDispositivo(nomeDoDispositivo), token);
+            ServidorGuardado novo = new ServidorGuardado(antigo.config.comNomeDoDispositivo(nomeDoDispositivo), token, antigo.agente);
             return atual.substituindoServidor(novo);
+        });
+    }
+
+    @Override
+    public Optional<AgenteInstalado> agenteInstalado(String servidorId) {
+        return exigirAberto().servidor(servidorId).map(s -> s.agente);
+    }
+
+    @Override
+    public void gravarAgenteInstalado(String servidorId, AgenteInstalado agente) throws CofreException {
+        mutar(atual -> {
+            ServidorGuardado antigo = atual.servidor(servidorId)
+                .orElseThrow(() -> new IllegalArgumentException("Servidor desconhecido."));
+            if (java.util.Objects.equals(antigo.agente, agente)) {
+                return atual;
+            }
+            return atual.substituindoServidor(antigo.comAgente(agente));
         });
     }
 
