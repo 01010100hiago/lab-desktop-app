@@ -411,6 +411,14 @@ public final class ConexaoSsh implements AutoCloseable {
         return abrirPty(s.createShellChannel(), colunas, linhas);
     }
 
+    /** Como {@link #abrirShellPty}, mas já dentro da pasta do projeto ({@link LinhaDePty#shellDoProjeto}). */
+    public PtyCapableChannelSession abrirShellDoProjetoPty(String pasta, int colunas, int linhas) throws IOException {
+        String comando = LinhaDePty.shellDoProjeto(pasta); // valida o caminho antes de tocar a sessão
+        ExecRemoto.exigirLinhaSemControle(comando);
+        ClientSession s = sessaoParaCanal();
+        return abrirPty(s.createExecChannel(comando), colunas, linhas);
+    }
+
     private ClientSession sessaoParaCanal() throws IOException {
         ClientSession s = sessaoViva;
         if (s == null || !s.isOpen()) {

@@ -73,6 +73,22 @@ class TransporteSshTest {
     }
 
     @Test
+    void abreOShellDoProjetoNaPastaDele() throws Exception {
+        try (CenarioDeTerminal c = CenarioDeTerminal.conectado()) {
+            CanalDeTerminal canal = new TransporteSsh(c.conexao).abrir(new ComandoDeTerminal.ShellDoProjeto("/srv/lab/projects/orbita"),
+                TamanhoDeTerminal.PADRAO);
+            try {
+                Espera.ate(PRAZO, "o servidor viu o comando", () -> c.terminal.comandos.size() == 1);
+                assertEquals("cd '/srv/lab/projects/orbita' 2>/dev/null || { echo 'A pasta do projeto não foi encontrada; abrindo na pasta pessoal.'; cd; }; "
+                    + "exec \"${SHELL:-/bin/sh}\" -l", c.terminal.comandos.get(0));
+                assertTrue(canal.aberto());
+            } finally {
+                canal.fechar();
+            }
+        }
+    }
+
+    @Test
     void aguardarFimDevolveOStatusDeSaidaDoServidor() throws Exception {
         try (CenarioDeTerminal c = CenarioDeTerminal.conectado()) {
             c.terminal.roteiro(ServidorDeTerminalFalso.imprimirESair("adeus\r\n", 7));

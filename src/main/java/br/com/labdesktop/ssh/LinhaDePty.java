@@ -30,4 +30,17 @@ public final class LinhaDePty {
         return "docker exec -it -e LANG=C.UTF-8 -e TERM=" + TIPO_DE_TERMINAL + " -e COLORTERM=truecolor lab-claude-" + projeto
             + " tmux -u attach" + (donoExclusivo ? " -d" : "") + " -t " + SESSAO_TMUX;
     }
+
+    /**
+     * O shell de login do usuário dentro da pasta do projeto. Sem a pasta, cai na pasta pessoal e diz isso. O caminho só entra na
+     * linha depois de passar pela regra de {@link br.com.labdesktop.terminal.ComandoDeTerminal.ShellDoProjeto} (sem aspas,
+     * espaço nem controle).
+     *
+     * @throws IllegalArgumentException se o caminho não passa na regra
+     */
+    public static String shellDoProjeto(String pasta) {
+        String validada = new br.com.labdesktop.terminal.ComandoDeTerminal.ShellDoProjeto(pasta).pasta();
+        return "cd '" + validada + "' 2>/dev/null || { echo 'A pasta do projeto não foi encontrada; abrindo na pasta pessoal.'; cd; }; "
+            + "exec \"${SHELL:-/bin/sh}\" -l";
+    }
 }

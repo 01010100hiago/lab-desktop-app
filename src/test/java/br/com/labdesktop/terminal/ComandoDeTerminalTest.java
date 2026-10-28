@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.labdesktop.terminal.ComandoDeTerminal.SessaoDoClaude;
+import br.com.labdesktop.terminal.ComandoDeTerminal.ShellDoProjeto;
 import br.com.labdesktop.terminal.ComandoDeTerminal.ShellDoServidor;
 import org.junit.jupiter.api.Test;
 
@@ -27,9 +28,20 @@ class ComandoDeTerminalTest {
     }
 
     @Test
-    void sohOShellEhShell() {
+    void osDoisShellsSaoShellESoASessaoDoClaudeNao() {
         assertTrue(ShellDoServidor.INSTANCIA.ehShell());
+        assertTrue(new ShellDoProjeto("/srv/lab/projects/orbita").ehShell());
         assertFalse(new SessaoDoClaude("orbita").ehShell());
+    }
+
+    @Test
+    void pastaDeProjetoRuimNaoViraComando() {
+        for (String ruim : new String[] {"", "orbita", "srv/lab", "/srv/lab/../etc", "/a b", "/a'b", "/a;b", "/a$(id)", "/a\nb", "/ação", "/..", null}) {
+            assertThrows(IllegalArgumentException.class, () -> new ShellDoProjeto(ruim), "aceitou: " + ruim);
+            assertFalse(ShellDoProjeto.valida(ruim));
+        }
+        assertTrue(ShellDoProjeto.valida("/srv/lab/projects/orbita"));
+        assertTrue(ShellDoProjeto.valida("/home/labuser/meus.projetos_2/x-y"));
     }
 
     @Test
