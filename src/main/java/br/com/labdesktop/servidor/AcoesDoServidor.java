@@ -212,6 +212,11 @@ public final class AcoesDoServidor {
         return ler(a -> a.logs(projeto, container, linhas));
     }
 
+    /** O histórico de métricas de uma janela, uma vez (o relatório, ao trocar de período). Só chame se o agente declarou {@code recursos.historico}. */
+    public br.com.labdesktop.tendencias.DadosDeTendencia historico(br.com.labdesktop.tendencias.JanelaDeTempo janela) throws ErroApi {
+        return br.com.labdesktop.tendencias.DadosDeTendencia.deHistorico(janela, ler(a -> a.historico(janela.codigo())), java.time.Instant.now());
+    }
+
     /** A tela do Claude, uma vez. */
     public TelaClaude tela(String projeto) throws ErroApi {
         return ler(a -> a.telaDoClaude(projeto));

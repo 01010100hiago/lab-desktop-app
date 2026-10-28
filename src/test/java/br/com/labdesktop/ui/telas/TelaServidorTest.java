@@ -16,7 +16,10 @@ import br.com.labdesktop.servidor.ResumoDeSeguranca.Leitura;
 import br.com.labdesktop.servidor.ResumoDeSeguranca.TipoDeTentativa;
 import br.com.labdesktop.ssh.EstadoConexao;
 import br.com.labdesktop.ssh.Falha;
+import br.com.labdesktop.teste.HistoricoSintetico;
 import br.com.labdesktop.teste.SaidasDeSeguranca;
+import br.com.labdesktop.tendencias.DadosDeTendencia;
+import br.com.labdesktop.tendencias.JanelaDeTempo;
 import br.com.labdesktop.ui.AvisosGravados;
 import br.com.labdesktop.ui.BarraServidores;
 import br.com.labdesktop.ui.DialogosGravados;
@@ -208,6 +211,88 @@ class TelaServidorTest {
         }
     }
 
+    /** O Resumo completo: o agente novo (seis gráficos de um período) e 200 linhas de registro, para o teste de "cabe sem rolagem" e os PNGs. */
+    static void encher(TelaServidor t, JanelaDeTempo janela) {
+        Visual.naEdt(() -> {
+            PaginaResumo r = t.resumo();
+            r.definirHistoricoDeLongoPrazoParaTeste(true);
+            r.lembrarJanelaParaTeste(janela);
+            r.aoReceberHistorico(DadosDeTendencia.deHistorico(janela, HistoricoSintetico.dados(janela, AGORA, 0), AGORA));
+            r.caixaDoRegistro().painel().aoReceber(ResumoComTendenciasERegistroTest.muitasLinhas());
+        });
+    }
+
+    /** Como {@link #conferirQueOResumoCabe}, depois de {@code antes} (que acrescenta dados) e conferindo que o Registro usou a altura que sobrou. */
+    private static void conferirQueOResumoCompletoCabe(int larguraDaJanela, int alturaDaJanela, Tema tema, JanelaDeTempo janela, java.util.function.Consumer<TelaServidor> antes, String png) {
+        Visual.tema(tema);
+        TelaServidor t = nova();
+        alimentar(t, EstadoConexao.CONECTADO, FixturesDeApi.servidorSintetico(), FixturesDeApi.detalheSintetico(), ModeloDeKpisTest.comAtaque());
+        encher(t, janela);
+        antes.accept(t);
+        int largura = larguraDaJanela - BarraServidores.LARGURA;
+        int altura = alturaDaJanela - 28;
+        int pedida = Visual.alturaPreferida(t, largura);
+        assertTrue(pedida <= altura, "o Resumo completo pede " + pedida + " px, e a janela de " + larguraDaJanela + "x" + alturaDaJanela + " dá " + altura);
+        BufferedImage img = Visual.renderizar(t, largura, altura);
+        assertFalse(Visual.naEdt(() -> t.resumo().rolagem().getVerticalScrollBar().isVisible()), "o corpo do Resumo não rola");
+        assertFalse(Visual.naEdt(() -> t.resumo().rolagem().getHorizontalScrollBar().isVisible()));
+        Visual.naEdt(() -> {
+            // a lista do registro rola POR DENTRO: as 200 linhas não cabem, e a barra da lista é a que aparece
+            var caixa = t.resumo().caixaDoRegistro();
+            int fundoDaCaixa = javax.swing.SwingUtilities.convertPoint(caixa, 0, caixa.getHeight(), t.resumo()).y;
+            int fundoDaPagina = t.resumo().rolagem().getViewport().getHeight() + javax.swing.SwingUtilities.convertPoint(t.resumo().rolagem().getViewport(), 0, 0, t.resumo()).y;
+            assertTrue(fundoDaPagina - fundoDaCaixa < 40, "o Registro vai até o fim da janela (sobra " + (fundoDaPagina - fundoDaCaixa) + " px)");
+            assertTrue(t.resumo().caixaDoRegistro().painel().lista().getModel().getSize() == 200);
+            return null;
+        });
+        if (png != null) {
+            Visual.salvar(img, png);
+        }
+    }
+
+    @Test
+    void oResumoCompletoCabeSemRolagemEm1100x700ComSeisGraficosERegistroCheio() {
+        for (JanelaDeTempo j : JanelaDeTempo.values()) {
+            conferirQueOResumoCompletoCabe(1100, 700, Tema.CLARO, j, t -> { }, j == JanelaDeTempo.UMA_SEMANA ? "resumo-completo-claro-1100" : null);
+        }
+        conferirQueOResumoCompletoCabe(1100, 700, Tema.ESCURO, JanelaDeTempo.UM_DIA, t -> { }, "resumo-completo-escuro-1100");
+    }
+
+    @Test
+    void oResumoCompletoCabeSemRolagemEm1440x860EORegistroGanhaAsLinhasQueSobram() {
+        conferirQueOResumoCompletoCabe(1440, 860, Tema.CLARO, JanelaDeTempo.UM_DIA, t -> { }, "resumo-completo-claro-1440");
+        conferirQueOResumoCompletoCabe(1440, 860, Tema.ESCURO, JanelaDeTempo.UM_MES, t -> { }, "resumo-completo-escuro-1440");
+        // mais alto, a lista mostra MAIS linhas: o Registro realmente ocupa o que sobra
+        Visual.tema(Tema.CLARO);
+        TelaServidor pequeno = nova();
+        alimentar(pequeno, EstadoConexao.CONECTADO, FixturesDeApi.servidorSintetico(), FixturesDeApi.detalheSintetico(), ModeloDeKpisTest.comAtaque());
+        encher(pequeno, JanelaDeTempo.UM_DIA);
+        Visual.renderizar(pequeno, 1100 - BarraServidores.LARGURA, 700 - 28);
+        TelaServidor grande = nova();
+        alimentar(grande, EstadoConexao.CONECTADO, FixturesDeApi.servidorSintetico(), FixturesDeApi.detalheSintetico(), ModeloDeKpisTest.comAtaque());
+        encher(grande, JanelaDeTempo.UM_DIA);
+        Visual.renderizar(grande, 1440 - BarraServidores.LARGURA, 860 - 28);
+        int linhasPequeno = Visual.naEdt(() -> {
+            var l = pequeno.resumo().caixaDoRegistro().painel().lista();
+            return l.getLastVisibleIndex() - l.getFirstVisibleIndex() + 1;
+        });
+        int linhasGrande = Visual.naEdt(() -> {
+            var l = grande.resumo().caixaDoRegistro().painel().lista();
+            return l.getLastVisibleIndex() - l.getFirstVisibleIndex() + 1;
+        });
+        assertTrue(linhasGrande > linhasPequeno + 3, "1440x860 mostra " + linhasGrande + " linhas e 1100x700 só " + linhasPequeno);
+    }
+
+    @Test
+    void oResumoCabeTambemComUmAvisoNasTendenciasSemRolagemEm1100x700() {
+        // agente de antes com um período lembrado que ele não tem: o aviso mora na linha do título e não pede altura
+        conferirQueOResumoCompletoCabe(1100, 700, Tema.CLARO, JanelaDeTempo.UM_DIA, t -> Visual.naEdt(() -> t.resumo().definirHistoricoDeLongoPrazoParaTeste(false)), "resumo-agente-so-dez-minutos-claro-1100");
+        conferirQueOResumoCompletoCabe(1100, 700, Tema.CLARO, JanelaDeTempo.UM_DIA, t -> Visual.naEdt(() -> {
+            t.resumo().definirHistoricoDeLongoPrazoParaTeste(true);
+            t.resumo().aoReceberHistorico(DadosDeTendencia.deHistorico(JanelaDeTempo.UM_DIA, HistoricoSintetico.dados(JanelaDeTempo.UM_DIA, AGORA, 200), AGORA));
+        }), null);
+    }
+
     @Test
     void oResumoCabeSemRolagemEm1440x860() {
         conferirQueOResumoCabe(1440, 860, ModeloDeKpisTest.comAtaque(), FixturesDeApi.servidorSintetico(), FixturesDeApi.detalheSintetico());
@@ -355,21 +440,25 @@ class TelaServidorTest {
     }
 
     @Test
-    void tendenciasEmGradeCompactaComUmGraficoPorSerieEHistoricoDeSessentaPontos() {
+    void tendenciasSaoSeisGraficosNaOrdemDoPedidoEUmAgenteDeAntesSoTemOsDezMinutos() {
         Visual.tema(Tema.CLARO);
         TelaServidor t = nova();
         alimentar(t, EstadoConexao.CONECTADO, null, false);
+        assertEquals(List.of("CPU", "Memória", "Disco", "Escrita no disco", "Download", "Upload"), Visual.naEdt(() -> t.resumo().blocoDeTendencias().nomes()));
         var graficos = Visual.naEdt(() -> t.resumo().blocoDeTendencias().graficos());
-        assertEquals(5, graficos.size(), "CPU, memória, descida, subida e temperatura");
-        for (int i = 0; i < 4; i++) {
-            assertEquals(60, graficos.get(i).quantidadeDePontos());
-        }
-        assertEquals(57, graficos.get(4).quantidadeDePontos(), "a temperatura começa com 3 nulos: descartados");
+        assertEquals(6, graficos.size());
+        assertEquals(60, graficos.get(0).quantidadeDePontos(), "CPU: 60 pontos de 10 s");
+        assertEquals(60, graficos.get(1).quantidadeDePontos());
+        assertEquals(0, graficos.get(2).quantidadeDePontos(), "Disco: o agente de antes não grava");
+        assertEquals(0, graficos.get(3).quantidadeDePontos(), "Escrita: idem");
+        assertEquals(60, graficos.get(4).quantidadeDePontos());
+        assertEquals(60, graficos.get(5).quantidadeDePontos());
         var legendas = Visual.naEdt(() -> t.resumo().blocoDeTendencias().legendas());
-        assertTrue(legendas.get(0).startsWith("agora "), legendas.get(0));
-        assertTrue(legendas.get(0).contains("mín") && legendas.get(0).contains("máx"), legendas.get(0));
-        assertTrue(legendas.get(2).contains("kb/s"), "a rede em bits: " + legendas.get(2));
-        assertTrue(texto(t.resumo().blocoDeTendencias()).contains("últimos 10 min"));
+        assertTrue(legendas.get(0).startsWith("mín ") && legendas.get(0).contains("méd") && legendas.get(0).contains("máx"), legendas.get(0));
+        assertEquals("sem dado ainda", legendas.get(2));
+        assertEquals("sem dado ainda", legendas.get(3));
+        assertTrue(Visual.naEdt(() -> t.resumo().blocoDeTendencias().valoresDeAgora()).get(4).endsWith("kb/s"), "a rede em bits");
+        assertTrue(texto(t.resumo().blocoDeTendencias()).contains("últimos 10 minutos"));
     }
 
     // ---------------------------------------------------------------------------------------------

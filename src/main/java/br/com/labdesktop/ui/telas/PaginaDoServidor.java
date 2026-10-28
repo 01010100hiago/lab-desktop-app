@@ -108,6 +108,33 @@ public abstract class PaginaDoServidor extends Painel {
         return null;
     }
 
+    /** A aba estica o conteúdo até o fim da janela quando sobra altura (só o Resumo: a caixa do Registro ocupa o que sobra). */
+    boolean preencheAAltura() {
+        return false;
+    }
+
+    /**
+     * A aba mostra o corpo mesmo sem a leitura do agente? O Resumo de um servidor SSH SEM o agente mostra o que não precisa dele (Segurança, Registro) e diz nas Tendências "Instale o
+     * agente"; as outras abas continuam com o cartão "sem dados".
+     */
+    boolean mostraCorpoSemLeitura(SituacaoDaVisao situacao) {
+        return false;
+    }
+
+    /** Gancho: a aba acabou de assinar os seus tópicos (visível). */
+    void aoAssinarMais() { }
+
+    /** Gancho: a aba vai soltar os seus tópicos (escondida). */
+    void aoSoltarMais() { }
+
+    /** Gancho: o estado da conexão mudou (na EDT), depois de a aba se redesenhar. */
+    void aoMudarEstadoMais(EstadoServidor novo) { }
+
+    /** O servidor vivo ({@code null} nos testes que alimentam a aba com dados fixos). */
+    final ServidorLab servidor() {
+        return servidor;
+    }
+
     /** Refaz o conteúdo com os dados de agora (só quando a aba já tem dados). */
     abstract void atualizarConteudo();
 
@@ -136,7 +163,8 @@ public abstract class PaginaDoServidor extends Painel {
                 primeiro = false;
             }
         }
-        rolagem = new MioloRolavel(pilha, () -> Integer.MAX_VALUE);
+        corpo.preencher(preencheAAltura());
+        rolagem = new MioloRolavel(pilha, () -> Integer.MAX_VALUE, preencheAAltura());
         rolagem.getVerticalScrollBar().setUnitIncrement(18);
         add(rolagem, BorderLayout.CENTER);
         redesenhar();
@@ -234,10 +262,12 @@ public abstract class PaginaDoServidor extends Painel {
             });
         }
         inscricaoDoEstado = servidor.observarEstado(this::aoMudarEstado);
+        aoAssinarMais();
     }
 
     /** Para de consultar. Chamado ao esconder; idempotente. */
     public final void soltar() {
+        aoSoltarMais();
         for (Inscricao i : new Inscricao[] {inscricaoDoServidor, inscricaoDoDetalhe, inscricaoDaSeguranca, inscricaoDoEstado}) {
             if (i != null) {
                 i.close();
@@ -278,6 +308,7 @@ public abstract class PaginaDoServidor extends Painel {
     public final void aoMudarEstado(EstadoServidor novo) {
         this.estado = novo;
         redesenhar();
+        aoMudarEstadoMais(novo);
     }
 
     private void aoFalharServidor(ErroApi erro) {
@@ -338,18 +369,20 @@ public abstract class PaginaDoServidor extends Painel {
         }
         boolean tem = temDados();
         situacao = SituacaoDaVisao.de(estado, tem, leitura(), relogio.get(), fuso);
+        boolean semLeituraMasComCorpo = !tem && mostraCorpoSemLeitura(situacao);
+        boolean corpoVisivel = tem || semLeituraMasComCorpo;
         atualizarTopo();
         faixaDeDados.mostrar(situacao);
-        if (!tem && situacao.modo().naoInstalado()) {
+        if (!tem && situacao.modo().naoInstalado() && !semLeituraMasComCorpo) {
             faixaDeDados.setVisible(false); // o cartão "sem dados" já diz isto, com o botão: sem repetir o mesmo aviso em cima
         }
         boolean erro = erroSemDados != null && !tem;
-        esqueleto.setVisible(!tem && !erro && situacao.modo() == SituacaoDaVisao.Modo.CARREGANDO);
-        semDados.setVisible(!tem && (erro || situacao.modo() != SituacaoDaVisao.Modo.CARREGANDO));
+        esqueleto.setVisible(!corpoVisivel && !erro && situacao.modo() == SituacaoDaVisao.Modo.CARREGANDO);
+        semDados.setVisible(!corpoVisivel && (erro || situacao.modo() != SituacaoDaVisao.Modo.CARREGANDO));
         semDados.mostrar(erro ? MensagensDeErro.daApi(erroSemDados) : null, estado == null ? null : situacao);
-        corpo.setVisible(tem);
-        corpo.esmaecer(situacao.esmaecer());
-        if (tem) {
+        corpo.setVisible(corpoVisivel);
+        corpo.esmaecer(situacao.esmaecer() && tem);
+        if (corpoVisivel) {
             atualizarConteudo();
         }
         refazerLayout();
@@ -407,6 +440,12 @@ public abstract class PaginaDoServidor extends Painel {
     public static final class Esmaecivel extends Painel {
         private static final long serialVersionUID = 1L;
         private boolean esmaecido;
+        private boolean preencher;
+
+        /** Estica com a janela (o Resumo) em vez de ficar do tamanho que pede. */
+        public void preencher(boolean sim) {
+            this.preencher = sim;
+        }
 
         public void esmaecer(boolean sim) {
             if (sim != esmaecido) {
@@ -436,7 +475,7 @@ public abstract class PaginaDoServidor extends Painel {
 
         @Override
         public Dimension getMaximumSize() {
-            return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            return new Dimension(Integer.MAX_VALUE, preencher ? Integer.MAX_VALUE : getPreferredSize().height);
         }
     }
 

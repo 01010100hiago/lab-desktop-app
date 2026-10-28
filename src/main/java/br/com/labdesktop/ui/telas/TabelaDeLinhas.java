@@ -19,25 +19,25 @@ import javax.swing.JComponent;
  * Sem dado, mostra a frase de "vazio". Feita para listas curtas (20 processos, 5 sessões, 10 logins), refeita inteira
  * a cada atualização.
  */
-final class TabelaDeLinhas extends Painel {
+public final class TabelaDeLinhas extends Painel {
 
     private static final long serialVersionUID = 1L;
 
     /** Uma coluna: título, peso na sobra, se alinha à direita e se usa a fonte mono. */
-    record Coluna(String titulo, double peso, boolean numerica, boolean mono) { }
+    public record Coluna(String titulo, double peso, boolean numerica, boolean mono) { }
 
     private final List<Coluna> colunas;
     private final Rotulo vazio = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12.5f);
     private List<List<String>> linhas = List.of();
 
-    TabelaDeLinhas(Coluna... colunas) {
+    public TabelaDeLinhas(Coluna... colunas) {
         super(new GridBagLayout());
         this.colunas = List.of(colunas);
         definir(List.of(), "");
     }
 
     /** Troca as linhas. {@code mensagemVazia} aparece no lugar delas quando a lista está vazia. */
-    void definir(List<List<String>> novas, String mensagemVazia) {
+    public void definir(List<List<String>> novas, String mensagemVazia) {
         this.linhas = List.copyOf(novas);
         removeAll();
         int y = 0;

@@ -20,6 +20,14 @@ public interface EscolhedorLocal {
     /** A pasta do Mac onde guardar o que for baixado (começa em {@code padrao}); vazio se cancelou. */
     Optional<Path> escolherPastaParaBaixar(Path padrao);
 
+    /**
+     * Onde o usuário quer SALVAR um arquivo que o app gerou (o relatório): o seletor de arquivos do sistema, começando na pasta de Downloads com {@code nomeSugerido}. Vazio se cancelou.
+     * Neutro de sistema: nada de caminho fixo de um Mac.
+     */
+    default Optional<Path> escolherArquivoParaSalvar(String nomeSugerido, String extensao, String descricao) {
+        return Optional.empty();
+    }
+
     /** A pasta do computador que o usuário quer importar como projeto (o seletor do sistema, só pastas); vazio se cancelou. */
     default Optional<Path> escolherPastaParaImportar() {
         return Optional.empty();
@@ -43,6 +51,23 @@ public interface EscolhedorLocal {
                     l.add(f.toPath());
                 }
                 return l;
+            }
+
+            @Override
+            public Optional<Path> escolherArquivoParaSalvar(String nomeSugerido, String extensao, String descricao) {
+                Path padrao = br.com.labdesktop.arquivos.ServicosDeArquivos.pastaDeDownloadsPadrao();
+                JFileChooser c = new JFileChooser(padrao.toFile());
+                c.setDialogTitle("Salvar o relatório");
+                c.setApproveButtonText("Salvar");
+                c.setFileSelectionMode(JFileChooser.FILES_ONLY);
+                c.setSelectedFile(padrao.resolve(nomeSugerido).toFile());
+                c.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(descricao, extensao));
+                if (c.showSaveDialog(janela.get()) != JFileChooser.APPROVE_OPTION) {
+                    return Optional.empty();
+                }
+                Path escolhido = c.getSelectedFile().toPath();
+                String nome = escolhido.getFileName().toString();
+                return Optional.of(nome.toLowerCase(java.util.Locale.ROOT).endsWith("." + extensao) ? escolhido : escolhido.resolveSibling(nome + "." + extensao));
             }
 
             @Override

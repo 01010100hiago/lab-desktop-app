@@ -17,7 +17,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * O que o gerenciador de arquivos lembra entre uma abertura e outra, por servidor: a raiz que o usuário escolheu, o último
- * caminho em que estava e, por projeto, o último caminho dentro dele. Também guarda a <b>raiz dos projetos</b> do servidor
+ * caminho em que estava e, por projeto, o último caminho dentro dele. Guarda também, por servidor, o período escolhido nas Tendências do Resumo (10 min a 1 mês): é a mesma "memória
+ * por servidor" e o mesmo arquivo, para não abrir um segundo. Também guarda a <b>raiz dos projetos</b> do servidor
  * ({@code /srv/lab/projects} por padrão): a pasta de um projeto é {@code <raiz dos projetos>/<nome>}, e quem não usa essa
  * convenção a muda uma vez e o app a lembra.
  *
@@ -38,6 +39,8 @@ public final class MemoriaDeCaminhos {
         public String raizDosProjetos;
         public String raiz;
         public String ultimoCaminho;
+        /** O período das Tendências do Resumo (o código do agente: 10m, 1h, 1d, 7d, 30d). */
+        public String janelaDasTendencias;
         public Map<String, String> projetos = new LinkedHashMap<>();
     }
 
@@ -105,6 +108,26 @@ public final class MemoriaDeCaminhos {
             throw ErroSftp.nomeInvalido("A pasta dos projetos não pode ser a raiz (/) do servidor.");
         }
         dados(servidorId).raizDosProjetos = n.equals(RAIZ_DOS_PROJETOS_PADRAO) ? null : n;
+        salvarEmFundo();
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // O período das Tendências
+    // ---------------------------------------------------------------------------------------------
+
+    /** O código do período que o usuário escolheu da última vez neste servidor ({@code 10m}...), ou {@code null} se nunca escolheu (ou se o arquivo tem lixo). */
+    public synchronized String janelaDasTendencias(String servidorId) {
+        DadosDoServidor d = servidores.get(servidorId);
+        String c = d == null ? null : d.janelaDasTendencias;
+        return c != null && br.com.labdesktop.tendencias.JanelaDeTempo.doCodigo(c).isPresent() ? c : null;
+    }
+
+    /** Lembra o período escolhido (um código inválido é ignorado). */
+    public synchronized void definirJanelaDasTendencias(String servidorId, String codigo) {
+        if (br.com.labdesktop.tendencias.JanelaDeTempo.doCodigo(codigo).isEmpty()) {
+            return;
+        }
+        dados(servidorId).janelaDasTendencias = codigo;
         salvarEmFundo();
     }
 

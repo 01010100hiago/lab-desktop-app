@@ -168,11 +168,16 @@ public abstract class Dialogo {
         if (botaoPadrao != null) {
             janela.getRootPane().setDefaultButton(botaoPadrao);
         }
-        janela.setResizable(false);
+        janela.setResizable(redimensionavel());
         janela.pack();
         janela.setLocationRelativeTo(pai);
         antesDeMostrar();
         janela.setVisible(true);
+    }
+
+    /** O usuário pode mudar o tamanho da janela? Só os diálogos que mostram uma lista longa (o registro, o relatório) dizem que sim; os outros têm o tamanho do conteúdo. */
+    protected boolean redimensionavel() {
+        return false;
     }
 
     /** Gancho: roda logo antes de a janela aparecer (foco inicial, primeira consulta). */

@@ -202,7 +202,9 @@ class AgenteNaoInstaladoNaJanelaTest {
 
         String texto = Visual.naEdt(() -> textosDe(tela));
         assertTrue(texto.contains(ConteudoDosAvisos.TEXTO_DO_AGENTE_NAO_INSTALADO), texto);
-        assertFalse(texto.toLowerCase().contains("erro"), "é uma pergunta, não um erro: " + texto);
+        assertFalse(texto.toLowerCase().replace("erros", "").contains("erro"), "é uma pergunta, não um erro (o botão de filtro \"Erros\" do Registro não conta): " + texto);
+        assertTrue(texto.contains("Instale o agente para ver a tendência."), "as Tendências dizem o que fazer, sem vermelho: " + texto);
+        assertTrue(texto.contains("Registro do servidor"), "o Registro continua (pelo SSH): " + texto);
         List<AbstractButton> instalar = new ArrayList<>();
         Visual.naEdt(() -> botoes(tela, new ArrayList<>()).stream().filter(b -> "Instalar agente".equals(b.getText())).forEach(instalar::add));
         assertFalse(instalar.isEmpty(), "o botão Instalar agente está à mão no Resumo");

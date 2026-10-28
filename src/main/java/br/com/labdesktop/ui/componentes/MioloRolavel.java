@@ -28,9 +28,12 @@ public final class MioloRolavel extends JScrollPane {
     private static final class Vista extends Painel implements Scrollable {
         private static final long serialVersionUID = 1L;
 
-        Vista(JComponent conteudo) {
+        private final boolean preencher;
+
+        Vista(JComponent conteudo, boolean preencher) {
             super(new BorderLayout());
-            add(conteudo, BorderLayout.NORTH);
+            this.preencher = preencher;
+            add(conteudo, preencher ? BorderLayout.CENTER : BorderLayout.NORTH);
         }
 
         @Override
@@ -55,7 +58,8 @@ public final class MioloRolavel extends JScrollPane {
 
         @Override
         public boolean getScrollableTracksViewportHeight() {
-            return false;
+            // Preenchendo: se a janela é mais alta que o conteúdo, o conteúdo ESTICA até o fim dela (a página usa a altura toda); se não cabe, rola como sempre.
+            return preencher && getParent() instanceof javax.swing.JViewport vp && vp.getHeight() >= getPreferredSize().height;
         }
     }
 
@@ -65,7 +69,15 @@ public final class MioloRolavel extends JScrollPane {
      */
     @SuppressWarnings("this-escape") // configurar o componente no construtor é o jeito do Swing
     public MioloRolavel(JComponent conteudo, IntSupplier alturaMaxima) {
-        super(new Vista(conteudo), VERTICAL_SCROLLBAR_AS_NEEDED, HORIZONTAL_SCROLLBAR_NEVER);
+        this(conteudo, alturaMaxima, false);
+    }
+
+    /**
+     * @param preencherAltura o conteúdo ESTICA quando a janela é mais alta que ele (o Resumo faz o Registro ocupar a altura que sobra); com {@code false} fica colado no topo
+     */
+    @SuppressWarnings("this-escape")
+    public MioloRolavel(JComponent conteudo, IntSupplier alturaMaxima, boolean preencherAltura) {
+        super(new Vista(conteudo, preencherAltura), VERTICAL_SCROLLBAR_AS_NEEDED, HORIZONTAL_SCROLLBAR_NEVER);
         this.alturaMaxima = alturaMaxima;
         setBorder(null);
         setViewportBorder(null);
