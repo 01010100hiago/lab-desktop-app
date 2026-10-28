@@ -83,15 +83,16 @@ public final class DialogoNovoProjeto extends Dialogo {
 
         FluxoDeCriacao.Desfecho criar(String nome, Boolean guiaIa);
 
-        ImportadorDeProjeto.Resultado clonar(UrlDeGit url, String nome, ImportadorDeProjeto.Observador obs) throws FalhaDoProjeto, InterruptedException;
+        ImportadorDeProjeto.Resultado clonar(UrlDeGit url, String nome, ImportadorDeProjeto.Observador obs, Cancelamento cancelamento)
+            throws FalhaDoProjeto, InterruptedException;
 
         ImportadorDeProjeto.Resultado importarPasta(Path pasta, String nome, FiltroDeEnvio filtro, ImportadorDeProjeto.Observador obs,
                                                     Cancelamento cancelamento) throws FalhaDoProjeto;
 
         List<ImportadorDeProjeto.Candidata> candidatas() throws FalhaDoProjeto;
 
-        ImportadorDeProjeto.Resultado adotar(String origem, String nome, ImportadorDeProjeto.Modo modo, ImportadorDeProjeto.Observador obs)
-            throws FalhaDoProjeto, InterruptedException;
+        ImportadorDeProjeto.Resultado adotar(String origem, String nome, ImportadorDeProjeto.Modo modo, ImportadorDeProjeto.Observador obs,
+                                             Cancelamento cancelamento) throws FalhaDoProjeto, InterruptedException;
 
         /** O seletor de pastas do sistema; vazio se o usuário cancelou. */
         Optional<Path> escolherPasta();
@@ -125,8 +126,10 @@ public final class DialogoNovoProjeto extends Dialogo {
     private boolean ocupado;
     private boolean incerto;
     private Concluido talvezConcluido;
-    private final Cancelamento[] cancelamentoDoEnvio = {new Cancelamento()};
+    /** O pedido de parar da importação em curso: vale desde o primeiro instante, para todas as origens (a thread pode nem ter começado). */
+    private volatile Cancelamento cancelamentoDoEnvio = new Cancelamento();
     private volatile Thread threadDoTrabalho;
+    private boolean pediuParar;
 
     // ---- criar do zero ----
     private final JTextField campoNome = Campos.texto(30, "meu-projeto");
@@ -148,7 +151,7 @@ public final class DialogoNovoProjeto extends Dialogo {
     private final Botao escolherPasta = Botoes.secundario("Escolher pasta…", "pasta");
     private Path pastaDoComputador;
     private final JCheckBox levarGit = new JCheckBox("Levar a pasta .git (o histórico do Git)", false);
-    private final JCheckBox levarEnv = new JCheckBox("Levar os arquivos .env (senhas e chaves)", false);
+    private final JCheckBox levarEnv = new JCheckBox("Levar os arquivos de segredos (.env, .npmrc, chaves)", false);
     private final JComboBox<String> candidatas = new JComboBox<>();
     private final DefaultComboBoxModel<String> modeloDeCandidatas = new DefaultComboBoxModel<>();
     private List<ImportadorDeProjeto.Candidata> listaDeCandidatas = List.of();
@@ -273,8 +276,8 @@ public final class DialogoNovoProjeto extends Dialogo {
 
         escolherPasta.addActionListener(e -> escolherAPastaDoComputador());
         painelDeOrigem.add(Caixa.coluna(6, new Rotulo("Pasta do seu computador").negrito(), Caixa.linha(8, escolherPasta, pastaEscolhida), levarGit, levarEnv,
-            dicaCorrida("Ficam de fora: node_modules (volta com o npm install), .git e os arquivos .env, a menos que você marque. "
-                + "Os .env guardam senhas e chaves: só leve se tiver certeza.")), Origem.PASTA_DO_COMPUTADOR.name());
+            dicaCorrida("Ficam de fora: node_modules (volta com o npm install), .git e os arquivos de segredos (.env, .envrc, .npmrc, *.pem, id_rsa*), "
+                + "a menos que você marque. Eles guardam senhas e chaves: só leve se tiver certeza.")), Origem.PASTA_DO_COMPUTADOR.name());
 
         painelDeOrigem.add(Caixa.coluna(6, new Rotulo("Pasta que já está no servidor").negrito(), candidatas, situacaoDasCandidatas,
             new Rotulo("Ou escreva o caminho completo").corDoToken(Tokens.TEXTO2).tamanho(12.5f), campoOutraPasta, copiar, mover,
@@ -355,14 +358,29 @@ public final class DialogoNovoProjeto extends Dialogo {
         irPara(Pagina.ESCOLHER);
     }
 
+    /**
+     * Esc, o X e o botão. Parado: fecha. Importando: o primeiro pedido PARA a importação; o segundo (o botão já mudou para "Fechar mesmo assim") fecha o
+     * diálogo e deixa a tarefa terminar em segundo plano. Criando: o pedido já saiu e não se desfaz, então o botão é "Fechar mesmo assim" desde o
+     * começo. O diálogo nunca fica preso.
+     */
     @Override
     protected void aoCancelar() {
-        if (ocupado && pagina == Pagina.IMPORTAR) {
+        if (!ocupado) {
+            fechar();
+            return;
+        }
+        if (pagina == Pagina.IMPORTAR && !pediuParar) {
             pedirParaParar();
             return;
         }
-        if (ocupado) {
-            return; // um pedido de criação em voo não se desfaz: espera a resposta
+        fecharEmSegundoPlano();
+    }
+
+    private void fecharEmSegundoPlano() {
+        if (pagina == Pagina.IMPORTAR) {
+            avisos.info("A importação foi mandada parar e termina em segundo plano. Confira a lista de projetos daqui a pouco.");
+        } else {
+            avisos.info("O pedido já saiu: o projeto pode ser criado mesmo com esta janela fechada. Confira a lista de projetos.");
         }
         fechar();
     }
@@ -394,9 +412,9 @@ public final class DialogoNovoProjeto extends Dialogo {
         guiaIa.setEnabled(!sim);
         escolherPasta.setEnabled(!sim);
         abasDeOrigem.setEnabled(!sim);
-        // cancelar só vale como "parar o envio" na importação; na criação o pedido já saiu e não se desfaz
-        cancelar.setEnabled(!sim || pagina == Pagina.IMPORTAR);
-        cancelar.setText(sim && pagina == Pagina.IMPORTAR ? "Parar" : "Cancelar");
+        // na importação o botão PARA; na criação o pedido já saiu e não se desfaz (só se fecha a janela); nos dois casos ele nunca fica preso
+        cancelar.setEnabled(true);
+        cancelar.setText(!sim ? "Cancelar" : pagina == Pagina.IMPORTAR && !pediuParar ? "Parar" : "Fechar mesmo assim");
         progresso.setVisible(sim && pagina == Pagina.IMPORTAR);
         progressoTexto.setVisible(sim && pagina == Pagina.IMPORTAR);
         progressoTexto.setText(texto == null ? "" : texto);
@@ -446,6 +464,10 @@ public final class DialogoNovoProjeto extends Dialogo {
         definirOcupado(true, "Criando " + nome + "…");
         Tarefas.rodar(() -> motor.criar(nome, guia), desfecho -> aoTerminarDeCriar(nome, desfecho), falha -> {
             definirOcupado(false, "");
+            if (jaFechou()) {
+                avisos.erro("Criar " + nome + ": " + MensagensDeErro.de(falha));
+                return;
+            }
             dizerErro(falhaDeCriar, MensagensDeErro.de(falha));
             revalidarCriar();
         });
@@ -453,6 +475,16 @@ public final class DialogoNovoProjeto extends Dialogo {
 
     private void aoTerminarDeCriar(String nome, FluxoDeCriacao.Desfecho d) {
         definirOcupado(false, "");
+        if (jaFechou()) {
+            // o usuário fechou a janela enquanto o pedido estava em voo: o resultado chega do mesmo jeito, pela janela principal e pelos avisos
+            switch (d.tipo()) {
+                case CRIADO -> aoConcluir.accept(new Concluido(nome, d.mensagem(), d.avisos(), false));
+                case TALVEZ -> aoConcluir.accept(new Concluido(nome, d.mensagem(), d.avisos(), true));
+                case CANCELADO -> { }
+                case FALHOU, NAO_AUTORIZADO -> avisos.erro("Criar " + nome + ": " + d.mensagem());
+            }
+            return;
+        }
         switch (d.tipo()) {
             case CRIADO -> {
                 fechar();
@@ -604,7 +636,7 @@ public final class DialogoNovoProjeto extends Dialogo {
             case GIT -> "• Roda git clone " + (UrlDeGit.conferir(campoUrl.getText()).valida() ? campoUrl.getText() : "<endereço>") + " em " + destino
                 + (motor.local() ? ", neste computador" : ", no servidor") + ", sem pedir senha.\n" + fim;
             case PASTA_DO_COMPUTADOR -> "• Copia " + (pastaDoComputador == null ? "<a pasta>" : pastaDoComputador.toString()) + " para " + destino + ", sem node_modules"
-                + (levarGit.isSelected() ? "" : ", sem .git") + (levarEnv.isSelected() ? ", COM os .env" : ", sem os .env")
+                + (levarGit.isSelected() ? "" : ", sem .git") + (levarEnv.isSelected() ? ", COM os arquivos de segredos" : ", sem os arquivos de segredos (.env, chaves .pem e id_rsa, .npmrc)")
                 + ". A cópia vai primeiro para uma pasta provisória e só vira o projeto no fim.\n" + fim;
             case PASTA_DO_SERVIDOR -> {
                 String o = origemDoServidor().isEmpty() ? "<a pasta>" : origemDoServidor();
@@ -622,8 +654,9 @@ public final class DialogoNovoProjeto extends Dialogo {
         }
         dizerErro(falhaDeImportar, "");
         blocoDoComando.setVisible(false);
-        cancelamentoDoEnvio[0] = new Cancelamento();
-        Cancelamento cancelamento = cancelamentoDoEnvio[0];
+        pediuParar = false;
+        cancelamentoDoEnvio = new Cancelamento();
+        Cancelamento cancelamento = cancelamentoDoEnvio;
         ImportadorDeProjeto.Observador obs = (frase, fracao) -> Fundo.naEdt(() -> {
             if (ocupado && pagina == Pagina.IMPORTAR) {
                 progressoTexto.setText(frase);
@@ -647,10 +680,13 @@ public final class DialogoNovoProjeto extends Dialogo {
         Tarefas.rodar(() -> {
             threadDoTrabalho = Thread.currentThread();
             try {
+                if (cancelamento.cancelado()) { // o usuário clicou em Parar antes de a tarefa começar
+                    throw new FalhaDoProjeto(FalhaDoProjeto.Tipo.CANCELADO, "Cancelado. Nada foi criado.");
+                }
                 return switch (quem) {
-                    case GIT -> motor.clonar(url, nome, obs);
+                    case GIT -> motor.clonar(url, nome, obs, cancelamento);
                     case PASTA_DO_COMPUTADOR -> motor.importarPasta(pasta, nome, filtro, obs, cancelamento);
-                    case PASTA_DO_SERVIDOR -> motor.adotar(doServidor, nome, modo, obs);
+                    case PASTA_DO_SERVIDOR -> motor.adotar(doServidor, nome, modo, obs, cancelamento);
                 };
             } finally {
                 threadDoTrabalho = null;
@@ -661,6 +697,11 @@ public final class DialogoNovoProjeto extends Dialogo {
             aoConcluir.accept(new Concluido(r.nome(), "Projeto " + r.nome() + " importado.", r.avisos(), false));
         }, falha -> {
             definirOcupado(false, "");
+            if (jaFechou()) {
+                avisos.atencao("Importar " + nome + ": " + (falha instanceof FalhaDoProjeto f ? f.mensagem()
+                    : falha instanceof InterruptedException ? "cancelado." : MensagensDeErro.de(falha)));
+                return;
+            }
             if (falha instanceof FalhaDoProjeto f) {
                 dizerErro(falhaDeImportar, f.mensagem());
                 if (f.comandoParaCopiar() != null) {
@@ -676,11 +717,16 @@ public final class DialogoNovoProjeto extends Dialogo {
         });
     }
 
-    /** "Parar": o envio para no próximo bloco, o clone é interrompido, e o que ficou pela metade é apagado. */
+    /**
+     * "Parar": o envio para no próximo bloco, o clone é interrompido, e o que ficou pela metade é apagado. O botão passa a "Fechar mesmo assim" (um
+     * segundo clique, ou Esc, fecha a janela e deixa a limpeza terminar em segundo plano).
+     */
     private void pedirParaParar() {
-        progressoTexto.setText("Parando e apagando o que ficou pela metade…");
-        cancelar.setEnabled(false);
-        cancelamentoDoEnvio[0].cancelar();
+        pediuParar = true;
+        progressoTexto.setText("Parando e apagando o que ficou pela metade… (se demorar, use \"Fechar mesmo assim\")");
+        cancelar.setText("Fechar mesmo assim");
+        cancelar.setEnabled(true);
+        cancelamentoDoEnvio.cancelar();
         Thread t = threadDoTrabalho;
         if (t != null) {
             t.interrupt();
@@ -701,6 +747,11 @@ public final class DialogoNovoProjeto extends Dialogo {
 
     public boolean ocupado() {
         return ocupado;
+    }
+
+    /** O diálogo já fechou (pelo botão, por Esc, pelo X ou ao concluir). */
+    public boolean fechou() {
+        return jaFechou();
     }
 
     public JTextField campoNome() {

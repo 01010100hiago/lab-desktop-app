@@ -43,6 +43,7 @@ public final class MenuApp {
     private JMenuItem itemNormal;
     private JMenuItem itemNovoProjeto;
     private JMenuItem itemUltimoProjeto;
+    private br.com.labdesktop.servidor.Inscricao inscricaoDoEstado;
     private JMenuItem itemVoltarAosProjetos;
     private final JMenuBar barra = new JMenuBar();
     private final Map<Tema, JRadioButtonMenuItem> itensDeTema = new EnumMap<>(Tema.class);
@@ -195,6 +196,27 @@ public final class MenuApp {
         barra.add(menuJanela);
         atualizarHabilitacao();
         atualizarHabilitacaoDoNovoProjeto();
+        // O atalho de um item desabilitado não faz nada: a habilitação acompanha o servidor em foco (troca de tela) e o estado dele (o agente
+        // que passa a responder), e não só o abrir do menu.
+        painel.navegacao().aoMudar(id -> religarAoServidorEmFoco());
+        religarAoServidorEmFoco();
+    }
+
+    /** Passa a observar o estado do servidor em foco (e solta o do anterior); cada mudança recalcula o que o menu oferece. */
+    private void religarAoServidorEmFoco() {
+        ServidorLab lab = painel.servidorEmFoco();
+        if (inscricaoDoEstado != null) {
+            inscricaoDoEstado.close();
+            inscricaoDoEstado = null;
+        }
+        atualizarHabilitacao();
+        atualizarHabilitacaoDoNovoProjeto();
+        if (lab != null) {
+            inscricaoDoEstado = lab.observarEstado(e -> {
+                atualizarHabilitacao();
+                atualizarHabilitacaoDoNovoProjeto();
+            });
+        }
     }
 
     private void trocarTema(Tema t) {

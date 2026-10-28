@@ -275,9 +275,11 @@ public final class TelaProjetos extends Painel {
     private void atualizarOTextoDoVazio() {
         boolean local = ultimoEstado != null && ultimoEstado.local();
         boolean pode = podeCriarProjeto();
-        String pasta = local && acoesUi != null && servidor != null ? acoesUi.pastaDosProjetosLocais(servidor) : "/srv/lab/projects";
-        textoDoVazio.setText(pode ? "Crie um projeto novo ou importe um que já existe (do GitHub ou de uma pasta). Eles ficam em " + pasta + "."
-            : "Os projetos aparecem aqui quando houver pastas em " + pasta + ".");
+        // onde os projetos moram: no computador local, a pasta do laboratório (nunca o /srv/lab/projects de um servidor); no servidor, a do agente
+        String onde = !local ? "em /srv/lab/projects"
+            : acoesUi != null && servidor != null ? "em " + acoesUi.pastaDosProjetosLocais(servidor) : "na pasta do laboratório deste computador";
+        textoDoVazio.setText(pode ? "Crie um projeto novo ou importe um que já existe (do GitHub ou de uma pasta). Eles ficam " + onde + "."
+            : "Os projetos aparecem aqui quando houver pastas " + onde + ".");
         convite.setVisible(pode);
     }
 

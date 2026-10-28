@@ -29,11 +29,28 @@ public final class ComandosDeProjeto {
     }
 
     /**
-     * O ambiente do clone: nunca pedir senha (ninguém vai digitá-la: a falha vem na hora e o app a explica) e só os protocolos {@code https} e
+     * O ambiente do clone: nunca pedir senha (ninguém vai digitá-la: a falha vem na hora e o app a explica; o gerenciador de credenciais e o
+     * programa de senha do git e do ssh também ficam mudos) e só os protocolos {@code https} e
      * {@code ssh} (nada de {@code file}, {@code ext}, {@code git}), por cima da regra de {@link UrlDeGit}.
      */
     public static Map<String, String> ambienteDoGit() {
-        return Map.of("GIT_TERMINAL_PROMPT", "0", "GIT_ALLOW_PROTOCOL", "https:ssh");
+        return Map.of("GIT_TERMINAL_PROMPT", "0", "GIT_ALLOW_PROTOCOL", "https:ssh", "GCM_INTERACTIVE", "never",
+            "GIT_ASKPASS", "true", "SSH_ASKPASS_REQUIRE", "never");
+    }
+
+    /**
+     * Põe o limite de tempo do SERVIDOR ({@code timeout <segundos>}) na frente de um comando remoto: quando o app desiste (prazo, Parar, a conexão
+     * cai), o processo no servidor não segue sozinho para sempre.
+     */
+    public static List<String> comLimiteDeTempo(List<String> comando, long segundos) {
+        if (segundos < 1 || segundos > 24 * 3600) {
+            throw new IllegalArgumentException("Limite de tempo fora do razoável.");
+        }
+        List<String> l = new java.util.ArrayList<>();
+        l.add("timeout");
+        l.add(String.valueOf(segundos));
+        l.addAll(comando);
+        return List.copyOf(l);
     }
 
     /** Confere o compose que chega pela ENTRADA ({@code -f -}) como se estivesse na pasta do projeto (o {@code .env} dela vale). */
@@ -41,14 +58,17 @@ public final class ComandosDeProjeto {
         return List.of("docker", "compose", "--project-directory", pastaDoProjeto, "-f", "-", "config", "-q");
     }
 
-    /** Move uma pasta (nunca sobrescreve: {@code -n}). */
+    /**
+     * Move uma pasta. {@code -n}: nunca sobrescreve; {@code -T}: o destino é o NOME da pasta nova, nunca "uma pasta onde pôr" (sem isso, um destino que
+     * apareceu no meio do caminho receberia a pasta DENTRO dele).
+     */
     public static List<String> mover(String de, String para) {
-        return List.of("mv", "-n", "--", de, para);
+        return List.of("mv", "-nT", "--", de, para);
     }
 
-    /** Copia uma pasta inteira, preservando tudo ({@code -a}). */
+    /** Copia uma pasta inteira, preservando tudo ({@code -a}); {@code -T} pelo mesmo motivo do {@link #mover}. */
     public static List<String> copiar(String de, String para) {
-        return List.of("cp", "-a", "--", de, para);
+        return List.of("cp", "-aT", "--", de, para);
     }
 
     private static void exigir(String nome) {

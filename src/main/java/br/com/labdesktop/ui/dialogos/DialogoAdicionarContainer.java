@@ -48,12 +48,14 @@ public final class DialogoAdicionarContainer extends Dialogo {
         EscritorDeCompose.Gravado gravar(EscritorDeCompose.Previa previa) throws FalhaDoProjeto;
     }
 
-    private static final int LARGURA = 480;
+    /** A largura do conteúdo: a da fileira de botões (Cancelar, Iniciar o projeto, Gravar no docker-compose.yml), para nada passar da margem. */
+    private static final int LARGURA = 552;
 
     private final String projeto;
     private final Motor motor;
     private final Runnable aoGravar;
     private final Runnable aoIniciar;
+    private final Notificacoes avisos;
 
     private final Map<Modelo, JRadioButton> opcoes = new EnumMap<>(Modelo.class);
     private final TextoCorrido descricaoDoModelo = new TextoCorrido("", LARGURA).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
@@ -89,6 +91,7 @@ public final class DialogoAdicionarContainer extends Dialogo {
         this.motor = motor;
         this.aoGravar = aoGravar;
         this.aoIniciar = aoIniciar;
+        this.avisos = avisos;
         this.copiar = BotaoCopiar.criar("Copiar o bloco", () -> blocoAtual == null ? "" : blocoAtual.textoParaCopiar(), copiador, avisos);
 
         titulo.setText("Projeto " + projeto);
@@ -257,8 +260,13 @@ public final class DialogoAdicionarContainer extends Dialogo {
             gravar.setEnabled(!ocupado);
         } else {
             previa.setText(r.textoParaCopiar());
-            nota.setText("Este docker-compose.yml já tem serviços, redes ou volumes seus, e o app não reescreve o que é do usuário. Copie o bloco acima e cole no arquivo "
-                + "(use o gerenciador de arquivos do projeto ou o terminal). Depois use Iniciar projeto.");
+            if (r.situacao() == ComposeDoProjeto.Situacao.COMPLEXO && r.original() == null) {
+                nota.setText("Este docker-compose.yml não está em UTF-8 (talvez Latin-1 ou ANSI): gravar por cima estragaria os acentos, então o app não escreve nele. Copie o bloco "
+                    + "acima e cole no arquivo (use o gerenciador de arquivos do projeto ou o terminal). Depois use Iniciar projeto.");
+            } else {
+                nota.setText("Este docker-compose.yml já tem serviços, redes ou volumes seus, e o app não reescreve o que é do usuário. Copie o bloco acima e cole no arquivo "
+                    + "(use o gerenciador de arquivos do projeto ou o terminal). Depois use Iniciar projeto.");
+            }
             gravar.setEnabled(false);
         }
         nota.setVisible(true);
@@ -273,12 +281,22 @@ public final class DialogoAdicionarContainer extends Dialogo {
         EscritorDeCompose.Previa p = previaAtual;
         ocupado = true;
         gravar.definirOcupado(true);
-        cancelar.setEnabled(false);
+        // durante a gravação nada do que o usuário vê pode mudar (o que está sendo gravado é o que ele conferiu), e a janela nunca fica presa: o botão vira
+        // "Fechar mesmo assim", que deixa a gravação terminar em segundo plano
+        travarOsCampos(true);
+        cancelar.setText("Fechar mesmo assim");
+        cancelar.setEnabled(true);
         dizerErro(falha, "");
         Tarefas.rodar(() -> motor.gravar(p), g -> {
             ocupado = false;
             gravar.definirOcupado(false);
             gravado = true;
+            if (jaFechou()) {
+                avisos.ok("Container gravado no docker-compose.yml de " + projeto + (g.copia() == null ? "." : " (cópia de antes: " + g.copia() + ")."));
+                g.avisos().forEach(avisos::atencao);
+                aoGravar.run();
+                return;
+            }
             gravar.setVisible(false);
             cancelar.setText("Fechar");
             cancelar.setEnabled(true);
@@ -309,6 +327,12 @@ public final class DialogoAdicionarContainer extends Dialogo {
         }, f -> {
             ocupado = false;
             gravar.definirOcupado(false);
+            if (jaFechou()) {
+                avisos.erro("Adicionar container em " + projeto + ": " + (f instanceof FalhaDoProjeto fp ? fp.mensagem() : MensagensDeErro.de(f)));
+                return;
+            }
+            travarOsCampos(false);
+            cancelar.setText("Cancelar");
             cancelar.setEnabled(true);
             dizerErro(falha, f instanceof FalhaDoProjeto fp ? fp.mensagem() : MensagensDeErro.de(f));
             gravar.setEnabled(previaAtual != null && previaAtual.gravavel());
@@ -316,10 +340,27 @@ public final class DialogoAdicionarContainer extends Dialogo {
         });
     }
 
+    /** Liga ou desliga tudo o que o usuário escolhe (o modelo, o nome, a imagem e as portas) enquanto a gravação está em curso. */
+    private void travarOsCampos(boolean travar) {
+        for (JRadioButton r : opcoes.values()) {
+            r.setEnabled(!travar);
+        }
+        campoServico.setEnabled(!travar);
+        campoImagem.setEnabled(!travar);
+        abrirPorta.setEnabled(!travar);
+        boolean porta = abrirPorta.isSelected() && !travar;
+        campoPortaNoComputador.setEnabled(porta);
+        campoPortaNoContainer.setEnabled(porta);
+    }
+
+    /**
+     * Esc, o X e o botão. Parado: fecha. Gravando: a gravação não se desfaz no meio (há uma cópia, uma conferência do Docker e uma troca de arquivo), então
+     * fechar a janela só deixa a tarefa terminar em segundo plano; o resultado aparece nos avisos. Nunca preso.
+     */
     @Override
     protected void aoCancelar() {
         if (ocupado) {
-            return;
+            avisos.info("A gravação continua em segundo plano: o resultado aparece aqui em seguida.");
         }
         fechar();
     }
@@ -397,6 +438,16 @@ public final class DialogoAdicionarContainer extends Dialogo {
 
     public boolean gravado() {
         return gravado;
+    }
+
+    /** O diálogo já fechou. */
+    public boolean fechou() {
+        return jaFechou();
+    }
+
+    /** Esc, o X e o botão Cancelar fazem isto. */
+    public void cancelarDeVerdade() {
+        aoCancelar();
     }
 
     public String projeto() {

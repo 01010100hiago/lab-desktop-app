@@ -38,6 +38,11 @@ public final class AvisosGravados implements Notificacoes {
         ultimaAcao = acao;
     }
 
+    /** Só os textos, na ordem. */
+    public List<String> textos() {
+        return todos.stream().map(Aviso::texto).toList();
+    }
+
     public Aviso ultimo() {
         return todos.isEmpty() ? null : todos.get(todos.size() - 1);
     }

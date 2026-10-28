@@ -138,13 +138,17 @@ public final class AcoesDaInterface {
         return pastaDosProjetosLocais(lab, CaminhosLocais.doSistema());
     }
 
-    /** A raiz dos projetos no caminho do app (com barras): a que o gerenciador de arquivos lembra, ou a do laboratório local. */
+    /**
+     * A raiz dos projetos no caminho do app (com barras). No computador local, a pasta do laboratório. Num servidor com o agente, a que o AGENTE usa
+     * (a pasta padrão dos projetos do agente): o agente não informa esse caminho em nenhuma rota (nem em {@code /api/versao}),
+     * então vale o padrão dele, e NÃO o que o gerenciador de arquivos lembra (que o usuário pode ter apontado para outra pasta só para navegar).
+     */
     private String raizDosProjetosNoApp(ServidorLab lab) {
         if (lab.ehLocal()) {
             CaminhosLocais c = CaminhosLocais.doSistema();
             return c.doTextoDoSistema(pastaDosProjetosLocais(lab, c));
         }
-        return servicosDeArquivos.memoria().raizDosProjetos(lab.id());
+        return MemoriaDeCaminhos.RAIZ_DOS_PROJETOS_PADRAO;
     }
 
     /**
@@ -287,8 +291,9 @@ public final class AcoesDaInterface {
         }
 
         @Override
-        public ImportadorDeProjeto.Resultado clonar(UrlDeGit url, String nome, ImportadorDeProjeto.Observador obs) throws FalhaDoProjeto, InterruptedException {
-            return new ImportadorDeProjeto(ambiente).clonar(url, nome, obs);
+        public ImportadorDeProjeto.Resultado clonar(UrlDeGit url, String nome, ImportadorDeProjeto.Observador obs,
+                                                    br.com.labdesktop.arquivos.Cancelamento cancelamento) throws FalhaDoProjeto, InterruptedException {
+            return new ImportadorDeProjeto(ambiente).clonar(url, nome, obs, cancelamento);
         }
 
         @Override
@@ -303,9 +308,9 @@ public final class AcoesDaInterface {
         }
 
         @Override
-        public ImportadorDeProjeto.Resultado adotar(String origem, String nome, ImportadorDeProjeto.Modo modo, ImportadorDeProjeto.Observador obs)
-            throws FalhaDoProjeto, InterruptedException {
-            return new ImportadorDeProjeto(ambiente).adotar(origem, nome, modo, obs);
+        public ImportadorDeProjeto.Resultado adotar(String origem, String nome, ImportadorDeProjeto.Modo modo, ImportadorDeProjeto.Observador obs,
+                                                    br.com.labdesktop.arquivos.Cancelamento cancelamento) throws FalhaDoProjeto, InterruptedException {
+            return new ImportadorDeProjeto(ambiente).adotar(origem, nome, modo, obs, cancelamento);
         }
 
         @Override

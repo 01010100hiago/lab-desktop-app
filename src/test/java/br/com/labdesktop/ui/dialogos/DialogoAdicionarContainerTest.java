@@ -96,7 +96,8 @@ class DialogoAdicionarContainerTest {
             for (Tema t : List.of(Tema.CLARO, Tema.ESCURO)) {
                 Visual.tema(t);
                 Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(d.raiz()));
-                Visual.salvar(Visual.renderizar(d.raiz(), 580, Visual.alturaPreferida(d.raiz(), 580)), nome + "-" + (t == Tema.CLARO ? "claro" : "escuro"));
+                int largura = Visual.naEdt(() -> d.raiz().getPreferredSize().width); // a largura de verdade do diálogo (o pack da janela), não um número qualquer
+                Visual.salvar(Visual.renderizar(d.raiz(), largura, Visual.alturaPreferida(d.raiz(), largura)), nome + "-" + (t == Tema.CLARO ? "claro" : "escuro"));
             }
         } finally {
             Dialogo.definirAlturaDaTelaParaTeste(0);
@@ -280,5 +281,74 @@ class DialogoAdicionarContainerTest {
         esperarPrevia(d);
         assertTrue(Visual.naEdt(d::textoDaNota).contains("ainda não tem docker-compose.yml"));
         assertTrue(Visual.naEdt(() -> d.botaoGravar().isEnabled()));
+    }
+
+    @Test
+    void durante_a_gravacaoOsCamposTravamEAJanelaNuncaFicaPresa() throws Exception {
+        compose(GabaritoDoProjeto.composeVazio("demo"));
+        DialogoAdicionarContainer d = abrir();
+        esperarPrevia(d);
+        java.util.concurrent.CountDownLatch segurar = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicBoolean conferindo = new java.util.concurrent.atomic.AtomicBoolean();
+        a.roteiro = c -> {
+            conferindo.set(true);
+            try {
+                segurar.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return AmbienteFalso.ok("");
+        };
+        Visual.naEdt(() -> d.botaoGravar().doClick());
+        Espera.ate(PRAZO, "o Docker está conferindo", conferindo::get);
+        for (Modelo m : Modelo.values()) {
+            assertFalse(Visual.naEdt(() -> d.opcao(m).isEnabled()), "o modelo " + m + " trava: o que se grava é o que o usuário conferiu");
+        }
+        assertFalse(Visual.naEdt(() -> d.campoServico().isEnabled()));
+        assertFalse(Visual.naEdt(() -> d.campoImagem().isEnabled()));
+        assertFalse(Visual.naEdt(() -> d.caixaDaPorta().isEnabled()));
+        assertFalse(Visual.naEdt(() -> d.campoPortaNoComputador().isEnabled()));
+        assertEquals("Fechar mesmo assim", Visual.naEdt(() -> d.botaoCancelar().getText()));
+        assertTrue(Visual.naEdt(() -> d.botaoCancelar().isEnabled()));
+        Visual.naEdt(() -> d.botaoCancelar().doClick());
+        assertTrue(Visual.naEdt(d::fechou), "Esc, X e o botão sempre fecham");
+        assertTrue(avisos.disse("info", "continua em segundo plano"));
+        segurar.countDown();
+        Espera.ate(PRAZO, () -> "avisos: " + avisos.todos, () -> avisos.disse("ok", "Container gravado no docker-compose.yml de demo"));
+        assertEquals(1, gravacoes.get(), "a lista ainda é atualizada");
+        assertTrue(Files.readString(projeto.resolve("docker-compose.yml")).contains("services:\n  app:\n"));
+    }
+
+    @Test
+    void falhaDepoisDeFecharAparecePeloAviso() throws Exception {
+        compose(GabaritoDoProjeto.composeVazio("demo"));
+        DialogoAdicionarContainer d = abrir();
+        esperarPrevia(d);
+        java.util.concurrent.CountDownLatch segurar = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicBoolean conferindo = new java.util.concurrent.atomic.AtomicBoolean();
+        a.roteiro = c -> {
+            conferindo.set(true);
+            try {
+                segurar.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return AmbienteFalso.erro(1, "service app: invalid");
+        };
+        Visual.naEdt(() -> d.botaoGravar().doClick());
+        Espera.ate(PRAZO, "o Docker está conferindo", conferindo::get);
+        Visual.naEdt(d::cancelarDeVerdade);
+        segurar.countDown();
+        Espera.ate(PRAZO, () -> "avisos: " + avisos.todos, () -> avisos.disse("erro", "Adicionar container em demo"));
+        assertEquals(0, gravacoes.get());
+    }
+
+    @Test
+    void composeForaDeUtf8NaoOfereceGravarEDizPorque() throws Exception {
+        Files.write(projeto.resolve("docker-compose.yml"), "name: demo\n# ação\nservices: {}\n".getBytes(java.nio.charset.Charset.forName("ISO-8859-1")));
+        DialogoAdicionarContainer d = abrir();
+        Espera.ate(PRAZO, "bloco para copiar", () -> Visual.naEdt(d::textoDaPrevia).contains("# 1) Em \"services:\""));
+        assertFalse(Visual.naEdt(() -> d.botaoGravar().isEnabled()));
+        assertTrue(Visual.naEdt(d::textoDaNota).contains("não está em UTF-8"), Visual.naEdt(d::textoDaNota));
     }
 }

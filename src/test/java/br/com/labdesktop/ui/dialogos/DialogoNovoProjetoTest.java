@@ -55,6 +55,8 @@ class DialogoNovoProjetoTest {
     private volatile boolean local;
     private volatile boolean guiaIa;
     private volatile FiltroDeEnvio filtroRecebido;
+    private volatile Cancelamento cancelamentoRecebido;
+    private volatile boolean teimoso;
 
     private final DialogoNovoProjeto.Motor motor = new DialogoNovoProjeto.Motor() {
         @Override
@@ -86,7 +88,8 @@ class DialogoNovoProjetoTest {
         }
 
         @Override
-        public ImportadorDeProjeto.Resultado clonar(UrlDeGit url, String nome, ImportadorDeProjeto.Observador obs) throws FalhaDoProjeto {
+        public ImportadorDeProjeto.Resultado clonar(UrlDeGit url, String nome, ImportadorDeProjeto.Observador obs, Cancelamento cancelamento) throws FalhaDoProjeto {
+            cancelamentoRecebido = cancelamento;
             chamadas.add("clonar " + url.texto() + " " + nome);
             obs.andamento("Clonando…", -1);
             aguardar();
@@ -115,8 +118,8 @@ class DialogoNovoProjetoTest {
         }
 
         @Override
-        public ImportadorDeProjeto.Resultado adotar(String origem, String nome, ImportadorDeProjeto.Modo modo, ImportadorDeProjeto.Observador obs)
-            throws FalhaDoProjeto {
+        public ImportadorDeProjeto.Resultado adotar(String origem, String nome, ImportadorDeProjeto.Modo modo, ImportadorDeProjeto.Observador obs,
+                                                    Cancelamento cancelamento) throws FalhaDoProjeto {
             chamadas.add("adotar " + modo + " " + origem + " " + nome);
             aguardar();
             if (falhaNoImportar != null) {
@@ -131,10 +134,17 @@ class DialogoNovoProjetoTest {
         }
 
         private void aguardar() {
-            try {
-                segurar.await(PRAZO.toSeconds(), TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            long limite = System.nanoTime() + PRAZO.toNanos();
+            while (segurar.getCount() > 0 && System.nanoTime() < limite) {
+                try {
+                    segurar.await(100, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                    if (!teimoso) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    // uma tarefa que não solta (um comando remoto que demora a obedecer): o diálogo não pode ficar preso por causa dela
+                }
             }
         }
     };
@@ -354,7 +364,8 @@ class DialogoNovoProjetoTest {
         assertTrue(ed(() -> d.botaoPrincipal().ocupado()));
         assertFalse(ed(() -> d.campoNome().isEnabled()));
         assertFalse(ed(() -> d.botaoVoltar().isEnabled()));
-        assertFalse(ed(() -> d.botaoCancelar().isEnabled()), "o pedido já saiu: não se desfaz");
+        assertTrue(ed(() -> d.botaoCancelar().isEnabled()), "a janela nunca fica presa: o botão fecha mesmo com o pedido em voo");
+        assertEquals("Fechar mesmo assim", ed(() -> d.botaoCancelar().getText()), "o pedido já saiu e não se desfaz: só se fecha a janela");
         fotografar(d, "dialogo-novo-projeto-criar-enviando");
         Espera.naoAcontece(Duration.ofMillis(300), "um segundo pedido", () -> criacoes.get() > 1);
         segurar.countDown();
@@ -492,6 +503,47 @@ class DialogoNovoProjetoTest {
     }
 
     @Test
+    void pararPedeCancelamentoDesdeOPrimeiroInstanteEOSegundoCliqueFechaMesmoAssim() {
+        teimoso = true;
+        segurar = new CountDownLatch(1);
+        DialogoNovoProjeto d = abrir();
+        Visual.naEdt(() -> d.escolherAPagina(DialogoNovoProjeto.Pagina.IMPORTAR));
+        digitar(d.campoUrl(), "https://github.com/usuario/repo.git");
+        Visual.naEdt(() -> d.botaoPrincipal().doClick());
+        Espera.ate(PRAZO, "começou", () -> chamadas.size() == 1);
+        assertFalse(cancelamentoRecebido.cancelado());
+        Visual.naEdt(() -> d.botaoCancelar().doClick()); // Parar
+        assertTrue(cancelamentoRecebido.cancelado(), "o pedido de parar chega a quem clona (vale para o git também, não só para a cópia)");
+        assertEquals("Fechar mesmo assim", ed(() -> d.botaoCancelar().getText()));
+        assertTrue(ed(() -> d.botaoCancelar().isEnabled()));
+        assertFalse(ed(d::fechou), "o primeiro clique só pede para parar");
+        Visual.naEdt(() -> d.botaoCancelar().doClick()); // o segundo fecha
+        assertTrue(ed(d::fechou), "a janela nunca fica presa");
+        assertTrue(avisos.textos().stream().anyMatch(t -> t.contains("segundo plano")), avisos.textos().toString());
+        falhaNoImportar = new FalhaDoProjeto(FalhaDoProjeto.Tipo.CANCELADO, "Cancelado. O que estava pela metade foi apagado.");
+        segurar.countDown();
+        Espera.ate(PRAZO, "o aviso do fim, já com a janela fechada", () -> avisos.textos().stream().anyMatch(t -> t.contains("Importar repo")));
+        assertTrue(concluidos.isEmpty(), "cancelado não conclui nada");
+    }
+
+    @Test
+    void escETambemFechamUmaCriacaoEmVooEOResultadoChegaDepois() {
+        segurar = new CountDownLatch(1);
+        DialogoNovoProjeto d = abrir();
+        Visual.naEdt(() -> d.escolherAPagina(DialogoNovoProjeto.Pagina.CRIAR));
+        digitar(d.campoNome(), "meu-app");
+        Visual.naEdt(() -> d.botaoPrincipal().doClick());
+        Espera.ate(PRAZO, "o pedido saiu", () -> criacoes.get() >= 1);
+        Visual.naEdt(() -> d.botaoCancelar().doClick());
+        assertTrue(ed(d::fechou), "criando: o pedido não se desfaz, mas a janela fecha");
+        assertTrue(avisos.textos().stream().anyMatch(t -> t.contains("pode ser criado")), avisos.textos().toString());
+        segurar.countDown();
+        Espera.ate(PRAZO, "o resultado chegou pela janela principal", () -> !concluidos.isEmpty());
+        assertEquals("meu-app", concluidos.get(0).nome());
+        assertEquals(1, criacoes.get());
+    }
+
+    @Test
     void importarComFalhaMostraAFraseDoGit() {
         falhaNoImportar = new FalhaDoProjeto(FalhaDoProjeto.Tipo.RECUSADO, "Não consegui acessar o repositório. Se ele é privado, deixe o servidor logado nele.");
         DialogoNovoProjeto d = abrir();
@@ -522,7 +574,7 @@ class DialogoNovoProjetoTest {
         String resumo = ed(d::textoDoQueVaiAcontecer);
         assertTrue(resumo.contains("sem node_modules"), resumo);
         assertTrue(resumo.contains("sem .git"), resumo);
-        assertTrue(resumo.contains("sem os .env"), resumo);
+        assertTrue(resumo.contains("sem os arquivos de segredos"), resumo);
         fotografar(d, "dialogo-novo-projeto-importar-pasta");
         Visual.naEdt(() -> d.botaoPrincipal().doClick());
         Espera.ate(PRAZO, "importou", () -> !concluidos.isEmpty());
@@ -543,7 +595,7 @@ class DialogoNovoProjetoTest {
         });
         String resumo = ed(d::textoDoQueVaiAcontecer);
         assertFalse(resumo.contains("sem .git"), resumo);
-        assertTrue(resumo.contains("COM os .env"), resumo);
+        assertTrue(resumo.contains("COM os arquivos de segredos"), resumo);
         Visual.naEdt(() -> d.botaoPrincipal().doClick());
         Espera.ate(PRAZO, "importou", () -> !concluidos.isEmpty());
         assertEquals(new FiltroDeEnvio(true, true), filtroRecebido);
@@ -571,9 +623,9 @@ class DialogoNovoProjetoTest {
         assertTrue(ed(() -> d.opcaoCopiar().isSelected()), "o padrão é copiar: a pasta de antes não some");
         String resumo = ed(d::textoDoQueVaiAcontecer);
         assertTrue(resumo.contains("Copia /home/ana/meuapp para /srv/lab/projects/meuapp"), resumo);
-        assertTrue(resumo.contains("Comando: cp -a -- /home/ana/meuapp /srv/lab/projects/meuapp"), resumo);
+        assertTrue(resumo.contains("Comando: cp -aT -- /home/ana/meuapp /srv/lab/projects/meuapp"), resumo);
         Visual.naEdt(() -> d.opcaoMover().doClick());
-        assertTrue(ed(d::textoDoQueVaiAcontecer).contains("Comando: mv -n -- /home/ana/meuapp /srv/lab/projects/meuapp"));
+        assertTrue(ed(d::textoDoQueVaiAcontecer).contains("Comando: mv -nT -- /home/ana/meuapp /srv/lab/projects/meuapp"));
         fotografar(d, "dialogo-novo-projeto-importar-servidor");
         Visual.naEdt(() -> d.botaoPrincipal().doClick());
         Espera.ate(PRAZO, "adotou", () -> !concluidos.isEmpty());

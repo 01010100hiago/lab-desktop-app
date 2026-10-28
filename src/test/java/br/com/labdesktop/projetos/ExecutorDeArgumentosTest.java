@@ -51,10 +51,10 @@ class ExecutorDeArgumentosTest {
 
     @Test
     void comandoParaCopiarCitaOQueTemCaractereEstranho() {
-        assertEquals("mv -n -- /home/ana/app /srv/lab/projects/app",
+        assertEquals("mv -nT -- /home/ana/app /srv/lab/projects/app",
             ImportadorDeProjeto.comandoParaCopiar(ComandosDeProjeto.mover("/home/ana/app", "/srv/lab/projects/app")));
-        assertEquals("mv -n -- '/home/ana/meu app' /srv/lab/projects/meu-app",
+        assertEquals("mv -nT -- '/home/ana/meu app' /srv/lab/projects/meu-app",
             ImportadorDeProjeto.comandoParaCopiar(ComandosDeProjeto.mover("/home/ana/meu app", "/srv/lab/projects/meu-app")));
-        assertEquals("mv -n -- '/home/ana/it'\\''s' /x", ImportadorDeProjeto.comandoParaCopiar(ComandosDeProjeto.mover("/home/ana/it's", "/x")));
+        assertEquals("mv -nT -- '/home/ana/it'\\''s' /x", ImportadorDeProjeto.comandoParaCopiar(ComandosDeProjeto.mover("/home/ana/it's", "/x")));
     }
 }

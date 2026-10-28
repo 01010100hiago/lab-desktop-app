@@ -142,6 +142,8 @@ class NovoProjetoLocalNaJanelaTest {
         assertTrue(ed(() -> lista.botaoDoConvite().isVisible()));
         assertTrue(lista.textoDoVazio().contains(raiz().toString()), lista.textoDoVazio());
         assertEquals(List.of(), pc.escritas(), "nada foi criado só de olhar");
+        Visual.naEdt(() -> tela.mostrarAba(TelaServidor.Aba.PROJETOS)); // a foto é da aba Projetos, com o convite (e não do Resumo)
+        assertEquals(TelaServidor.Aba.PROJETOS, ed(tela::abaMarcada));
         fotografarJanela("janela-este-computador-projetos-vazio");
     }
 
@@ -285,6 +287,18 @@ class NovoProjetoLocalNaJanelaTest {
         Visual.naEdt(() -> item.doClick());
         Espera.ate(PRAZO, "abriu o diálogo", () -> dialogos.mostrados.size() > antes);
         assertTrue(dialogos.ultimo() instanceof DialogoNovoProjeto);
+    }
+
+    @Test
+    void oItemDoMenuAcompanhaAMudancaDeTelaSemPrecisarAbrirOMenu() throws Exception {
+        // o atalho de um item desabilitado não faz nada: a habilitação não pode esperar o menu ser aberto
+        System.clearProperty(FluxosDeProjeto.PROPRIEDADE_ACOES);
+        MenuApp menu = menu();
+        assertFalse(Visual.naEdt(menu.itemNovoProjeto()::isEnabled));
+        System.setProperty(FluxosDeProjeto.PROPRIEDADE_ACOES, "true");
+        Visual.naEdt(() -> painel.mostrarServidores());
+        Visual.naEdt(() -> painel.mostrarServidor(lab));
+        assertTrue(Visual.naEdt(menu.itemNovoProjeto()::isEnabled), "trocou o servidor em foco: o item (e o atalho) passa a valer sem abrir o menu");
     }
 
     @Test

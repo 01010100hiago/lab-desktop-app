@@ -124,4 +124,29 @@ class DiferencaEEnvTest {
         assertTrue(ExplicadorDeErrosDeGit.explicar("").length() > 10);
         assertTrue(ExplicadorDeErrosDeGit.explicar(null).length() > 10);
     }
+
+    @Test
+    void segredosAlemDoEnvTambemFicamDeForaPorPadraoEVaoComACaixaMarcada() {
+        FiltroDeEnvio padrao = FiltroDeEnvio.PADRAO;
+        FiltroDeEnvio tudo = new FiltroDeEnvio(false, true);
+        for (String n : List.of("chave.pem", "id_rsa", "id_rsa.pub", "id_ed25519", "id_ecdsa", ".npmrc", ".envrc", "prod.env", "staging.ENV")) {
+            assertFalse(padrao.aceita(n, false), n);
+            assertTrue(tudo.aceita(n, false), n + " vai se o usuário marcar");
+        }
+        assertFalse(padrao.aceita(".env", true), "uma PASTA chamada .env (segredos ou ambiente virtual) também");
+        assertTrue(tudo.aceita(".env", true));
+        for (String n : List.of(".env.example", ".env.sample", "environment.ts", "pem.txt", "src")) {
+            assertTrue(padrao.aceita(n, n.equals("src")), n);
+        }
+    }
+
+    @Test
+    void asFrasesDoGitFalamDeEsteComputadorQuandoEleELocal() {
+        String privado = ExplicadorDeErrosDeGit.explicar("fatal: could not read Username for 'https://github.com': terminal prompts disabled", true);
+        assertTrue(privado.contains("este computador logado") && !privado.contains("servidor"), privado);
+        String chave = ExplicadorDeErrosDeGit.explicar("Host key verification failed.", true);
+        assertTrue(chave.contains("Terminal deste computador") && !chave.contains("Entre no servidor"), chave);
+        assertTrue(ExplicadorDeErrosDeGit.explicar("Host key verification failed.", false).contains("Entre no servidor"));
+        assertTrue(ExplicadorDeErrosDeGit.explicar("Could not resolve host: github.com", true).startsWith("Este computador não alcançou"));
+    }
 }

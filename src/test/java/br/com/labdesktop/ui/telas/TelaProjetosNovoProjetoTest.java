@@ -124,6 +124,8 @@ class TelaProjetosNovoProjetoTest {
             Visual.salvar(Visual.renderizar(cheia, 1100, 700), "projetos-lista-com-botao-novo-projeto-" + sufixo);
             TelaProjetos local = tela(true, estado(monitor(), true), true);
             Visual.salvar(Visual.renderizar(local, 1100, 700), "projetos-lista-vazia-local-" + sufixo);
+            assertFalse(local.textoDoVazio().contains("/srv/lab/projects"), "no computador local não aparece a pasta de um servidor: " + local.textoDoVazio());
+            assertTrue(local.textoDoVazio().contains("pasta do laboratório deste computador"), local.textoDoVazio());
             assertTrue(Visual.naEdt(() -> cheia.botaoNovoProjeto().isShowing() || cheia.botaoNovoProjeto().isVisible()));
         }
         Visual.tema(Tema.CLARO);
