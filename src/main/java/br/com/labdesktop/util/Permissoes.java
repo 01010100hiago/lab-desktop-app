@@ -7,7 +7,6 @@ import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileAttribute;
 import java.util.Set;
-import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
@@ -16,7 +15,6 @@ import org.slf4j.LoggerFactory;
  */
 public final class Permissoes {
 
-    private static final Logger LOG = LoggerFactory.getLogger(Permissoes.class);
     private static volatile ProtecaoDeArquivos protecao = ProtecaoDeArquivos.doSistema();
 
     private Permissoes() { }
@@ -89,7 +87,8 @@ public final class Permissoes {
         try {
             protecao.restringirAoDono(caminho, pasta);
         } catch (IOException | RuntimeException e) {
-            LOG.warn("Não consegui deixar {} só para o usuário: {}", caminho.getFileName(), e.toString());
+            // Logger só aqui, preguiçoso: criar um logger na carga da classe fixava o destino do log antes do ConfiguracaoDeLog.
+            LoggerFactory.getLogger(Permissoes.class).warn("Não consegui deixar {} só para o usuário: {}", caminho.getFileName(), e.toString());
         }
     }
 }

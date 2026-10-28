@@ -67,14 +67,14 @@ public final class Principal {
             return;
         }
         try {
+            ConfiguracaoDeLog.configurar(caminhos); // o PRIMEIRO passo: o slf4j-simple lê o destino do log uma vez, quando o primeiro logger nasce
+        } catch (IOException e) {
+            System.err.println("Não consegui preparar o arquivo de log: " + e.getMessage()); // o app abre mesmo assim
+        }
+        try {
             NativosDoApp.apontar(caminhos); // antes de qualquer PTY ou JNA: os nativos extraídos ficam na pasta de dados, não em /tmp nem em %TEMP%
         } catch (IOException e) {
             System.err.println("Não consegui preparar a pasta dos nativos: " + e.getMessage()); // o app abre mesmo assim, com a pasta temporária do sistema
-        }
-        try {
-            ConfiguracaoDeLog.configurar(caminhos);
-        } catch (IOException e) {
-            System.err.println("Não consegui preparar o arquivo de log: " + e.getMessage()); // o app abre mesmo assim
         }
         Logger log = LoggerFactory.getLogger(Principal.class);
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> log.error("Erro não tratado na thread {}", t.getName(), e));

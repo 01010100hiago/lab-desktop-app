@@ -23,15 +23,17 @@ public final class ConfiguracaoDeLog {
 
     /** Prepara a pasta e o arquivo e aponta o {@code slf4j-simple} para ele. */
     public static void configurar(CaminhosApp caminhos) throws IOException {
-        caminhos.prepararPastaDeLogs();
+        // PRIMEIRA linha, antes de qualquer E/S ou logger: o slf4j-simple lê o logFile uma vez, quando o primeiro logger nasce. Se a pasta falhar, o arquivo simplesmente não é criado
+        // (o slf4j-simple cai para a tela), mas o caminho certo já está valendo.
         Path log = caminhos.arquivoLog();
+        System.setProperty("org.slf4j.simpleLogger.logFile", log.toString());
+        caminhos.prepararPastaDeLogs();
         rotacionarSeGrande(log);
         if (!Files.exists(log)) {
             Permissoes.criarArquivoPrivado(log);
         } else {
             Permissoes.corrigirArquivoSeAberto(log);
         }
-        System.setProperty("org.slf4j.simpleLogger.logFile", log.toString());
         LogDeRequisicoes.ligarSeSolicitado();
     }
 

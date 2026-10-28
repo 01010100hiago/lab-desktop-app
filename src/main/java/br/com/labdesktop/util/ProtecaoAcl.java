@@ -14,7 +14,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
-import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
@@ -26,8 +25,6 @@ import org.slf4j.LoggerFactory;
  * ({@link #quemMaisTemAcesso}); nunca falha por isso (o cofre é cifrado com a senha-mestra; a ACL é uma segunda trava). A vista da ACL entra por uma função, para o teste dar uma falsa.
  */
 public final class ProtecaoAcl implements ProtecaoDeArquivos {
-
-    private static final Logger LOG = LoggerFactory.getLogger(ProtecaoAcl.class);
 
     private final Function<Path, AclFileAttributeView> vista;
 
@@ -62,7 +59,7 @@ public final class ProtecaoAcl implements ProtecaoDeArquivos {
         v.setAcl(List.of(deDono));
         List<String> outros = quemMaisTemAcesso(v.getAcl(), proprietario);
         if (!outros.isEmpty()) {
-            LOG.debug("Depois de restringir {}, ainda têm acesso (herdado): {}", caminho.getFileName(), outros);
+            LoggerFactory.getLogger(ProtecaoAcl.class).debug("Depois de restringir {}, ainda têm acesso (herdado): {}", caminho.getFileName(), outros);
         }
     }
 
