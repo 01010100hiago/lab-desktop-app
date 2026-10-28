@@ -258,7 +258,8 @@ class NavegacaoDoProjetoTest {
         var voltar = Visual.naEdt(menu::itemVoltarAosProjetos);
         assertEquals("Último projeto aberto", Visual.naEdt(ultimo::getText));
         assertEquals("Voltar à lista de projetos", Visual.naEdt(voltar::getText));
-        assertEquals(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_4, cmd), Visual.naEdt(ultimo::getAccelerator), "Cmd+4, depois de Cmd+1, 2 e 3");
+        assertEquals(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_P, cmd | java.awt.event.InputEvent.SHIFT_DOWN_MASK), Visual.naEdt(ultimo::getAccelerator),
+            "Cmd+Shift+P: os números 1 a 9 agora são das abas do servidor");
         assertEquals(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_OPEN_BRACKET, cmd), Visual.naEdt(voltar::getAccelerator), "Cmd+[ é o 'voltar' do macOS");
 
         Visual.naEdt(menu::atualizarHabilitacaoDoProjeto);

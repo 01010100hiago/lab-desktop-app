@@ -34,4 +34,42 @@ public final class Teclas {
     public static String nome() {
         return nome(SistemaOperacional.detectar());
     }
+
+    /** A tecla escrita para o usuário ("Cmd+,", "Ctrl+Shift+N", "F1"): a tecla de comando do sistema se chama Cmd no Mac e Ctrl nos outros. */
+    public static String descrever(javax.swing.KeyStroke tecla, SistemaOperacional sistema) {
+        int mods = tecla.getModifiers();
+        StringBuilder b = new StringBuilder();
+        if ((mods & java.awt.event.InputEvent.META_DOWN_MASK) != 0) {
+            b.append("Cmd+");
+        }
+        if ((mods & java.awt.event.InputEvent.CTRL_DOWN_MASK) != 0) {
+            b.append("Ctrl+");
+        }
+        if ((mods & java.awt.event.InputEvent.ALT_DOWN_MASK) != 0) {
+            b.append(sistema == SistemaOperacional.MAC ? "Option+" : "Alt+");
+        }
+        if ((mods & java.awt.event.InputEvent.SHIFT_DOWN_MASK) != 0) {
+            b.append("Shift+");
+        }
+        b.append(nomeDaTecla(tecla.getKeyCode()));
+        return b.toString();
+    }
+
+    private static String nomeDaTecla(int codigo) {
+        return switch (codigo) {
+            case java.awt.event.KeyEvent.VK_COMMA -> ",";
+            case java.awt.event.KeyEvent.VK_PERIOD -> ".";
+            case java.awt.event.KeyEvent.VK_SLASH -> "/";
+            case java.awt.event.KeyEvent.VK_OPEN_BRACKET -> "[";
+            case java.awt.event.KeyEvent.VK_CLOSE_BRACKET -> "]";
+            case java.awt.event.KeyEvent.VK_EQUALS -> "=";
+            case java.awt.event.KeyEvent.VK_MINUS -> "-";
+            case java.awt.event.KeyEvent.VK_PLUS -> "+";
+            default -> java.awt.event.KeyEvent.getKeyText(codigo).toUpperCase(java.util.Locale.ROOT);
+        };
+    }
+
+    public static String descrever(javax.swing.KeyStroke tecla) {
+        return descrever(tecla, SistemaOperacional.detectar());
+    }
 }

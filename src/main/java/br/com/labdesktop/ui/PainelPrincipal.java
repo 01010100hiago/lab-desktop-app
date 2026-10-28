@@ -8,6 +8,7 @@ import br.com.labdesktop.ui.componentes.Notificacoes;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.dialogos.Apresentador;
 import br.com.labdesktop.ui.telas.TelaServidor;
+import br.com.labdesktop.ui.telas.ajustes.TelaAjustes;
 import java.awt.BorderLayout;
 import br.com.labdesktop.util.Preferencias;
 import java.util.function.Consumer;
@@ -60,10 +61,21 @@ public final class PainelPrincipal extends Painel {
             public void aoEscolherGerenciar() {
                 navegacao.mostrarServidores();
             }
+
+            @Override
+            public void aoEscolherAjustes() {
+                if (navegacao.emAjustes()) {
+                    navegacao.voltarDosAjustes(); // a engrenagem de novo fecha os Ajustes
+                } else {
+                    navegacao.mostrarAjustes(null);
+                }
+            }
         });
         navegacao.aoMudar(atual -> {
             ServidorLab lab = navegacao.servidorAtual();
-            barra.definirSelecionado(lab == null ? null : lab.id(), lab == null);
+            boolean ajustesNaFrente = navegacao.emAjustes();
+            barra.definirSelecionado(ajustesNaFrente || lab == null ? null : lab.id(), lab == null && !ajustesNaFrente);
+            barra.definirAjustesSelecionado(ajustesNaFrente);
         });
         add(barra, BorderLayout.WEST);
         add(navegacao, BorderLayout.CENTER);
@@ -73,6 +85,67 @@ public final class PainelPrincipal extends Painel {
         } else {
             navegacao.mostrarServidores();
         }
+    }
+
+    /** Liga a engrenagem da barra e os atalhos à tela Ajustes (montada só na primeira vez que for aberta). */
+    public void instalarAjustes(Supplier<TelaAjustes> fabrica) {
+        navegacao.instalarAjustes(fabrica);
+        barra.definirAjustesDisponivel(true);
+    }
+
+    /** Abre os Ajustes na seção dada ({@code null}: a que estava). */
+    public void mostrarAjustes(TelaAjustes.Secao secao) {
+        navegacao.mostrarAjustes(secao);
+    }
+
+    /**
+     * Cmd+1 a Cmd+9: a aba de número {@code n} (a partir de 1) do servidor em foco, contando as abas que APARECEM na barra, na ordem que o usuário deixou. Sem aba nesse número
+     * não faz nada.
+     */
+    public void mostrarAbaNumero(int n) {
+        ServidorLab lab = servidorOuPrimeiro();
+        TelaServidor t = lab == null ? null : navegacao.telaServidorDe(lab.id());
+        if (t == null) {
+            return;
+        }
+        java.util.List<TelaServidor.Aba> visiveis = t.abasVisiveis();
+        if (n >= 1 && n <= visiveis.size()) {
+            navegacao.mostrarServidor(lab, visiveis.get(n - 1));
+        }
+    }
+
+    /**
+     * Abre uma aba do servidor em foco (ou do primeiro cadastrado). {@code false} se não há nenhum servidor. Um link da Ajuda usa isto; como sai da tela Ajustes, o
+     * "Voltar" de Ajustes não volta para cá: o usuário já está onde queria ir.
+     */
+    public boolean irParaAba(TelaServidor.Aba aba) {
+        ServidorLab lab = servidorOuPrimeiro();
+        if (lab == null) {
+            return false;
+        }
+        navegacao.mostrarServidor(lab, aba);
+        return true;
+    }
+
+    /** Os nomes das abas que aparecem agora no servidor em foco, na ordem (os itens Cmd+1 a Cmd+9 do menu mostram estes). */
+    public java.util.List<String> nomesDasAbasVisiveis() {
+        ServidorLab lab = servidorOuPrimeiro();
+        TelaServidor t = lab == null ? null : navegacao.telaServidorDe(lab.id());
+        return t == null ? java.util.List.of() : t.abasVisiveis().stream().map(TelaServidor.Aba::rotulo).toList();
+    }
+
+    /** A aba aberta agora na página do servidor em foco (ela não pode ser escondida em Ajustes). */
+    public String abaAbertaDoServidor() {
+        ServidorLab lab = servidorOuPrimeiro();
+        TelaServidor t = lab == null ? null : navegacao.telaServidorDe(lab.id());
+        return t == null ? null : t.abaAtual().id();
+    }
+
+    /** A aba aberta agora na página do projeto em foco, ou {@code null} se não há página de projeto aberta. */
+    public String abaAbertaDoProjeto() {
+        ServidorLab lab = servidorOuPrimeiro();
+        TelaServidor t = lab == null ? null : navegacao.telaServidorDe(lab.id());
+        return t == null || t.projetoAberto() == null ? null : t.projetoAberto().abaAtual().id();
     }
 
     /**

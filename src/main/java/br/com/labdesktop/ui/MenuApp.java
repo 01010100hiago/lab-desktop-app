@@ -4,17 +4,16 @@ import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.ui.MenuDoServidor.Item;
 import br.com.labdesktop.ui.componentes.Teclas;
 import br.com.labdesktop.ui.tema.Fontes;
-import br.com.labdesktop.util.Preferencias.Tema;
+import br.com.labdesktop.ui.telas.ajustes.TelaAjustes;
 import java.awt.event.KeyEvent;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import javax.swing.ButtonGroup;
 import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
-import javax.swing.JRadioButtonMenuItem;
 import javax.swing.KeyStroke;
 import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
@@ -22,8 +21,10 @@ import javax.swing.event.MenuListener;
 /**
  * O menu do app (a barra de menus do macOS, por {@code apple.laf.useScreenMenuBar}). Regra de ouro (ARQUITETURA 7.4):
  * Cmd é do app e o resto é do terminal, e os atalhos nativos do JediTerm (Cmd+C, Cmd+V, Cmd+K, Cmd+Setas) NÃO viram
- * item de menu, para o menu da tela do macOS não engolir o atalho. Aqui só entram Cmd+N, Cmd+Shift+N (Novo projeto), Cmd+R, Cmd+1 a
- * Cmd+6, Cmd+W, Cmd+M e Cmd+Shift+L (bloquear o cofre); "Cmd" é a tecla de comando do sistema (Ctrl no Windows e no Linux).
+ * item de menu, para o menu da tela do macOS não engolir o atalho. Aqui entram Cmd+N, Cmd+Shift+N (Novo projeto), Cmd+R, Cmd+, (Ajustes), Cmd+1 a Cmd+9
+ * (as abas do servidor, NA ORDEM que o usuário deixou em Ajustes, Navegação), Cmd+Shift+S (Servidores), Cmd+Shift+P (último projeto), Cmd+W, Cmd+M e Cmd+Shift+L (bloquear o
+ * cofre); "Cmd" é a tecla de comando do sistema (Ctrl no Windows e no Linux). A Ajuda é a exceção: F1 no Windows e no Linux e Cmd+Shift+/ (Cmd+?) no Mac, o padrão de cada
+ * sistema. Todo item com atalho tem uma chave estável ({@link #atalhosDoMenu}): a Ajuda cita as teclas por ela e a tabela de atalhos dela sai daqui.
  *
  * <p>"Servidor" age sobre o servidor em foco (o da lista na tela, ou o único cadastrado) e só habilita o que faz
  * sentido para o estado dele: o "Configurar 2FA" daqui vale para o servidor selecionado (a tela Servidor tem o mesmo botão).
@@ -47,7 +48,12 @@ public final class MenuApp {
     private br.com.labdesktop.servidor.Inscricao inscricaoDoEstado;
     private JMenuItem itemVoltarAosProjetos;
     private final JMenuBar barra = new JMenuBar();
-    private final Map<Tema, JRadioButtonMenuItem> itensDeTema = new EnumMap<>(Tema.class);
+    private final List<JMenuItem> itensDasAbas = new ArrayList<>();
+    private JMenuItem itemAjustes;
+    private JMenuItem itemSobre;
+    private JMenuItem itemAparencia;
+    private JMenuItem itemAjuda;
+    private JMenuItem itemServidores;
 
     private final ComportamentoDaJanela comportamento;
 
@@ -78,6 +84,15 @@ public final class MenuApp {
         return Teclas.comando();
     }
 
+    /** Todo item do menu pelo nome estável (a Ajuda cita os atalhos por estas chaves), na ordem em que foram criados. */
+    private final Map<String, JMenuItem> porChave = new java.util.LinkedHashMap<>();
+
+    private JMenuItem item(String chave, String texto, KeyStroke tecla, Runnable acao) {
+        JMenuItem i = item(texto, tecla, acao);
+        porChave.put(chave, i);
+        return i;
+    }
+
     private static JMenuItem item(String texto, KeyStroke tecla, Runnable acao) {
         JMenuItem i = new JMenuItem(texto);
         i.putClientProperty("html.disable", Boolean.TRUE);
@@ -91,14 +106,12 @@ public final class MenuApp {
     private void montar() {
         // --- Cofre ---
         JMenu cofre = new JMenu("Cofre");
-        cofre.add(item("Bloquear o cofre", KeyStroke.getKeyStroke(KeyEvent.VK_L, atalho() | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
+        cofre.add(item("bloquear-cofre", "Bloquear o cofre", KeyStroke.getKeyStroke(KeyEvent.VK_L, atalho() | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
             bloquearCofre));
-        cofre.addSeparator();
-        cofre.add(item("Sobre o Lab Desktop", null, mostrarSobre));
         if (comportamento.temItemSair()) {
             // Windows e Linux: não há o Cmd+Q do menu do app. No Windows o atalho do sistema é Alt+F4 (fechar a janela também sai); no Linux, Ctrl+Q.
             cofre.addSeparator();
-            itemSair = item("Sair", comportamento.sistema() == br.com.labdesktop.plataforma.SistemaOperacional.LINUX ? KeyStroke.getKeyStroke(KeyEvent.VK_Q, atalho()) : null,
+            itemSair = item("sair", "Sair", comportamento.sistema() == br.com.labdesktop.plataforma.SistemaOperacional.LINUX ? KeyStroke.getKeyStroke(KeyEvent.VK_Q, atalho()) : null,
                 comportamento.sair());
             cofre.add(itemSair);
         }
@@ -107,9 +120,15 @@ public final class MenuApp {
         // --- Arquivo ---
         JMenu arquivo = new JMenu("Arquivo");
         // Cmd+Shift+N no Mac, Ctrl+Shift+N nos outros (a tecla de comando do sistema; Cmd+N é "Adicionar servidor")
-        itemNovoProjeto = item("Novo projeto…", KeyStroke.getKeyStroke(KeyEvent.VK_N, atalho() | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
+        itemNovoProjeto = item("novo-projeto", "Novo projeto…", KeyStroke.getKeyStroke(KeyEvent.VK_N, atalho() | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
             () -> painel.novoProjetoNoServidorEmFoco());
         arquivo.add(itemNovoProjeto);
+        arquivo.addSeparator();
+        // A tecla de comando do sistema (Cmd no Mac, Ctrl nos outros) e a vírgula: o atalho de Ajustes de todo app.
+        itemAjustes = item("ajustes", "Ajustes…", KeyStroke.getKeyStroke(KeyEvent.VK_COMMA, atalho()), () -> painel.mostrarAjustes(null));
+        itemSobre = item("sobre", "Sobre o Lab Desktop", null, mostrarSobre);
+        arquivo.add(itemAjustes);
+        arquivo.add(itemSobre);
         arquivo.addMenuListener(new MenuListener() {
             @Override
             public void menuSelected(MenuEvent e) {
@@ -125,15 +144,16 @@ public final class MenuApp {
         barra.add(arquivo);
 
         // --- Servidor ---
-        menuServidor.add(item("Adicionar servidor…", KeyStroke.getKeyStroke(KeyEvent.VK_N, atalho()),
+        menuServidor.add(item("adicionar-servidor", "Adicionar servidor…", KeyStroke.getKeyStroke(KeyEvent.VK_N, atalho()),
             () -> painel.acoes().adicionarServidor()));
         menuServidor.addSeparator();
         for (Item i : Item.values()) {
             if (i == Item.EDITAR) {
                 menuServidor.addSeparator();
             }
-            JMenuItem mi = item(i.rotulo(), i == Item.ATUALIZAR ? KeyStroke.getKeyStroke(KeyEvent.VK_R, atalho()) : null,
-                () -> executarNoServidorEmFoco(i));
+            JMenuItem mi = i == Item.ATUALIZAR
+                ? item("atualizar", i.rotulo(), KeyStroke.getKeyStroke(KeyEvent.VK_R, atalho()), () -> executarNoServidorEmFoco(i))
+                : item(i.rotulo(), null, () -> executarNoServidorEmFoco(i));
             itensDoServidor.put(i, mi);
             menuServidor.add(mi);
         }
@@ -153,42 +173,41 @@ public final class MenuApp {
 
         // --- Visualizar ---
         JMenu ver = new JMenu("Visualizar");
-        ver.add(item("Servidores", KeyStroke.getKeyStroke(KeyEvent.VK_2, atalho()), painel::mostrarServidores));
-        ver.add(item("Resumo do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_3, atalho()), painel::mostrarResumo));
-        ver.add(item("Projetos do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_1, atalho()), painel::mostrarProjetos));
-        ver.add(item("Arquivos do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_5, atalho()), painel::mostrarArquivos));
-        ver.add(item("Terminal do servidor", KeyStroke.getKeyStroke(KeyEvent.VK_6, atalho()), painel::mostrarTerminal));
-        itemUltimoProjeto = item("Último projeto aberto", KeyStroke.getKeyStroke(KeyEvent.VK_4, atalho()), painel::mostrarUltimoProjeto);
+        // Servidores (a tela de gerenciar) deixou o número 2: os números 1 a 9 agora são as abas do servidor, na ordem que o usuário deixou em Ajustes, Navegação.
+        itemServidores = item("servidores", "Servidores", KeyStroke.getKeyStroke(KeyEvent.VK_S, atalho() | java.awt.event.InputEvent.SHIFT_DOWN_MASK), painel::mostrarServidores);
+        ver.add(itemServidores);
+        ver.addSeparator();
+        for (int n = 1; n <= 9; n++) {
+            int numero = n;
+            JMenuItem aba = item("aba-" + n, "Aba " + n, KeyStroke.getKeyStroke(KeyEvent.VK_0 + n, atalho()), () -> painel.mostrarAbaNumero(numero));
+            itensDasAbas.add(aba);
+            ver.add(aba);
+        }
+        ver.addSeparator();
+        itemUltimoProjeto = item("ultimo-projeto", "Último projeto aberto", KeyStroke.getKeyStroke(KeyEvent.VK_P, atalho() | java.awt.event.InputEvent.SHIFT_DOWN_MASK), painel::mostrarUltimoProjeto);
         ver.add(itemUltimoProjeto);
-        itemVoltarAosProjetos = item("Voltar à lista de projetos", KeyStroke.getKeyStroke(KeyEvent.VK_OPEN_BRACKET, atalho()),
+        itemVoltarAosProjetos = item("voltar-aos-projetos", "Voltar à lista de projetos", KeyStroke.getKeyStroke(KeyEvent.VK_OPEN_BRACKET, atalho()),
             painel::mostrarProjetos);
         ver.add(itemVoltarAosProjetos);
         ver.addSeparator();
-        itemAumentar = item("Aumentar texto", KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, atalho()), () -> mudarTexto(Fontes.maior(Fontes.percentual())));
-        itemDiminuir = item("Diminuir texto", KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, atalho()), () -> mudarTexto(Fontes.menor(Fontes.percentual())));
-        itemNormal = item("Tamanho normal", KeyStroke.getKeyStroke(KeyEvent.VK_0, atalho()), () -> mudarTexto(Fontes.ESCALAS[0]));
+        itemAumentar = item("aumentar-texto", "Aumentar texto", KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, atalho()), () -> mudarTexto(Fontes.maior(Fontes.percentual())));
+        itemDiminuir = item("diminuir-texto", "Diminuir texto", KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, atalho()), () -> mudarTexto(Fontes.menor(Fontes.percentual())));
+        itemNormal = item("tamanho-normal", "Tamanho normal", KeyStroke.getKeyStroke(KeyEvent.VK_0, atalho()), () -> mudarTexto(Fontes.ESCALAS[0]));
         ver.add(itemAumentar);
         ver.add(itemDiminuir);
         ver.add(itemNormal);
         instalarAtalhoDoMais();
         atualizarItensDoTexto();
         ver.addSeparator();
-        JMenu aparencia = new JMenu("Aparência");
-        ButtonGroup grupo = new ButtonGroup();
-        for (Object[] par : new Object[][] {{Tema.SISTEMA, "Seguir o sistema"}, {Tema.CLARO, "Claro"}, {Tema.ESCURO, "Escuro"}}) {
-            Tema t = (Tema) par[0];
-            JRadioButtonMenuItem r = new JRadioButtonMenuItem((String) par[1], t == tema.escolha());
-            r.putClientProperty("html.disable", Boolean.TRUE);
-            r.addActionListener(e -> trocarTema(t));
-            grupo.add(r);
-            aparencia.add(r);
-            itensDeTema.put(t, r);
-        }
-        ver.add(aparencia);
+        // O tema (Sistema, Claro, Escuro) mora em Ajustes: aqui fica só o caminho até lá.
+        itemAparencia = item("Aparência…", null, () -> painel.mostrarAjustes(TelaAjustes.Secao.APARENCIA));
+        ver.add(itemAparencia);
         ver.addMenuListener(new MenuListener() {
             @Override
             public void menuSelected(MenuEvent e) {
                 atualizarHabilitacaoDoProjeto();
+                atualizarItensDasAbas();
+                atualizarItensDoTexto();
             }
 
             @Override
@@ -201,19 +220,33 @@ public final class MenuApp {
 
         // --- Janela ---
         JMenu menuJanela = new JMenu("Janela");
-        menuJanela.add(item("Minimizar", KeyStroke.getKeyStroke(KeyEvent.VK_M, atalho()),
+        menuJanela.add(item("minimizar", "Minimizar", KeyStroke.getKeyStroke(KeyEvent.VK_M, atalho()),
             () -> janela.setExtendedState(janela.getExtendedState() | JFrame.ICONIFIED)));
         if (comportamento.fecharEscondeAJanela()) {
             // Só onde fechar a janela é esconder (Mac): Cmd+W. Fora do Mac Ctrl+W NÃO existe (fechar a janela sai do app; quem quer sair usa "Sair" e a pergunta de pendências).
-            menuJanela.add(item("Fechar a janela", KeyStroke.getKeyStroke(KeyEvent.VK_W, atalho()),
+            menuJanela.add(item("fechar-janela", "Fechar a janela", KeyStroke.getKeyStroke(KeyEvent.VK_W, atalho()),
                 () -> janela.dispatchEvent(new java.awt.event.WindowEvent(janela, java.awt.event.WindowEvent.WINDOW_CLOSING))));
         }
         barra.add(menuJanela);
+
+        // --- Ajuda ---
+        JMenu ajuda = new JMenu("Ajuda");
+        // F1 no Windows e no Linux; no Mac, Cmd+? (Cmd+Shift+/), o atalho de Ajuda do sistema
+        KeyStroke teclaDaAjuda = comportamento.sistema() == br.com.labdesktop.plataforma.SistemaOperacional.MAC
+            ? KeyStroke.getKeyStroke(KeyEvent.VK_SLASH, atalho() | java.awt.event.InputEvent.SHIFT_DOWN_MASK)
+            : KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0);
+        itemAjuda = item("ajuda", "Guia do Lab Desktop", teclaDaAjuda, () -> painel.mostrarAjustes(TelaAjustes.Secao.AJUDA));
+        ajuda.add(itemAjuda);
+        barra.add(ajuda);
         atualizarHabilitacao();
         atualizarHabilitacaoDoNovoProjeto();
+        atualizarItensDasAbas();
         // O atalho de um item desabilitado não faz nada: a habilitação acompanha o servidor em foco (troca de tela) e o estado dele (o agente
         // que passa a responder), e não só o abrir do menu.
-        painel.navegacao().aoMudar(id -> religarAoServidorEmFoco());
+        painel.navegacao().aoMudar(id -> {
+            religarAoServidorEmFoco();
+            atualizarItensDasAbas();
+        });
         religarAoServidorEmFoco();
     }
 
@@ -234,10 +267,18 @@ public final class MenuApp {
         }
     }
 
-    private void trocarTema(Tema t) {
-        tema.definirEscolha(t);
-        preferencias.atualizar(p -> p.comTema(t));
-        tema.conferirSistema();
+    /**
+     * Os itens "Aba 1" a "Aba 9" ganham o nome da aba daquele número NA ORDEM de agora (a que o usuário deixou em Ajustes, Navegação) para o servidor em foco; sem aba naquele
+     * número o item fica apagado. O atalho (a tecla de comando e o número) conta pelas mesmas posições.
+     */
+    public void atualizarItensDasAbas() {
+        List<String> nomes = painel.nomesDasAbasVisiveis();
+        for (int i = 0; i < itensDasAbas.size(); i++) {
+            JMenuItem mi = itensDasAbas.get(i);
+            boolean tem = i < nomes.size();
+            mi.setText(tem ? nomes.get(i) : "Aba " + (i + 1));
+            mi.setEnabled(tem);
+        }
     }
 
     private void executarNoServidorEmFoco(Item item) {
@@ -259,10 +300,7 @@ public final class MenuApp {
      * ajusta o que o menu oferece.
      */
     void mudarTexto(int porcento) {
-        Fontes.definirPercentual(porcento);
-        tema.reaplicarFontes();
-        int atual = Fontes.percentual();
-        preferencias.atualizar(p -> p.comEscalaTexto(atual));
+        AjustesDoApp.aplicarTamanhoDoTexto(tema, preferencias, porcento);
         atualizarItensDoTexto();
     }
 
@@ -341,7 +379,46 @@ public final class MenuApp {
         return itensDoServidor.get(i);
     }
 
-    public JRadioButtonMenuItem itemDeTema(Tema t) {
-        return itensDeTema.get(t);
+    /** O item "Aba N" (de 1 a 9) do menu Visualizar. */
+    public JMenuItem itemDaAba(int numero) {
+        return itensDasAbas.get(numero - 1);
+    }
+
+    public JMenuItem itemAjustes() {
+        return itemAjustes;
+    }
+
+    /** O item Ajuda (F1 no Windows e no Linux, Cmd+? no Mac). */
+    public JMenuItem itemAjuda() {
+        return itemAjuda;
+    }
+
+    /**
+     * Os atalhos do menu como a Ajuda os mostra: a chave estável, o que o item faz e a tecla escrita. Sai do próprio menu (o que está agora no
+     * computador do usuário), nunca é digitado; as abas numeradas dizem o nome da aba que o número abre agora.
+     */
+    public List<br.com.labdesktop.ajuda.AtalhoDoMenu> atalhosDoMenu() {
+        atualizarItensDasAbas();
+        List<br.com.labdesktop.ajuda.AtalhoDoMenu> lista = new ArrayList<>();
+        porChave.forEach((chave, mi) -> {
+            KeyStroke tecla = mi.getAccelerator();
+            if (tecla != null && !(chave.startsWith("aba-") && !mi.isEnabled())) {
+                String descricao = chave.startsWith("aba-") ? "Abrir a aba " + chave.substring(4) + " da barra (" + mi.getText() + ")" : mi.getText().replace("…", "");
+                lista.add(new br.com.labdesktop.ajuda.AtalhoDoMenu(chave, descricao, Teclas.descrever(tecla, comportamento.sistema())));
+            }
+        });
+        return lista;
+    }
+
+    public JMenuItem itemSobre() {
+        return itemSobre;
+    }
+
+    public JMenuItem itemAparencia() {
+        return itemAparencia;
+    }
+
+    public JMenuItem itemServidores() {
+        return itemServidores;
     }
 }

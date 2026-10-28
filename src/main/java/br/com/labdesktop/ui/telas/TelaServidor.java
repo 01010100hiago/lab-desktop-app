@@ -12,6 +12,7 @@ import br.com.labdesktop.ui.telas.arquivos.EscolhedorLocal;
 import br.com.labdesktop.ui.telas.arquivos.GerenciadorDeArquivos;
 import br.com.labdesktop.ui.terminal.ContextoDeTerminal;
 import br.com.labdesktop.ui.tema.Tokens;
+import br.com.labdesktop.util.OrdemDeAbas;
 import br.com.labdesktop.util.Preferencias;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
@@ -39,7 +40,10 @@ public final class TelaServidor extends Painel {
 
     private static final long serialVersionUID = 1L;
 
-    /** As abas, na ordem da tela. */
+    /** Os ids de todas as abas desta versão, na ordem padrão (o que {@link OrdemDeAbas} usa para não perder nenhuma). */
+    public static final java.util.List<String> IDS_DAS_ABAS = Arrays.stream(Aba.values()).map(Aba::id).toList();
+
+    /** As abas, na ordem padrão. */
     public enum Aba {
         RESUMO("resumo", "Resumo"),
         SEGURANCA("seguranca", "Segurança"),
@@ -90,6 +94,8 @@ public final class TelaServidor extends Painel {
     private final CardLayout cartoes = new CartoesAjustaveis();
     private final JPanel corpo = new Painel(cartoes);
     private Aba atual = Aba.RESUMO;
+    /** A ordem e as abas escondidas das páginas de projeto (Ajustes, Navegação): vale para toda página de projeto aberta aqui. */
+    private OrdemDeAbas ordemDoProjeto = OrdemDeAbas.PADRAO;
     /** O servidor tem projetos, segundo o agente (desconhecido vale sim): sem projetos, a aba Projetos some. */
     private boolean temProjetos = true;
     private transient br.com.labdesktop.servidor.Inscricao inscricaoDoEstado;
@@ -156,6 +162,9 @@ public final class TelaServidor extends Painel {
             abas.adicionar(a.id, a.rotulo);
         }
         abas.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 12, 0, 12));
+        Preferencias prefs = preferencias == null ? Preferencias.padrao() : preferencias.get();
+        this.ordemDoProjeto = prefs.abasDoProjeto();
+        abas.aplicarPreferencia(prefs.abasDoServidor(), IDS_DAS_ABAS);
         if (servidor != null && servidor.ehLocal()) {
             abas.definirVisivel(Aba.SEGURANCA.id, false); // a leitura de segurança é do SSH (registro de entradas, firewall) de um servidor remoto
         }
@@ -205,6 +214,24 @@ public final class TelaServidor extends Painel {
         if (!comProjetos && (atual == Aba.PROJETOS || projetoAberto != null)) {
             mostrarAba(Aba.RESUMO);
         }
+    }
+
+    /**
+     * O usuário mexeu em Ajustes, Navegação: aplica a ordem e as abas escondidas das duas barras (a do servidor e a das páginas de projeto, a aberta e as guardadas). Na hora,
+     * sem reiniciar. A aba que está aberta nunca some.
+     */
+    public void aplicarPreferenciasDeAbas(Preferencias prefs) {
+        abas.aplicarPreferencia(prefs.abasDoServidor(), IDS_DAS_ABAS);
+        this.ordemDoProjeto = prefs.abasDoProjeto();
+        if (projetoAberto != null) {
+            projetoAberto.aplicarPreferenciaDeAbas(ordemDoProjeto);
+        }
+        projetosGuardados.values().forEach(t -> t.aplicarPreferenciaDeAbas(ordemDoProjeto));
+    }
+
+    /** As abas que aparecem agora, da esquerda para a direita (⌘1 abre a primeira daqui, ⌘2 a segunda...). */
+    public java.util.List<Aba> abasVisiveis() {
+        return abas.idsVisiveis().stream().map(Aba::de).toList();
     }
 
     /** A aba Projetos está disponível neste servidor? */
@@ -311,6 +338,7 @@ public final class TelaServidor extends Painel {
             }
         }, () -> projetos.urlDeLoginDe(nome), aoAtualizarProjeto, CopiadorDeTexto.doSistema(), servicosDeArquivos, escolhedor,
             contextoDeTerminal);
+        projetoAberto.aplicarPreferenciaDeAbas(ordemDoProjeto);
         add(projetoAberto, CARTAO_PROJETO + nome);
         niveis.show(this, CARTAO_PROJETO + nome);
         revalidate();

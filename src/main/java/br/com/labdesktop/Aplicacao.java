@@ -265,7 +265,7 @@ public final class Aplicacao {
                 });
             }
             if (d.isSupported(Desktop.Action.APP_ABOUT)) {
-                d.setAboutHandler(e -> new DialogoSobre().mostrar(janelaDeDialogos()));
+                d.setAboutHandler(e -> Fundo.naEdt(this::mostrarSobre));
             }
             if (d.isSupported(Desktop.Action.APP_EVENT_REOPENED)) {
                 d.addAppEventListener((AppReopenedListener) e -> reabrirJanela());
@@ -289,6 +289,16 @@ public final class Aplicacao {
             LOG.warn("Não consegui ligar o aviso de sono do sistema: {}", e.toString());
         }
         vigiaDeRelogio = VigiaDeRelogio.iniciar(monitorDeSono);
+    }
+
+    /** "Sobre": com a janela principal à vista leva aos Ajustes, na seção Sobre; sem ela (cofre bloqueado) abre a janelinha. */
+    private void mostrarSobre() {
+        JanelaPrincipal j = janela;
+        if (j != null && j.isVisible()) {
+            j.painel().mostrarAjustes(br.com.labdesktop.ui.telas.ajustes.TelaAjustes.Secao.SOBRE);
+            return;
+        }
+        new DialogoSobre(br.com.labdesktop.util.InformacoesDoApp.coletar(caminhos)).mostrar(janelaDeDialogos());
     }
 
     /** Clique no ícone do Dock com a janela escondida: mostra de novo. */

@@ -2,6 +2,7 @@ package br.com.labdesktop.ui.componentes;
 
 import br.com.labdesktop.ui.tema.Fontes;
 import br.com.labdesktop.ui.tema.Tokens;
+import br.com.labdesktop.util.OrdemDeAbas;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
@@ -28,7 +29,13 @@ public final class Abas extends Painel {
 
     private static final long serialVersionUID = 1L;
 
-    private final Map<String, JToggleButton> botoes = new LinkedHashMap<>();
+    private Map<String, JToggleButton> botoes = new LinkedHashMap<>();
+    /** As que o servidor não tem (o recurso não existe): decidido pela tela, com {@link #definirVisivel}. */
+    private final java.util.Set<String> indisponiveis = new java.util.HashSet<>();
+    /** As que o usuário escondeu em Ajustes, Navegação: decidido pela preferência, com {@link #definirEscondidasPeloDono}. */
+    private final java.util.Set<String> escondidasPeloDono = new java.util.HashSet<>();
+    /** O que a preferência pede esconder, inteiro (a aba aberta fica de fora de {@code escondidasPeloDono} enquanto está aberta). */
+    private final java.util.Set<String> preferenciaDeEscondidas = new java.util.HashSet<>();
     private final ButtonGroup grupo = new ButtonGroup();
     private Consumer<String> ouvinte = id -> { };
     private String selecionada;
@@ -156,14 +163,99 @@ public final class Abas extends Painel {
         }
     }
 
-    /** Mostra ou esconde uma aba (o servidor não tem o recurso: sem projetos, sem aba Projetos). A escolha não muda aqui. */
+    /**
+     * Diz se o servidor TEM a aba (o servidor não tem o recurso: sem projetos, sem aba Projetos). A escolha não muda aqui. Uma aba que o usuário escondeu em
+     * Ajustes continua escondida mesmo quando o servidor a tem.
+     */
     public void definirVisivel(String id, boolean visivel) {
+        if (visivel) {
+            indisponiveis.remove(id);
+        } else {
+            indisponiveis.add(id);
+        }
+        atualizarVisibilidade(id);
+    }
+
+    private void atualizarVisibilidade(String id) {
         JToggleButton b = botoes.get(id);
-        if (b != null && b.isVisible() != visivel) {
-            b.setVisible(visivel);
+        boolean aparece = !indisponiveis.contains(id) && !escondidasPeloDono.contains(id);
+        if (b != null && b.isVisible() != aparece) {
+            b.setVisible(aparece);
             revalidate();
             repaint();
         }
+    }
+
+    /**
+     * A ordem da barra (a que o usuário escolheu em Ajustes, Navegação): as abas na ordem dos ids dados; as que não vêm na lista (uma aba nova, uma aba do
+     * editor) ficam no fim, na ordem de antes. Nunca perde nem repete uma aba.
+     */
+    public void definirOrdem(java.util.List<String> ids) {
+        Map<String, JToggleButton> nova = new LinkedHashMap<>();
+        for (String id : ids) {
+            JToggleButton b = botoes.get(id);
+            if (b != null) {
+                nova.put(id, b);
+            }
+        }
+        botoes.forEach(nova::putIfAbsent);
+        if (new java.util.ArrayList<>(nova.keySet()).equals(new java.util.ArrayList<>(botoes.keySet()))) {
+            return;
+        }
+        botoes = nova;
+        removeAll();
+        nova.values().forEach(this::add);
+        revalidate();
+        repaint();
+    }
+
+    /**
+     * As abas que o usuário escondeu em Ajustes, Navegação. Duas guardas: a aba escolhida agora nunca some (ela aparece enquanto está aberta e volta a ser escondida
+     * quando o usuário sai dela) e nunca sobra a barra vazia (se só restassem escondidas, aparecem todas as que o servidor tem).
+     */
+    public void definirEscondidasPeloDono(java.util.Set<String> ids) {
+        preferenciaDeEscondidas.clear();
+        preferenciaDeEscondidas.addAll(ids);
+        recalcularEscondidas();
+    }
+
+    private void recalcularEscondidas() {
+        java.util.Set<String> efetivas = new java.util.HashSet<>(preferenciaDeEscondidas);
+        // tudo escondido na preferência só acontece com arquivo corrompido ou editado à mão (a tela de Ajustes não deixa): a intenção é desconhecida, aparecem todas
+        boolean tudoEscondido = botoes.keySet().stream().filter(id -> !indisponiveis.contains(id)).allMatch(efetivas::contains);
+        if (tudoEscondido) {
+            efetivas.clear();
+        }
+        efetivas.remove(selecionada);
+        if (efetivas.equals(escondidasPeloDono)) {
+            return;
+        }
+        java.util.Set<String> mudaram = new java.util.HashSet<>(efetivas);
+        mudaram.addAll(escondidasPeloDono);
+        escondidasPeloDono.clear();
+        escondidasPeloDono.addAll(efetivas);
+        mudaram.forEach(this::atualizarVisibilidade);
+    }
+
+    /**
+     * Aplica a preferência do usuário (ordem e abas escondidas) a esta barra, de uma vez. {@code conhecidas} são as abas que esta versão do app tem nesta barra, na
+     * ordem padrão ({@link OrdemDeAbas} cuida do que a preferência traz de errado).
+     */
+    public void aplicarPreferencia(OrdemDeAbas preferencia, java.util.List<String> conhecidas) {
+        definirOrdem(preferencia.ordenar(conhecidas));
+        java.util.Set<String> esconder = new java.util.HashSet<>(preferencia.ocultas());
+        esconder.retainAll(conhecidas);
+        definirEscondidasPeloDono(esconder);
+    }
+
+    /** O servidor tem esta aba (não é a que a tela marcou como indisponível)? */
+    public boolean disponivel(String id) {
+        return botoes.containsKey(id) && !indisponiveis.contains(id);
+    }
+
+    /** Os ids das abas que aparecem agora, da esquerda para a direita (os atalhos ⌘1, ⌘2... contam por aqui). */
+    public java.util.List<String> idsVisiveis() {
+        return botoes.entrySet().stream().filter(e -> e.getValue().isVisible()).map(Map.Entry::getKey).toList();
     }
 
     public boolean visivel(String id) {
@@ -208,6 +300,9 @@ public final class Abas extends Painel {
         b.setSelected(true);
         boolean mudou = !id.equals(selecionada);
         selecionada = id;
+        if (!preferenciaDeEscondidas.isEmpty()) {
+            recalcularEscondidas(); // a aba que acabou de abrir aparece; a que o usuário acabou de deixar volta a sumir
+        }
         repaint();
         if (mudou && avisar) {
             ouvinte.accept(id);

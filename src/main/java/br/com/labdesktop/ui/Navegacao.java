@@ -12,6 +12,7 @@ import br.com.labdesktop.ui.telas.TelaProjetos;
 import br.com.labdesktop.ui.telas.TelaServidor;
 import br.com.labdesktop.ui.telas.TelaServidor.Aba;
 import br.com.labdesktop.ui.telas.TelaServidores;
+import br.com.labdesktop.ui.telas.ajustes.TelaAjustes;
 import br.com.labdesktop.ui.telas.arquivos.EscolhedorLocal;
 import br.com.labdesktop.ui.tema.Tokens;
 import br.com.labdesktop.util.Preferencias;
@@ -34,6 +35,7 @@ public final class Navegacao extends Painel {
     private static final long serialVersionUID = 1L;
     private static final String SERVIDORES = "servidores";
     private static final String PREFIXO_DO_SERVIDOR = "servidor:";
+    private static final String AJUSTES = "ajustes";
 
     private final GerenciadorServidores gerenciador;
     private final AcoesDaInterface acoes;
@@ -49,6 +51,10 @@ public final class Navegacao extends Painel {
     private final Inscricao inscricaoDaLista;
     private final java.util.List<Consumer<String>> ouvintes = new java.util.concurrent.CopyOnWriteArrayList<>();
     private String atual = SERVIDORES;
+    /** Onde o usuário estava quando abriu os Ajustes (para o "Voltar"). */
+    private String anteriorAosAjustes = SERVIDORES;
+    private TelaAjustes ajustes;
+    private Supplier<TelaAjustes> fabricaDeAjustes;
 
     public Navegacao(GerenciadorServidores gerenciador, AcoesDaInterface acoes, Navegador navegador, Notificacoes avisos,
                      Apresentador apresentador) {
@@ -157,12 +163,75 @@ public final class Navegacao extends Painel {
         return atual;
     }
 
-    /** O servidor cuja lista está na tela, ou {@code null} na tela de servidores. */
+    /**
+     * O servidor cuja lista está na tela, ou {@code null} na tela de servidores. Nos Ajustes vale o servidor que estava na tela antes (o menu Servidor segue agindo
+     * sobre ele).
+     */
     public ServidorLab servidorAtual() {
-        if (!atual.startsWith(PREFIXO_DO_SERVIDOR)) {
+        String cartao = AJUSTES.equals(atual) ? anteriorAosAjustes : atual;
+        if (!cartao.startsWith(PREFIXO_DO_SERVIDOR)) {
             return null;
         }
-        return gerenciador.servidor(atual.substring(PREFIXO_DO_SERVIDOR.length())).orElse(null);
+        return gerenciador.servidor(cartao.substring(PREFIXO_DO_SERVIDOR.length())).orElse(null);
+    }
+
+    /**
+     * Diz como montar a tela Ajustes (a janela sabe o que ela precisa do app). Ela é montada na PRIMEIRA vez que o usuário a abre: a janela principal não paga por uma
+     * tela que muita gente nunca abre.
+     */
+    public void instalarAjustes(Supplier<TelaAjustes> fabrica) {
+        this.fabricaDeAjustes = fabrica;
+    }
+
+    /** O app tem tela de Ajustes (montada ou por montar)? */
+    public boolean temAjustes() {
+        return fabricaDeAjustes != null;
+    }
+
+    /** Mostra os Ajustes na seção dada ({@code null}: a que estava). */
+    public void mostrarAjustes(TelaAjustes.Secao secao) {
+        if (fabricaDeAjustes == null) {
+            return;
+        }
+        if (ajustes == null) {
+            ajustes = fabricaDeAjustes.get();
+            add(ajustes, AJUSTES);
+            ajustes.aoVoltar(this::voltarDosAjustes);
+        }
+        if (!AJUSTES.equals(atual)) {
+            anteriorAosAjustes = atual;
+        }
+        atual = AJUSTES;
+        ajustes.mostrarSecao(secao == null ? ajustes.secaoAtual() : secao);
+        cartoes.show(this, AJUSTES);
+        ouvintes.forEach(o -> o.accept(atual));
+    }
+
+    /** "Voltar" dos Ajustes: para o servidor ou a lista de servidores onde o usuário estava (se aquele servidor saiu, a lista de servidores). */
+    public void voltarDosAjustes() {
+        if (!AJUSTES.equals(atual)) {
+            return;
+        }
+        String destino = anteriorAosAjustes;
+        if (destino.startsWith(PREFIXO_DO_SERVIDOR) && !telas.containsKey(destino.substring(PREFIXO_DO_SERVIDOR.length()))) {
+            destino = SERVIDORES;
+        }
+        atual = destino;
+        cartoes.show(this, destino);
+        ouvintes.forEach(o -> o.accept(atual));
+    }
+
+    public boolean emAjustes() {
+        return AJUSTES.equals(atual);
+    }
+
+    public TelaAjustes telaDeAjustes() {
+        return ajustes;
+    }
+
+    /** O usuário mudou a ordem ou as abas escondidas (Ajustes, Navegação): aplica já em todas as páginas de servidor. */
+    public void reaplicarAbas(Preferencias prefs) {
+        telas.values().forEach(t -> t.aplicarPreferenciasDeAbas(prefs));
     }
 
     /** Avisa (na EDT) toda vez que a tela mostrada muda. */

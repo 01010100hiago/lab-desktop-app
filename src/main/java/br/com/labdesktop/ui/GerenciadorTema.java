@@ -124,6 +124,11 @@ public final class GerenciadorTema {
         return aplicado ? escuroAplicado : efetivoEscuro();
     }
 
+    /** Como o sistema (macOS, Windows) está agora, pelo que foi lido por último ({@link #conferirSistema()}): é o que "Sistema" segue. */
+    public boolean sistemaEstaEscuro() {
+        return sistemaEscuro;
+    }
+
     /** Troca a escolha e aplica. Na EDT. */
     public void definirEscolha(Tema nova) {
         this.escolha = nova == null ? Tema.SISTEMA : nova;

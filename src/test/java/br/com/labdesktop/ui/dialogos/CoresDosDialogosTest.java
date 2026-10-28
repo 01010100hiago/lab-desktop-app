@@ -52,7 +52,7 @@ class CoresDosDialogosTest {
         m.put("confirmar perigoso", () -> new DialogoConfirmar("Remover", "alerta", "Texto da pergunta.", "Remover", true, ok -> { }));
         m.put("confirmar com Cancelar no Enter", () -> new DialogoConfirmar("Sair?", "alerta", "Texto da pergunta.", "Sair mesmo assim", true, true, ok -> { }));
         m.put("confirmar sem perigo e Cancelar no Enter", () -> new DialogoConfirmar("Salvar", "chave", "Texto da pergunta.", "Salvar", false, true, ok -> { }));
-        m.put("sobre", DialogoSobre::new);
+        m.put("sobre", () -> new DialogoSobre(br.com.labdesktop.util.InformacoesDoApp.coletar(br.com.labdesktop.util.CaminhosApp.comPasta(java.nio.file.Path.of("dados-de-teste")))));
         m.put("nome", () -> new DialogoNome("Nova pasta", "pasta-mais", "Nome", "Nome", "x", "Criar pasta", t -> null, t -> { }));
         m.put("apagar arquivos", () -> new DialogoApagarArquivos(List.of(new DialogoApagarArquivos.Item("src", true, false)),
             new br.com.labdesktop.arquivos.ResumoDeTamanho(10, 2, 5000, true), ok -> { }));

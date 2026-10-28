@@ -51,6 +51,9 @@ public final class BarraServidores extends Painel {
         void aoEscolherServidor(ServidorLab lab);
 
         void aoEscolherGerenciar();
+
+        /** A engrenagem (Ajustes). Os que não têm tela de Ajustes não precisam tratar. */
+        default void aoEscolherAjustes() { }
     }
 
     private final GerenciadorServidores gerenciador;
@@ -59,6 +62,9 @@ public final class BarraServidores extends Painel {
     private final JPanel itensPanel = new Painel();
     private final Map<String, ItemDeServidor> itens = new LinkedHashMap<>();
     private final ItemFixo gerenciar = new ItemFixo("Gerenciar servidores", "servidor");
+    /** A engrenagem: abre a tela Ajustes (aparência, navegação, terminal e Sobre). Só aparece quando a janela tem a tela de Ajustes. */
+    private final ItemFixo ajustes = new ItemFixo("Ajustes", "config");
+    private boolean ajustesSelecionado;
     private final Botao adicionar = Botoes.mini("Adicionar", "mais");
     private final Inscricao inscricaoDaLista;
     private String selecionadoId;
@@ -75,12 +81,13 @@ public final class BarraServidores extends Painel {
 
         Rotulo titulo = new Rotulo("SERVIDORES").corDoToken(Tokens.TEXTO3).negrito().tamanho(10.5f);
         JComponent cabecalho = Caixa.linha(0, titulo, Caixa.mola(), adicionar);
-        cabecalho.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 6, 8, 0));
+        cabecalho.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 8, 0)); // sem recuo à esquerda: com ele o botão Adicionar passava 2 px da largura da barra
         add(cabecalho, BorderLayout.NORTH);
 
         itensPanel.setLayout(new BoxLayout(itensPanel, BoxLayout.Y_AXIS));
         add(itensPanel, BorderLayout.CENTER);
-        add(gerenciar, BorderLayout.SOUTH);
+        ajustes.setVisible(false);
+        add(Caixa.coluna(4, gerenciar, ajustes), BorderLayout.SOUTH);
 
         adicionar.setToolTipText("Adicionar um servidor");
         adicionar.addActionListener(e -> acoes.adicionarServidor());
@@ -88,6 +95,8 @@ public final class BarraServidores extends Painel {
             definirSelecionado(null, true);
             ouvinte.aoEscolherGerenciar();
         });
+        ajustes.aoClicar(ouvinte::aoEscolherAjustes);
+        ajustes.setToolTipText("Ajustes: aparência, ordem das abas, terminal e Sobre");
         getAccessibleContext().setAccessibleName("Servidores");
         inscricaoDaLista = gerenciador.observarLista(this::aoMudarALista);
     }
@@ -134,8 +143,33 @@ public final class BarraServidores extends Painel {
     }
 
     private void atualizarSelecao() {
-        itens.forEach((id, i) -> i.definirSelecionado(!gerenciarSelecionado && id.equals(selecionadoId)));
-        gerenciar.definirSelecionado(gerenciarSelecionado);
+        itens.forEach((id, i) -> i.definirSelecionado(!gerenciarSelecionado && !ajustesSelecionado && id.equals(selecionadoId)));
+        gerenciar.definirSelecionado(gerenciarSelecionado && !ajustesSelecionado);
+        ajustes.definirSelecionado(ajustesSelecionado);
+    }
+
+    /** Mostra a engrenagem (a janela tem a tela de Ajustes). */
+    public void definirAjustesDisponivel(boolean sim) {
+        ajustes.setVisible(sim);
+        revalidate();
+    }
+
+    /** Marca a engrenagem enquanto a tela Ajustes está à frente (ela tira a marca do servidor). */
+    public void definirAjustesSelecionado(boolean sim) {
+        this.ajustesSelecionado = sim;
+        atualizarSelecao();
+    }
+
+    public boolean ajustesSelecionado() {
+        return ajustesSelecionado;
+    }
+
+    public boolean ajustesVisivel() {
+        return ajustes.isVisible();
+    }
+
+    public void clicarEmAjustes() {
+        ajustes.clicar();
     }
 
     // ---------------------------------------------------------------------------------------------

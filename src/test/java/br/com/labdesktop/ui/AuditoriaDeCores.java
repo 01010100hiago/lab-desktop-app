@@ -84,7 +84,9 @@ public final class AuditoriaDeCores {
             return;
         }
         if (c instanceof AbstractButton || c instanceof JTextComponent || c instanceof JComboBox<?>) {
-            if (ehMedivel((JComponent) c)) {
+            // o botão de limpar que o FlatLaf põe DENTRO de um campo de busca é do campo, não da tela
+            boolean pecaDeCampo = c instanceof AbstractButton && c.getParent() instanceof JTextComponent;
+            if (!pecaDeCampo && ehMedivel((JComponent) c)) {
                 l.add((JComponent) c);
             }
         }
@@ -95,12 +97,24 @@ public final class AuditoriaDeCores {
         }
     }
 
+    /** Está à vista? Um componente dentro de uma rolagem (a tabela de atalhos) que ficou para baixo, fora da janela dela, não é pintado e não tem o que medir. */
+    private static boolean estaAVista(JComponent c) {
+        java.awt.Rectangle visivel = c.getVisibleRect();
+        return visivel.width * 2 >= c.getWidth() && visivel.height * 2 >= c.getHeight() && visivel.width > 0 && visivel.height > 0; // pelo menos metade dele à vista
+    }
+
     private static boolean ehMedivel(JComponent c) {
+        if (!estaAVista(c)) {
+            return false;
+        }
         if (c instanceof AbstractButton b) {
             return (b.getText() != null && !b.getText().isBlank()) || b.getIcon() != null;
         }
         if (c instanceof JTextComponent t) {
             return t.getText() != null && !t.getText().isBlank() && !(c.getClass().getName().contains("JediTerm"));
+        }
+        if (c instanceof JComboBox<?> combo) {
+            return combo.getSelectedItem() != null; // um seletor vazio não tem texto para medir
         }
         return true;
     }
@@ -261,6 +275,8 @@ public final class AuditoriaDeCores {
         g.c().setEnabled(g.habilitado());
         if (g.c() instanceof AbstractButton b) {
             ButtonModel m = b.getModel();
+            // desarmar ANTES de soltar: um botão apertado e armado que é solto dispara a ação dele (era um clique de verdade no meio da medida)
+            m.setArmed(false);
             m.setPressed(g.apertado());
             m.setArmed(g.armado());
             m.setRollover(g.emCima());
@@ -328,6 +344,9 @@ public final class AuditoriaDeCores {
                 BufferedImage img = pintar(raiz, largura, altura);
                 for (JComponent c : nesteEstado) {
                     Rectangle r = ondeEsta(c, raiz);
+                    if (r.intersection(new Rectangle(0, 0, largura, altura)).isEmpty()) {
+                        continue; // fora do que foi pintado (rolou para baixo): não há pixel para medir
+                    }
                     Rectangle[] partes = c instanceof AbstractButton ab ? ondeEstaOIconeETexto(ab, raiz) : null;
                     Rectangle soOTexto = partes != null && partes[0] != null && partes[1] != null ? partes[1] : r;
                     Color[] ft = fundoETintaDoTexto(img, r, soOTexto);
@@ -337,7 +356,7 @@ public final class AuditoriaDeCores {
                     medidas.add(new Medida(nome(c, raiz), visto, ft[0], ft[1], contraste(ft[0], ft[1]), minimo, fundoPuro(ft[0])));
                     if (c instanceof AbstractButton b && b.getText() != null && !b.getText().isBlank()) {
                         Rectangle ri = partes[0];
-                        if (ri != null && ri.width > 2) {
+                        if (ri != null && ri.width > 2 && !ri.intersection(new Rectangle(0, 0, largura, altura)).isEmpty()) {
                             Color[] it = fundoETintaDoIcone(img, ri);
                             medidas.add(new Medida(nome(c, raiz) + " (icone)", visto, it[0], it[1], contraste(it[0], it[1]), MINIMO_DE_ICONE, null));
                         }

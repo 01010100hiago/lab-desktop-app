@@ -312,6 +312,14 @@ public final class TelaProjeto extends Painel {
         return Aba.de(abas.selecionada());
     }
 
+    /** Os ids de todas as abas da página do projeto, na ordem padrão. */
+    public static final java.util.List<String> IDS_DAS_ABAS = java.util.Arrays.stream(Aba.values()).map(Aba::id).toList();
+
+    /** A ordem e as abas escondidas que o usuário escolheu em Ajustes, Navegação (a aba aberta nunca some). */
+    public void aplicarPreferenciaDeAbas(br.com.labdesktop.util.OrdemDeAbas ordem) {
+        abas.aplicarPreferencia(ordem, IDS_DAS_ABAS);
+    }
+
     public Abas abas() {
         return abas;
     }

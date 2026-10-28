@@ -144,6 +144,9 @@ class AtalhosDoMenuETerminalTest {
             if (a == null) {
                 continue;
             }
+            if (a.getKeyCode() == KeyEvent.VK_F1 && a.getModifiers() == 0) {
+                continue; // a Ajuda: F1 é o padrão do Windows e do Linux (não é tecla do terminal que o menu engula: o terminal usa F1 só dentro dele)
+            }
             assertTrue((a.getModifiers() & comando) != 0, item.getText() + ": todo atalho do app é com a tecla de comando do sistema (" + a + ")");
             assertEquals(0, a.getModifiers() & (outra | InputEvent.ALT_DOWN_MASK), item.getText() + " usa a tecla do outro sistema ou o Alt");
             assertFalse(a.getKeyCode() == KeyEvent.VK_ESCAPE || a.getKeyCode() == KeyEvent.VK_TAB, item.getText() + " usa Esc ou Tab");
@@ -151,8 +154,9 @@ class AtalhosDoMenuETerminalTest {
     }
 
     @Test
-    void oMenuOferecaOTerminalDoServidorComATeclaDeComandoESeis() {
-        JMenuItem terminal = itens().stream().filter(i -> "Terminal do servidor".equals(i.getText())).findFirst().orElseThrow();
-        assertEquals(KeyStroke.getKeyStroke(KeyEvent.VK_6, br.com.labdesktop.ui.componentes.Teclas.comando()), Visual.naEdt(terminal::getAccelerator));
+    void oMenuOferecaAsAbasDoServidorComATeclaDeComandoENumeroNaOrdemDaBarraETerminalEhAOitava() {
+        // Cmd+1 a Cmd+9 contam as abas na ordem da barra (a ordem padrão: Resumo, Segurança, Containers, Processos, Máquina, Projetos, Arquivos, Terminal, Cloudflare)
+        JMenuItem terminal = itens().stream().filter(i -> "Terminal".equals(i.getText())).findFirst().orElseThrow();
+        assertEquals(KeyStroke.getKeyStroke(KeyEvent.VK_8, br.com.labdesktop.ui.componentes.Teclas.comando()), Visual.naEdt(terminal::getAccelerator));
     }
 }

@@ -8,7 +8,7 @@ import br.com.labdesktop.ui.componentes.Notificacoes;
 import br.com.labdesktop.ui.componentes.Toasts;
 import br.com.labdesktop.ui.dialogos.Apresentador;
 import br.com.labdesktop.ui.dialogos.DialogoConfirmar;
-import br.com.labdesktop.ui.dialogos.DialogoSobre;
+import br.com.labdesktop.ui.telas.ajustes.TelaAjustes;
 import br.com.labdesktop.util.Preferencias;
 import java.awt.Dimension;
 import java.awt.GraphicsEnvironment;
@@ -90,10 +90,16 @@ public final class JanelaPrincipal extends JFrame {
         this.painel = new PainelPrincipal(gerenciador, assistente, avisos, apresentador, new Navegador(avisos), servicosDeArquivos,
             preferencias::get);
         setContentPane(painel);
+        // Ajustes (a engrenagem da barra, Arquivo, Ajustes, Cmd+,): montada na primeira vez que o usuário a abre
+        java.util.concurrent.atomic.AtomicReference<MenuApp> menuDoApp = new java.util.concurrent.atomic.AtomicReference<>();
+        painel.instalarAjustes(() -> new TelaAjustes(new AjustesDoApp(tema, preferencias, painel,
+            br.com.labdesktop.ui.componentes.CopiadorDeTexto.doSistema(), avisos,
+            () -> menuDoApp.get() == null ? java.util.List.of() : menuDoApp.get().atalhosDoMenu())));
         // "Sair" do menu passa pela mesma pergunta de fechar a janela
         ComportamentoDaJanela doMenu = comportamento.sair() == null ? comportamento : new ComportamentoDaJanela(comportamento.sistema(), this::pedirParaSair);
-        setJMenuBar(new MenuApp(this, painel, tema, preferencias, bloquearCofre,
-            () -> apresentador.mostrar(new DialogoSobre()), doMenu).barra());
+        MenuApp menu = new MenuApp(this, painel, tema, preferencias, bloquearCofre, () -> painel.mostrarAjustes(TelaAjustes.Secao.SOBRE), doMenu);
+        menuDoApp.set(menu);
+        setJMenuBar(menu.barra());
 
         aplicarTamanhoGuardado();
         this.gravarJanela = new Timer(700, e -> guardarTamanho());
