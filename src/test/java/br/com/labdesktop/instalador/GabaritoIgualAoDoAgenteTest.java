@@ -107,7 +107,10 @@ class GabaritoIgualAoDoAgenteTest {
         PacoteDoAgente pacote = PacoteDoAgente.doClasspath();
         String painel = new String(LeitorDeTarParaTeste.ler(pacote.conteudo()).get("painel.js").conteudo(), StandardCharsets.UTF_8);
         assertTrue(painel.contains("guia_ia deve ser true ou false."), "o agente empacotado recusa guia_ia que não é booleano");
-        assertTrue(painel.contains("? { claude: false, projetos: false, monitor: true, guia_ia: false }"));
-        assertTrue(painel.contains(": { claude: true, projetos: true, monitor: true, guia_ia: true };"));
+        assertTrue(painel.contains("? { claude: false, projetos: false, monitor: true, guia_ia: false, historico: true }"), "o monitor diz recursos.historico");
+        assertTrue(painel.contains(": { claude: true, projetos: true, monitor: true, guia_ia: true, historico: true };"), "o lab também");
+        java.util.Map<String, br.com.labdesktop.instalador.LeitorDeTarParaTeste.Entrada> arquivos = LeitorDeTarParaTeste.ler(pacote.conteudo());
+        assertTrue(arquivos.containsKey("historico.js"), "o pacote leva o gravador de histórico");
+        assertTrue(new String(arquivos.get("Dockerfile.monitor").conteudo(), StandardCharsets.UTF_8).contains("historico.js"), "e o Dockerfile o copia para a imagem");
     }
 }
