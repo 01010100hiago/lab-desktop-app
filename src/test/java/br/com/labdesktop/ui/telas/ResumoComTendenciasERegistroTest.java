@@ -500,8 +500,8 @@ class ResumoComTendenciasERegistroTest {
         assertTrue(Visual.naEdt(p::textoDoStatus).toLowerCase().contains("em pausa"), Visual.naEdt(p::textoDoStatus));
         // Atualizar em pausa: lê UMA vez (assina, recebe e solta)
         Visual.naEdt(() -> p.botaoAtualizar().doClick());
-        assertEquals(2, f.assinou.get());
-        assertEquals(1, f.atualizouAgora.get());
+        assertEquals(2, f.assinou.get(), "a leitura avulsa assina (sem o guardado, e a assinatura já pede a leitura nova)");
+        assertEquals(0, f.atualizouAgora.get(), "um clique, uma leitura: o pedido não é repetido");
         Visual.naEdt(() -> f.ouvinte.aoAtualizar(lido(JOURNAL, "do diário do sistema (journalctl)")));
         assertEquals(2, f.soltou.get(), "recebeu a leitura avulsa e soltou de novo");
         assertTrue(Visual.naEdt(p::pausado));

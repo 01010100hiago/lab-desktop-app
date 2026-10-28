@@ -170,7 +170,8 @@ public final class Sondador implements AutoCloseable {
             temAnterior = canal.temUltimo;
             anterior = canal.ultimo;
             // Quem acabou de aparecer quer o dado AGORA, não daqui a 10 s.
-            reprogramar(canal, canal.ouvintes.size() == 1);
+            // quem se inscreve SEM querer o guardado (a leitura avulsa de uma tela em pausa) quer o dado NOVO: leitura imediata mesmo que outro ouvinte já esteja no tópico
+            reprogramar(canal, canal.ouvintes.size() == 1 || !repetirUltimo);
         }
         if (temAnterior && repetirUltimo) {
             T valor = anterior;

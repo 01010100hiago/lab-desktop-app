@@ -1,0 +1,134 @@
+# Instaladores do lab-desktop: Windows (.msi e .zip portátil), Mac (.dmg) e Linux (.tar.gz portátil), cada um num runner do próprio sistema,
+# com o Java do app JUNTO (o usuário não instala nada).
+#
+# NUNCA roda em push comum: só à mão (Actions > instaladores > Run workflow) ou quando se cria uma tag v* (por exemplo v0.1.0). Os arquivos ficam como ARTEFATOS da execução
+# (baixáveis na página dela). Publicar numa Release do GitHub é um job à parte, que só roda se o usuário marcar "publicar" E aprovar o ambiente "publicacao": ver docs/INSTALAR.md.
+name: instaladores
+
+on:
+  workflow_dispatch:
+    inputs:
+      publicar:
+        description: 'Criar uma Release (rascunho) com os instaladores, depois da aprovação do ambiente "publicacao"'
+        type: boolean
+        default: false
+  push:
+    tags: ['v*']
+
+# Só leitura para quase tudo. A escrita (Release) é pedida SÓ no job de publicação, mais abaixo.
+permissions:
+  contents: read
+
+concurrency:
+  group: instaladores-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  instalador:
+    name: instalador (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      # O .msi do jpackage (JDK 21) precisa do WiX Toolset 3.x (candle.exe e light.exe) no PATH; o 4 e o 5 não servem a este JDK.
+      # Se o runner já traz o WiX 3, usa; senão instala pelo Chocolatey (o pacote "wixtoolset" é o 3.x).
+      - name: WiX Toolset 3 (só Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $achou = Get-Command candle.exe -ErrorAction SilentlyContinue
+          if (-not $achou) {
+            choco install wixtoolset --no-progress -y
+            $wix = Get-ChildItem "C:\Program Files (x86)" -Directory -Filter "WiX Toolset*" | Select-Object -First 1
+            if (-not $wix) { throw "WiX Toolset não foi instalado" }
+            "$($wix.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+
+      - name: Conferir que os módulos do runtime bastam (jdeps)
+        shell: bash
+        run: ./gradlew verificarModulos --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
+
+      - name: Gerar o instalador (jlink + jpackage)
+        shell: bash
+        run: ./gradlew empacotar --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
+
+      # Roda o app da imagem recém-gerada com o runtime enxuto: --versao e --autoteste (módulos do Java, chave Ed25519, cofre, SSH, tema, PTY), sem janela.
+      - name: Conferir a imagem (--autoteste com o runtime do instalador)
+        shell: bash
+        run: ./gradlew conferirImagem --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
+
+      # Instala o .msi de VERDADE (por usuário, sem administrador) e roda o autoteste dentro da pasta instalada. Não bloqueia: se falhar, os artefatos ainda sobem e a falha fica visível.
+      - name: Instalar o .msi e conferir (informativo, não bloqueia)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem build/instaladores -Filter *.msi | Select-Object -First 1
+          Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /l*v msi.log" -Wait -NoNewWindow
+          $pasta = Join-Path $env:LOCALAPPDATA "Lab Desktop"
+          if (-not (Test-Path $pasta)) { Get-Content msi.log -Tail 60; throw "o .msi não instalou em $pasta" }
+          Get-ChildItem $pasta | Select-Object Name
+          $java = Join-Path $pasta "runtime\bin\java.exe"
+          $jars = (Get-ChildItem (Join-Path $pasta "app") -Filter *.jar | ForEach-Object { $_.FullName }) -join ";"
+          & $java -Djava.awt.headless=true -cp $jars br.com.labdesktop.Principal --autoteste
+          if ($LASTEXITCODE -ne 0) { throw "autoteste do app instalado falhou ($LASTEXITCODE)" }
+
+      # Abre o .dmg de verdade e roda o autoteste com o runtime do .app que está dentro dele.
+      - name: Abrir o .dmg e conferir (informativo, não bloqueia)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        shell: bash
+        run: |
+          dmg=$(ls build/instaladores/*.dmg | head -1)
+          hdiutil attach "$dmg" -mountpoint /Volumes/LabDesktopCI -nobrowse -quiet
+          app="/Volumes/LabDesktopCI/Lab Desktop.app/Contents"
+          ls "$app" "$app/app"
+          jars=$(ls "$app"/app/*.jar | tr '\n' ':')
+          "$app/runtime/Contents/Home/bin/java" -Djava.awt.headless=true -cp "$jars" br.com.labdesktop.Principal --autoteste
+          status=$?
+          hdiutil detach /Volumes/LabDesktopCI -quiet || true
+          exit $status
+
+      - name: Guardar os instaladores
+        uses: actions/upload-artifact@v4
+        with:
+          name: instalador-${{ matrix.os }}
+          path: build/instaladores/*
+          if-no-files-found: error
+          retention-days: 30
+
+  # NUNCA roda sozinho: só no "Run workflow" com "publicar" marcado, e o ambiente "publicacao" (Settings > Environments) deve exigir a aprovação do usuário.
+  # É o único lugar com permissão de escrita. Cria uma Release em RASCUNHO: quem mantém o projeto olha e publica à mão.
+  publicar:
+    name: publicar (rascunho de Release)
+    needs: instalador
+    if: github.event_name == 'workflow_dispatch' && inputs.publicar == true
+    runs-on: ubuntu-latest
+    environment: publicacao
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: instaladores
+          pattern: instalador-*
+          merge-multiple: true
+      - name: Criar o rascunho da Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -la instaladores
+          gh release create "manual-${{ github.run_number }}" instaladores/* --draft --title "Lab Desktop (execução ${{ github.run_number }})" \
+            --notes "Instaladores gerados pelo workflow instaladores. Rascunho: confira os arquivos (SHA256SUMS-*.txt) antes de publicar."

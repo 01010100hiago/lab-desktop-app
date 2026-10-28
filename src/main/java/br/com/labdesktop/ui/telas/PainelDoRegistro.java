@@ -77,7 +77,7 @@ public final class PainelDoRegistro extends Painel {
     /** De onde vêm os resultados (o servidor de verdade, ou nada nos testes que alimentam o painel à mão). */
     public interface Fonte {
         /**
-         * @param repetirUltimo {@code true} entrega logo o último registro guardado (a tela que aparece); {@code false} só o que for lido DEPOIS
+         * @param repetirUltimo {@code true} entrega logo o último registro guardado (a tela que aparece); {@code false} só o que for lido DEPOIS, e já PEDE essa leitura
          *                      (a leitura avulsa do "Atualizar" em pausa: o guardado seria a resposta velha a um pedido novo)
          */
         Inscricao assinar(OuvinteDeTopico<ResultadoDoRegistro> ouvinte, boolean repetirUltimo);
@@ -357,7 +357,8 @@ public final class PainelDoRegistro extends Painel {
         if (pausado) {
             leituraAvulsa = true;
             if (inscricao == null && visivel()) {
-                assinar();
+                assinar(); // assinar SEM o valor guardado já pede uma leitura nova: pedir de novo daria duas leituras para um clique
+                return;
             }
         }
         fonte.atualizarAgora();

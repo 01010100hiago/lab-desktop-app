@@ -1,0 +1,11 @@
+Lab Desktop
+
+Este programa é de uso do seu proprietário e é fornecido como está, sem garantia de nenhum tipo.
+
+Ele leva componentes de terceiros, cada um com a sua licença (Apache 2.0, BSD, MIT, EPL, OFL e outras). A lista está em AVISOS-DE-TERCEIROS.txt, na pasta do programa, e na
+seção "Dependências" da documentação do projeto.
+
+O programa NÃO envia dados para a internet por conta própria: ele só fala com os servidores que você cadastra (por SSH) e, se você pedir, com a conta da Cloudflare que você
+conectar. A senha-mestra e as chaves ficam só no cofre, neste computador.
+
+(Texto provisório: o proprietário do projeto decide a licença e o nome do titular antes de distribuir o instalador a outras pessoas.)

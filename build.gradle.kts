@@ -1,3 +1,4 @@
+import java.security.MessageDigest
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
@@ -113,7 +114,8 @@ tasks.jar {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    // as provas que só fazem sentido num Windows de verdade ficam de fora; rodam com `./gradlew provaWindows` (job do Windows do CI, sem bloquear)
+    useJUnitPlatform { excludeTags("prova-windows") }
     // O Argon2id de produção usa 256 MiB; o heap padrão do worker de teste (512 MiB) fica apertado.
     maxHeapSize = "1g"
     // Nada em /tmp: os testes escrevem sob build/ (apagado pelo `clean`).
@@ -139,61 +141,241 @@ tasks.test {
     }
 }
 
+tasks.register<Test>("provaWindows") {
+    group = "verification"
+    description = "Provas que só rodam num Windows de verdade (ACL do NTFS, junção, registro do tema...). Em outro sistema não roda nada."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("prova-windows") }
+    val tmpDosTestes = layout.buildDirectory.dir("tmp/testes").get().asFile
+    systemProperty("java.io.tmpdir", tmpDosTestes.absolutePath)
+    systemProperty("java.awt.headless", "true")
+    doFirst { tmpDosTestes.mkdirs() }
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true
+        exceptionFormat = TestExceptionFormat.FULL
+    }
+    failOnNoDiscoveredTests = false
+}
+
 // ---------------------------------------------------------------------------------------------
-// Empacotamento (ESQUELETO da fase 4). Desligado por padrão: as duas tarefas só rodam com `-Pempacotar`
-// (sem a propriedade o Gradle as pula, e `build` nunca depende delas).
-// Segue ARQUITETURA 11.3: jlink com os módulos de `jdeps` mais jdk.localedata, depois jpackage app-image.
-// Falta, na fase 4: Info.plist pós-jpackage (NSLocalNetworkUsageDescription, NSAppSleepDisabled),
-// codesign ad-hoc, ícone .icns, `empacotar` dependendo de `test` e `instalarApp`.
+// Empacotamento. O app leva o Java junto: `jlink` monta um runtime enxuto e o `jpackage` junta runtime, jars e ícone.
+// As tarefas são NEUTRAS de sistema (o mesmo arquivo roda no Mac, no Windows e no Linux) e só geram o instalador DO sistema onde rodam (o jlink e o
+// jpackage não fazem cruzado), por isso o CI tem um job por sistema. Nada disto entra no `build`: só `./gradlew empacotar` (ou as tarefas soltas).
+//
+//   ./gradlew empacotar        -> build/instaladores/: Windows .msi + .zip portátil; Mac .dmg; Linux .tar.gz portátil (e SHA256SUMS.txt)
+//   ./gradlew jpackageImagem   -> só a imagem (o .app, ou a pasta com o .exe), sem WiX nem dmg
+//   ./gradlew verificarModulos -> compara os módulos do jlink com o que `jdeps` acha nos jars (falha se faltar algum)
+//   ./gradlew conferirImagem   -> roda o app da imagem com --autoteste (sem janela) usando o runtime enxuto
+//
+// Windows: o `.msi` precisa do WiX Toolset 3.x no PATH (candle.exe e light.exe); o jpackage do JDK 21 não usa o WiX 4 nem o 5. O workflow instala com o Chocolatey.
+// Mac: Info.plist ajustado depois do jpackage (NSLocalNetworkUsageDescription, NSAppSleepDisabled) e assinatura AD-HOC (sem Developer ID: ver docs/INSTALAR.md).
 // ---------------------------------------------------------------------------------------------
-// java.management e jdk.management: a conferência de "Este computador" lê a memória total por com.sun.management.OperatingSystemMXBean (sem eles o
-// app empacotado perderia essa leitura); java.prefs, java.rmi, java.security.jgss e java.sql vêm do `jdeps` sobre as bibliotecas (FlatLaf, MINA, JNA).
+val nomeDoSistema = System.getProperty("os.name").lowercase()
+val ehMac = nomeDoSistema.contains("mac")
+val ehWindows = nomeDoSistema.contains("win")
+val sistemaNoNome = if (ehMac) "mac" else if (ehWindows) "windows" else "linux"
+val arquiteturaNoNome = System.getProperty("os.arch").lowercase().let { if (it == "aarch64" || it == "arm64") "arm64" else "x64" }
+val nomeDoApp = "Lab Desktop"
+val versaoDoApp = project.version.toString()
+
+// Os módulos do runtime. Os de `jdeps` mais o que o `jdeps` não vê (carregado por nome ou serviço): java.logging (JUL das bibliotecas), java.management e jdk.management (memória total em "Este
+// computador"), jdk.crypto.ec (ECDH/ECDSA do SSH, por ServiceLoader), jdk.unsupported (sun.misc.Unsafe de bibliotecas), jdk.localedata (pt-BR) e jdk.accessibility (leitor de tela).
 val modulosDoRuntime = "java.base,java.desktop,java.logging,java.naming,java.net.http,java.management,jdk.management," +
     "java.prefs,java.rmi,java.security.jgss,java.sql,jdk.crypto.ec,jdk.unsupported,jdk.localedata,jdk.accessibility"
 
+fun ferramentaDoJdk(nome: String): String {
+    val jdk = javaToolchains.launcherFor(java.toolchain).get().metadata.installationPath.asFile
+    return jdk.resolve("bin").resolve(if (ehWindows) "$nome.exe" else nome).absolutePath
+}
+
+val pastaDeEmpacotamento = layout.buildDirectory.dir("empacotamento")
+
 val jlinkRuntime = tasks.register<Exec>("jlinkRuntime") {
     group = "empacotamento"
-    description = "Gera o runtime enxuto em build/runtime (esqueleto da fase 4; só com -Pempacotar)."
-    onlyIf { project.hasProperty("empacotar") }
+    description = "Gera o runtime enxuto (jlink) em build/empacotamento/runtime."
     dependsOn("installDist")
-    val saida = layout.buildDirectory.dir("runtime")
+    val saida = pastaDeEmpacotamento.map { it.dir("runtime") }
+    outputs.dir(saida)
     doFirst {
-        val jdk = javaToolchains.launcherFor(java.toolchain).get().metadata.installationPath.asFile
         delete(saida)
         commandLine(
-            "${jdk}/bin/jlink",
+            ferramentaDoJdk("jlink"),
             "--add-modules", modulosDoRuntime,
-            "--strip-debug", "--no-header-files", "--no-man-pages",
+            "--strip-debug", "--no-header-files", "--no-man-pages", "--compress=zip-6",
             "--output", saida.get().asFile.absolutePath
         )
     }
 }
 
-tasks.register<Exec>("jpackageApp") {
+tasks.register("verificarModulos") {
     group = "empacotamento"
-    description = "Gera build/dist/Lab Desktop.app com jpackage (esqueleto da fase 4; só com -Pempacotar)."
-    onlyIf { project.hasProperty("empacotar") }
+    description = "Falha se o jdeps achar nos jars um módulo do Java que o jlink não leva."
+    dependsOn("installDist")
+    doLast {
+        val lib = layout.buildDirectory.dir("install/lab-desktop/lib").get().asFile
+        val jars = lib.listFiles { f -> f.name.endsWith(".jar") }!!.map { it.absolutePath }
+        val processo = ProcessBuilder(listOf(ferramentaDoJdk("jdeps"), "--multi-release", "21", "--ignore-missing-deps", "--print-module-deps", "-cp", lib.absolutePath + File.separator + "*") + jars)
+            .redirectErrorStream(false).start()
+        val saida = processo.inputStream.bufferedReader().readText().trim()
+        processo.errorStream.readBytes()
+        if (processo.waitFor() != 0) throw GradleException("jdeps falhou")
+        val achados = saida.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val levados = modulosDoRuntime.split(",").toSet()
+        val faltam = achados.filter { it !in levados }
+        if (faltam.isNotEmpty()) throw GradleException("O jdeps achou módulos que o jlink não leva: $faltam. Acrescente em modulosDoRuntime.")
+        println("Módulos de jdeps: $achados (todos no runtime). Extras levados de propósito: ${levados - achados.toSet()}")
+    }
+}
+
+// As opções da JVM do app empacotado. Comuns aos três sistemas; as do Mac só no Mac (a barra de menus do sistema e o nome no Dock não existem fora dele).
+fun opcoesDaJvm(): List<String> {
+    val comuns = listOf("-Dfile.encoding=UTF-8", "-Xmx768m", "-XX:+DisableAttachMechanism", "-XX:-HeapDumpOnOutOfMemoryError", "-XX:-CreateCoredumpOnCrash")
+    val doMac = if (ehMac) listOf("-Dapple.laf.useScreenMenuBar=true", "-Dapple.awt.application.name=$nomeDoApp", "-Dapple.awt.application.appearance=system") else emptyList()
+    return comuns + doMac
+}
+
+val iconeDoSistema = layout.projectDirectory.file(if (ehMac) "empacotamento/icones/lab-desktop.icns" else if (ehWindows) "empacotamento/icones/lab-desktop.ico" else "empacotamento/icones/lab-desktop.png")
+
+val jpackageImagem = tasks.register<Exec>("jpackageImagem") {
+    group = "empacotamento"
+    description = "Gera a imagem do app com o Java junto (o .app no Mac; a pasta com o .exe no Windows) em build/empacotamento/imagem."
     dependsOn(jlinkRuntime)
     val lib = layout.buildDirectory.dir("install/lab-desktop/lib")
-    val destino = layout.buildDirectory.dir("dist")
+    val destino = pastaDeEmpacotamento.map { it.dir("imagem") }
+    inputs.file(iconeDoSistema)
+    outputs.dir(destino)
     doFirst {
-        val jdk = javaToolchains.launcherFor(java.toolchain).get().metadata.installationPath.asFile
         delete(destino)
-        val opcoes = application.applicationDefaultJvmArgs.flatMap { listOf("--java-options", it) }
-        commandLine(
-            listOf(
-                "${jdk}/bin/jpackage",
-                "--type", "app-image",
-                "--name", "Lab Desktop",
-                "--mac-package-identifier", "br.com.labdesktop",
-                "--runtime-image", layout.buildDirectory.dir("runtime").get().asFile.absolutePath,
-                "--input", lib.get().asFile.absolutePath,
-                "--main-jar", "lab-desktop.jar",
-                "--main-class", "br.com.labdesktop.Principal",
-                "--dest", destino.get().asFile.absolutePath,
-                "--java-options", "-Dapple.awt.application.appearance=system"
-            ) + opcoes
+        val comandos = mutableListOf(
+            ferramentaDoJdk("jpackage"),
+            "--type", "app-image",
+            "--name", nomeDoApp,
+            "--app-version", versaoDoApp,
+            "--vendor", "Thiago Bezerra",
+            "--description", "Cliente do Painel do Lab: servidores, projetos, arquivos e terminal",
+            "--copyright", "Thiago Bezerra",
+            "--icon", iconeDoSistema.asFile.absolutePath,
+            "--runtime-image", pastaDeEmpacotamento.get().dir("runtime").asFile.absolutePath,
+            "--input", lib.get().asFile.absolutePath,
+            "--main-jar", "lab-desktop.jar",
+            "--main-class", "br.com.labdesktop.Principal",
+            "--dest", destino.get().asFile.absolutePath
         )
+        for (o in opcoesDaJvm()) { comandos += listOf("--java-options", o) }
+        if (ehMac) {
+            comandos += listOf("--mac-package-identifier", "br.com.labdesktop", "--mac-package-name", nomeDoApp)
+        }
+        commandLine(comandos)
+    }
+    doLast {
+        if (ehMac) {
+            // O que o jpackage não deixa pôr: a permissão de Rede Local (o app fala com servidores da rede local) e o app que não dorme com a janela escondida.
+            val plist = destino.get().asFile.resolve("$nomeDoApp.app/Contents/Info.plist").absolutePath
+            fun plutil(vararg args: String) {
+                val p = ProcessBuilder(listOf("plutil") + args).redirectErrorStream(true).start()
+                val saida = p.inputStream.bufferedReader().readText()
+                if (p.waitFor() != 0) throw GradleException("plutil falhou: $saida")
+            }
+            plutil("-replace", "NSLocalNetworkUsageDescription", "-string", "O Lab Desktop fala com os servidores da sua rede (por exemplo o do laboratório) por SSH.", plist)
+            plutil("-replace", "NSAppSleepDisabled", "-bool", "true", plist)
+            plutil("-replace", "LSApplicationCategoryType", "-string", "public.app-category.developer-tools", plist)
+            // assinatura ad-hoc depois de mexer no Info.plist (sem Developer ID; o Gatekeeper avisa na primeira abertura: docs/INSTALAR.md)
+            val app = destino.get().asFile.resolve("$nomeDoApp.app").absolutePath
+            val p = ProcessBuilder("codesign", "--force", "--deep", "--sign", "-", app).redirectErrorStream(true).start()
+            val saida = p.inputStream.bufferedReader().readText()
+            if (p.waitFor() != 0) throw GradleException("codesign ad-hoc falhou: $saida")
+        }
+    }
+}
+
+val pastaDosInstaladores = layout.buildDirectory.dir("instaladores")
+val nomeBase = "LabDesktop-$versaoDoApp-$sistemaNoNome-$arquiteturaNoNome"
+
+val jpackageInstalador = tasks.register<Exec>("jpackageInstalador") {
+    group = "empacotamento"
+    description = "Gera o instalador do sistema: .msi no Windows (precisa do WiX 3), .dmg no Mac. No Linux não faz nada (só o .tar.gz portátil)."
+    dependsOn(jpackageImagem)
+    onlyIf { ehMac || ehWindows }
+    val imagem = pastaDeEmpacotamento.map { it.dir("imagem") }
+    val destino = pastaDeEmpacotamento.map { it.dir("instalador") }
+    outputs.dir(destino)
+    doFirst {
+        delete(destino)
+        val comandos = mutableListOf(
+            ferramentaDoJdk("jpackage"),
+            "--type", if (ehWindows) "msi" else "dmg",
+            "--name", nomeDoApp,
+            "--app-version", versaoDoApp,
+            "--vendor", "Thiago Bezerra",
+            "--dest", destino.get().asFile.absolutePath
+        )
+        if (ehWindows) {
+            comandos += listOf(
+                "--app-image", imagem.get().asFile.resolve(nomeDoApp).absolutePath,
+                "--win-per-user-install", "--win-menu", "--win-menu-group", nomeDoApp, "--win-shortcut",
+                // O UUID de atualização é FIXO: o Windows reconhece uma versão nova como atualização da mesma instalação (nunca mude).
+                "--win-upgrade-uuid", "d96b92d7-db83-49cd-8d70-5a9f62d546c0",
+                "--license-file", layout.projectDirectory.file("empacotamento/windows/licenca.txt").asFile.absolutePath
+            )
+        } else {
+            comandos += listOf("--app-image", imagem.get().asFile.resolve("$nomeDoApp.app").absolutePath, "--mac-package-identifier", "br.com.labdesktop")
+        }
+        commandLine(comandos)
+    }
+}
+
+val empacotar = tasks.register("empacotar") {
+    group = "empacotamento"
+    description = "Gera tudo do sistema onde roda em build/instaladores/ (instalador, versão portátil e SHA256SUMS.txt)."
+    dependsOn(jpackageInstalador)
+    doLast {
+        val saida = pastaDosInstaladores.get().asFile
+        delete(saida)
+        saida.mkdirs()
+        val imagem = pastaDeEmpacotamento.get().dir("imagem").asFile
+        val instalador = pastaDeEmpacotamento.get().dir("instalador").asFile
+        val gerados = mutableListOf<File>()
+        if (ehWindows || ehMac) {
+            val feito = instalador.listFiles()!!.firstOrNull { it.name.endsWith(if (ehWindows) ".msi" else ".dmg") }
+                ?: throw GradleException("O jpackage não gerou o instalador em $instalador")
+            val alvo = saida.resolve("$nomeBase.${if (ehWindows) "msi" else "dmg"}")
+            feito.copyTo(alvo)
+            gerados += alvo
+        }
+        if (ehWindows) {
+            // versão portátil: a pasta inteira num .zip (não precisa do WiX nem instalar; roda de qualquer pasta)
+            val zip = saida.resolve("$nomeBase-portatil.zip")
+            val p = ProcessBuilder("tar", "-a", "-c", "-f", zip.absolutePath, "-C", imagem.absolutePath, nomeDoApp).redirectErrorStream(true).start()
+            val texto = p.inputStream.bufferedReader().readText()
+            if (p.waitFor() != 0) throw GradleException("Não consegui montar o .zip portátil: $texto")
+            gerados += zip
+        }
+        if (!ehWindows && !ehMac) {
+            val tar = saida.resolve("$nomeBase-portatil.tar.gz")
+            val p = ProcessBuilder("tar", "-czf", tar.absolutePath, "-C", imagem.absolutePath, nomeDoApp).redirectErrorStream(true).start()
+            val texto = p.inputStream.bufferedReader().readText()
+            if (p.waitFor() != 0) throw GradleException("Não consegui montar o .tar.gz portátil: $texto")
+            gerados += tar
+        }
+        val soma = gerados.joinToString("\n") { f ->
+            val h = MessageDigest.getInstance("SHA-256").digest(f.readBytes()).joinToString("") { "%02x".format(it) }
+            "$h  ${f.name}"
+        }
+        saida.resolve("SHA256SUMS-$sistemaNoNome-$arquiteturaNoNome.txt").writeText(soma + "\n")
+        println("Instaladores em $saida:\n" + gerados.joinToString("\n") { "  ${it.name} (${it.length() / 1024 / 1024} MB)" })
+    }
+}
+
+tasks.register<Exec>("conferirImagem") {
+    group = "empacotamento"
+    description = "Roda o app da imagem gerada com --autoteste (sem janela, com o runtime enxuto): prova que os módulos do jlink bastam."
+    dependsOn(jpackageImagem)
+    doFirst {
+        // scripts/ConferirEmpacotamento.java é um arquivo único (source launcher do JDK): acha o java e os jars DENTRO da imagem e roda `Principal --autoteste`
+        commandLine(ferramentaDoJdk("java"), layout.projectDirectory.file("scripts/ConferirEmpacotamento.java").asFile.absolutePath,
+            pastaDeEmpacotamento.get().dir("imagem").asFile.absolutePath)
     }
 }
 

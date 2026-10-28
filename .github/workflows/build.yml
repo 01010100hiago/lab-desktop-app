@@ -1,5 +1,5 @@
-# CI do lab-desktop: compila, roda a suíte inteira e confere as dependências (./gradlew build).
-# Sem segredos e sem deploy: nada aqui fala com servidor nenhum (os testes usam um SSH embutido em 127.0.0.1).
+# CI do lab-desktop: compila, roda a suíte inteira e confere as dependências (./gradlew build) no Linux, no Windows e no Mac.
+# Sem segredos e sem deploy: nada aqui fala com servidor nenhum (os testes usam um SSH embutido em 127.0.0.1). Não gera instalador (isso é o instaladores.yml, à parte).
 name: build
 
 on:
@@ -18,9 +18,15 @@ concurrency:
 
 jobs:
   build:
+    name: build (${{ matrix.os }})
     # Pull request de fork roda sem segredos (não há nenhum aqui) e com o token só de leitura.
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      # um sistema que quebra não esconde o resultado dos outros
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -31,18 +37,27 @@ jobs:
           # cache do Gradle (wrapper e dependências), chaveado pelos arquivos de build e pelo verification-metadata.xml
           cache: gradle
 
-      # O gradle.properties do repositório não fixa JDK nenhum (a linha `org.gradle.java.home` está comentada); aqui o Gradle usa o JDK 21 instalado acima.
-      # A verificação de dependências (gradle/verification-metadata.xml) continua ligada: é parte do `build`.
-      # Os testes de interface desenham sem janela (java.awt.headless=true, definido no build.gradle.kts): não precisam de xvfb.
+      # O gradle.properties do repositório não fixa JDK nenhum (a linha `org.gradle.java.home` está comentada); aqui o Gradle usa o JDK 21 instalado acima (o JAVA_HOME do setup-java), passado em -Dorg.gradle.java.home.
+      # A verificação de dependências (gradle/verification-metadata.xml) continua ligada: é parte do `build`, e os mesmos jars (com os nativos de cada sistema DENTRO)
+      # valem nos três sistemas. `shell: bash` porque o PowerShell do Windows expande variáveis de outro jeito.
+      # Os testes de interface desenham sem janela (java.awt.headless=true, definido no build.gradle.kts): não precisam de xvfb nem de tela.
       - name: Build e testes
+        shell: bash
         run: ./gradlew build --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
+
+      # Só no Windows: as provas que precisam do Windows de verdade (ACL do NTFS, junção, registro do tema). NÃO bloqueiam: o que elas imprimem é informação para quem mantém o projeto.
+      - name: Provas do Windows (informativo, não bloqueia)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: bash
+        run: ./gradlew provaWindows --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
 
       # Os PNGs das telas (claro e escuro) e a tabela de contraste, para quem quiser olhar o que a execução desenhou.
       - name: Guardar telas e relatório de testes
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: telas-e-testes
+          name: telas-e-testes-${{ matrix.os }}
           path: |
             build/telas/
             build/contraste.txt
