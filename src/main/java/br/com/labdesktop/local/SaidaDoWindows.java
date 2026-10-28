@@ -80,7 +80,7 @@ public final class SaidaDoWindows {
     }
 
     private static String limpar(String s) {
-        return s.replace("\u0000", "").replace("﻿", "");
+        return s.replace("\u0000", "").replace("\uFEFF", "");
     }
 
     /** A primeira linha com texto (sem espaços nas pontas), para uma frase curta; vazia se não há. */
