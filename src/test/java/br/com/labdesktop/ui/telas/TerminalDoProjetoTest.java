@@ -132,6 +132,7 @@ class TerminalDoProjetoTest {
         Visual.naEdt(() -> pagina().botaoTerminal().doClick(0));
         assertSame(terminal, Visual.naEdt(() -> pagina().painelDoTerminal()), "voltar ao terminal não abre outro");
         assertTrue(Visual.naEdt(pagina()::terminalAFrente));
+        Espera.ate(PRAZO, () -> "canais=" + cenario.terminal.canaisAbertos.get(), () -> cenario.terminal.canaisAbertos.get() >= 1); // o servidor conta depois do cliente
         assertEquals(1, cenario.terminal.canaisAbertos.get(), "um canal só");
         assertEquals(1, limite.emUso());
     }

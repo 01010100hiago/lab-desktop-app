@@ -139,8 +139,12 @@ class PaginaSessaoTest {
         String tela = Visual.naEdt(p::textoDaTela);
         assertTrue(tela.contains("Bash(npm test)"), tela);
         assertTrue(tela.contains("12 passaram, 0 falharam"));
-        assertFalse(tela.contains("⎿") || tela.contains("✻"), "símbolos que a fonte não tem não viram quadradinho: " + tela);
-        assertTrue(tela.contains("└"), "o ⎿ ganhou um parecido");
+        // nenhum símbolo que a fonte não sabe desenhar vira quadradinho: o que a fonte não tem é trocado (quais símbolos ela tem depende
+        // da plataforma: com a fonte de reserva do Linux o ✻ pode ser desenhado direto, e então fica como veio)
+        java.awt.Font fonte = Visual.naEdt(() -> c.tela.terminal().rolagemDaTela().getViewport().getView().getFont());
+        tela.codePoints().filter(cp -> cp >= 0x80).forEach(cp ->
+            assertTrue(fonte.canDisplay(cp), "sem glifo para U+" + Integer.toHexString(cp) + " em: " + tela));
+        assertEquals(!fonte.canDisplay(0x23BF), tela.contains("└"), "o ⎿ ganha um parecido quando a fonte não o tem");
         assertEquals("EXECUTANDO", selo(p.seloDeAtividade()));
         assertTrue(Visual.naEdt(() -> p.seloDeAtividade().getToolTipText()).startsWith("Executando: Pensando…"));
     }

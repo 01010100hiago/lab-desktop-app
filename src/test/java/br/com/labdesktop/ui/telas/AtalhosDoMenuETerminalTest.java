@@ -100,6 +100,8 @@ class AtalhosDoMenuETerminalTest {
 
     @Test
     void oVigiaEnxergaOsAtalhosNativosDoJediTerm() {
+        // só no macOS: no Linux e no Windows o JediTerm usa Ctrl+Shift+C, Ctrl+Shift+V e afins (o app é um app de Mac; a CI roda em Linux)
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name", "").toLowerCase().contains("mac"), "atalhos nativos do JediTerm são os do macOS");
         // sanidade do próprio teste: no macOS o JediTerm usa Cmd+C, Cmd+V e Cmd+K
         Set<KeyStroke> nativos = atalhosDoJediTerm();
         assertTrue(nativos.contains(KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.META_DOWN_MASK)), nativos.toString());

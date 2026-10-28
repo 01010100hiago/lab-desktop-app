@@ -257,6 +257,8 @@ class PainelTerminalTest {
         assertNotSame(primeiro, Visual.naEdt(p::widget), "cada anexação cria um JediTermWidget novo");
         assertFalse(Visual.naEdt(p::faixaVisivel));
         assertFalse(Visual.naEdt(p::avisoDeTeclasVisivel));
+        // o cliente fica ATIVO quando o canal abre; o servidor registra o comando um instante depois (no Linux, uma corrida de verdade)
+        Espera.ate(PRAZO, () -> "comandos=" + cenario.terminal.comandos, () -> cenario.terminal.comandos.size() == 2);
         assertEquals(2, cenario.terminal.comandos.size(), "reanexou ao mesmo comando");
         assertEquals(cenario.terminal.comandos.get(0), cenario.terminal.comandos.get(1));
 
@@ -288,6 +290,7 @@ class PainelTerminalTest {
         cenario.terminal.roteiro(ServidorDeTerminalFalso::roteiroQueNaoLe);
         Visual.naEdt(() -> p.botaoReconectar().doClick(0));
         esperarAtiva(p);
+        Espera.ate(PRAZO, () -> "canais=" + cenario.terminal.canaisAbertos.get(), () -> cenario.terminal.canaisAbertos.get() == 2); // o servidor conta um instante depois do cliente
         assertEquals(2, cenario.terminal.canaisAbertos.get());
         assertFalse(Visual.naEdt(p::faixaVisivel));
     }
@@ -331,7 +334,8 @@ class PainelTerminalTest {
         assertNull(Visual.naEdt(p::widget));
         assertTrue(Visual.naEdt(p::descartado));
         assertFalse(Visual.naEdt(() -> w.isSessionRunning()));
-        Espera.ate(PRAZO, "o canal fechou no servidor", () -> cenario.terminal.sessoes.get(0).saiu() || !w.getTtyConnector().isConnected());
+        Espera.ate(PRAZO, "o canal fechou no servidor",
+            () -> !w.getTtyConnector().isConnected() || (!cenario.terminal.sessoes.isEmpty() && cenario.terminal.sessoes.get(0).saiu()));
         Espera.naoAcontece(Duration.ofMillis(300), "reabriu depois de descartado", () -> cenario.terminal.canaisAbertos.get() > 1);
     }
 
