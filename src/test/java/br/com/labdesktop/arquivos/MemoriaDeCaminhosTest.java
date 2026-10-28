@@ -84,4 +84,38 @@ class MemoriaDeCaminhosTest {
         assertTrue(m.ultimoCaminhoDoProjeto("s1", "p0").isEmpty(), "os mais antigos saíram");
         assertTrue(m.ultimoCaminhoDoProjeto("s1", "p699").isPresent());
     }
+
+    @Test
+    void lembraOPeriodoDasTendenciasPorServidorEGravaEmDisco(@TempDir Path tmp) throws Exception {
+        Path arquivo = tmp.resolve("memoria-arquivos.json");
+        MemoriaDeCaminhos m = MemoriaDeCaminhos.doArquivo(arquivo);
+        assertEquals(null, m.janelaDasTendencias("s1"), "nunca escolheu: sem memória");
+        m.definirJanelaDasTendencias("s1", "7d");
+        m.definirJanelaDasTendencias("s2", "1h");
+        m.esvaziar();
+        MemoriaDeCaminhos lida = MemoriaDeCaminhos.doArquivo(arquivo);
+        assertEquals("7d", lida.janelaDasTendencias("s1"));
+        assertEquals("1h", lida.janelaDasTendencias("s2"), "cada servidor tem o seu");
+        assertEquals(null, lida.janelaDasTendencias("s3"));
+        // código inválido nunca entra, e o que já estava fica
+        lida.definirJanelaDasTendencias("s1", "2h");
+        lida.definirJanelaDasTendencias("s1", null);
+        lida.definirJanelaDasTendencias("s1", "constructor");
+        assertEquals("7d", lida.janelaDasTendencias("s1"));
+        // convive com o resto da memória do servidor
+        lida.lembrarDoServidor("s1", RaizDoServidor.MINHA_PASTA, "/home/ana");
+        lida.esvaziar();
+        MemoriaDeCaminhos outra = MemoriaDeCaminhos.doArquivo(arquivo);
+        assertEquals("7d", outra.janelaDasTendencias("s1"));
+        assertEquals(Optional.of("/home/ana"), outra.ultimoCaminhoDoServidor("s1"));
+    }
+
+    @Test
+    void arquivoEditadoComPeriodoComLixoNaoDerrubaEVoltaAoPadrao(@TempDir Path tmp) throws Exception {
+        Path arquivo = tmp.resolve("memoria-arquivos.json");
+        Files.writeString(arquivo, "{\"versao\":1,\"servidores\":{\"s1\":{\"janelaDasTendencias\":\"1 ano\"},\"s2\":{\"janelaDasTendencias\":\"30d\"}}}");
+        MemoriaDeCaminhos m = MemoriaDeCaminhos.doArquivo(arquivo);
+        assertEquals(null, m.janelaDasTendencias("s1"));
+        assertEquals("30d", m.janelaDasTendencias("s2"));
+    }
 }

@@ -43,7 +43,7 @@ class MontadorDoPacoteTest {
         assertArrayEquals(a, b, "a ordem de entrada não muda o resultado");
 
         Map<String, LeitorDeTarParaTeste.Entrada> lidas = LeitorDeTarParaTeste.ler(a);
-        assertEquals(List.of("Dockerfile.monitor", "acesso.js", "docker-proxy.js", "guarda.js", "painel.js", "precos.json", "tokens.js", "totp.js"),
+        assertEquals(List.of("Dockerfile.monitor", "acesso.js", "docker-proxy.js", "guarda.js", "historico.js", "painel.js", "precos.json", "tokens.js", "totp.js"),
             List.copyOf(lidas.keySet()), "em ordem de nome");
         for (var e : lidas.values()) {
             assertEquals(0, e.data(), e.nome());

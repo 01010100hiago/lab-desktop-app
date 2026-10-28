@@ -20,7 +20,7 @@ class ComandosLocaisTest {
         return List.of(ComandosLocais.versaoDoDocker(), ComandosLocais.versaoDoComposeDoDocker(), ComandosLocais.versaoDoGit(), ComandosLocais.estadoDoWsl(),
             ComandosLocais.virtualizacaoDoWindows(), ComandosLocais.lerRede(p), ComandosLocais.lerContainersNaRede(p), ComandosLocais.lerContainer(p),
             ComandosLocais.lerContainerPeloNome(p.containerAnterior()), ComandosLocais.lerVolume(p), ComandosLocais.lerImagem(p, PACOTE.versao()),
-            ComandosLocais.lerLogs(p), ComandosLocais.lerEstadoDoContainer("painel-lab"));
+            ComandosLocais.lerLogs(p), ComandosLocais.lerRegistroDoAgente("painel-lab"), ComandosLocais.lerEstadoDoContainer("painel-lab"));
     }
 
     private List<List<String>> escritas() {

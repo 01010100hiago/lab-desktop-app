@@ -32,7 +32,7 @@ public final class MontadorDoPacote {
 
     /** O que o agente do perfil monitor precisa para subir: o painel, os módulos que ele carrega e o Dockerfile mínimo. */
     public static final List<String> ARQUIVOS = List.of("Dockerfile.monitor", "acesso.js", "docker-proxy.js", "guarda.js",
-        "painel.js", "precos.json", "tokens.js", "totp.js");
+        "historico.js", "painel.js", "precos.json", "tokens.js", "totp.js");
 
     private static final Pattern COMMIT_COMPLETO = Pattern.compile("^[0-9a-f]{40}$");
 
