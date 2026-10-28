@@ -244,7 +244,7 @@ public final class LaboratorioLocal {
                     "Não consegui remover o agente antigo que sobrou");
             }
         }
-        boolean volumeExistia = ler(ComandosLocais.lerVolume(parametros)).lines().anyMatch(v -> v.strip().equals(parametros.volume()));
+        boolean volumeExistia = LeituraDoDocker.volumes(ler(ComandosLocais.lerVolume(parametros))).stream().anyMatch(v -> v.nome().equals(parametros.volume()));
         if (atual != null) {
             exigirSucesso(ComandosLocais.renomearContainer(parametros.container(), parametros.containerAnterior()), ESCRITA_CURTA, "Não consegui guardar o agente anterior");
             guardouOAnterior = true;
@@ -259,12 +259,15 @@ public final class LaboratorioLocal {
         } catch (IllegalArgumentException e) {
             throw new FalhaDePasso(e.getMessage());
         }
+        if (!volumeExistia) {
+            exigirSucesso(ComandosLocais.criarVolume(parametros), ESCRITA_CURTA, "Não consegui criar o volume dos dados do agente");
+            criouVolume = true; // se o run falhar, o desfazer o apaga
+        }
         criouContainer = true;
         ResultadoExec x = rodar(ComandosLocais.subirContainer(parametros, pacote, plataforma.montagemDaMaquina(), pastaNoContainer), ESCRITA_CURTA);
         if (x.status() != 0) {
             throw new FalhaDePasso("O Docker não conseguiu subir o agente: " + saidaDeErro(x));
         }
-        criouVolume = !volumeExistia;
         return true;
     }
 
@@ -472,21 +475,49 @@ public final class LaboratorioLocal {
         obs.aoMudarPasso(PassoDaRemocaoLocal.CONTAINER, removido ? (existe ? EstadoDoPasso.FEITO : EstadoDoPasso.JA_ESTAVA_FEITO) : EstadoDoPasso.FALHOU, "");
 
         boolean eraDoApp = existe && doApp != null;
-        String versao = eraDoApp && doApp.matches("^[A-Za-z0-9][A-Za-z0-9_.-]{0,40}$") ? doApp : pacote.versao();
-        if (eraDoApp) {
-            boolean temVolume = ler(ComandosLocais.lerVolume(parametros)).lines().anyMatch(v -> v.strip().equals(parametros.volume()));
-            removerComAviso(PassoDaRemocaoLocal.DADOS, ComandosLocais.removerVolume(parametros), "os dados do agente",
-                "Apaguei os dados do agente (token e 2FA).", feito, avisos, temVolume);
-            removerComAviso(PassoDaRemocaoLocal.IMAGEM, ComandosLocais.removerImagem(parametros, versao), "a imagem do agente",
-                "Apaguei a imagem do agente.", feito, avisos, true);
-        } else {
-            obs.aoMudarPasso(PassoDaRemocaoLocal.DADOS, EstadoDoPasso.JA_ESTAVA_FEITO, "");
-            obs.aoMudarPasso(PassoDaRemocaoLocal.IMAGEM, EstadoDoPasso.JA_ESTAVA_FEITO, "");
-            avisos.add("Não havia um agente deste app chamado " + parametros.container() + ", então deixei os dados e a imagem como estavam.");
+        // Mesmo SEM container (uma remoção que parou no meio, um run que falhou), o que o app marcou como dele ainda é recolhido; o que não tem a
+        // marca só sai junto com um container que o app criou.
+        boolean temVolume = LeituraDoDocker.volumes(ler(ComandosLocais.lerVolume(parametros))).stream()
+            .anyMatch(v -> v.nome().equals(parametros.volume()) && (eraDoApp || v.doApp()));
+        List<String> versoes = new ArrayList<>();
+        if (eraDoApp && doApp.matches("^[A-Za-z0-9][A-Za-z0-9_.-]{0,40}$")) {
+            versoes.add(doApp);
+        }
+        for (String v : LeituraDoDocker.versoesDasImagens(ler(ComandosLocais.lerImagensDoApp(parametros)), parametros.imagemBase())) {
+            if (!versoes.contains(v)) {
+                versoes.add(v);
+            }
+        }
+        removerComAviso(PassoDaRemocaoLocal.DADOS, ComandosLocais.removerVolume(parametros), "os dados do agente",
+            "Apaguei os dados do agente (token e 2FA).", feito, avisos, temVolume);
+        removerImagens(versoes, feito, avisos);
+        if (!eraDoApp && !temVolume && versoes.isEmpty()) {
+            avisos.add("Não havia um agente deste app chamado " + parametros.container() + ", então deixei o que não é do app como estava.");
         }
         removerAReSeForDoApp(feito, avisos);
         feito.add("Seus projetos em " + parametros.pastaDosProjetos() + " continuam onde estavam: o app nunca os apaga.");
         return new ResultadoDaRemocao(removido, feito, avisos, false);
+    }
+
+    private void removerImagens(List<String> versoes, List<String> feito, List<String> avisos) throws IOException, InterruptedException {
+        conferirCancelamento();
+        if (versoes.isEmpty()) {
+            obs.aoMudarPasso(PassoDaRemocaoLocal.IMAGEM, EstadoDoPasso.JA_ESTAVA_FEITO, "");
+            return;
+        }
+        obs.aoMudarPasso(PassoDaRemocaoLocal.IMAGEM, EstadoDoPasso.EM_ANDAMENTO, "");
+        boolean falhou = false;
+        for (String versao : versoes) {
+            conferirCancelamento();
+            ResultadoExec x = rodar(ComandosLocais.removerImagem(parametros, versao), ESCRITA_CURTA);
+            if (x.status() == 0) {
+                feito.add("Apaguei a imagem do agente (" + versao + ").");
+            } else {
+                falhou = true;
+                avisos.add("Não consegui apagar a imagem do agente (" + versao + "): " + saidaDeErro(x));
+            }
+        }
+        obs.aoMudarPasso(PassoDaRemocaoLocal.IMAGEM, falhou ? EstadoDoPasso.FALHOU : EstadoDoPasso.FEITO, "");
     }
 
     private void removerAReSeForDoApp(List<String> feito, List<String> avisos) throws IOException, InterruptedException {

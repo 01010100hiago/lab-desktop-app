@@ -56,7 +56,11 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
     public final Map<String, String> redes = new LinkedHashMap<>(); // nome -> rótulo do app (vazio se não é dele)
     public final Map<String, Integer> containersNaRede = new LinkedHashMap<>();
     public final Set<String> volumes = new LinkedHashSet<>();
+    /** Os volumes que levam o rótulo do app. */
+    public final Set<String> volumesDoApp = new LinkedHashSet<>();
     public final Set<String> imagens = new LinkedHashSet<>();
+    /** As imagens que levam o rótulo do app (construídas por ele). */
+    public final Set<String> imagensDoApp = new LinkedHashSet<>();
     public final Map<String, Cont> containers = new LinkedHashMap<>();
     public final Set<String> programasAusentes = new LinkedHashSet<>();
     public String logsDoContainer = "node: escutando em 0.0.0.0:7070";
@@ -219,14 +223,33 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
             case "volume": {
                 if (a.get(2).equals("ls")) {
                     String nome = filtro(a);
-                    return ok(volumes.contains(nome) ? nome + "\n" : "");
+                    return ok(volumes.contains(nome) ? nome + "|" + (volumesDoApp.contains(nome) ? "br.com.labdesktop.local=1" : "") + "\n" : "");
+                }
+                if (a.get(2).equals("create")) {
+                    String nome = a.get(a.size() - 1);
+                    volumes.add(nome);
+                    if (a.contains("br.com.labdesktop.local=1")) {
+                        volumesDoApp.add(nome);
+                    }
+                    return ok(nome + "\n");
                 }
                 if (a.get(2).equals("rm")) {
+                    volumesDoApp.remove(a.get(3));
                     return volumes.remove(a.get(3)) ? ok(a.get(3) + "\n") : erro(1, "Error: No such volume");
                 }
                 break;
             }
             case "image": {
+                if (a.get(2).equals("ls")) {
+                    String base = a.get(a.indexOf("--filter") + 1).substring("reference=".length());
+                    StringBuilder l = new StringBuilder();
+                    for (String i : imagensDoApp) {
+                        if (i.startsWith(base + ":")) {
+                            l.append(i).append('\n');
+                        }
+                    }
+                    return ok(l.toString());
+                }
                 return imagens.contains(a.get(a.size() - 1)) ? ok("sha256:abc\n") : erro(1, "Error: No such image");
             }
             case "build": {
@@ -234,6 +257,9 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
                     return erro(1, "unable to prepare context: path not found");
                 }
                 imagens.add(a.get(a.indexOf("-t") + 1));
+                if (a.contains("br.com.labdesktop.local=1")) {
+                    imagensDoApp.add(a.get(a.indexOf("-t") + 1));
+                }
                 return ok("Successfully built\n");
             }
             case "run":
@@ -268,6 +294,7 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
                 return ok(a.get(2) + "\n");
             }
             case "rmi": {
+                imagensDoApp.remove(a.get(2));
                 return imagens.remove(a.get(2)) ? ok("Untagged\n") : erro(1, "Error: No such image");
             }
             case "logs":

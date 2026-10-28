@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.labdesktop.instalador.Cancelamento;
@@ -110,7 +111,9 @@ class LaboratorioLocalTest {
         assertEquals(1, tokens.get());
         assertTrue(sondagens.get() >= 1);
         List<String> w = pc.escritas().stream().map(x -> x.get(1)).toList();
-        assertEquals(List.of("network", "build", "run"), w, "só estas três escritas de Docker, nessa ordem");
+        assertEquals(List.of("network", "build", "volume", "run"), w, "só estas escritas de Docker, nessa ordem (o volume rotulado nasce ANTES do run)");
+        assertTrue(pc.volumesDoApp.contains("painel-lab-dados"));
+        assertTrue(pc.imagensDoApp.contains("labdesktop-agente:0.1.0-abc1234"), "a imagem leva o rótulo do app");
         assertEquals(EstadoDoPasso.FEITO, ultimo.get(PassoDoLaboratorio.PASTA));
         assertEquals(EstadoDoPasso.FEITO, ultimo.get(PassoDoLaboratorio.CONTAINER));
         // o pacote foi pela entrada do docker build, intacto
@@ -373,7 +376,7 @@ class LaboratorioLocalTest {
         ResultadoDaRemocao r = lab().remover(obs, Cancelamento.NUNCA);
         assertTrue(pc.volumes.contains("painel-lab-dados"));
         assertTrue(pc.imagens.contains("labdesktop-agente:0.1.0-abc1234"));
-        assertTrue(r.avisos().stream().anyMatch(a -> a.contains("deixei os dados e a imagem")), r.avisos().toString());
+        assertTrue(r.avisos().stream().anyMatch(a -> a.contains("deixei o que não é do app como estava")), r.avisos().toString());
     }
 
     @Test
@@ -494,5 +497,59 @@ class LaboratorioLocalTest {
         Cont c = pc.containers.get("painel-lab");
         assertEquals("0.1.0-abc1234", c.rotulo);
         assertEquals("1", c.rotuloLocal);
+    }
+
+    // ----- M3: o volume nasce antes do run; remover se recupera -----
+
+    @Test
+    void odockerRunQueFalhaNaoDeixaOVolumeCriadoPorEstaExecucao() {
+        pc.falharEm(c -> c.size() > 1 && c.get(1).equals("run"), 125, "docker: Error response from daemon: port is already allocated");
+        ResultadoDaInstalacao r = criar();
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertFalse(pc.volumes.contains("painel-lab-dados"), "o volume que esta execução criou foi desfeito");
+        assertTrue(pc.volumesDoApp.isEmpty());
+        assertTrue(pc.imagens.isEmpty() && pc.redes.isEmpty(), "e o resto também");
+    }
+
+    @Test
+    void umVolumeQueJaExistiaNaoEApagadoQuandoORunFalha() {
+        pc.volumes.add("painel-lab-dados");
+        pc.volumesDoApp.add("painel-lab-dados");
+        pc.falharEm(c -> c.size() > 1 && c.get(1).equals("run"), 125, "boom");
+        assertEquals(Desfecho.FALHOU, criar().desfecho());
+        assertTrue(pc.volumes.contains("painel-lab-dados"), "os dados de antes ficam");
+    }
+
+    @Test
+    void removerRecolheOVolumeEAsImagensDoAppMesmoSemContainer() throws Exception {
+        pc.volumes.add("painel-lab-dados");
+        pc.volumesDoApp.add("painel-lab-dados");
+        pc.imagens.addAll(List.of("labdesktop-agente:0.1.0-abc1234", "labdesktop-agente:0.0.9-velha", "labdesktop-outra:1"));
+        pc.imagensDoApp.addAll(List.of("labdesktop-agente:0.1.0-abc1234", "labdesktop-agente:0.0.9-velha"));
+        ResultadoDaRemocao r = lab().remover(obs, Cancelamento.NUNCA);
+        assertTrue(r.removido(), r.avisos().toString());
+        assertFalse(pc.volumes.contains("painel-lab-dados"));
+        assertEquals(java.util.Set.of("labdesktop-outra:1"), pc.imagens, "só as imagens com o rótulo do app saíram");
+    }
+
+    @Test
+    void cancelarNoMeioDoRemoverERepetirTerminaOTrabalho() throws Exception {
+        assertEquals(Desfecho.CONCLUIDA, criar().desfecho());
+        assertThrows(InterruptedException.class, () -> lab().remover(obs, () -> pc.containers.isEmpty())); // cancela logo depois de tirar o agente
+        assertTrue(pc.containers.isEmpty());
+        assertTrue(pc.volumes.contains("painel-lab-dados"), "ainda sobrou o volume");
+        ResultadoDaRemocao r = lab().remover(obs, Cancelamento.NUNCA);
+        assertTrue(r.removido(), r.avisos().toString());
+        assertTrue(pc.volumes.isEmpty() && pc.imagens.isEmpty() && pc.redes.isEmpty(), "a segunda vez recolheu o resto: " + pc.volumes + pc.imagens + pc.redes);
+    }
+
+    @Test
+    void removerDeNovoDepoisDeRemovidoNaoFazNadaNemFalha() throws Exception {
+        assertEquals(Desfecho.CONCLUIDA, criar().desfecho());
+        assertTrue(lab().remover(obs, Cancelamento.NUNCA).removido());
+        pc.limparRegistro();
+        ResultadoDaRemocao r = lab().remover(obs, Cancelamento.NUNCA);
+        assertTrue(r.removido());
+        assertTrue(pc.escritas().isEmpty(), "nada a fazer: " + pc.escritas());
     }
 }

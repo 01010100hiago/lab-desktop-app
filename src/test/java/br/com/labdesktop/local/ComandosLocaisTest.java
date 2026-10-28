@@ -28,7 +28,7 @@ class ComandosLocaisTest {
             ComandosLocais.subirContainer(p, PACOTE, List.of("-v", "/:/host:ro"), "/Users/ana/LabLocal/projects"),
             ComandosLocais.removerContainer("painel-lab"), ComandosLocais.renomearContainer("painel-lab", "painel-lab-anterior"),
             ComandosLocais.pararContainer("painel-lab"), ComandosLocais.iniciarContainer("painel-lab"), ComandosLocais.removerVolume(p),
-            ComandosLocais.removerImagem(p, PACOTE.versao()));
+            ComandosLocais.removerImagem(p, PACOTE.versao()), ComandosLocais.criarVolume(p));
     }
 
     @Test
@@ -104,7 +104,7 @@ class ComandosLocaisTest {
 
     @Test
     void oBuildLevaOPacotePelaEntradaSemCaminhoDoSistema() {
-        assertEquals(List.of("docker", "build", "-f", "Dockerfile.monitor", "-t", "labdesktop-agente:0.1.0-abc1234", "-"), ComandosLocais.construirImagem(p, PACOTE));
+        assertEquals(List.of("docker", "build", "--label", "br.com.labdesktop.local=1", "-f", "Dockerfile.monitor", "-t", "labdesktop-agente:0.1.0-abc1234", "-"), ComandosLocais.construirImagem(p, PACOTE));
     }
 
     @Test

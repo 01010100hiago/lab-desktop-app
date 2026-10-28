@@ -37,6 +37,13 @@ final class LeituraDoDocker {
         }
     }
 
+    /** Um volume lido por {@link ComandosLocais#lerVolume}. */
+    record Volume(String nome, String rotuloLocal) {
+        boolean doApp() {
+            return "1".equals(rotuloLocal);
+        }
+    }
+
     /** O valor do rótulo na lista {@code a=b,c=d} do Docker; vazio se a chave não está. */
     static String rotulo(String rotulos, String chave) {
         Matcher m = Pattern.compile("(?:^|,)" + Pattern.quote(chave) + "=([^,]*)").matcher(rotulos == null ? "" : rotulos);
@@ -68,6 +75,31 @@ final class LeituraDoDocker {
                 continue;
             }
             l.add(new Rede(linha.substring(0, a).strip(), rotulo(linha.substring(a + 1), ComandosLocais.ROTULO_LOCAL)));
+        }
+        return l;
+    }
+
+    /** {@code nome|rótulos}. */
+    static List<Volume> volumes(String saida) {
+        List<Volume> l = new ArrayList<>();
+        for (String linha : saida.split("\\R")) {
+            int a = linha.indexOf('|');
+            if (a < 0) {
+                continue;
+            }
+            l.add(new Volume(linha.substring(0, a).strip(), rotulo(linha.substring(a + 1), ComandosLocais.ROTULO_LOCAL)));
+        }
+        return l;
+    }
+
+    /** As linhas {@code imagem:versão} da imagem base dada; o que não tem a forma esperada (ou é de outra imagem) é ignorado. */
+    static List<String> versoesDasImagens(String saida, String imagemBase) {
+        List<String> l = new ArrayList<>();
+        for (String linha : saida.split("\\R")) {
+            String t = linha.strip();
+            if (t.startsWith(imagemBase + ":") && t.substring(imagemBase.length() + 1).matches("^[A-Za-z0-9][A-Za-z0-9_.-]{0,40}$")) {
+                l.add(t.substring(imagemBase.length() + 1));
+            }
         }
         return l;
     }

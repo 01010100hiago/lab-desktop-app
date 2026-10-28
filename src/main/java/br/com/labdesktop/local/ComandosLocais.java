@@ -75,8 +75,15 @@ public final class ComandosLocais {
             "{{.Names}}|{{.Labels}}|{{.State}}");
     }
 
+    /** Os volumes com este nome exato: {@code nome|rótulos}. */
     public static List<String> lerVolume(ParametrosDoLaboratorio p) {
-        return List.of(DOCKER, "volume", "ls", "-q", "--filter", "name=^" + p.volume() + "$");
+        return List.of(DOCKER, "volume", "ls", "--filter", "name=^" + p.volume() + "$", "--format", "{{.Name}}|{{.Labels}}");
+    }
+
+    /** As imagens do agente que o app construiu (têm o rótulo local), uma {@code nome:versão} por linha, de qualquer versão. */
+    public static List<String> lerImagensDoApp(ParametrosDoLaboratorio p) {
+        return List.of(DOCKER, "image", "ls", "--filter", "reference=" + p.imagemBase(), "--filter", "label=" + ROTULO_LOCAL + "=1", "--format",
+            "{{.Repository}}:{{.Tag}}");
     }
 
     /** Sai com 0 se a imagem existe. */
@@ -112,7 +119,7 @@ public final class ComandosLocais {
      * dentro do pacote.
      */
     public static List<String> construirImagem(ParametrosDoLaboratorio p, PacoteDoAgente pacote) {
-        return List.of(DOCKER, "build", "-f", "Dockerfile.monitor", "-t", p.imagem(pacote.versao()), "-");
+        return List.of(DOCKER, "build", "--label", ROTULO_LOCAL + "=1", "-f", "Dockerfile.monitor", "-t", p.imagem(pacote.versao()), "-");
     }
 
     /**
@@ -152,6 +159,14 @@ public final class ComandosLocais {
 
     public static List<String> iniciarContainer(String nome) {
         return List.of(DOCKER, "start", exigirNome(nome));
+    }
+
+    /**
+     * Cria o volume dos dados do agente ANTES do {@code docker run}, marcado como do app: se o run falhar, o volume que ESTA execução criou é
+     * desfeito, e um volume que sobrou (cancelou no meio) ainda é reconhecido como do app na hora de remover.
+     */
+    public static List<String> criarVolume(ParametrosDoLaboratorio p) {
+        return List.of(DOCKER, "volume", "create", "--label", ROTULO_LOCAL + "=1", p.volume());
     }
 
     public static List<String> removerVolume(ParametrosDoLaboratorio p) {
@@ -197,7 +212,7 @@ public final class ComandosLocais {
     private static List<List<Pattern>> montarLeituras() {
         ParametrosDoLaboratorio p = new ParametrosDoLaboratorio("zzcontainer", 54321, "zzrede", "zzimagem", "/zzpasta");
         List<List<String>> modelos = List.of(versaoDoDocker(), versaoDoComposeDoDocker(), versaoDoGit(), estadoDoWsl(), virtualizacaoDoWindows(),
-            lerRede(p), lerContainersNaRede(p), lerContainer(p), lerVolume(p), lerImagem(p, "zzversao"), lerLogs(p), lerEstadoDoContainer("zzcontainer"));
+            lerRede(p), lerContainersNaRede(p), lerContainer(p), lerVolume(p), lerImagensDoApp(p), lerImagem(p, "zzversao"), lerLogs(p), lerEstadoDoContainer("zzcontainer"));
         List<List<Pattern>> moldes = new ArrayList<>();
         for (List<String> modelo : modelos) {
             List<Pattern> m = new ArrayList<>();
