@@ -6,9 +6,9 @@
 @onde: Processos de um projeto | Página do projeto > Processos
 1. Abra Servidor, aba Processos (ou a aba Processos da página de um projeto).
 2. Na linha do programa, clique em Encerrar. Para um container, os botões são Parar e Reiniciar.
-3. A confirmação mostra o nome, o número (PID), o proprietário, o projeto ou container e a hora em que o programa começou.
+3. A confirmação mostra o nome, o número (PID), o dono, o projeto ou container e a hora de início.
 4. Encerrar pede ao programa para fechar (SIGTERM) e espera alguns segundos. O app nunca força sozinho.
-5. Se o programa continuar rodando, o botão "Forçar (SIGKILL)" mata na hora, por outro clique: a decisão é sua.
+5. Se ele continuar rodando, o botão "Forçar (SIGKILL)" mata na hora, por outro clique: a decisão é sua.
 [Ir para Processos](ir:processos)
 @acoes: sim
 @veja: servidor terminal

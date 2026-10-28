@@ -50,6 +50,17 @@ class BaixadorDeBackupsTest {
             () -> Visual.naEdt(() -> b.fila() != null && b.fila().retratos().size() >= quantas && b.fila().retratos().stream().allMatch(r -> r.estado().terminou())));
     }
 
+    /** Os PNGs do download nos dois temas (a fila com a barra, e o resultado com "Mostrar na pasta"). */
+    private static void fotografar(BaixadorDeBackups b, String nome) {
+        for (Tema t : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
+            Visual.tema(t);
+            Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(b));
+            Visual.salvar(Visual.renderizar(b, 1000, Visual.alturaPreferida(b, 1000) + 12), nome + "-" + (t == Tema.CLARO ? "claro" : "escuro"));
+        }
+        Visual.tema(Tema.CLARO);
+        Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(b));
+    }
+
     private static Retrato primeiro(BaixadorDeBackups b) {
         return Visual.naEdt(() -> b.fila().retratos().get(0));
     }
@@ -78,6 +89,7 @@ class BaixadorDeBackupsTest {
             assertEquals(List.of(destino), c.escolhedor.mostradas, "Mostrar na pasta abre a pasta do download");
             assertEquals(ServicosDeArquivosPadrao.pastaDeDownloads(), c.escolhedor.padraoVisto, "o seletor começa em Downloads");
             assertTrue(Visual.naEdt(() -> b.painelDeTransferencias().aberto()), "a fila abre sozinha");
+            fotografar(b, "backups-download-pronto");
             try (var s = Files.list(destino)) {
                 assertEquals(1, s.count(), "nenhum parcial sobrou");
             }
@@ -117,10 +129,12 @@ class BaixadorDeBackupsTest {
                 && b.fila().retratos().get(0).estado() == Estado.EM_ANDAMENTO && b.fila().retratos().get(0).bytesFeitos() > 256 * 1024));
             var linha = Visual.naEdt(() -> b.painelDeTransferencias().linhas().get(0));
             assertTrue(Visual.naEdt(() -> linha.botaoCancelar().isVisible()), "Cancelar aparece enquanto baixa");
+            fotografar(b, "backups-download-andando");
             Visual.naEdt(() -> linha.botaoCancelar().doClick(0));
             esperarFim(b, 1);
             assertEquals(Estado.CANCELADA, primeiro(b).estado());
             assertTrue(Visual.naEdt(b::textoDoResultado).startsWith("Download cancelado"), Visual.naEdt(b::textoDoResultado));
+            fotografar(b, "backups-download-cancelado");
             assertFalse(Visual.naEdt(() -> b.botaoMostrarNaPasta().isVisible()), "nada foi baixado: nada a mostrar");
             try (var s = Files.list(destino)) {
                 assertEquals(0, s.count(), "nem o arquivo nem o parcial oculto ficaram");

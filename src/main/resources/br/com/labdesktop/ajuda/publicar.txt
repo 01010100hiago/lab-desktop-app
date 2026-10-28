@@ -5,11 +5,11 @@
 @onde: Adicionar domínio | Página do projeto > Adicionar domínio… (barra de cima)
 @onde: Adicionar domínio pelo menu | Menu Arquivo > Adicionar domínio…
 @onde: Conectar a Cloudflare | Servidor > Cloudflare > Conectar a Cloudflare… | cloudflare
-1. Abra a página do projeto e clique em "Adicionar domínio…", na barra de cima (também está na aba Internet, na aba Cloudflare do servidor e no menu Arquivo).
-2. Sem a Cloudflare conectada, o app abre primeiro "Conectar a Cloudflare" (cole o token que você criou; ele fica só no cofre cifrado) e volta.
-3. Siga os passos: conta, domínio, nome do endereço, serviço e porta do projeto. Até aqui o app só pergunta e lê.
-4. O último passo mostra tudo o que vai mudar (compose, regra do túnel e DNS). Só depois do seu clique em "Publicar na internet" ele muda alguma coisa.
-5. Para tirar o endereço, use Remover na aba Internet: o app pede para você digitar o endereço.
+1. Na página do projeto, clique em "Adicionar domínio…", na barra de cima (também está na aba Internet, na aba Cloudflare e no menu Arquivo).
+2. Sem a Cloudflare conectada, o app abre primeiro o "Conectar a Cloudflare" (cole o token; ele fica só no cofre) e volta.
+3. Siga os passos: conta, domínio, nome do endereço, serviço e porta. Até aqui o app só pergunta e lê.
+4. O último passo mostra tudo o que vai mudar. Só depois do seu clique em "Publicar na internet" ele muda algo.
+5. Para tirar o endereço, use Remover na aba Internet (o app pede para você digitar o endereço).
 [Ir para Cloudflare](ir:cloudflare)
 @acoes: sim
 @veja: projetos
