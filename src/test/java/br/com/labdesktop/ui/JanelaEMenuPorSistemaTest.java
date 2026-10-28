@@ -40,6 +40,15 @@ class JanelaEMenuPorSistemaTest {
     }
 
     @Test
+    void oIconeDoDockDoAppEmpacotadoNoMacNaoETrocadoPeloPngBruto() {
+        assertFalse(IconesDoApp.deveTrocarOIconeDoApp(SistemaOperacional.MAC, true), "o Dock do .app usa o .icns do bundle");
+        assertTrue(IconesDoApp.deveTrocarOIconeDoApp(SistemaOperacional.MAC, false), "rodando solto pelo Gradle o Mac usa os PNGs");
+        assertTrue(IconesDoApp.deveTrocarOIconeDoApp(SistemaOperacional.WINDOWS, true));
+        assertTrue(IconesDoApp.deveTrocarOIconeDoApp(SistemaOperacional.LINUX, true));
+        assertTrue(IconesDoApp.deveTrocarOIconeDoApp(SistemaOperacional.LINUX, false));
+    }
+
+    @Test
     void oIconeDoAppTemOsTamanhosEEstaNaPaletaNeutra() {
         var imagens = IconesDoApp.imagens();
         assertEquals(IconesDoApp.TAMANHOS.length, imagens.size());

@@ -1,5 +1,6 @@
 package br.com.labdesktop.ui;
 
+import br.com.labdesktop.plataforma.SistemaOperacional;
 import java.awt.Image;
 import java.awt.Taskbar;
 import java.awt.Window;
@@ -52,8 +53,22 @@ public final class IconesDoApp {
         }
     }
 
-    /** O ícone do app no Dock ou na barra de tarefas, onde o Java deixa (macOS e alguns Linux; o Windows usa o do executável). Nunca falha. */
+    /** Dentro de uma imagem do jpackage o launcher define esta propriedade da JVM; rodando pelo Gradle ou pelo {@code java -cp} ela não existe. */
+    static final String PROPRIEDADE_DO_JPACKAGE = "jpackage.app-version";
+
+    /**
+     * Só no Mac EMPACOTADO o ícone do Dock é o do {@code .app} (o {@code .icns} desenhado para o Dock, com as margens do macOS): trocá-lo pelo PNG bruto o deixaria diferente do ícone do
+     * Finder. Fora do Mac e rodando solto (Gradle) o ícone do app vem destes PNGs.
+     */
+    static boolean deveTrocarOIconeDoApp(SistemaOperacional sistema, boolean imagemEmpacotada) {
+        return !(sistema == SistemaOperacional.MAC && imagemEmpacotada);
+    }
+
+    /** O ícone do app no Dock ou na barra de tarefas, onde o Java deixa (macOS rodando solto e alguns Linux; o Windows usa o do executável). Nunca falha. */
     public static void aplicarAoApp() {
+        if (!deveTrocarOIconeDoApp(SistemaOperacional.detectar(), System.getProperty(PROPRIEDADE_DO_JPACKAGE) != null)) {
+            return;
+        }
         try {
             List<Image> l = imagens();
             if (l.isEmpty() || !Taskbar.isTaskbarSupported()) {
