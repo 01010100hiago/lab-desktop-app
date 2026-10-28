@@ -368,8 +368,8 @@ public final class ClienteSftpLocal implements ClienteSftp {
         Path alvo = p(caminho);
         try {
             BasicFileAttributes a = Files.readAttributes(alvo, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-            if (!a.isDirectory()) {
-                Files.delete(alvo); // arquivo ou link: apaga o item, nunca o destino do link
+            if (!a.isDirectory() || ehLigacao(a)) {
+                Files.delete(alvo); // arquivo, link ou junção: apaga o item, nunca o destino
                 return;
             }
             if (!recursivo) {
@@ -381,25 +381,47 @@ public final class ClienteSftpLocal implements ClienteSftp {
                 Files.delete(alvo);
                 return;
             }
-            Files.walkFileTree(alvo, new SimpleFileVisitor<>() { // por padrão NÃO segue links
-                @Override
-                public FileVisitResult visitFile(Path f, BasicFileAttributes at) throws IOException {
-                    Files.delete(f);
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult postVisitDirectory(Path d, IOException e) throws IOException {
-                    if (e != null) {
-                        throw e;
-                    }
-                    Files.delete(d);
-                    return FileVisitResult.CONTINUE;
-                }
-            });
+            Files.walkFileTree(alvo, visitanteDeApagar(alvo));
         } catch (IOException | RuntimeException e) {
             throw ErroSftp.de(e, "apagar este item");
         }
+    }
+
+    /**
+     * Um link ou uma JUNÇÃO do Windows (ponto de reparse): o Java a vê como pasta comum ({@code isDirectory}) mas {@code isOther}, e um
+     * {@code walkFileTree} desceria por ela e apagaria o conteúdo do DESTINO. Quem apaga trata a junção como um item só.
+     */
+    static boolean ehLigacao(BasicFileAttributes a) {
+        return a.isSymbolicLink() || a.isOther();
+    }
+
+    /** O visitante do "apagar tudo": apaga a pasta e o que ela tem, mas uma junção ou link é apagado SEM descer por ela. Visível para teste. */
+    static SimpleFileVisitor<Path> visitanteDeApagar(Path raiz) {
+        return new SimpleFileVisitor<>() { // por padrão NÃO segue links
+            @Override
+            public FileVisitResult preVisitDirectory(Path d, BasicFileAttributes at) throws IOException {
+                if (!d.equals(raiz) && ehLigacao(at)) {
+                    Files.delete(d); // só a junção; o conteúdo do destino fica
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path f, BasicFileAttributes at) throws IOException {
+                Files.delete(f);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path d, IOException e) throws IOException {
+                if (e != null) {
+                    throw e;
+                }
+                Files.delete(d);
+                return FileVisitResult.CONTINUE;
+            }
+        };
     }
 
     @Override

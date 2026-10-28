@@ -244,4 +244,59 @@ class ClienteSftpLocalTest {
         assertEquals(ErroSftp.Tipo.FORA_DA_RAIZ, tipoDe(() -> s.listar(raiz.resolve("projeto/escapa").toString(), 100, n -> true)),
             "a cerca resolve o link e recusa o que sai da pasta do projeto: igual ao remoto");
     }
+
+    /** Os atributos de uma JUNÇÃO do Windows como o Java a vê: pasta comum, mas "outra coisa" (ponto de reparse), e não link simbólico. */
+    private record AtributosDeJuncao(boolean pasta, boolean outra, boolean simbolico) implements java.nio.file.attribute.BasicFileAttributes {
+        @Override public java.nio.file.attribute.FileTime lastModifiedTime() { return java.nio.file.attribute.FileTime.fromMillis(0); }
+        @Override public java.nio.file.attribute.FileTime lastAccessTime() { return java.nio.file.attribute.FileTime.fromMillis(0); }
+        @Override public java.nio.file.attribute.FileTime creationTime() { return java.nio.file.attribute.FileTime.fromMillis(0); }
+        @Override public boolean isRegularFile() { return false; }
+        @Override public boolean isDirectory() { return pasta; }
+        @Override public boolean isSymbolicLink() { return simbolico; }
+        @Override public boolean isOther() { return outra; }
+        @Override public long size() { return 0; }
+        @Override public Object fileKey() { return null; }
+    }
+
+    @Test
+    void umaJuncaoDoWindowsEApagadaSemDescerPorElaEOConteudoDoDestinoFica(@TempDir Path destino) throws Exception {
+        Path alvo = Files.createDirectories(destino.toRealPath().resolve("destino"));
+        Files.writeString(alvo.resolve("precioso.txt"), "nao apague");
+        Path juncao = raiz.resolve("pasta").resolve("juncao");
+        Files.createDirectories(juncao.getParent());
+        Files.createSymbolicLink(juncao, alvo); // no Mac faz o papel do ponto de reparse: o que importa é o que o visitante decide
+
+        var visitante = ClienteSftpLocal.visitanteDeApagar(raiz.resolve("pasta"));
+        var resultado = visitante.preVisitDirectory(juncao, new AtributosDeJuncao(true, true, false));
+
+        assertEquals(java.nio.file.FileVisitResult.SKIP_SUBTREE, resultado, "não desce pela junção");
+        assertFalse(Files.exists(juncao, java.nio.file.LinkOption.NOFOLLOW_LINKS), "a junção em si foi apagada");
+        assertTrue(Files.exists(alvo.resolve("precioso.txt")), "o conteúdo do destino ficou");
+        // uma pasta de verdade segue o caminho normal
+        assertEquals(java.nio.file.FileVisitResult.CONTINUE, visitante.preVisitDirectory(raiz.resolve("pasta").resolve("x"), new AtributosDeJuncao(true, false, false)));
+        // e a raiz do apagar nunca é tratada como junção (é o que o usuário mandou apagar)
+        assertEquals(java.nio.file.FileVisitResult.CONTINUE, visitante.preVisitDirectory(raiz.resolve("pasta"), new AtributosDeJuncao(true, true, false)));
+    }
+
+    @Test
+    void ehLigacaoReconheceLinkSimbolicoEPontoDeReparseMasNaoPastaNemArquivoComuns() {
+        assertTrue(ClienteSftpLocal.ehLigacao(new AtributosDeJuncao(true, true, false)), "junção");
+        assertTrue(ClienteSftpLocal.ehLigacao(new AtributosDeJuncao(false, false, true)), "link simbólico");
+        assertFalse(ClienteSftpLocal.ehLigacao(new AtributosDeJuncao(true, false, false)), "pasta comum");
+        assertFalse(ClienteSftpLocal.ehLigacao(new AtributosDeJuncao(false, false, false)), "arquivo comum");
+    }
+
+    @Test
+    void apagarRecursivoComUmLinkDePastaDentroApagaOLinkENuncaOQueEleApontaNoDisco(@TempDir Path fora) throws Exception {
+        Path alvo = Files.createDirectories(fora.toRealPath().resolve("de-fora"));
+        Files.writeString(alvo.resolve("a.txt"), "x");
+        Path p = Files.createDirectories(raiz.resolve("p").resolve("fundo"));
+        Files.writeString(p.resolve("b.txt"), "y");
+        Files.createSymbolicLink(raiz.resolve("p").resolve("atalho"), alvo);
+
+        c.apagar(t("p"), true);
+
+        assertFalse(Files.exists(raiz.resolve("p")));
+        assertTrue(Files.exists(alvo.resolve("a.txt")), "o destino do link intacto");
+    }
 }
