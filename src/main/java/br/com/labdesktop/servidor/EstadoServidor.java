@@ -143,6 +143,14 @@ public record EstadoServidor(
     }
 
     /**
+     * O agente deste servidor tem o histórico de métricas de até um mês ({@code recursos.historico}). Só então o app chama {@code GET /api/servidor/historico}; agente de
+     * antes, ou que ainda não respondeu: não (cai nos 10 minutos de {@code /api/servidor}, sem erro).
+     */
+    public boolean entendeHistorico() {
+        return versao != null && versao.entendeHistorico();
+    }
+
+    /**
      * O agente deste servidor sabe criar projeto ({@code POST /api/projetos/novo}): respondeu, não é do perfil monitor e tem projetos (o do lab
      * de produção, de antes dos {@code recursos}, também). Sem agente (ainda não respondeu, ou não está instalado): não.
      */

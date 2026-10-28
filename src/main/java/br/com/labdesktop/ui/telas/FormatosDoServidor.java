@@ -38,20 +38,7 @@ public final class FormatosDoServidor {
      * se mede internet). A entrada é BYTES por segundo (é o que o agente manda em {@code rx_bps} e {@code tx_bps}).
      */
     public static String bitsPorSegundo(Number bytesPorSegundo) {
-        if (semDado(bytesPorSegundo)) {
-            return SEM_DADO;
-        }
-        double bits = bytesPorSegundo.doubleValue() * 8;
-        if (bits < 1_000) {
-            return Formato.fmtNum(Math.round(bits), 0) + " b/s";
-        }
-        if (bits < 1_000_000) {
-            return Formato.fmtNum(bits / 1_000) + " kb/s";
-        }
-        if (bits < 1_000_000_000) {
-            return Formato.fmtNum(bits / 1_000_000) + " Mb/s";
-        }
-        return Formato.fmtNum(bits / 1_000_000_000) + " Gb/s";
+        return br.com.labdesktop.tendencias.UnidadesDeMedida.bitsPorSegundo(bytesPorSegundo == null ? null : bytesPorSegundo.doubleValue()); // a unidade das Tendências e da Máquina é a mesma
     }
 
     /** Tempo ligado: {@code 5 d 7 h}, {@code 3 h 57 min}, {@code 12 min} ou {@code menos de 1 min}. */

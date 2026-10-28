@@ -15,6 +15,7 @@ public enum Rota {
     VERSAO(Duration.ofSeconds(5)),
     SERVIDOR(Duration.ofSeconds(20)),
     SERVIDOR_DETALHE(Duration.ofSeconds(20)),
+    SERVIDOR_HISTORICO(Duration.ofSeconds(20)),
     LIMITES(Duration.ofSeconds(15)),
     TOKENS(Duration.ofSeconds(15)),
     TOKENS_DO_PROJETO(Duration.ofSeconds(15)),

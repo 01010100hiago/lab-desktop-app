@@ -12,6 +12,7 @@ import br.com.labdesktop.api.modelo.Detalhe;
 import br.com.labdesktop.api.modelo.DetalheProjeto;
 import br.com.labdesktop.api.modelo.DetalheRaiz;
 import br.com.labdesktop.api.modelo.DetalheServidor;
+import br.com.labdesktop.api.modelo.HistoricoDoAgente;
 import br.com.labdesktop.api.modelo.InfoServidor;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.ListaProjetos;
@@ -85,6 +86,8 @@ public final class ClienteApi implements AutoCloseable {
 
     /** O formato do código de login que o agente aceita (CONTRATO-API 4.8). */
     private static final java.util.regex.Pattern CODIGO_DE_LOGIN = java.util.regex.Pattern.compile("^[A-Za-z0-9_#.-]{4,600}$");
+
+    private static final java.util.Set<String> JANELAS_DO_HISTORICO = java.util.Set.of("10m", "1h", "1d", "7d", "30d");
 
     /** O agente limita {@code linhas} dos logs a 50..2000 (CONTRATO-API 3.9). */
     private static final int LINHAS_MINIMAS_DE_LOG = 50;
@@ -173,6 +176,18 @@ public final class ClienteApi implements AutoCloseable {
     /** {@code GET /api/servidor/detalhe}: sensores, energia e hardware (mais pesado que {@code /api/servidor}). */
     public DetalheServidor servidorDetalhe() throws ErroApi {
         return get("/api/servidor/detalhe", Rota.SERVIDOR_DETALHE, DetalheServidor.class);
+    }
+
+    /**
+     * {@code GET /api/servidor/historico?janela=}: o histórico de métricas de até um mês. {@code janela} é um dos códigos de
+     * {@code JanelaDeTempo} ({@code 10m}, {@code 1h}, {@code 1d}, {@code 7d}, {@code 30d}); qualquer outro texto é recusado AQUI, antes de ir à rede. O app só chama
+     * isto se o agente disse {@code recursos.historico} em {@code /api/versao}.
+     */
+    public HistoricoDoAgente historico(String janela) throws ErroApi {
+        if (janela == null || !JANELAS_DO_HISTORICO.contains(janela)) {
+            throw new IllegalArgumentException("Janela do histórico inválida: use 10m, 1h, 1d, 7d ou 30d.");
+        }
+        return get("/api/servidor/historico?janela=" + janela, Rota.SERVIDOR_HISTORICO, HistoricoDoAgente.class);
     }
 
     /** {@code GET /api/limites}. */

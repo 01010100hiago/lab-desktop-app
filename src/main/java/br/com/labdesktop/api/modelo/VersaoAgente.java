@@ -57,6 +57,11 @@ public record VersaoAgente(
         return recursos != null && Boolean.TRUE.equals(recursos.guiaIa());
     }
 
+    /** O agente grava e serve o histórico de métricas? Só {@code true} explícito conta: desconhecido (agente de antes) vale como não, e o app usa os 10 minutos de {@code /api/servidor}. */
+    public boolean entendeHistorico() {
+        return recursos != null && Boolean.TRUE.equals(recursos.historico());
+    }
+
     /** O servidor tem projetos? Desconhecido vale como SIM: o app só esconde a aba Projetos quando o agente diz que não. */
     public boolean temProjetos() {
         return recursos == null || recursos.projetos() == null || recursos.projetos();
