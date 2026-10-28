@@ -37,6 +37,11 @@ public class Navegador {
         abrir(Tipo.PULL_REQUEST, url);
     }
 
+    /** Uma das páginas oficiais de download de "Preparar este computador" (endereços exatos: Docker Desktop, guia do Docker, git). */
+    public void abrirPaginaDeDownload(String url) {
+        abrir(Tipo.PAGINA_DE_DOWNLOAD, url);
+    }
+
     /** Um link impresso no terminal ({@code http} ou {@code https}; {@link ListaPermitidaDeUrls#validarLinkDoTerminal}). */
     public void abrirLinkDoTerminal(String url) {
         Optional<URI> uri = ListaPermitidaDeUrls.validarLinkDoTerminal(url);

@@ -61,7 +61,8 @@ final class CabecalhoDoServidor extends Painel {
         if (info == null) {
             boolean semAgente = e != null && e.conexao() == br.com.labdesktop.ssh.EstadoConexao.SSH_OK_SEM_AGENTE
                 && e.situacaoDoAgente().oferecerInstalar();
-            linhaDeBaixo.setText(semAgente ? "Sem o agente não há leituras de CPU, memória, containers nem projetos."
+            linhaDeBaixo.setText(semAgente ? (e.local() ? "Sem o laboratório local não há leituras de CPU, memória, containers nem projetos."
+                : "Sem o agente não há leituras de CPU, memória, containers nem projetos.")
                 : "Esperando a primeira leitura do servidor…");
             linhaDeBaixo.setVisible(true);
             ficha.definir(List.of());

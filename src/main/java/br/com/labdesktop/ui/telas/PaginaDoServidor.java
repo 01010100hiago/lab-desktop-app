@@ -340,7 +340,7 @@ public abstract class PaginaDoServidor extends Painel {
         situacao = SituacaoDaVisao.de(estado, tem, leitura(), relogio.get(), fuso);
         atualizarTopo();
         faixaDeDados.mostrar(situacao);
-        if (!tem && situacao.modo() == SituacaoDaVisao.Modo.AGENTE_NAO_INSTALADO) {
+        if (!tem && situacao.modo().naoInstalado()) {
             faixaDeDados.setVisible(false); // o cartão "sem dados" já diz isto, com o botão: sem repetir o mesmo aviso em cima
         }
         boolean erro = erroSemDados != null && !tem;
@@ -475,6 +475,7 @@ public abstract class PaginaDoServidor extends Painel {
 
         public void mostrar(SituacaoDaVisao s) {
             setVisible(s.temAviso());
+            instalar.setText(s.modo() == SituacaoDaVisao.Modo.LOCAL_A_PREPARAR ? "Preparar este computador" : "Instalar agente");
             instalar.setVisible(s.temAviso() && s.oferecerInstalar() && aoInstalar != null);
             if (!s.temAviso()) {
                 return;
@@ -546,6 +547,7 @@ public abstract class PaginaDoServidor extends Painel {
         }
 
         void mostrar(String erro, SituacaoDaVisao situacao) {
+            instalar.setText(situacao != null && situacao.modo() == SituacaoDaVisao.Modo.LOCAL_A_PREPARAR ? "Preparar este computador" : "Instalar agente");
             instalar.setVisible(erro == null && situacao != null && situacao.oferecerInstalar() && aoInstalar != null);
             tentar.setVisible(!instalar.isVisible());
             titulo.setIcon(Icones.colorido("rede", 20, Tokens.TEXTO3));

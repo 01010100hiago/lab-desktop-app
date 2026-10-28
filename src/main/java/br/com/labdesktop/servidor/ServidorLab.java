@@ -153,7 +153,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         this.ultimaConfig = config;
         this.estado = new EstadoServidor(config.id(), config.nome(),
             br.com.labdesktop.ssh.EstadoConexao.DESCONECTADO, null, 0, null, null, 0,
-            config.estado2fa(), config.nomeDoDispositivo(), null, null);
+            config.estado2fa(), config.nomeDoDispositivo(), null, null, SituacaoDoAgente.DESCONHECIDA, config.ehLocal());
 
         this.sondador = new Sondador(agendador, trabalho, entrega, this::aoErroDeConsulta);
         this.local = config.ehLocal();
@@ -412,7 +412,8 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private void aoMudarConexao(InfoConexao info) {
         atualizarEstado(e -> e.comConexao(info));
         if (info.estado() == br.com.labdesktop.ssh.EstadoConexao.SSH_OK_SEM_AGENTE
-            && (info.falha() == null || info.falha().tipo() != br.com.labdesktop.ssh.Falha.Tipo.AGENTE_DESATUALIZADO)) {
+            && (info.falha() == null || (info.falha().tipo() != br.com.labdesktop.ssh.Falha.Tipo.AGENTE_DESATUALIZADO
+                && info.falha().tipo() != br.com.labdesktop.ssh.Falha.Tipo.LOCAL_AGENTE_DESATUALIZADO))) {
             diagnosticarOAgente();
         }
         switch (info.estado()) {
@@ -542,7 +543,8 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             EstadoServidor agora = estado();
             if (repetirSeFaltou && agora.conexao() == br.com.labdesktop.ssh.EstadoConexao.SSH_OK_SEM_AGENTE
                 && agora.situacaoDoAgente() == SituacaoDoAgente.DESCONHECIDA
-                && (agora.falha() == null || agora.falha().tipo() != br.com.labdesktop.ssh.Falha.Tipo.AGENTE_DESATUALIZADO)) {
+                && (agora.falha() == null || (agora.falha().tipo() != br.com.labdesktop.ssh.Falha.Tipo.AGENTE_DESATUALIZADO
+                && agora.falha().tipo() != br.com.labdesktop.ssh.Falha.Tipo.LOCAL_AGENTE_DESATUALIZADO))) {
                 diagnosticarOAgente(false);
             }
         });

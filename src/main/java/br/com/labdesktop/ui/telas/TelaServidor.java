@@ -151,6 +151,9 @@ public final class TelaServidor extends Painel {
             abas.adicionar(a.id, a.rotulo);
         }
         abas.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 12, 0, 12));
+        if (servidor != null && servidor.ehLocal()) {
+            abas.definirVisivel(Aba.SEGURANCA.id, false); // a leitura de segurança é do SSH (registro de entradas, firewall) de um servidor remoto
+        }
         abas.aoSelecionar(id -> mostrarAba(Aba.de(id)));
         corpo.add(resumo, Aba.RESUMO.id);
         corpo.add(seguranca, Aba.SEGURANCA.id);

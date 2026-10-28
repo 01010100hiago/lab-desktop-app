@@ -25,7 +25,15 @@ public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, Stri
 
     /** As situações. {@code AGENTE_NAO_INSTALADO}: o SSH conectou e a leitura por SSH disse que o agente não existe (uma pergunta, não um erro). */
     public enum Modo { CARREGANDO, NORMAL, SEM_CONEXAO_COM_DADOS, SEM_CONEXAO_SEM_DADOS, SEM_AGENTE_COM_DADOS, SEM_AGENTE_SEM_DADOS,
-        AGENTE_NAO_INSTALADO }
+        AGENTE_NAO_INSTALADO,
+        /** "Este computador": falta o Docker, ou o laboratório local ainda não foi criado (o botão é "Preparar este computador"). */
+        LOCAL_A_PREPARAR;
+
+        /** O agente não existe e o app pergunta (no remoto "Instalar agente", no local "Preparar este computador"). */
+        public boolean naoInstalado() {
+            return this == AGENTE_NAO_INSTALADO || this == LOCAL_A_PREPARAR;
+        }
+    }
 
     public SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, String titulo, String texto, boolean esmaecer) {
         this(modo, gravidade, icone, titulo, texto, esmaecer, false);
@@ -63,6 +71,10 @@ public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, Stri
         if (c == EstadoConexao.CONECTANDO && !temDados) {
             return CARREGANDO;
         }
+        if (c == EstadoConexao.SSH_OK_SEM_AGENTE && estado.local() && estado.situacaoDoAgente().oferecerPreparar()) {
+            var aviso = ConteudoDosAvisos.deConexao(estado, agora, fuso);
+            return new SituacaoDaVisao(Modo.LOCAL_A_PREPARAR, Gravidade.ATENCAO, aviso.icone(), aviso.titulo(), aviso.texto(), temDados, true);
+        }
         if (c == EstadoConexao.SSH_OK_SEM_AGENTE && estado.situacaoDoAgente().oferecerInstalar()
             && (estado.falha() == null || estado.falha().tipo() != Falha.Tipo.AGENTE_DESATUALIZADO)) {
             boolean semPermissao = estado.situacaoDoAgente() == br.com.labdesktop.servidor.SituacaoDoAgente.SEM_PERMISSAO_NO_DOCKER;
@@ -76,7 +88,9 @@ public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, Stri
         }
         if (c == EstadoConexao.SSH_OK_SEM_AGENTE) {
             Falha.Tipo tipo = estado.falha() == null ? null : estado.falha().tipo();
-            String explicacao = tipo == Falha.Tipo.AGENTE_DESATUALIZADO
+            String explicacao = estado.local()
+                ? "O Docker está rodando e o container do agente existe, mas ele não está respondendo. Ele pode estar reiniciando; o app tenta de novo sozinho."
+                : tipo == Falha.Tipo.AGENTE_DESATUALIZADO
                 ? "O servidor responde, mas o programa do painel (o agente) que roda nele é de uma versão antiga e não tem as "
                     + "informações que este app precisa. Falta publicar o painel no servidor."
                 : "O servidor responde, mas o programa do painel (o agente) que roda nele não está respondendo. Ele pode estar "

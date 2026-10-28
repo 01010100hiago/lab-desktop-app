@@ -15,6 +15,15 @@ public final class ApresentacaoDoEstado {
 
     private ApresentacaoDoEstado() { }
 
+    private static Apresentacao apresentacaoLocal(SituacaoDoAgente s) {
+        return switch (s) {
+            case LOCAL_NAO_CRIADO -> new Apresentacao("Falta criar o laboratório", "sistema", Gravidade.ATENCAO);
+            case LOCAL_DOCKER_PARADO -> new Apresentacao("Docker parado", "alerta", Gravidade.ATENCAO);
+            case LOCAL_SEM_DOCKER -> new Apresentacao("Docker não instalado", "alerta", Gravidade.ATENCAO);
+            default -> new Apresentacao("Agente local não responde", "alerta", Gravidade.ATENCAO);
+        };
+    }
+
     /** O estado em poucas palavras. */
     public static Apresentacao de(EstadoServidor e) {
         Falha.Tipo falha = e.falha() == null ? null : e.falha().tipo();
@@ -24,7 +33,7 @@ public final class ApresentacaoDoEstado {
             case CONECTADO -> e.agenteIncompativel()
                 ? new Apresentacao("Agente incompatível", "alerta", Gravidade.ATENCAO)
                 : new Apresentacao("Conectado", "ok-circulo", Gravidade.OK);
-            case SSH_OK_SEM_AGENTE -> falha == Falha.Tipo.AGENTE_DESATUALIZADO
+            case SSH_OK_SEM_AGENTE -> e.local() ? apresentacaoLocal(e.situacaoDoAgente()) : falha == Falha.Tipo.AGENTE_DESATUALIZADO
                 ? new Apresentacao("Agente desatualizado", "alerta", Gravidade.ATENCAO)
                 : e.situacaoDoAgente() == SituacaoDoAgente.NAO_INSTALADO
                     ? new Apresentacao("Agente não instalado", "servidor", Gravidade.ATENCAO)

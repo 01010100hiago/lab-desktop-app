@@ -61,6 +61,19 @@ public final class DialogoRemoverServidor extends Dialogo {
      */
     public DialogoRemoverServidor(String nome, String usuario, boolean conectado, List<String> outrosQueUsamAChave,
                                   Origem origemDaChave, Remocao remocao, Notificacoes avisos) {
+        this(nome, usuario, conectado, outrosQueUsamAChave, origemDaChave, remocao, avisos, false);
+    }
+
+    /**
+     * "Remover" o servidor Este computador: sem chave nem SSH (a caixa da chave não existe), e o texto diz o que NÃO acontece: o laboratório
+     * (o agente no Docker) continua rodando; para tirá-lo, "Remover laboratório local".
+     */
+    public static DialogoRemoverServidor paraEsteComputador(String nome, boolean conectado, Remocao remocao, Notificacoes avisos) {
+        return new DialogoRemoverServidor(nome, "", conectado, List.of(), Origem.DESCONHECIDA, remocao, avisos, true);
+    }
+
+    private DialogoRemoverServidor(String nome, String usuario, boolean conectado, List<String> outrosQueUsamAChave,
+                                   Origem origemDaChave, Remocao remocao, Notificacoes avisos, boolean local) {
         super("Remover servidor");
         this.nome = nome;
         this.remocao = remocao;
@@ -92,9 +105,22 @@ public final class DialogoRemoverServidor extends Dialogo {
                 + usuario + ".");
         }
 
+        if (local) {
+            apagarChave.setSelected(false);
+            apagarChave.setEnabled(false);
+            apagarChave.setVisible(false);
+            explicacaoDaChave.setVisible(false);
+            revogar.setText("Apagar o token deste app no agente local");
+            explicacaoDaRevogacao.setText(conectado
+                ? "O token que este app registrou no agente do laboratório local é apagado. Se algo não der certo, o app avisa e remove mesmo assim."
+                : "O agente local não responde agora, então o token dele não pode ser apagado por aqui. Ele fica no agente até o laboratório ser removido.");
+        }
         JComponent corpo = Caixa.coluna(14,
             cabecalho("lixeira", "Remover servidor"),
-            paragrafo("O app vai parar de se conectar a " + nome + " e tirá-lo da lista. O servidor em si não é mexido, "
+            paragrafo(local
+                ? "O app vai parar de falar com " + nome + " e tirá-lo da lista. O laboratório (o agente no Docker) NÃO é removido e continua rodando: "
+                    + "para tirá-lo, use \"Remover laboratório local\" antes. Seus projetos não são tocados."
+                : "O app vai parar de se conectar a " + nome + " e tirá-lo da lista. O servidor em si não é mexido, "
                 + "a não ser pela revogação abaixo."),
             Caixa.coluna(4, apagarChave, explicacaoDaChave),
             Caixa.coluna(4, revogar, explicacaoDaRevogacao),

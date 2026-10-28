@@ -187,6 +187,31 @@ public final class GerenciadorServidores implements AutoCloseable {
         return new ResultadoDaEdicao(depois.get(), mudou, impressaoApagada);
     }
 
+    /**
+     * "Este computador": grava a porta nova do agente (a que o Docker publica em 127.0.0.1) e reconecta com ela. Só vale para o servidor local
+     * (o resto dele, que seria endereço e usuário do SSH, não existe).
+     *
+     * @throws IllegalArgumentException o servidor não existe, não é o local, ou a porta não vale
+     */
+    public void atualizarPortaDoLocal(String servidorId, int novaPorta) throws CofreException {
+        ServidorLab lab = servidor(servidorId).orElseThrow(() -> new IllegalArgumentException("Esse servidor não está mais na lista."));
+        if (!lab.ehLocal()) {
+            throw new IllegalArgumentException("Só o servidor Este computador tem esta edição.");
+        }
+        if (novaPorta < 1024 || novaPorta > 65_535) {
+            throw new IllegalArgumentException("A porta do agente vai de 1024 a 65535.");
+        }
+        java.util.concurrent.atomic.AtomicBoolean mudou = new java.util.concurrent.atomic.AtomicBoolean();
+        cofre.alterarServidor(servidorId, atual -> {
+            ConfigServidor nova = atual.editarLocal(atual.nome(), novaPorta);
+            mudou.set(!nova.equals(atual));
+            return nova;
+        });
+        if (mudou.get()) {
+            lab.aoEditarNoCofre();
+        }
+    }
+
     // =====================================================================================================
     // Remover
     // =====================================================================================================

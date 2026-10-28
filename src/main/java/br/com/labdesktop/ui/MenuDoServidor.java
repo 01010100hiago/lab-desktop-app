@@ -3,6 +3,7 @@ package br.com.labdesktop.ui;
 import br.com.labdesktop.cofre.Estado2fa;
 import br.com.labdesktop.servidor.EstadoServidor;
 import br.com.labdesktop.servidor.ServidorLab;
+import br.com.labdesktop.servidor.SituacaoDoAgente;
 import br.com.labdesktop.ssh.EstadoConexao;
 import br.com.labdesktop.ssh.Falha;
 import br.com.labdesktop.ui.componentes.Icones;
@@ -35,6 +36,10 @@ public final class MenuDoServidor {
         ATUALIZAR_AGENTE("Atualizar agente…", "atualizar"),
         /** Só com o agente do perfil monitor que o app instalou: remove o que o app criou (o Docker fica). */
         REMOVER_AGENTE("Remover agente…", "lixeira"),
+        /** "Este computador": confere o que falta (Docker, disco, porta) e cria o laboratório local; só pergunta, nada se instala sem confirmação. */
+        PREPARAR_COMPUTADOR("Preparar este computador…", "sistema"),
+        /** "Este computador": tira o agente, os dados dele e a rede; nunca os projetos. */
+        REMOVER_LABORATORIO("Remover laboratório local…", "lixeira"),
         /** Nome, endereço, porta e usuário do servidor. Sempre disponível. */
         EDITAR("Editar…", "config"),
         /** Tira o servidor do app (com as opções de apagar a chave e revogar o acesso). Sempre disponível. */
@@ -83,6 +88,16 @@ public final class MenuDoServidor {
         if (!semAgente && (c.permiteExec() || c == EstadoConexao.CONECTADO)) {
             itens.add(e.estado2fa() == Estado2fa.ATIVO ? Item.DESATIVAR_2FA : Item.CONFIGURAR_2FA);
         }
+        if (e.local()) {
+            // Este computador: não há SSH nem agente instalado por SSH. "Preparar" confere e cria o laboratório (vale sempre: é onde se vê o que
+            // falta); "Remover laboratório" só existe com o agente criado. Sem "Editar": não há endereço, porta de SSH nem usuário.
+            itens.add(Item.PREPARAR_COMPUTADOR);
+            if ((c == EstadoConexao.CONECTADO && e.agenteDoMonitor()) || e.situacaoDoAgente() == SituacaoDoAgente.INSTALADO_SEM_RESPOSTA) {
+                itens.add(Item.REMOVER_LABORATORIO);
+            }
+            itens.add(Item.REMOVER);
+            return itens;
+        }
         if (c == EstadoConexao.SSH_OK_SEM_AGENTE && e.situacaoDoAgente().oferecerInstalar()) {
             itens.add(Item.INSTALAR_AGENTE);
         }
@@ -108,6 +123,8 @@ public final class MenuDoServidor {
             case REGISTRAR_TOKEN -> acoes.registrarToken(lab);
             case CONFIGURAR_2FA, DESATIVAR_2FA -> acoes.configurar2fa(lab);
             case INSTALAR_AGENTE -> acoes.instalarAgente(lab);
+            case PREPARAR_COMPUTADOR -> acoes.prepararEsteComputador(lab);
+            case REMOVER_LABORATORIO -> acoes.removerLaboratorioLocal(lab);
             case ATUALIZAR_AGENTE -> acoes.atualizarAgente(lab);
             case REMOVER_AGENTE -> acoes.removerAgente(lab);
             case EDITAR -> acoes.editar(lab);
@@ -131,7 +148,7 @@ public final class MenuDoServidor {
         JMenuItem m = new JMenuItem(i.rotulo());
         m.putClientProperty("html.disable", Boolean.TRUE);
         m.setIcon(Icones.de(i.icone(), 14));
-        m.setForeground(Tokens.cor(i == Item.REMOVER || i == Item.REMOVER_AGENTE ? Tokens.PERIGO : Tokens.TEXTO));
+        m.setForeground(Tokens.cor(i == Item.REMOVER || i == Item.REMOVER_AGENTE || i == Item.REMOVER_LABORATORIO ? Tokens.PERIGO : Tokens.TEXTO));
         m.addActionListener(e -> acao.run());
         return m;
     }

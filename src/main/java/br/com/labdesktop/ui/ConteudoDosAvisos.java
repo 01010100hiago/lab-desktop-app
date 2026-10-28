@@ -31,6 +31,8 @@ public final class ConteudoDosAvisos {
         REGISTRAR_TOKEN("Registrar token"),
         /** Abre a confirmação "Instalar agente" (o app nunca instala sozinho: é só o botão que leva ao diálogo). */
         INSTALAR_AGENTE("Instalar agente"),
+        /** "Este computador": abre "Preparar este computador" (que só confere e pergunta; nada se instala sem a confirmação). */
+        PREPARAR_COMPUTADOR("Preparar este computador"),
         /** Abre o diálogo "Remover servidor" (que pede confirmação): o caminho para quem reinstalou o servidor. */
         REMOVER_SERVIDOR("Remover servidor");
 
@@ -84,6 +86,14 @@ public final class ConteudoDosAvisos {
      */
     public static final String TEXTO_DO_AGENTE_NAO_INSTALADO = "O servidor responde por SSH, mas o agente ainda não está instalado. "
         + "Sem ele você não vê CPU, memória, containers nem projetos (Segurança e Arquivos já funcionam).";
+
+    /** "Este computador": o Docker roda e o laboratório ainda não foi criado. */
+    public static final String TEXTO_DO_LOCAL_NAO_CRIADO = "O Docker está rodando, mas o laboratório local ainda não foi criado. Clique em Preparar este "
+        + "computador: o app confere o que falta e cria o laboratório só depois da sua confirmação. O terminal e os arquivos deste computador já funcionam.";
+    public static final String TEXTO_DO_LOCAL_DOCKER_PARADO = "O laboratório local precisa do Docker rodando. Clique em Preparar este computador para o "
+        + "app ajudar a abri-lo e esperar ele ligar. O terminal e os arquivos deste computador já funcionam.";
+    public static final String TEXTO_DO_LOCAL_SEM_DOCKER = "O laboratório local roda no Docker, e ele não está instalado neste computador. Clique em "
+        + "Preparar este computador: o app mostra as opções de instalação e só instala o que você confirmar. O terminal e os arquivos já funcionam.";
 
     /** No máximo 3 nomes de sessões pausadas na faixa. */
     public static final int MAX_PAUSADAS = 3;
@@ -143,7 +153,7 @@ public final class ConteudoDosAvisos {
                     "Reconectando" + (e.tentativa() > 0 ? " (tentativa " + e.tentativa() + proxima(e, agora) + ")" : "")
                         + ". Os dados na tela são os da última leitura." + detalhe, List.of(Acao.TENTAR_AGORA));
             }
-            case SSH_OK_SEM_AGENTE -> tipo == Falha.Tipo.AGENTE_DESATUALIZADO
+            case SSH_OK_SEM_AGENTE -> e.local() ? deConexaoLocal(e, nome, detalhe) : tipo == Falha.Tipo.AGENTE_DESATUALIZADO
                 ? new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente de " + nome + " é de antes do app nativo",
                     "Falta publicar o painel com o acesso.js: a rota /api/versao não existe lá (404).", List.of(Acao.TENTAR_AGORA))
                 : e.situacaoDoAgente() == SituacaoDoAgente.NAO_INSTALADO
@@ -173,6 +183,21 @@ public final class ConteudoDosAvisos {
                 nome + " pede o código de 6 dígitos do autenticador para este Mac.", List.of(Acao.DIGITAR_CODIGO));
             case SUSPENSO -> new AvisoDeConexao(Gravidade.NEUTRO, "pausa", "O Mac está em repouso",
                 "A conexão com " + nome + " volta quando ele acordar.", List.of());
+        };
+    }
+
+    /** "Este computador" com o agente fora: o que falta, em palavras de Docker (nunca "SSH"), e o botão que leva à tela que pergunta. */
+    private static AvisoDeConexao deConexaoLocal(EstadoServidor e, String nome, String detalhe) {
+        return switch (e.situacaoDoAgente()) {
+            case LOCAL_NAO_CRIADO -> new AvisoDeConexao(Gravidade.ATENCAO, "sistema", "O laboratório local ainda não foi criado",
+                TEXTO_DO_LOCAL_NAO_CRIADO, List.of(Acao.PREPARAR_COMPUTADOR));
+            case LOCAL_DOCKER_PARADO -> new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O Docker não está rodando neste computador",
+                TEXTO_DO_LOCAL_DOCKER_PARADO, List.of(Acao.PREPARAR_COMPUTADOR));
+            case LOCAL_SEM_DOCKER -> new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O Docker não está instalado neste computador",
+                TEXTO_DO_LOCAL_SEM_DOCKER, List.of(Acao.PREPARAR_COMPUTADOR));
+            default -> new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente do laboratório local não responde",
+                "O Docker está rodando e o agente existe, mas não responde. O app insiste a cada poucos segundos (ele pode estar reiniciando)."
+                    + detalhe, List.of(Acao.TENTAR_AGORA));
         };
     }
 

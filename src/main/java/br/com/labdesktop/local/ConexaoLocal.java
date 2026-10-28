@@ -323,8 +323,8 @@ public final class ConexaoLocal implements ConexaoDoServidor {
             case OK -> mudar(EstadoConexao.CONECTADO, null, null);
             case AGENTE_FORA, AGENTE_DESATUALIZADO -> {
                 mudar(EstadoConexao.SSH_OK_SEM_AGENTE, r == SondaDoAgente.Resultado.AGENTE_FORA
-                    ? new Falha(Falha.Tipo.AGENTE_FORA, "O agente do laboratório local não responde (o Docker pode estar parado ou o agente reiniciando).")
-                    : new Falha(Falha.Tipo.AGENTE_DESATUALIZADO, "O agente local é anterior a este app (não tem GET /api/versao). Atualize o agente."), null);
+                    ? new Falha(Falha.Tipo.LOCAL_AGENTE_FORA, "O agente do laboratório local não responde (o Docker pode estar parado ou o agente reiniciando).")
+                    : new Falha(Falha.Tipo.LOCAL_AGENTE_DESATUALIZADO, "O agente local é anterior a este app (não tem GET /api/versao). Atualize o agente."), null);
                 timer = agendador.agendar(cfg.intervaloSemAgente(), () -> post(() -> {
                     if (id == idTentativa && estado == EstadoConexao.SSH_OK_SEM_AGENTE) {
                         iniciarSonda(id);

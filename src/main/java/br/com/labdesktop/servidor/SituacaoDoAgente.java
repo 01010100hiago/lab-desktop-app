@@ -28,6 +28,6 @@ public enum SituacaoDoAgente {
 
     /** O app deve oferecer "Instalar agente" (o verbo é do usuário: nunca se instala sozinho). */
     public boolean oferecerInstalar() {
-        return this == NAO_INSTALADO || this == SEM_PERMISSAO_NO_DOCKER;
+        return this == NAO_INSTALADO || this == SEM_PERMISSAO_NO_DOCKER || oferecerPreparar();
     }
 }

@@ -241,7 +241,8 @@ public final class TelaServidores extends Painel {
             ConfigServidor cfg = lab.config();
             Apresentacao a = ApresentacaoDoEstado.de(e);
             nome.setText(e.nome());
-            endereco.setText(cfg.usuario() + "@" + cfg.host() + ":" + cfg.porta() + ", painel na porta " + cfg.portaAgente());
+            endereco.setText(cfg.ehLocal() ? "Este computador (sem SSH), agente em 127.0.0.1:" + cfg.portaAgente()
+                : cfg.usuario() + "@" + cfg.host() + ":" + cfg.porta() + ", painel na porta " + cfg.portaAgente());
             estadoDaConexao.setIcon(Icones.colorido(a.icone(), 16, a.gravidade().tokenDoTexto()));
             estadoDaConexao.setIconTextGap(7);
             estadoDaConexao.setText(a.texto());
@@ -274,7 +275,10 @@ public final class TelaServidores extends Painel {
                 ? "Configuração começada e ainda não confirmada: nada é exigido."
                 : null);
 
-            if (cfg.pins().isEmpty()) {
+            if (cfg.ehLocal()) {
+                impressao.setText("não se aplica: este computador não usa SSH");
+                impressao.corDoToken(Tokens.TEXTO2);
+            } else if (cfg.pins().isEmpty()) {
                 impressao.setText("ainda não confirmado: confira a impressão antes de conectar");
                 impressao.corDoToken(Tokens.ATENCAO);
             } else {
@@ -295,6 +299,15 @@ public final class TelaServidores extends Painel {
             boolean oferecer = e.conexao() == br.com.labdesktop.ssh.EstadoConexao.SSH_OK_SEM_AGENTE && e.situacaoDoAgente().oferecerInstalar();
             quadroDoAviso.setVisible(oferecer);
             if (!oferecer) {
+                return;
+            }
+            if (e.local()) {
+                var aviso = ConteudoDosAvisos.deConexao(e, java.time.Instant.now(), java.time.ZoneId.systemDefault());
+                tituloDoAvisoDoAgente.setText(aviso.titulo());
+                tituloDoAvisoDoAgente.setIcon(Icones.colorido("sistema", 16, Tokens.ATENCAO));
+                tituloDoAvisoDoAgente.setIconTextGap(8);
+                tituloDoAvisoDoAgente.corDoToken(Tokens.ATENCAO);
+                avisoDoAgente.setText(aviso.texto());
                 return;
             }
             boolean semPermissao = e.situacaoDoAgente() == br.com.labdesktop.servidor.SituacaoDoAgente.SEM_PERMISSAO_NO_DOCKER;
@@ -328,9 +341,9 @@ public final class TelaServidores extends Painel {
                     depoisDaMola = true;
                     primeiro = true;
                 }
-                Botao b = i == Item.CONFERIR_IMPRESSAO || i == Item.REGISTRAR_TOKEN || i == Item.DIGITAR_CODIGO || i == Item.INSTALAR_AGENTE
+                Botao b = i == Item.CONFERIR_IMPRESSAO || i == Item.REGISTRAR_TOKEN || i == Item.DIGITAR_CODIGO || i == Item.INSTALAR_AGENTE || i == Item.PREPARAR_COMPUTADOR
                     ? Botoes.miniPrimario(i.rotulo(), i.icone())
-                    : i == Item.REMOVER || i == Item.REMOVER_AGENTE ? Botoes.miniPerigo(i.rotulo(), i.icone())
+                    : i == Item.REMOVER || i == Item.REMOVER_AGENTE || i == Item.REMOVER_LABORATORIO ? Botoes.miniPerigo(i.rotulo(), i.icone())
                         : Botoes.mini(i.rotulo(), i.icone());
                 b.setName("acao-" + i.name());
                 b.addActionListener(ev -> MenuDoServidor.executar(i, lab, acoes));

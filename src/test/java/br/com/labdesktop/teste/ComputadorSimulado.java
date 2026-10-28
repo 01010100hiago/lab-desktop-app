@@ -66,6 +66,12 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
         return this;
     }
 
+    /** Remove as falhas programadas (o usuário "consertou" o computador). */
+    public ComputadorSimulado consertar() {
+        falhas.clear();
+        return this;
+    }
+
     public ComputadorSimulado antesDe(Predicate<List<String>> quando, Runnable acao) {
         ganchos.add(new Gancho(quando, acao));
         return this;

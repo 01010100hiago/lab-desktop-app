@@ -47,7 +47,7 @@ public final class PainelPrincipal extends Painel {
         this.gerenciador = gerenciador;
         this.navegador = navegador;
         Consumer<ServidorLab> aoSelecionar = this::mostrarServidor;
-        this.acoes = new AcoesDaInterface(gerenciador, assistente, avisos, apresentador, aoSelecionar);
+        this.acoes = new AcoesDaInterface(gerenciador, assistente, avisos, apresentador, aoSelecionar, navegador, servicosDeArquivos);
         this.navegacao = new Navegacao(gerenciador, acoes, navegador, avisos, apresentador, servicosDeArquivos, preferencias);
         this.barra = new BarraServidores(gerenciador, acoes, new BarraServidores.Ouvinte() {
             @Override

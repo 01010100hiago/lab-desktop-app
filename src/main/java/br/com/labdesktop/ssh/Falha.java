@@ -29,7 +29,11 @@ public record Falha(Tipo tipo, String mensagem) {
         /** SSH de pé, agente não responde. */
         AGENTE_FORA,
         /** SSH de pé e o agente responde, mas é de antes do app nativo: não tem {@code GET /api/versao} (404). */
-        AGENTE_DESATUALIZADO
+        AGENTE_DESATUALIZADO,
+        /** "Este computador": o agente do laboratório local não responde (a tela fala de Docker, não de SSH). */
+        LOCAL_AGENTE_FORA,
+        /** "Este computador": o agente local é de antes do app nativo. */
+        LOCAL_AGENTE_DESATUALIZADO
     }
 
     public Falha {

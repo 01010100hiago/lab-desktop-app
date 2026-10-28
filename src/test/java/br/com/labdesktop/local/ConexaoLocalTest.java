@@ -74,7 +74,7 @@ class ConexaoLocalTest {
         resposta.set(SondaDoAgente.Resultado.AGENTE_FORA);
         conexao.iniciar();
         Espera.ate(PRAZO, () -> "estado=" + conexao.info(), () -> estado() == EstadoConexao.SSH_OK_SEM_AGENTE);
-        assertEquals(Falha.Tipo.AGENTE_FORA, conexao.info().falha().tipo());
+        assertEquals(Falha.Tipo.LOCAL_AGENTE_FORA, conexao.info().falha().tipo());
         int antes = sondagens.get();
         Espera.ate(PRAZO, "insiste no teste do agente sem derrubar nada", () -> sondagens.get() >= antes + 2);
 

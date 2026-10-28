@@ -24,8 +24,14 @@ public final class ListaPermitidaDeUrls {
         /** Pull request: {@code https://github.com/<usuario>/<repo>/pull/<n>}. */
         PULL_REQUEST,
         /** Hostname de projeto: {@code https://*.example.com/...}. */
-        HOST_DE_PROJETO
+        HOST_DE_PROJETO,
+        /** As páginas oficiais de download que "Preparar este computador" abre (Docker Desktop, guia do Docker no Linux, git): endereços EXATOS. */
+        PAGINA_DE_DOWNLOAD
     }
+
+    /** Os endereços exatos de {@link Tipo#PAGINA_DE_DOWNLOAD} (host e caminho, sem consulta). */
+    private static final Set<String> PAGINAS_DE_DOWNLOAD = Set.of("www.docker.com/products/docker-desktop/", "docs.docker.com/engine/install/",
+        "git-scm.com/downloads");
 
     private static final Set<String> HOSTS_DE_LOGIN = Set.of("claude.ai", "claude.com");
     private static final String SUFIXO_DE_PROJETO = ".example.com";
@@ -58,6 +64,7 @@ public final class ListaPermitidaDeUrls {
             case LOGIN -> HOSTS_DE_LOGIN.contains(host);
             case PULL_REQUEST -> host.equals("github.com") && CAMINHO_DE_PR.matcher(caminho).matches();
             case HOST_DE_PROJETO -> hostDeProjetoValido(host);
+            case PAGINA_DE_DOWNLOAD -> uri.getRawQuery() == null && uri.getRawFragment() == null && PAGINAS_DE_DOWNLOAD.contains(host + caminho);
         };
         return ok ? Optional.of(uri) : Optional.empty();
     }
