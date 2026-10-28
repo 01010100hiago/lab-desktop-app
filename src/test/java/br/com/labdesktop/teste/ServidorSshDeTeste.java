@@ -57,6 +57,8 @@ public final class ServidorSshDeTeste implements AutoCloseable {
     public final AtomicInteger sessoesAbertas = new AtomicInteger();
     /** Destinos de forward que o cliente pediu (host:porta), quando o filtro restritivo está ligado. */
     public final List<String> destinosPedidos = new CopyOnWriteArrayList<>();
+    /** Cada senha que chegou ao autenticador do servidor (aceita ou não): vazio = o servidor NUNCA viu uma senha. */
+    public final List<String> senhasVistas = new CopyOnWriteArrayList<>();
 
     private volatile List<PublicKey> aceitas;
     private volatile Manipulador manipulador = (c, in, out) -> 0;
@@ -120,6 +122,50 @@ public final class ServidorSshDeTeste implements AutoCloseable {
 
     public void aceitar(PublicKey... chaves) {
         this.aceitas = List.of(chaves);
+    }
+
+    /** Passa a aceitar login por SENHA deste usuário (e a registrar toda senha que chegar). Sem esta chamada o servidor só aceita chave. */
+    public void aceitarSenha(String usuario, String senha) {
+        ofereceSenha(true);
+        sshd.setPasswordAuthenticator((u, s, sessao) -> {
+            senhasVistas.add(s);
+            return u.equals(usuario) && s.equals(senha);
+        });
+    }
+
+    /** Aceita senha mas LARGA a conexão assim que ela chega (a conta bloqueada, o limite de tentativas do servidor). */
+    public void largarAoReceberSenha() {
+        ofereceSenha(true);
+        sshd.setPasswordAuthenticator((u, s, sessao) -> {
+            senhasVistas.add(s);
+            sessao.close(true);
+            return false;
+        });
+    }
+
+    /** Pede para trocar a senha (a senha venceu). */
+    public void pedirTrocaDeSenha() {
+        ofereceSenha(true);
+        sshd.setPasswordAuthenticator((u, s, sessao) -> {
+            senhasVistas.add(s);
+            throw new org.apache.sshd.server.auth.password.PasswordChangeRequiredException("venceu", "Troque a senha", "pt-BR");
+        });
+    }
+
+    /** Volta a aceitar só chave (sem login por senha). */
+    public void desligarSenha() {
+        ofereceSenha(false);
+        sshd.setPasswordAuthenticator(null);
+    }
+
+    /** A lista de métodos que o servidor anuncia: o padrão do MINA a monta ao iniciar, então a senha entra (ou sai) dela aqui. */
+    private void ofereceSenha(boolean sim) {
+        List<org.apache.sshd.server.auth.UserAuthFactory> fatores = new java.util.ArrayList<>();
+        if (sim) {
+            fatores.add(org.apache.sshd.server.auth.password.UserAuthPasswordFactory.INSTANCE);
+        }
+        fatores.add(org.apache.sshd.server.auth.pubkey.UserAuthPublicKeyFactory.INSTANCE);
+        sshd.setUserAuthFactories(fatores);
     }
 
     public void comandoRemoto(Manipulador m) {
