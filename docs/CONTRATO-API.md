@@ -100,6 +100,8 @@ Colunas "Web" e "App" resumem a cadência; o detalhe está nas seções 3 e 4. T
 | 20 | `PUT /api/projetos/:p/limite` | define ou remove o teto | modal | ação | 30 s |
 | 21 | `POST /api/projetos/:p/limite/retomar` | tira a pausa e reabre | botão Retomar | ação | 6 min |
 | 22 | `PUT /api/limites/freio` | liga, ajusta ou desliga o freio global | modal na página de consumo | ação | 30 s |
+| 24 | `GET /api/containers` (NOVA, só perfil `monitor`) | todos os containers do servidor (rodando ou não), com CPU e memória | não existe | (o app ainda não usa; ver 3.12) | 20 s |
+| 25 | `GET /api/containers/:nome/logs?linhas=<n>` (NOVA, só perfil `monitor`) | logs de um container qualquer do servidor | não existe | (o app ainda não usa; ver 3.12) | 25 s |
 
 Fora do app: `POST /api/diag`, `GET /terminal/<p>/*` (HTTP e WebSocket do ttyd) e as páginas estáticas (`/`, `/projeto/:p`, `/sessao/:p`, `/consumo`, `/servidor`, arquivos de `publico/`). O terminal do app é um canal SSH com PTY, não o ttyd.
 
@@ -107,11 +109,14 @@ Fora do app: `POST /api/diag`, `GET /terminal/<p>/*` (HTTP e WebSocket do ttyd) 
 
 ### 3.1 `GET /api/versao` (nova, proposta)
 
-Resposta `200`: `{ "api": 1, "painel": "v22.x", "cliente": "mac-de-teste", "totp": "desligado" }`.
+Resposta `200`: `{ "api": 1, "painel": "v22.x", "cliente": "mac-de-teste", "perfil": "lab", "recursos": { "claude": true, "projetos": true, "monitor": true }, "agente": null }`.
 
 - `api`: versão do contrato; o app avisa "agente incompatível" se for diferente de 1.
 - `painel`: `process.version` do Node do agente.
 - `cliente`: o nome do dispositivo desta conexão, ou `null`.
+- `perfil`: `"lab"` (o painel completo do lab, o padrão) ou `"monitor"` (o agente que o app instala em qualquer servidor: só leitura da máquina). Aditivo: o contrato continua `api: 1`.
+- `recursos`: o que o servidor sabe fazer, `{ "claude": bool, "projetos": bool, "monitor": bool }`. Perfil `lab` = tudo `true`; perfil `monitor` = só `monitor`. **É o sinal "o servidor tem Claude"**: o app esconde o Claude (aba Terminal do projeto, Visão geral, lista de projetos, Consumo, faixa de crédito, tópico de limites) quando `claude` é falso, e a aba Projetos quando `projetos` é falso. Cada campo é anulável no app: **um agente que não manda `recursos` (agente antigo) mantém o comportamento de antes** (o Claude vale pela presença de `sessao` no detalhe do projeto, a aba Projetos fica), e desconhecido nunca esconde nada.
+- `agente`: a versão do pacote do agente que o app instalou (`"0.1.0-abc1234"`, o texto do arquivo `VERSAO` do pacote), ou `null` (o servidor não tem o arquivo). Serve para "Atualizar agente" mostrar de qual versão para qual.
 
 Erros: `401` com o campo `erro` em JSON (credencial recusada, seção 6).
 
@@ -312,7 +317,7 @@ Sessão raiz (`:p = lab`), sempre `200`:
   "limite": LIMITE }
 ```
 
-**Servidor sem Claude**: o app trata `sessao: null` no detalhe comum como "este servidor não tem sessões do Claude" e esconde tudo do Claude (a aba Terminal do projeto fica só com o shell; ARQUITETURA 7.8). O agente do lab de hoje sempre devolve o objeto `sessao`, aberto ou não (um teste de contrato confere), então para ele nada muda; um agente de servidor sem Claude é quem devolve `null`. Um sinal próprio (por exemplo `claude: false` em `GET /api/versao`) é decisão.
+**Servidor sem Claude**: o sinal é `recursos.claude` de `GET /api/versao` (3.1). Com ele o app esconde tudo do Claude (a aba Terminal do projeto fica só com o shell; ARQUITETURA 7.8). Um agente que não manda `recursos` (mais antigo) mantém a regra antiga: `sessao: null` no detalhe comum quer dizer "este servidor não tem sessões do Claude". O agente do lab sempre devolve o objeto `sessao`, aberto ou não (um teste de contrato confere), então para ele nada muda.
 
 Diferenças que o app precisa respeitar: o detalhe comum não traz `login` (só a lista traz); o da raiz traz `loginPendente` (booleano) e `sessaoClaude` no lugar de `sessao`.
 
@@ -357,6 +362,13 @@ App: TELA(p), só com a aba Terminal do servidor ou a aba Terminal do projeto, n
 `404 {"erro":"Sessão não está aberta."}`, `500`. `200` texto puro: últimas 300 linhas do tmux sem espaços no fim e sem 3 ou mais quebras seguidas.
 
 Web: botão "Tela em texto" da página da sessão (usa `fetch` direto). App: ação "Copiar tela inteira" da barra lateral, vai para a área de transferência.
+
+### 3.12 O perfil `monitor` e as rotas só dele
+
+O agente no perfil `monitor` responde uma lista FECHADA de rotas, todas de leitura: `GET /api/versao`, `GET /api/servidor`, `GET /api/servidor/detalhe` (sem `consumo` por projeto: `[]`; processo de container fica sem dono de projeto), `GET /api/containers` e `GET /api/containers/:nome/logs?linhas=<50..2000>`. **Todo o resto responde `404`** em JSON, antes de tocar em Docker ou disco: `{"erro":"Esta rota não existe no perfil monitor do agente (só leitura do servidor).","perfil":"monitor"}`. Isso inclui projetos, sessões do Claude, consumo, limites, terminal web, páginas e TODA rota de escrita. No perfil `lab` (o padrão, e o do servidor) nada mudou: as duas rotas de containers abaixo NÃO existem lá (404 em texto puro, como qualquer rota desconhecida).
+
+`GET /api/containers` → `{"containers":[{"nome","estado","status","portas","imagem","criado"(ISO|null),"compose"(nome do projeto compose|null),"cpu","mem","memLimite","net","bloco","pids"}]}` (`cpu`...`pids` são `null` sem leitura do `docker stats`, que roda a cada 15 s). `GET /api/containers/:nome/logs` → texto puro; o nome da URL só vai ao Docker se o `docker ps -a` o lista agora (senão `404 {"erro":"Container não existe."}`). **O app ainda não consome estas duas rotas** (a aba Containers do servidor continua lendo o resumo de `/api/servidor`); elas existem para a tela de containers do perfil monitor.
+
 
 ## 4. Rotas de ação
 

@@ -43,7 +43,8 @@ Em resumo:
 | Ações de escrita (iniciar, parar, abrir sessão do Claude, limites, Freio global), barra lateral da sessão, Novo projeto | **falta**; o código existe e é testado, mas só liga com `-Plabdesktop.acoes=true` (o terminal NÃO depende disso) |
 | Notificações, ícone na barra de menus, `.app` | só o **esqueleto** do empacotamento (`-Pempacotar`: `jlink` e `jpackage`); sem ícone, `Info.plist` final nem assinatura |
 | Adicionar, editar e remover servidor | feito (assistente de três passos); rotação de chave e de token e "redefinir pin" faltam |
-| Instalador do agente, servidor local ("Este computador"), Windows | não existem C e itens 4 e 10 do "O que falta") |
+| Instalador do agente (instalar, atualizar e remover o agente do perfil monitor, sempre pelo clique do usuário) | feito; falta a validação real no lab. O pacote do agente é montado por `./gradlew empacotarAgente` (manual, commit fixado em `gradle.properties`) |
+| Servidor local ("Este computador"), Windows | não existem D e itens 4 e 10 do "O que falta") |
 
 **Testes pulados (8)**: 6 em `ContratoComFixturesReaisTest`, que só rodam com as respostas reais do agente em `src/test/resources/lab-real/` (o `scripts/capturar-fixtures.sh` as grava; nunca foi executado, então os DTOs só foram exercitados com mocks do front e fixtures sintéticas), e 2 em `ProvisionarCofreDev`, uma ferramenta manual que só roda com `LABDEV_FASE` (veja "Desenvolvimento: cofre de teste"). Os spikes de risco da fase 1: o do terminal (B1) foi superado pelo terminal de verdade; o do `.app` pelo Finder (B2: Rede Local, notificações, ícone na barra de menus) continua sem ser feito. O que falta, com o motivo e a ordem, está em ``, seção "O que falta".
 
