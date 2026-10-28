@@ -690,7 +690,11 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
                 throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_LOGIN_POR_CHAVE, "Não consegui ler a chave deste servidor no cofre.", e);
             }
         };
-        return new DesligadorDeSenha(new ExecutorSsh(conexaoSsh), prova, java.time.LocalDateTime::now);
+        br.com.labdesktop.ssh.SondaDeMetodos sonda = () -> {
+            ConfigServidor c = config();
+            return br.com.labdesktop.ssh.SondaDeMetodos.para(c.host(), c.porta(), c.usuario(), c.pins(), cfgSsh).ler();
+        };
+        return new DesligadorDeSenha(new ExecutorSsh(conexaoSsh), prova, java.time.LocalDateTime::now, sonda, config().usuario());
     }
 
     /** O instalador terminou (instalou, atualizou ou removeu): repete o teste do agente para o estado refletir o que há no servidor. */

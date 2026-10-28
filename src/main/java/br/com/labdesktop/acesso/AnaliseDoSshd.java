@@ -13,7 +13,8 @@ import java.util.TreeMap;
  * <p>A regra do sshd, que manda aqui: para cada opção vale o PRIMEIRO valor lido, e o arquivo principal lê os {@code Include} no lugar em
  * que eles aparecem (os arquivos da pasta, em ordem alfabética). Por isso um arquivo que vem antes do nosso, ou um valor no principal antes do
  * {@code Include}, vence o nosso. Um bloco {@code Match} vale só para quem ele escolhe e termina no fim do arquivo: o que está dentro dele não
- * é a regra geral.
+ * é a regra geral. Os arquivos da pasta são lidos em ordem ASCII (a ordem do {@code glob} em locale C; num servidor com outro locale o {@code sshd} pode ordenar
+ * diferente para nomes com letras maiúsculas ou acentos, e o app só garante o caso de nomes comuns como {@code 10-}, {@code 50-cloud-init}).
  */
 public final class AnaliseDoSshd {
 
@@ -81,11 +82,11 @@ public final class AnaliseDoSshd {
         String nome = null;
         StringBuilder corpo = new StringBuilder();
         for (String linha : saida == null ? new String[0] : saida.split("\\R")) {
-            if (linha.startsWith("#### ")) {
+            if (linha.startsWith(ComandosDoAcesso.MARCADOR_DE_ARQUIVO + " ")) {
                 if (nome != null) {
                     arquivos.put(nome, corpo.toString());
                 }
-                String caminho = linha.substring(5).strip();
+                String caminho = linha.substring(ComandosDoAcesso.MARCADOR_DE_ARQUIVO.length() + 1).strip();
                 nome = caminho.substring(caminho.lastIndexOf('/') + 1);
                 corpo = new StringBuilder();
             } else if (nome != null) {
@@ -100,7 +101,7 @@ public final class AnaliseDoSshd {
 
     /** O texto de {@code lerPastaDaConfig} diz que a pasta {@code sshd_config.d} existe? */
     public static boolean pastaExiste(String saida) {
-        return saida != null && saida.lines().anyMatch(l -> l.strip().equals("pasta=sim"));
+        return saida != null && saida.lines().anyMatch(l -> l.strip().equals(ComandosDoAcesso.MARCADOR_DA_PASTA + " sim"));
     }
 
     /**
@@ -233,6 +234,13 @@ public final class AnaliseDoSshd {
             resto = resto.substring(0, comentario);
         }
         resto = resto.strip();
-        return resto.isEmpty() ? List.of() : List.of(resto.split("\\s+"));
+        if (resto.isEmpty()) {
+            return List.of();
+        }
+        List<String> valores = new ArrayList<>();
+        for (String v : resto.split("\\s+")) {
+            valores.add(v.replaceAll("^\"+|\"+$", "")); // Include "/etc/ssh/sshd_config.d/*.conf" "outro/*.conf": aspas fora, vários globs
+        }
+        return valores;
     }
 }

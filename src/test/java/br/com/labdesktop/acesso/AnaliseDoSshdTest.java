@@ -127,11 +127,22 @@ class AnaliseDoSshdTest {
     }
 
     @Test
+    void oIncludeComAspasEVariosGlobsEEntendidoEUmArquivoComQuatroCercasNoTextoNaoQuebraOSeparador() {
+        AnaliseDoSshd.Previsao p = AnaliseDoSshd.prever("Include \"/etc/ssh/x/*.conf\" \"/etc/ssh/sshd_config.d/*.conf\"\nPasswordAuthentication yes\n", pasta(), REGRA);
+        assertTrue(p.incluiAPasta());
+        assertTrue(p.nossaVale(p.senha()));
+        SortedMap<String, String> m = AnaliseDoSshd.arquivosDaPasta(ComandosDoAcesso.MARCADOR_DA_PASTA + " sim\n" + ComandosDoAcesso.MARCADOR_DE_ARQUIVO
+            + " /etc/ssh/sshd_config.d/10-a.conf\n#### comentario com quatro cercas\nPort 22\n");
+        assertEquals(List.of("10-a.conf"), List.copyOf(m.keySet()), "'####' num comentário não vira arquivo novo");
+    }
+
+    @Test
     void arquivosDaPastaSeparaOsArquivosPeloMarcador() {
-        SortedMap<String, String> m = AnaliseDoSshd.arquivosDaPasta("pasta=sim\n#### /etc/ssh/sshd_config.d/50-b.conf\nB\n#### /etc/ssh/sshd_config.d/10-a.conf\nA\n");
+        SortedMap<String, String> m = AnaliseDoSshd.arquivosDaPasta(ComandosDoAcesso.MARCADOR_DA_PASTA + " sim\n" + ComandosDoAcesso.MARCADOR_DE_ARQUIVO + " /etc/ssh/sshd_config.d/50-b.conf\nB\n"
+            + ComandosDoAcesso.MARCADOR_DE_ARQUIVO + " /etc/ssh/sshd_config.d/10-a.conf\nA\n");
         assertEquals(List.of("10-a.conf", "50-b.conf"), List.copyOf(m.keySet()));
         assertEquals("A\n", m.get("10-a.conf"));
-        assertTrue(AnaliseDoSshd.pastaExiste("pasta=sim\n"));
-        assertFalse(AnaliseDoSshd.pastaExiste("pasta=nao\n"));
+        assertTrue(AnaliseDoSshd.pastaExiste(ComandosDoAcesso.MARCADOR_DA_PASTA + " sim\n"));
+        assertFalse(AnaliseDoSshd.pastaExiste(ComandosDoAcesso.MARCADOR_DA_PASTA + " nao\n"));
     }
 }

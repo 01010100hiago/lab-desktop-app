@@ -5,6 +5,7 @@ import br.com.labdesktop.ssh.FalhaDeEntradaPorSenha;
 import br.com.labdesktop.ssh.ProvaDeChave;
 import br.com.labdesktop.ssh.ProvisionadorRemoto;
 import br.com.labdesktop.ssh.ResultadoExec;
+import br.com.labdesktop.ssh.SondaDeMetodos;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -21,21 +22,24 @@ import org.slf4j.LoggerFactory;
  * "Desligar o login por senha neste servidor". Duas fases, e a segunda SÓ roda depois do clique do usuário e do nome do
  * servidor digitado:
  * <ol>
- *   <li>{@link #avaliar()}: só LEITURA. Vê se o usuário é root ou tem {@code sudo -n}, lê a configuração efetiva ({@code sshd -T}) e os arquivos
- *       ({@code sshd_config} e {@code sshd_config.d}), prevê se a regra do app valeria no meio do que já existe e diz o que encontrou, em frases
- *       simples. Recusa o que não é seguro (métodos combinados, login por chave desligado, arquivo anterior que manda mais, pasta que não é lida).</li>
- *   <li>{@link #desligar}: cópia datada do arquivo, grava {@code sshd_config.d/10-lab-desktop.conf}, valida com {@code sshd -t} ANTES de aplicar,
- *       RECARREGA (nunca reinicia) o sshd, prova com uma conexão NOVA só por chave que ainda entra e confere {@code sshd -T}. Se a prova ou a
- *       conferência falha, desfaz sozinho o que acabou de fazer (apaga ou restaura o arquivo e recarrega) e diz o que aconteceu. Esse desfazer
- *       é só desta operação; depois dela o app NUNCA religa a senha: mostra o comando de reverter.</li>
+ *   <li>{@link #avaliar()}: só LEITURA. Vê se o usuário é root ou tem {@code sudo -n}, se o servidor tem {@code systemd-run} (para o desfazer automático),
+ *       lê a configuração efetiva ({@code sshd -T}) e os arquivos, prevê se a regra do app valeria no meio do que já existe e diz o que encontrou. Recusa o que não é
+ *       seguro (métodos combinados, login por chave desligado, arquivo anterior que manda mais, pasta que não é lida, servidor sem como armar o desfazer).</li>
+ *   <li>{@link #desligar}: cópia datada do arquivo que ela altera, ARMA um desfazer no próprio servidor (um timer do systemd de 2 minutos), grava
+ *       {@code sshd_config.d/10-lab-desktop.conf}, valida com {@code sshd -t} ANTES de aplicar, RECARREGA (nunca reinicia) o sshd, prova com uma conexão nova só por
+ *       chave que ainda entra, confere o resultado (a configuração geral, a do usuário, e os métodos que o servidor oferece numa conexão nova) e só então CANCELA o timer.
+ *       Se a prova ou a conferência falha, desfaz sozinho. Se o app morre, a conexão cai ou o app fica sem resposta no meio, o servidor desfaz sozinho em 2 minutos.
+ *       Depois da operação o app NUNCA religa a senha: mostra o comando de reverter.</li>
  * </ol>
- * Sem permissão (nem root, nem {@code sudo -n}) o app NÃO tenta e NÃO pede senha de sudo: mostra o comando exato para o usuário rodar. Todos os
- * comandos são os fixos de {@link ComandosDoAcesso}. Bloqueia (SSH): thread de fundo.
+ * Sem permissão (nem root, nem {@code sudo -n}) o app NÃO tenta e NÃO pede senha de sudo: mostra o comando exato para o usuário rodar. Todos os comandos são os fixos
+ * de {@link ComandosDoAcesso}. O que o app NÃO sabe, ele diz que não sabe: uma queda de conexão no meio é "talvez aplicado", nunca "nada foi gravado". Bloqueia (SSH): thread de fundo.
  */
 public final class DesligadorDeSenha {
 
     private static final Logger LOG = LoggerFactory.getLogger(DesligadorDeSenha.class);
     private static final Duration PRAZO = Duration.ofSeconds(30);
+    private static final Duration INTERVALO_PADRAO_DA_PROVA = Duration.ofMillis(1500);
+    private static final int TENTATIVAS_DA_PROVA = 3;
     private static final byte[] SEM_ENTRADA = new byte[0];
     private static final DateTimeFormatter CARIMBO = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
@@ -56,6 +60,8 @@ public final class DesligadorDeSenha {
         ARQUIVO_ANTERIOR,
         /** O {@code sshd_config} não lê a pasta {@code sshd_config.d}: a regra do app seria ignorada. */
         NAO_LE_A_PASTA,
+        /** O servidor não tem {@code systemd-run}: o app não consegue armar o desfazer automático no servidor, e sem ele não mexe. */
+        SEM_DESFAZER_NO_SERVIDOR,
         /** Não consegui ler a configuração do servidor. */
         NAO_LI
     }
@@ -81,12 +87,14 @@ public final class DesligadorDeSenha {
 
     /** Os passos que a tela mostra. */
     public enum Passo {
-        COPIA("Copiar o arquivo do sshd (cópia datada)"),
+        COPIA("Guardar uma cópia datada do que vai mudar"),
+        ARMAR("Armar o desfazer automático no servidor (2 minutos)"),
         GRAVAR("Gravar a regra do app"),
         VALIDAR("Conferir a configuração antes de aplicar"),
         RECARREGAR("Recarregar o sshd (sem reiniciar)"),
         PROVAR("Entrar de novo só com a chave"),
-        CONFERIR("Conferir o resultado no servidor");
+        CONFERIR("Conferir o resultado no servidor"),
+        CANCELAR("Cancelar o desfazer automático");
 
         private final String rotulo;
 
@@ -110,16 +118,22 @@ public final class DesligadorDeSenha {
 
     /** Como terminou. */
     public enum Desfecho {
-        /** Desligou e conferiu: o servidor não aceita mais senha. */
+        /** Desligou e conferiu (a configuração geral, a do usuário e os métodos que o servidor oferece): ele não aceita mais senha. */
         DESLIGADA,
+        /** Desligou na regra geral, mas um bloco {@code Match} ainda aceita senha para este usuário e endereço. O app não desfaz (a chave segue entrando). */
+        PARCIAL,
+        /** A chave entrou e o arquivo está gravado, mas o app NÃO conseguiu conferir se a senha está mesmo desligada. Nunca afirma. */
+        SEM_CONFERENCIA,
         /** Já estava desligado: nada foi mexido. */
         JA_ESTAVA_DESLIGADA,
         /** O app não podia (sem permissão, ou algo inseguro): nada foi mexido; veja o texto. */
         NAO_APLICADA,
-        /** Falhou antes de recarregar (cópia, gravação ou validação): o que foi gravado foi desfeito e o sshd nem foi tocado. */
+        /** Falhou antes de recarregar (cópia, desfazer automático, gravação ou validação): o que foi gravado foi desfeito e o sshd nem foi tocado. */
         FALHOU_SEM_EFEITO,
         /** Recarregou, mas a prova da chave ou a conferência falhou: o app desfez e recarregou de novo. */
         DESFEITA,
+        /** A conexão caiu ou o app foi interrompido no meio e o app NÃO sabe o que ficou: talvez aplicado. O servidor desfaz sozinho em 2 minutos. */
+        INCERTO,
         /** Falhou e o app NÃO conseguiu desfazer: o texto diz o comando que o usuário precisa rodar. */
         PRECISA_DE_AJUDA
     }
@@ -139,24 +153,39 @@ public final class DesligadorDeSenha {
     private final ProvisionadorRemoto.Executor executor;
     private final ProvaDeChave prova;
     private final Supplier<LocalDateTime> relogio;
+    private final SondaDeMetodos sonda;
+    private final String usuario;
+    private final Duration intervaloDaProva;
 
     /**
      * @param executor a conexão SSH que o app já tem (ou um falso, nos testes)
      * @param prova    abre uma conexão NOVA só com a chave e prova que entra
      * @param relogio  a data e a hora de agora (o carimbo da cópia)
+     * @param sonda    lê os métodos que o servidor oferece numa conexão nova ({@code null}: não há como conferir assim)
+     * @param usuario  o usuário do SSH (para conferir a configuração PARA ele, com os blocos Match); {@code null}: não confere
      */
-    public DesligadorDeSenha(ProvisionadorRemoto.Executor executor, ProvaDeChave prova, Supplier<LocalDateTime> relogio) {
+    public DesligadorDeSenha(ProvisionadorRemoto.Executor executor, ProvaDeChave prova, Supplier<LocalDateTime> relogio, SondaDeMetodos sonda, String usuario) {
+        this(executor, prova, relogio, sonda, usuario, INTERVALO_PADRAO_DA_PROVA);
+    }
+
+    /** Com o intervalo entre as tentativas da prova trocável (os testes não esperam). */
+    public DesligadorDeSenha(ProvisionadorRemoto.Executor executor, ProvaDeChave prova, Supplier<LocalDateTime> relogio, SondaDeMetodos sonda, String usuario,
+                             Duration intervaloDaProva) {
         this.executor = executor;
         this.prova = prova;
         this.relogio = relogio;
+        this.sonda = sonda;
+        this.usuario = usuario;
+        this.intervaloDaProva = intervaloDaProva;
     }
 
-    /** O conteúdo que o app grava no arquivo dele. */
+    /** O conteúdo que o app grava no arquivo dele (os dois nomes do teclado interativo: o OpenSSH antigo só conhece {@code ChallengeResponseAuthentication}). */
     public static String conteudoDaRegra(LocalDateTime agora) {
         return "# Criado pelo Lab Desktop em " + DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").format(agora) + ".\n"
             + "# Para voltar ao login por senha: apague este arquivo e recarregue o ssh (systemctl reload ssh).\n"
             + "PasswordAuthentication no\n"
-            + "KbdInteractiveAuthentication no\n";
+            + "KbdInteractiveAuthentication no\n"
+            + "ChallengeResponseAuthentication no\n";
     }
 
     // =====================================================================================================
@@ -170,7 +199,7 @@ public final class DesligadorDeSenha {
         if (permissao == Permissao.NENHUMA) {
             return new Avaliacao(Permissao.NENHUMA, null, null, null, null, null, List.of(), List.of(), false, new Bloqueio(Motivo.SEM_PERMISSAO,
                 "Este usuário não é administrador e não tem sudo sem senha, e o app nunca pede a senha de sudo. Para desligar o login por "
-                    + "senha, rode você mesmo, no servidor, o comando abaixo."));
+                    + "senha, rode você mesmo, no servidor, o comando abaixo. " + ComandosDoAcesso.AVISO_DO_COMANDO_MANUAL));
         }
         String p = permissao == Permissao.ADMINISTRADOR ? ComandosDoAcesso.SEM_PREFIXO : ComandosDoAcesso.COM_SUDO;
         ResultadoExec sshdT = rodar(ComandosDoAcesso.lerConfiguracaoEfetiva(p));
@@ -204,11 +233,19 @@ public final class DesligadorDeSenha {
         }
         boolean temMatch = AnaliseDoSshd.temMatch(principal.stdout(), semOProprio);
         if (temMatch) {
-            avisos.add("A configuração tem um bloco Match (regras para certos usuários ou endereços). O app muda só a regra geral: nesses casos "
-                + "o servidor ainda pode aceitar senha.");
+            avisos.add("A configuração tem um bloco Match (regras para certos usuários ou endereços). O app muda só a regra geral e, no fim, confere também a "
+                + "configuração para este usuário e este endereço: se o Match ainda aceitar senha, o resultado diz.");
         }
 
         Bloqueio bloqueio = decidir(efetiva, pastaTexto.stdout(), principal.stdout(), semOProprio, temArquivoProprio, quemMexe);
+        if (bloqueio == null) {
+            ResultadoExec systemd = rodar(ComandosDoAcesso.verificarSystemdRun());
+            if (!systemd.stdout().contains("systemd-run=sim")) {
+                bloqueio = new Bloqueio(Motivo.SEM_DESFAZER_NO_SERVIDOR, "Este servidor não tem o systemd-run, e o app só mexe no login por senha depois de armar, no próprio "
+                    + "servidor, um desfazer automático de " + ComandosDoAcesso.PRAZO_DO_DESFAZER_NO_SERVIDOR / 60 + " minutos (para o servidor voltar sozinho se a conexão cair). "
+                    + "Nada foi alterado. Se você quiser desligar a senha mesmo assim, rode o comando manual abaixo e teste uma conexão nova antes de fechar a sessão.");
+            }
+        }
         return new Avaliacao(permissao, p, efetiva.senha(), efetiva.teclado(), efetiva.usaPam(), efetiva.metodos(), List.copyOf(achados),
             List.copyOf(avisos), temArquivoProprio, bloqueio);
     }
@@ -275,6 +312,14 @@ public final class DesligadorDeSenha {
     // Fase 2: escreve (só depois do clique e do nome digitado)
     // =====================================================================================================
 
+    /** O que já foi feito no servidor até agora (para saber o que desfazer). As marcas valem desde ANTES de o comando ser enviado: uma queda no meio conta como "talvez". */
+    private static final class Andamento {
+        boolean desfazerArmado;
+        boolean gravado;
+        boolean recarregado;
+        String copia;
+    }
+
     /**
      * Desliga o login por senha. Só depois do clique do usuário e do nome do servidor digitado; a tela nunca chama isto sozinha.
      *
@@ -290,135 +335,283 @@ public final class DesligadorDeSenha {
         LocalDateTime agora = relogio.get();
         String carimbo = CARIMBO.format(agora);
         boolean tinhaProprio = avaliacao.temArquivoProprio();
-        Andamento atual = new Andamento();
-        atual.copia = ComandosDoAcesso.nomeDaCopiaDoPrincipal(carimbo);
+        Andamento a = new Andamento();
+        a.copia = tinhaProprio ? ComandosDoAcesso.nomeDaCopiaDoProprio(carimbo) : ComandosDoAcesso.nomeDaCopiaDoPrincipal(carimbo);
+        List<String> detalhes = new ArrayList<>(avaliacao.avisos());
         try {
-            // 1. cópia datada
+            // 1. cópia datada do que o app REALMENTE altera (o arquivo dele, se já existia); a do sshd_config é só um extra
             observador.passo(Passo.COPIA, Estado.ANDANDO, "");
-            ResultadoExec copia = rodar(ComandosDoAcesso.copiaDoArquivoPrincipal(p, carimbo));
-            if (copia.status() != 0) {
-                observador.passo(Passo.COPIA, Estado.FALHOU, "A cópia não foi feita.");
-                return new Resultado(Desfecho.FALHOU_SEM_EFEITO, "Não consegui fazer a cópia de segurança do arquivo do sshd. Nada foi alterado.",
-                    List.of(erroCurto(copia)), avaliacao.senhaLigada(), reverter, null);
-            }
             if (tinhaProprio) {
                 ResultadoExec copiaProprio = rodar(ComandosDoAcesso.copiaDoArquivoProprio(p, carimbo));
                 if (copiaProprio.status() != 0) {
                     observador.passo(Passo.COPIA, Estado.FALHOU, "A cópia do arquivo do app não foi feita.");
-                    return new Resultado(Desfecho.FALHOU_SEM_EFEITO, "Não consegui guardar a versão anterior do arquivo do app. Nada foi alterado.",
+                    return new Resultado(Desfecho.FALHOU_SEM_EFEITO, "Não consegui guardar a versão anterior do arquivo do app, então não mexi em nada.",
                         List.of(erroCurto(copiaProprio)), avaliacao.senhaLigada(), reverter, null);
                 }
             }
-            observador.passo(Passo.COPIA, Estado.FEITO, ComandosDoAcesso.nomeDaCopiaDoPrincipal(carimbo));
+            ResultadoExec copiaPrincipal = rodar(ComandosDoAcesso.copiaDoArquivoPrincipal(p, carimbo));
+            if (copiaPrincipal.status() == 0) {
+                detalhes.add("Cópia do arquivo principal do sshd: " + ComandosDoAcesso.nomeDaCopiaDoPrincipal(carimbo) + " (o app não o altera; pode apagá-la quando quiser).");
+            } else {
+                detalhes.add("A cópia extra do sshd_config não foi feita; não era necessária, porque o app não altera esse arquivo.");
+            }
+            observador.passo(Passo.COPIA, Estado.FEITO, tinhaProprio ? ComandosDoAcesso.nomeDaCopiaDoProprio(carimbo) : "o app só cria um arquivo novo");
 
-            // 2. gravar
+            // 2. armar o desfazer NO SERVIDOR, antes de qualquer mudança
+            observador.passo(Passo.ARMAR, Estado.ANDANDO, "");
+            a.desfazerArmado = true;
+            ResultadoExec armou = rodar(ComandosDoAcesso.armarDesfazerNoServidor(p, carimbo, tinhaProprio));
+            if (armou.status() != 0) {
+                a.desfazerArmado = false;
+                observador.passo(Passo.ARMAR, Estado.FALHOU, "Não consegui armar o desfazer.");
+                return new Resultado(Desfecho.FALHOU_SEM_EFEITO, "Não consegui armar o desfazer automático no servidor, então não mexi na configuração do SSH.",
+                    List.of(erroCurto(armou)), avaliacao.senhaLigada(), reverter, a.copia);
+            }
+            observador.passo(Passo.ARMAR, Estado.FEITO, "se o app não cancelar, o servidor desfaz sozinho em " + ComandosDoAcesso.PRAZO_DO_DESFAZER_NO_SERVIDOR + " s");
+
+            // 3. gravar
             observador.passo(Passo.GRAVAR, Estado.ANDANDO, "");
+            a.gravado = true;
             ResultadoExec gravou = rodar(ComandosDoAcesso.gravarArquivoProprio(p), conteudoDaRegra(agora).getBytes(StandardCharsets.UTF_8));
-            atual.gravado = true;
             if (gravou.status() != 0) {
                 observador.passo(Passo.GRAVAR, Estado.FALHOU, "Não consegui gravar o arquivo.");
-                desfazerArquivo(p, carimbo, tinhaProprio);
-                return new Resultado(Desfecho.FALHOU_SEM_EFEITO, "Não consegui gravar o arquivo do app em " + ComandosDoAcesso.PASTA_DA_CONFIG
-                    + ". Nada foi alterado.", List.of(erroCurto(gravou)), avaliacao.senhaLigada(), reverter, atual.copia);
+                return desfazerESair(avaliacao, observador, a, carimbo, Desfecho.FALHOU_SEM_EFEITO, "Não consegui gravar o arquivo do app em "
+                    + ComandosDoAcesso.PASTA_DA_CONFIG + ".", List.of(erroCurto(gravou)), reverter);
             }
             observador.passo(Passo.GRAVAR, Estado.FEITO, ComandosDoAcesso.ARQUIVO_PROPRIO);
 
-            // 3. validar ANTES de aplicar
+            // 4. validar ANTES de aplicar
             observador.passo(Passo.VALIDAR, Estado.ANDANDO, "");
             ResultadoExec valido = rodar(ComandosDoAcesso.validarConfiguracao(p));
             if (valido.status() != 0) {
                 observador.passo(Passo.VALIDAR, Estado.FALHOU, "O sshd rejeitou a configuração.");
-                desfazerArquivo(p, carimbo, tinhaProprio);
-                observador.passo(Passo.GRAVAR, Estado.DESFEITO, "Arquivo apagado.");
-                return new Resultado(Desfecho.FALHOU_SEM_EFEITO, "O sshd não aceitou a configuração com a regra do app, então nada foi recarregado "
-                    + "e o arquivo foi desfeito.", List.of(erroCurto(valido)), avaliacao.senhaLigada(), reverter, atual.copia);
+                return desfazerESair(avaliacao, observador, a, carimbo, Desfecho.FALHOU_SEM_EFEITO, "O sshd não aceitou a configuração com a regra do app, então nada foi "
+                    + "recarregado e o arquivo foi desfeito.", List.of(erroCurto(valido)), reverter);
             }
             observador.passo(Passo.VALIDAR, Estado.FEITO, "sshd -t sem erros.");
 
-            // 4. recarregar (nunca reiniciar)
+            // 5. recarregar (nunca reiniciar)
             observador.passo(Passo.RECARREGAR, Estado.ANDANDO, "");
+            a.recarregado = true;
             ResultadoExec recarregou = rodar(ComandosDoAcesso.recarregarSshd(p));
             if (recarregou.status() != 0) {
+                a.recarregado = false; // o servidor respondeu que NÃO recarregou
                 observador.passo(Passo.RECARREGAR, Estado.FALHOU, "Não consegui recarregar o sshd.");
-                desfazerArquivo(p, carimbo, tinhaProprio);
-                observador.passo(Passo.GRAVAR, Estado.DESFEITO, "Arquivo apagado.");
-                return new Resultado(Desfecho.FALHOU_SEM_EFEITO, "Não consegui recarregar o sshd (o serviço pode ter outro nome neste servidor). O "
-                    + "arquivo foi desfeito e o servidor continua como estava.", List.of(erroCurto(recarregou)), avaliacao.senhaLigada(), reverter,
-                    atual.copia);
+                return desfazerESair(avaliacao, observador, a, carimbo, Desfecho.FALHOU_SEM_EFEITO, "Não consegui recarregar o sshd (o serviço pode ter outro nome neste "
+                    + "servidor). O arquivo foi desfeito e o servidor continua como estava.", List.of(erroCurto(recarregou)), reverter);
             }
-            atual.recarregado = true;
             observador.passo(Passo.RECARREGAR, Estado.FEITO, "sshd recarregado; a sua sessão continua aberta.");
 
-            // 5. provar com conexão nova só por chave
+            // 6. provar com conexão nova só por chave (algumas tentativas, só se foi problema de rede)
             observador.passo(Passo.PROVAR, Estado.ANDANDO, "");
             try {
-                prova.provar();
+                provarComTentativas();
             } catch (FalhaDeEntradaPorSenha falha) {
                 observador.passo(Passo.PROVAR, Estado.FALHOU, "A chave não entrou.");
-                return desfazerTudo(avaliacao, observador, atual, carimbo, "Depois de desligar a senha, a conexão nova só com a chave NÃO entrou ("
-                    + falha.getMessage() + ")", reverter);
+                return desfazerESair(avaliacao, observador, a, carimbo, Desfecho.DESFEITA, "Depois de desligar a senha, a conexão nova só com a chave NÃO entrou ("
+                    + falha.getMessage() + ")", List.of(), reverter);
             }
             observador.passo(Passo.PROVAR, Estado.FEITO, "A chave entrou numa conexão nova.");
 
-            // 6. conferir o efeito
+            // 7. conferir o efeito: configuração geral, a do usuário (Match) e o que o servidor oferece numa conexão nova
             observador.passo(Passo.CONFERIR, Estado.ANDANDO, "");
-            ResultadoExec depois = rodar(ComandosDoAcesso.lerConfiguracaoEfetiva(p));
-            Boolean senhaDepois = depois.status() == 0 ? AnaliseDoSshd.lerEfetiva(depois.stdout()).senha() : null;
-            Boolean tecladoDepois = depois.status() == 0 ? AnaliseDoSshd.lerEfetiva(depois.stdout()).teclado() : null;
-            if (Boolean.TRUE.equals(senhaDepois) || Boolean.TRUE.equals(tecladoDepois)) {
-                observador.passo(Passo.CONFERIR, Estado.FALHOU, "O servidor ainda aceita senha.");
-                return desfazerTudo(avaliacao, observador, atual, carimbo, "O servidor continua aceitando senha mesmo com a regra gravada (alguma outra "
-                    + "configuração manda mais)", reverter);
+            ResultadoExec geral = rodar(ComandosDoAcesso.lerConfiguracaoEfetiva(p));
+            AnaliseDoSshd.Efetiva efGeral = geral.status() == 0 ? AnaliseDoSshd.lerEfetiva(geral.stdout()) : null;
+            AnaliseDoSshd.Efetiva efUsuario = lerConfiguracaoDoUsuario(p);
+            List<String> oferecidos = lerMetodosOferecidos();
+            boolean geralAindaAceita = efGeral != null && (Boolean.TRUE.equals(efGeral.senha()) || Boolean.TRUE.equals(efGeral.teclado()));
+            boolean ofereceSenha = oferecidos != null && (oferecidos.contains("password") || oferecidos.contains("keyboard-interactive"));
+            if (geralAindaAceita || ofereceSenha) {
+                observador.passo(Passo.CONFERIR, Estado.FALHOU, ofereceSenha ? "O servidor ainda oferece senha." : "O servidor ainda aceita senha.");
+                return desfazerESair(avaliacao, observador, a, carimbo, Desfecho.DESFEITA, ofereceSenha
+                    ? "O servidor continua oferecendo senha numa conexão nova, mesmo com a regra gravada (alguma outra configuração manda mais)"
+                    : "O servidor continua aceitando senha mesmo com a regra gravada (alguma outra configuração manda mais)", List.of(), reverter);
             }
-            observador.passo(Passo.CONFERIR, Estado.FEITO, senhaDepois == null ? "Não consegui conferir." : "passwordauthentication no");
-            List<String> detalhes = new ArrayList<>(avaliacao.avisos());
-            detalhes.add("Cópia do arquivo do sshd: " + atual.copia + ".");
-            detalhes.add("Servidores que o provedor ou uma ferramenta de configuração (cloud-init, painel) gerencia podem desfazer esta mudança sozinhos: "
-                + "se a senha voltar, é isso.");
-            if (senhaDepois == null) {
-                detalhes.add("Não consegui reler a configuração para confirmar; a prova da chave passou e o arquivo está gravado.");
+            boolean usuarioAindaAceita = efUsuario != null && (Boolean.TRUE.equals(efUsuario.senha()) || Boolean.TRUE.equals(efUsuario.teclado()));
+            boolean confirmouGeral = efGeral != null && Boolean.FALSE.equals(efGeral.senha()) && !Boolean.TRUE.equals(efGeral.teclado());
+            boolean confirmouOferta = oferecidos != null;
+            observador.passo(Passo.CONFERIR, Estado.FEITO, usuarioAindaAceita ? "um bloco Match ainda aceita senha"
+                : confirmouGeral && confirmouOferta ? "passwordauthentication no, e o servidor só oferece chave" : "não consegui conferir tudo");
+
+            // 8. só agora o desfazer automático sai de cena
+            observador.passo(Passo.CANCELAR, Estado.ANDANDO, "");
+            Cancelamento cancelou = cancelarDesfazer(p, carimbo);
+            if (cancelou == Cancelamento.JA_DISPAROU) {
+                observador.passo(Passo.CANCELAR, Estado.FALHOU, "O desfazer automático já tinha disparado.");
+                return new Resultado(Desfecho.DESFEITA, "O desfazer automático do servidor disparou antes de o app terminar (a operação demorou mais de "
+                    + ComandosDoAcesso.PRAZO_DO_DESFAZER_NO_SERVIDOR + " s), então o servidor VOLTOU ao que era. Pode tentar de novo.", List.copyOf(detalhes),
+                    Boolean.TRUE, reverter, a.copia);
             }
-            return new Resultado(Desfecho.DESLIGADA, "Login por senha: desligado. O servidor só aceita a chave.", List.copyOf(detalhes), senhaDepois,
-                reverter, atual.copia);
+            if (cancelou == Cancelamento.PENDENTE) {
+                observador.passo(Passo.CANCELAR, Estado.FALHOU, "Não consegui cancelar o desfazer automático.");
+                return new Resultado(Desfecho.PRECISA_DE_AJUDA, "A regra está aplicada e a chave entra, mas o app NÃO conseguiu cancelar o desfazer automático do servidor: "
+                    + "em poucos minutos ele vai voltar o servidor a aceitar senha por conta própria. Para impedir, rode no servidor: sudo systemctl stop "
+                    + ComandosDoAcesso.nomeDoDesfazerNoServidor(carimbo) + ".timer", List.copyOf(detalhes), efGeral == null ? null : efGeral.senha(), reverter, a.copia);
+            }
+            observador.passo(Passo.CANCELAR, Estado.FEITO, "");
+            detalhes.add("Servidores que o provedor ou uma ferramenta de configuração (cloud-init, painel) gerencia podem desfazer esta mudança sozinhos: se a senha voltar, é isso.");
+            detalhes.add("Agentes do provedor (guest agent, droplet-agent, OS Login) podem reescrever o authorized_keys: se a chave sumir, é isso.");
+            if (usuarioAindaAceita) {
+                detalhes.add("Conferi a configuração para o usuário " + usuario + " vindo deste endereço: um bloco Match ainda aceita senha nesse caso. O app não mexe em Match.");
+                return new Resultado(Desfecho.PARCIAL, "O login por senha foi desligado na regra geral, mas um bloco Match ainda aceita senha para este usuário e este "
+                    + "endereço. A chave segue entrando.", List.copyOf(detalhes), Boolean.TRUE, reverter, a.copia);
+            }
+            if (!(confirmouGeral && confirmouOferta)) {
+                if (efUsuario == null) {
+                    detalhes.add("Não consegui conferir a configuração para este usuário e este endereço: se houver bloco Match, ele não foi conferido.");
+                }
+                detalhes.add("A prova da chave passou e o arquivo está gravado.");
+                return new Resultado(Desfecho.SEM_CONFERENCIA, "A chave entra e a regra está gravada, mas NÃO consegui conferir se a senha está mesmo desligada neste servidor.",
+                    List.copyOf(detalhes), efGeral == null ? null : efGeral.senha(), reverter, a.copia);
+            }
+            if (efUsuario == null) {
+                detalhes.add("Não consegui conferir a configuração para este usuário e este endereço: se houver bloco Match, ele não foi conferido.");
+            }
+            return new Resultado(Desfecho.DESLIGADA, "Login por senha: desligado. O servidor só oferece a chave numa conexão nova.", List.copyOf(detalhes), Boolean.FALSE,
+                reverter, a.copia);
         } catch (IOException | RuntimeException e) {
             LOG.warn("Desligar a senha parou por um erro de conexão: {}", Redator.redigir(e));
-            return recuperarDepoisDeErro(avaliacao, observador, atual, carimbo, reverter, e);
+            return recuperarDepoisDeErro(avaliacao, observador, a, carimbo, reverter, "A conexão com o servidor parou no meio (" + Redator.redigir(e) + ")");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return recuperarDepoisDeErro(avaliacao, observador, atual, carimbo, reverter, e);
+            return incerto(a, carimbo, reverter, "O app foi interrompido no meio");
         }
     }
 
-    /** O que já foi feito no servidor até agora (para saber o que desfazer). */
-    private static final class Andamento {
-        boolean gravado;
-        boolean recarregado;
-        String copia;
-    }
+    private enum Cancelamento { CANCELADO, JA_DISPAROU, PENDENTE }
 
-    private Resultado recuperarDepoisDeErro(Avaliacao avaliacao, Observador observador, Andamento atual, String carimbo, String reverter, Exception e) {
-        String motivo = "A conexão com o servidor parou no meio (" + Redator.redigir(e) + ")";
-        if (!atual.gravado) {
-            return new Resultado(Desfecho.FALHOU_SEM_EFEITO, motivo + ". Nada foi gravado.", List.of(), avaliacao.senhaLigada(), reverter, atual.copia);
+    /** Para o timer do servidor. Se não consegue, confere o estado: ou ele já disparou (e o servidor voltou) ou continua pendente. */
+    private Cancelamento cancelarDesfazer(String p, String carimbo) throws IOException, InterruptedException {
+        for (int i = 0; i < 2; i++) {
+            if (rodar(ComandosDoAcesso.cancelarDesfazerNoServidor(p, carimbo)).status() == 0) {
+                return Cancelamento.CANCELADO;
+            }
+            ResultadoExec geral = rodar(ComandosDoAcesso.lerConfiguracaoEfetiva(p));
+            if (geral.status() == 0) {
+                AnaliseDoSshd.Efetiva e = AnaliseDoSshd.lerEfetiva(geral.stdout());
+                if (Boolean.TRUE.equals(e.senha())) {
+                    return Cancelamento.JA_DISPAROU;
+                }
+            }
         }
-        return desfazerTudo(avaliacao, observador, atual, carimbo, motivo, reverter);
+        return Cancelamento.PENDENTE;
     }
 
-    /** Apaga (ou restaura) o arquivo do app, recarrega se já tinha recarregado e prova de novo; diz o que aconteceu. */
-    private Resultado desfazerTudo(Avaliacao avaliacao, Observador observador, Andamento atual, String carimbo, String motivo, String reverter) {
+    private void provarComTentativas() throws FalhaDeEntradaPorSenha, InterruptedException {
+        for (int tentativa = 1; ; tentativa++) {
+            try {
+                prova.provar();
+                return;
+            } catch (FalhaDeEntradaPorSenha f) {
+                // só falha de REDE merece outra tentativa (o sshd acabou de recarregar); chave recusada é resposta, não azar
+                if (f.motivo() != FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO || tentativa >= TENTATIVAS_DA_PROVA) {
+                    throw f;
+                }
+                esperar();
+            }
+        }
+    }
+
+    private void esperar() throws InterruptedException {
+        if (!intervaloDaProva.isZero()) {
+            Thread.sleep(intervaloDaProva.toMillis());
+        }
+    }
+
+    private AnaliseDoSshd.Efetiva lerConfiguracaoDoUsuario(String p) throws IOException, InterruptedException {
+        if (usuario == null) {
+            return null;
+        }
+        try {
+            ResultadoExec r = rodar(ComandosDoAcesso.lerConfiguracaoParaEsteUsuario(p, usuario));
+            return r.status() == 0 ? AnaliseDoSshd.lerEfetiva(r.stdout()) : null;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private List<String> lerMetodosOferecidos() throws InterruptedException {
+        if (sonda == null) {
+            return null;
+        }
+        try {
+            return sonda.ler();
+        } catch (RuntimeException e) {
+            LOG.debug("A sonda dos métodos oferecidos falhou: {}", Redator.redigir(e));
+            return null;
+        }
+    }
+
+    /**
+     * A conexão caiu (ou outro erro) no meio. O app NÃO sabe o que ficou: tenta ler o estado real do servidor (algumas vezes, dando tempo da conexão voltar); se lê, desfaz o que
+     * houver e diz que conferiu; se não lê, diz que NÃO sabe e que o servidor desfaz sozinho.
+     */
+    private Resultado recuperarDepoisDeErro(Avaliacao avaliacao, Observador observador, Andamento a, String carimbo, String reverter, String motivo) {
+        if (!a.desfazerArmado && !a.gravado && !a.recarregado) {
+            return new Resultado(Desfecho.FALHOU_SEM_EFEITO, motivo + ", antes de qualquer mudança na configuração do SSH (só cópias de segurança podem ter sido feitas).", List.of(),
+                avaliacao.senhaLigada(), reverter, a.copia);
+        }
+        String p = avaliacao.prefixo();
+        for (int i = 0; i < 3; i++) {
+            try {
+                ResultadoExec arquivo = rodar(ComandosDoAcesso.lerArquivoProprio(p));
+                ResultadoExec geral = rodar(ComandosDoAcesso.lerConfiguracaoEfetiva(p));
+                if (arquivo.status() == 0 && geral.status() == 0) {
+                    boolean existe = !arquivo.stdout().isBlank();
+                    Resultado r = desfazerESair(avaliacao, observador, a, carimbo, Desfecho.DESFEITA, motivo + ". Conferi o servidor (o arquivo do app "
+                        + (existe ? "existia" : "não existia") + ")", List.of(), reverter);
+                    return r;
+                }
+            } catch (IOException | RuntimeException e) {
+                LOG.debug("Ainda sem conexão para reler o servidor: {}", Redator.redigir(e));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            try {
+                esperar();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return incerto(a, carimbo, reverter, motivo);
+    }
+
+    private static Resultado incerto(Andamento a, String carimbo, String reverter, String motivo) {
+        String armado = a.desfazerArmado ? " O desfazer automático foi armado no servidor: em até " + ComandosDoAcesso.PRAZO_DO_DESFAZER_NO_SERVIDOR / 60
+            + " minutos ele apaga a regra do app e recarrega o sshd sozinho." : " O desfazer automático NÃO chegou a ser armado.";
+        return new Resultado(Desfecho.INCERTO, motivo + ". O app NÃO sabe se a regra chegou a ser gravada ou aplicada." + armado + " Reconecte, espere esse prazo e confira em "
+            + "Servidor > Segurança > SSH e bloqueio. Para voltar atrás à mão, rode no servidor o comando de reverter abaixo.", List.of(
+            "Se o desfazer automático estiver ativo, para cancelá-lo: sudo systemctl stop " + ComandosDoAcesso.nomeDoDesfazerNoServidor(carimbo) + ".timer"), null, reverter, a.copia);
+    }
+
+    /** Apaga (ou restaura) o arquivo do app, recarrega se já tinha recarregado, confere e para o timer; diz o que aconteceu. */
+    private Resultado desfazerESair(Avaliacao avaliacao, Observador observador, Andamento a, String carimbo, Desfecho desfechoSeDerCerto, String motivo, List<String> extras,
+                                    String reverter) {
         String p = avaliacao.prefixo();
         boolean desfez = true;
-        List<String> detalhes = new ArrayList<>();
+        List<String> detalhes = new ArrayList<>(extras);
+        Boolean senhaDepois = null;
         try {
             if (!desfazerArquivo(p, carimbo, avaliacao.temArquivoProprio())) {
                 desfez = false;
             }
-            if (desfez && atual.recarregado) {
+            if (desfez && a.recarregado) {
                 ResultadoExec valido = rodar(ComandosDoAcesso.validarConfiguracao(p));
                 ResultadoExec recarregou = valido.status() == 0 ? rodar(ComandosDoAcesso.recarregarSshd(p)) : valido;
                 if (recarregou.status() != 0) {
                     desfez = false;
                     detalhes.add(erroCurto(recarregou));
+                }
+            }
+            if (desfez) {
+                ResultadoExec geral = rodar(ComandosDoAcesso.lerConfiguracaoEfetiva(p));
+                if (geral.status() == 0) {
+                    senhaDepois = AnaliseDoSshd.lerEfetiva(geral.stdout()).senha();
+                }
+                if (a.desfazerArmado) {
+                    rodar(ComandosDoAcesso.cancelarDesfazerNoServidor(p, carimbo)); // melhor esforço: se não parar, ele só repete o que já foi feito
                 }
             }
         } catch (IOException | RuntimeException e) {
@@ -429,14 +622,21 @@ public final class DesligadorDeSenha {
             desfez = false;
         }
         if (desfez) {
-            observador.passo(Passo.GRAVAR, Estado.DESFEITO, "Arquivo do app removido e sshd recarregado.");
-            detalhes.add("O login por senha continua como estava antes. Cópia do arquivo do sshd: " + atual.copia + ".");
-            return new Resultado(Desfecho.DESFEITA, motivo + ", então o app DESFEZ o que tinha feito e recarregou o sshd. Nada ficou diferente do "
-                + "que era.", List.copyOf(detalhes), avaliacao.senhaLigada(), reverter, atual.copia);
+            observador.passo(Passo.GRAVAR, Estado.DESFEITO, "Arquivo do app removido" + (a.recarregado ? " e sshd recarregado." : "."));
+            detalhes.add(senhaDepois == null ? "Não consegui reler a configuração depois de desfazer." : senhaDepois
+                ? "Conferi: o servidor voltou a aceitar senha, como era antes."
+                : "Atenção: depois de desfazer, o sshd -T ainda mostra a senha desligada (a regra pode vir de outro arquivo). Confira em Segurança.");
+            Desfecho d = desfechoSeDerCerto;
+            if (d == Desfecho.DESFEITA) {
+                return new Resultado(d, motivo + ", então o app DESFEZ o que tinha feito" + (a.recarregado ? " e recarregou o sshd" : "") + ".", List.copyOf(detalhes),
+                    senhaDepois, reverter, a.copia);
+            }
+            return new Resultado(d, motivo + " O app desfez o que tinha gravado.", List.copyOf(detalhes), senhaDepois, reverter, a.copia);
         }
+        detalhes.add("O desfazer automático do servidor, se estiver ativo, repete isto em até " + ComandosDoAcesso.PRAZO_DO_DESFAZER_NO_SERVIDOR / 60 + " minutos.");
         detalhes.add("Para desfazer à mão, no servidor: " + reverter);
         return new Resultado(Desfecho.PRECISA_DE_AJUDA, motivo + ", e o app NÃO conseguiu desfazer sozinho. Rode você mesmo o comando abaixo no "
-            + "servidor para apagar o arquivo do app e recarregar o sshd.", List.copyOf(detalhes), avaliacao.senhaLigada(), reverter, atual.copia);
+            + "servidor para apagar o arquivo do app e recarregar o sshd.", List.copyOf(detalhes), null, reverter, a.copia);
     }
 
     /** Apaga o arquivo do app, ou devolve a versão anterior dele. {@code true} se terminou bem. */

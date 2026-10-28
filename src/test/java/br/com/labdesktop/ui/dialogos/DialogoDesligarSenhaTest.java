@@ -73,7 +73,7 @@ class DialogoDesligarSenhaTest {
             if (falhaDaProva != null) {
                 throw falhaDaProva;
             }
-        }, () -> LocalDateTime.of(2026, 10, 28, 15, 30, 5));
+        }, () -> LocalDateTime.of(2026, 10, 28, 15, 30, 5), () -> java.util.List.of("publickey"), SshdFalso.USUARIO, Duration.ZERO);
         DialogoDesligarSenha.Motor motor = new DialogoDesligarSenha.Motor() {
             @Override
             public DesligadorDeSenha.Avaliacao avaliar() throws Exception {
@@ -168,7 +168,7 @@ class DialogoDesligarSenhaTest {
         Espera.ate(PRAZO, () -> "resultado (selo='" + Visual.naEdt(d::seloDoResultado) + "')", () -> !Visual.naEdt(d::seloDoResultado).isEmpty());
 
         assertEquals("SENHA DESLIGADA", Visual.naEdt(d::seloDoResultado));
-        assertEquals("Login por senha: desligado. O servidor só aceita a chave.", Visual.naEdt(d::textoDoResultado));
+        assertEquals("Login por senha: desligado. O servidor só oferece a chave numa conexão nova.", Visual.naEdt(d::textoDoResultado));
         for (Passo p : Passo.values()) {
             assertTrue(Visual.naEdt(d::linhasDosPassos).get(p).startsWith(p.rotulo()), p.toString());
         }

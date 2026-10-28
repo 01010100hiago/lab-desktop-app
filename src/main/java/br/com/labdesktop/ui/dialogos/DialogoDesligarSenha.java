@@ -300,6 +300,9 @@ public final class DialogoDesligarSenha extends Dialogo {
         blocoDoResultado.setVisible(true);
         switch (r.desfecho()) {
             case DESLIGADA -> selo.atualizar("SENHA DESLIGADA", Gravidade.OK, null);
+            case PARCIAL -> selo.atualizar("DESLIGADA EM PARTE", Gravidade.ATENCAO, null);
+            case SEM_CONFERENCIA -> selo.atualizar("NÃO CONFERI", Gravidade.ATENCAO, null);
+            case INCERTO -> selo.atualizar("CONFIRA NO SERVIDOR", Gravidade.ATENCAO, null);
             case JA_ESTAVA_DESLIGADA -> selo.atualizar("JÁ ESTAVA DESLIGADA", Gravidade.OK, null);
             case NAO_APLICADA -> selo.atualizar("NADA FOI ALTERADO", Gravidade.ATENCAO, null);
             case FALHOU_SEM_EFEITO -> selo.atualizar("NADA MUDOU", Gravidade.ATENCAO, null);
@@ -309,7 +312,10 @@ public final class DialogoDesligarSenha extends Dialogo {
         textoDoResultado.setText(r.resumo());
         detalhes.setText(marcadores(r.detalhes()));
         detalhes.setVisible(!r.detalhes().isEmpty());
-        boolean mostrarOReverter = r.desfecho() == Desfecho.DESLIGADA || r.desfecho() == Desfecho.PRECISA_DE_AJUDA;
+        boolean mostrarOReverter = switch (r.desfecho()) {
+            case DESLIGADA, PARCIAL, SEM_CONFERENCIA, INCERTO, PRECISA_DE_AJUDA -> true;
+            default -> false;
+        };
         blocoDoReverter.setVisible(mostrarOReverter);
         if (mostrarOReverter) {
             comandoDeReverter.setText(r.comandoParaReverter());
