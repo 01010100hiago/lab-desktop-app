@@ -146,8 +146,17 @@ public final class Sondador implements AutoCloseable {
      * Assina um tópico. A inscrição devolvida solta a assinatura; quando o último ouvinte sai, o timer do tópico
      * para. O ouvinte recebe o último valor conhecido (se houver) logo em seguida, pelo despachante de entrega.
      */
-    @SuppressWarnings("unchecked")
     public <T> Inscricao assinar(Topico<T> topico, OuvinteDeTopico<T> ouvinte) {
+        return assinar(topico, ouvinte, true);
+    }
+
+    /**
+     * Como {@link #assinar(Topico, OuvinteDeTopico)}, mas com a escolha de receber (ou não) o último valor guardado na inscrição. A leitura
+     * AVULSA de uma tela em pausa ("Atualizar") não quer o guardado: ele chegaria como se fosse a resposta ao pedido, e a tela mostraria o
+     * valor velho com a hora de agora.
+     */
+    @SuppressWarnings("unchecked")
+    public <T> Inscricao assinar(Topico<T> topico, OuvinteDeTopico<T> ouvinte, boolean repetirUltimo) {
         Objects.requireNonNull(ouvinte, "ouvinte");
         Canal<T> canal;
         T anterior = null;
@@ -163,7 +172,7 @@ public final class Sondador implements AutoCloseable {
             // Quem acabou de aparecer quer o dado AGORA, não daqui a 10 s.
             reprogramar(canal, canal.ouvintes.size() == 1);
         }
-        if (temAnterior) {
+        if (temAnterior && repetirUltimo) {
             T valor = anterior;
             entrega.execute(() -> avisar(ouvinte, valor));
         }

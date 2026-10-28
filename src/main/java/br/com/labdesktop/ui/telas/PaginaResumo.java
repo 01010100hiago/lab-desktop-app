@@ -72,8 +72,8 @@ public final class PaginaResumo extends PaginaDoServidor {
         this.cabecalho = new CabecalhoDoServidor(aoAtualizar == null ? () -> { } : aoAtualizar);
         PainelDoRegistro.Fonte fonte = servidor == null ? null : new PainelDoRegistro.Fonte() {
             @Override
-            public Inscricao assinar(OuvinteDeTopico<br.com.labdesktop.registro.ResultadoDoRegistro> ouvinte) {
-                return servidor.assinarRegistro(ouvinte);
+            public Inscricao assinar(OuvinteDeTopico<br.com.labdesktop.registro.ResultadoDoRegistro> ouvinte, boolean repetirUltimo) {
+                return servidor.assinarRegistro(ouvinte, repetirUltimo);
             }
 
             @Override

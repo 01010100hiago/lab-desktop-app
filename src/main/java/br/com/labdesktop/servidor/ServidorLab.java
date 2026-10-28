@@ -274,7 +274,12 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * Assina o registro geral do servidor (a caixa do Resumo e a janela "Ver tudo", ao ficarem visíveis). A cada 15 s, só com a janela ativa; nada de rede ou processo na EDT.
      */
     public Inscricao assinarRegistro(OuvinteDeTopico<br.com.labdesktop.registro.ResultadoDoRegistro> ouvinte) {
-        return sondador.assinar(topicoDeRegistro, ouvinte);
+        return assinarRegistro(ouvinte, true);
+    }
+
+    /** Com a escolha de receber (ou não) o último registro guardado ao assinar: a leitura avulsa de uma caixa em pausa só quer o resultado NOVO. */
+    public Inscricao assinarRegistro(OuvinteDeTopico<br.com.labdesktop.registro.ResultadoDoRegistro> ouvinte, boolean repetirUltimo) {
+        return sondador.assinar(topicoDeRegistro, ouvinte, repetirUltimo);
     }
 
     /** O tópico do registro (só para os testes conferirem a cadência). */

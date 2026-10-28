@@ -277,11 +277,16 @@ class ResumoComTendenciasERegistroTest {
         final AtomicInteger soltou = new AtomicInteger();
         final AtomicInteger atualizouAgora = new AtomicInteger();
         OuvinteDeTopico<ResultadoDoRegistro> ouvinte;
+        /** O último resultado que o Sondador de verdade guarda: ele o REPETE a quem assina (se pedir). */
+        ResultadoDoRegistro guardado;
 
         @Override
-        public Inscricao assinar(OuvinteDeTopico<ResultadoDoRegistro> o) {
+        public Inscricao assinar(OuvinteDeTopico<ResultadoDoRegistro> o, boolean repetirUltimo) {
             assinou.incrementAndGet();
             ouvinte = o;
+            if (repetirUltimo && guardado != null) {
+                o.aoAtualizar(guardado);
+            }
             return soltou::incrementAndGet;
         }
 
@@ -442,6 +447,48 @@ class ResumoComTendenciasERegistroTest {
         // escondido (outra aba na frente): solta
         Visual.naEdt(() -> p.forcarVisivelParaTeste(false));
         assertEquals(3, f.soltou.get());
+    }
+
+    @Test
+    void atualizarEmPausaNaoMostraORegistroGuardadoComoSeFosseOResultadoDoPedido() {
+        // O Sondador de verdade repete o último valor guardado a quem assina. Antes da correção, isso chegava como "resposta" ao Atualizar: a tela
+        // mostrava o registro VELHO com "Lido às <agora>" e soltava a assinatura antes de a leitura nova chegar (e cada clique mostrava o do anterior).
+        FonteFalsa f = new FonteFalsa();
+        var hora = new java.util.concurrent.atomic.AtomicReference<>(AGORA);
+        PainelDoRegistro p = novoPainel(f, false);
+        p.relogio(hora::get);
+        ResultadoDoRegistro.Lido velho = lido(JOURNAL, "do diário do sistema (journalctl)");
+        f.guardado = velho;
+        Visual.naEdt(() -> p.forcarVisivelParaTeste(true));
+        assertEquals(4, Visual.naEdt(p::linhasQueAparecem).size(), "ao aparecer, o guardado é mostrado (é o que se quer)");
+        String horaDoVelho = Visual.naEdt(p::textoDoStatus);
+        Visual.naEdt(() -> p.botaoPausar().doClick());
+
+        // um pedido novo, cinco minutos depois: o guardado NÃO pode contar como resposta
+        hora.set(AGORA.plusSeconds(300));
+        Visual.naEdt(() -> p.botaoAtualizar().doClick());
+        assertTrue(Visual.naEdt(p::assinada), "continua esperando a leitura nova");
+        assertEquals(horaDoVelho.substring(0, horaDoVelho.indexOf("Lido às") + 7 + 6), Visual.naEdt(p::textoDoStatus).substring(0, horaDoVelho.indexOf("Lido às") + 7 + 6),
+            "a hora na tela continua a da leitura velha: nada foi lido de novo");
+
+        String saidaNova = JOURNAL + "2026-10-28T12:03:00-0300 lab app[1]: linha que só existe na leitura nova\n";
+        Visual.naEdt(() -> f.ouvinte.aoAtualizar(lido(saidaNova, "do diário do sistema (journalctl)")));
+        assertFalse(Visual.naEdt(p::assinada), "com o resultado novo a leitura avulsa termina");
+        List<LinhaDeRegistro> depois = Visual.naEdt(p::linhasQueAparecem);
+        assertEquals(5, depois.size());
+        assertTrue(depois.stream().anyMatch(l -> l.mensagem().contains("só existe na leitura nova")));
+        String hora2 = br.com.labdesktop.util.Formato.fmtHora(AGORA.plusSeconds(300), SP);
+        assertTrue(Visual.naEdt(p::textoDoStatus).contains("Lido às " + hora2), Visual.naEdt(p::textoDoStatus));
+
+        // o clique seguinte espera o seu próprio resultado, não o do anterior
+        f.guardado = lido(saidaNova, "do diário do sistema (journalctl)");
+        hora.set(AGORA.plusSeconds(600));
+        Visual.naEdt(() -> p.botaoAtualizar().doClick());
+        assertTrue(Visual.naEdt(p::assinada));
+        assertTrue(Visual.naEdt(p::textoDoStatus).contains("Lido às " + hora2), "ainda a hora do clique anterior");
+        Visual.naEdt(() -> f.ouvinte.aoConfirmar());
+        assertFalse(Visual.naEdt(p::assinada));
+        assertTrue(Visual.naEdt(p::textoDoStatus).contains("Lido às " + br.com.labdesktop.util.Formato.fmtHora(AGORA.plusSeconds(600), SP)));
     }
 
     @Test

@@ -76,7 +76,11 @@ public final class PainelDoRegistro extends Painel {
 
     /** De onde vêm os resultados (o servidor de verdade, ou nada nos testes que alimentam o painel à mão). */
     public interface Fonte {
-        Inscricao assinar(OuvinteDeTopico<ResultadoDoRegistro> ouvinte);
+        /**
+         * @param repetirUltimo {@code true} entrega logo o último registro guardado (a tela que aparece); {@code false} só o que for lido DEPOIS
+         *                      (a leitura avulsa do "Atualizar" em pausa: o guardado seria a resposta velha a um pedido novo)
+         */
+        Inscricao assinar(OuvinteDeTopico<ResultadoDoRegistro> ouvinte, boolean repetirUltimo);
 
         void atualizarAgora();
     }
@@ -281,6 +285,7 @@ public final class PainelDoRegistro extends Painel {
         if (fonte == null || inscricao != null || (pausado && !leituraAvulsa)) {
             return;
         }
+        // Na leitura avulsa (Atualizar em pausa) o guardado NÃO volta: só vale o resultado que veio depois do pedido.
         inscricao = fonte.assinar(new OuvinteDeTopico<ResultadoDoRegistro>() {
             @Override
             public void aoAtualizar(ResultadoDoRegistro valor) {
@@ -299,7 +304,7 @@ public final class PainelDoRegistro extends Painel {
             public void aoFalhar(ErroApi erro) {
                 aoFalharLeitura();
             }
-        });
+        }, !leituraAvulsa);
     }
 
     /** Só para os testes: faz o que o {@code HierarchyListener} faria quando a aba aparece ({@code true}) ou some ({@code false}); sem janela de verdade o painel nunca está visível. */
