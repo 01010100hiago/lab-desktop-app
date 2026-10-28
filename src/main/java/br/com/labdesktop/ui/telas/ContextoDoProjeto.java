@@ -45,12 +45,21 @@ final class ContextoDoProjeto {
 
     /** O que o botão "Publicar na internet" faz (abre o diálogo; o app só escreve depois do clique de confirmar); o argumento roda quando o diálogo termina. */
     Consumer<Runnable> publicarNaInternet = depois -> { };
+    /** O que "Adicionar domínio" faz (abre o assistente, que primeiro leva ao "Conectar a Cloudflare" se faltar; só escreve no último passo); o argumento roda quando termina. */
+    Consumer<Runnable> adicionarDominio = depois -> { };
     /** O que "Conectar a Cloudflare" faz (abre o diálogo do token; só lê da Cloudflare e grava no cofre local). */
     Consumer<Runnable> conectarCloudflare = depois -> { };
     /** O que "Remover" de um endereço faz (abre o diálogo que pede para digitar o endereço). */
     java.util.function.BiConsumer<String, Runnable> removerEndereco = (host, depois) -> { };
     /** Abre o endereço público no navegador (só um endereço da zona conectada). */
     Consumer<String> abrirEndereco = host -> { };
+
+    /** O que "Baixar" da aba Backups faz (o {@code BaixadorDeBackups} da página); {@code null} nos testes de tela sem ele. */
+    Consumer<java.util.List<br.com.labdesktop.arquivos.PlanoDeBackups.Backup>> baixarBackups;
+    /** O componente com a fila de downloads dos backups (mostrado embaixo da tabela), ou {@code null}. */
+    javax.swing.JComponent baixadorDeBackups;
+    /** O que Encerrar e Reiniciar dos processos do projeto fazem ({@code null}: a lista sem botões). */
+    AcoesDeProcessos acoesDeProcessos;
 
     EstadoServidor estado;
     DetalheProjeto detalhe;

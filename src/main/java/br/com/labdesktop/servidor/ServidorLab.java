@@ -142,6 +142,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private volatile Duration prazoDoTesteDoToken = PRAZO_PADRAO_DO_TESTE_DO_TOKEN;
     /** A fachada da Cloudflare, criada na primeira vez que alguém a pede (sob "this"). */
     private br.com.labdesktop.cloudflare.ServicoCloudflare cloudflare;
+    /** Encerrar e reiniciar processos, montado na primeira vez que alguém o pede (sob "this"). */
+    private br.com.labdesktop.processos.ControleDeProcessos controleDeProcessos;
+    private br.com.labdesktop.processos.LeitorDeProcessosLocais leitorDeProcessosLocais;
 
     /** Para produção: tempos do SSH padrão, agendador do {@code Fundo} e entrega pela EDT. */
     public ServidorLab(String servidorId, AcessoAoCofre cofre, PedidoDeCodigo2fa pedidoDeCodigo) {
@@ -1149,6 +1152,59 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     /** Roda o comando do "Salvar com sudo" do editor de arquivos; {@code null} onde não existe sudo (o computador local). */
     public ProvisionadorRemoto.Executor executorDeSudo() {
         return local ? null : conexao::executar;
+    }
+
+    /**
+     * Encerrar e reiniciar processos deste servidor: por SSH, com o usuário da conexão e SEM sudo; em "Este computador", pelo próprio sistema. Só MONTA (nada roda ao
+     * montar); quem age é o diálogo de confirmação, depois do clique do usuário. O container do agente deste servidor entra na lista de proteção.
+     */
+    public synchronized br.com.labdesktop.processos.ControleDeProcessos controleDeProcessos() {
+        if (controleDeProcessos == null) {
+            if (local) {
+                br.com.labdesktop.processos.ProcessosDoSistema sistema = br.com.labdesktop.processos.ProcessosDoSistema.real();
+                boolean windows = locais.plataforma().sistema() == br.com.labdesktop.plataforma.SistemaOperacional.WINDOWS;
+                controleDeProcessos = new br.com.labdesktop.processos.ControleLocal(sistema, locais.executor(), new br.com.labdesktop.processos.AmbienteDeProcessos(
+                    windows ? br.com.labdesktop.processos.AmbienteDeProcessos.Tipo.COMPUTADOR_WINDOWS : br.com.labdesktop.processos.AmbienteDeProcessos.Tipo.COMPUTADOR_MAC_OU_LINUX,
+                    System.getProperty("user.name"), java.util.Set.of(), sistema.pidsDoApp()));
+            } else {
+                ConfigServidor c = config();
+                controleDeProcessos = new br.com.labdesktop.processos.ControleRemoto(conexao::executar,
+                    br.com.labdesktop.processos.AmbienteDeProcessos.servidor(c.usuario(), java.util.Set.of(comoFalarComOAgente().container())));
+            }
+        }
+        return controleDeProcessos;
+    }
+
+    /**
+     * Monta o instalador do Git deste servidor (só num servidor por SSH; em "Este computador" o git se instala por "Preparar este computador"). NÃO instala nada: quem o aciona é o diálogo de
+     * confirmação, depois do clique do usuário.
+     */
+    public br.com.labdesktop.instalador.InstaladorDeGit instaladorDeGit() {
+        if (local) {
+            throw new IllegalStateException("Em Este computador o git se confere e se instala em \"Preparar este computador\".");
+        }
+        return new br.com.labdesktop.instalador.InstaladorDeGit(conexao::executar);
+    }
+
+    /** Só os testes de tela: troca o controle de processos (um de mentira, sem sinal de verdade). */
+    public synchronized void definirControleDeProcessos(br.com.labdesktop.processos.ControleDeProcessos controle) {
+        this.controleDeProcessos = controle;
+    }
+
+    /** A lista de processos DESTE computador (só em "Este computador": a do agente seria a da máquina virtual do Docker); guarda a leitura anterior para calcular a CPU. */
+    public synchronized br.com.labdesktop.processos.LeitorDeProcessosLocais leitorDeProcessosLocais() {
+        if (!local) {
+            throw new IllegalStateException("A lista de processos do computador é só de Este computador.");
+        }
+        if (leitorDeProcessosLocais == null) {
+            leitorDeProcessosLocais = new br.com.labdesktop.processos.LeitorDeProcessosLocais(br.com.labdesktop.processos.ProcessosDoSistema.real(), java.time.Instant::now);
+        }
+        return leitorDeProcessosLocais;
+    }
+
+    /** Só os testes de tela: troca a leitura da lista local. */
+    public synchronized void definirLeitorDeProcessosLocais(br.com.labdesktop.processos.LeitorDeProcessosLocais leitor) {
+        this.leitorDeProcessosLocais = leitor;
     }
 
     /** É o servidor "Este computador" (sem SSH)? */

@@ -75,6 +75,30 @@ class LinhaProjetoVisualTest {
         assertEquals("Parar x-api", Visual.naEdt(() -> l.botaoCompose().getToolTipText()));
     }
 
+    @Test
+    void menuDaLinhaTemAdicionarDominioLigadoComAsAcoesEDesligadoComAExplicacaoSem() {
+        Visual.tema(Tema.CLARO);
+        List<String> pedidos = new ArrayList<>();
+        LinhaProjetoVisual ligada = linha();
+        Visual.naEdt(() -> ligada.aoAdicionarDominio(pedidos::add));
+        Visual.naEdt(() -> ligada.atualizar(modelo(""), null));
+        javax.swing.JMenuItem item = Visual.naEdt(() -> (javax.swing.JMenuItem) java.util.Arrays.stream(ligada.montarMenu().getComponents())
+            .filter(c -> c instanceof javax.swing.JMenuItem m && "Adicionar domínio…".equals(m.getText())).findFirst().orElseThrow());
+        assertTrue(Visual.naEdt(item::isEnabled));
+        Visual.naEdt(() -> item.doClick());
+        assertEquals(List.of("x-api"), pedidos, "o item leva o nome do projeto ao assistente");
+
+        LinhaProjetoVisual desligada = linhaSomenteLeitura();
+        Visual.naEdt(() -> desligada.aoAdicionarDominio(pedidos::add));
+        Visual.naEdt(() -> desligada.atualizar(modelo(""), null));
+        assertTrue(Visual.naEdt(() -> desligada.botaoMenu().isVisible()), "o menu existe mesmo sem as ações, por causa deste item");
+        javax.swing.JMenuItem apagado = Visual.naEdt(() -> (javax.swing.JMenuItem) java.util.Arrays.stream(desligada.montarMenu().getComponents())
+            .filter(c -> c instanceof javax.swing.JMenuItem m && "Adicionar domínio…".equals(m.getText())).findFirst().orElseThrow());
+        assertFalse(Visual.naEdt(apagado::isEnabled), "aparece desligado, não some");
+        assertEquals("As ações de escrita estão desligadas nesta versão do app.", Visual.naEdt(() -> apagado.getToolTipText()));
+        assertEquals(1, Visual.naEdt(() -> desligada.montarMenu().getComponentCount()), "sem as ações, só este item");
+    }
+
     /**
      * No modo somente leitura a linha mostra o estado, mas
      * nenhum botão que mude o servidor (um clique em "parar" num servidor real roda compose down de até 12 min).

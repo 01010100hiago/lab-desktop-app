@@ -180,6 +180,41 @@ public final class PainelPrincipal extends Painel {
         return br.com.labdesktop.ui.telas.FluxosDeProjeto.liberadasPorPropriedade() && AcoesDaInterface.podeCriarProjeto(servidorEmFoco());
     }
 
+    /**
+     * "Adicionar domínio…" do menu: no projeto que está aberto no servidor em foco, ou, se nenhum está aberto, pergunta para qual projeto. Leva ao "Conectar a Cloudflare" primeiro
+     * se faltar. Só com as ações de escrita liberadas.
+     */
+    public void adicionarDominioNoServidorEmFoco() {
+        ServidorLab lab = servidorEmFoco();
+        if (lab == null) {
+            return;
+        }
+        TelaServidor t = navegacao.telaServidorDe(lab.id());
+        if (t != null && t.projetoAberto() != null) {
+            acoes.adicionarDominio(lab, t.projetoAberto().projeto(), null);
+        } else if (t != null) {
+            acoes.adicionarDominioEscolhendoOProjeto(lab, t.nomesDosProjetos(), null);
+        }
+    }
+
+    /** O item "Adicionar domínio…" vale agora? (um servidor por SSH em foco e as ações liberadas) */
+    public boolean podeAdicionarDominioNoServidorEmFoco() {
+        ServidorLab lab = servidorEmFoco();
+        return lab != null && !lab.ehLocal() && br.com.labdesktop.ui.telas.FluxosDeProjeto.liberadasPorPropriedade();
+    }
+
+    /** Por que o item "Adicionar domínio…" está desligado (a dica dele), ou {@code null} se está ligado. */
+    public String motivoDeNaoAdicionarDominio() {
+        ServidorLab lab = servidorEmFoco();
+        if (lab == null) {
+            return "Abra um servidor para dar um endereço novo a um projeto dele.";
+        }
+        if (lab.ehLocal()) {
+            return "Este computador não tem um túnel da Cloudflare configurado pelo app.";
+        }
+        return br.com.labdesktop.ui.telas.FluxosDeProjeto.liberadasPorPropriedade() ? null : "As ações de escrita estão desligadas nesta versão do app.";
+    }
+
     public AcoesDaInterface acoes() {
         return acoes;
     }

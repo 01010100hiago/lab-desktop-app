@@ -398,6 +398,83 @@ public final class AcoesDaInterface {
         if (recusarSemAsAcoes()) {
             return;
         }
+        abrirPublicacao(lab, projeto, depois, null, null);
+    }
+
+    /**
+     * "Adicionar domínio": o assistente em passos curtos (conta, domínio, endereço, serviço e, no fim, a prévia do que será criado e a confirmação). Sem Cloudflare conectada, abre PRIMEIRO o
+     * "Conectar a Cloudflare" e, depois de salvar, volta e abre o assistente. Mesma trava das outras ações de escrita; só o clique do usuário chega aqui, e nada é escrito antes do "Publicar"
+     * do último passo.
+     */
+    public void adicionarDominio(ServidorLab lab, String projeto, Runnable depois) {
+        if (recusarSemAsAcoes()) {
+            return;
+        }
+        br.com.labdesktop.cloudflare.ServicoCloudflare servico = lab.cloudflare();
+        if (servico.ehLocal()) {
+            avisos.atencao("Adicionar domínio pede um servidor com o cloudflared (o túnel). Este computador não tem um túnel configurado pelo app.");
+            return;
+        }
+        if (!servico.conectado()) {
+            conectarCloudflare(lab, () -> {
+                if (servico.conectado()) {
+                    abrirAssistenteDeDominio(lab, projeto, null, depois);
+                }
+            });
+            return;
+        }
+        abrirAssistenteDeDominio(lab, projeto, null, depois);
+    }
+
+    /**
+     * "Adicionar domínio" a partir do servidor (a aba Cloudflare, que não é de um projeto só): pergunta primeiro PARA QUAL PROJETO e segue para o assistente. Sem projetos, avisa.
+     */
+    public void adicionarDominioEscolhendoOProjeto(ServidorLab lab, List<String> projetos, Runnable depois) {
+        if (recusarSemAsAcoes()) {
+            return;
+        }
+        if (projetos.isEmpty()) {
+            avisos.atencao("Este servidor ainda não tem projetos. Crie ou importe um projeto (Novo projeto) e depois dê um domínio a ele.");
+            return;
+        }
+        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoEscolherProjeto(projetos, escolhido -> adicionarDominio(lab, escolhido, depois)));
+    }
+
+    private void abrirAssistenteDeDominio(ServidorLab lab, String projeto, br.com.labdesktop.ui.dialogos.DialogoPublicar.Predefinicao inicial, Runnable depois) {
+        br.com.labdesktop.cloudflare.ServicoCloudflare servico = lab.cloudflare();
+        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoAdicionarDominio(new br.com.labdesktop.ui.dialogos.DialogoAdicionarDominio.Motor() {
+            @Override
+            public String projeto() {
+                return projeto;
+            }
+
+            @Override
+            public java.util.Optional<br.com.labdesktop.ui.dialogos.DialogoAdicionarDominio.Conexao> conexao() {
+                if (!servico.conectado()) {
+                    return java.util.Optional.empty();
+                }
+                return servico.escolha().map(c -> new br.com.labdesktop.ui.dialogos.DialogoAdicionarDominio.Conexao(c.contaNome(), c.zonaNome(), c.tunelNome(), c.prefixo()));
+            }
+
+            @Override
+            public void conectar(Runnable aoFechar) {
+                conectarCloudflare(lab, aoFechar);
+            }
+
+            @Override
+            public List<br.com.labdesktop.cloudflare.ComposeComEdge.Servico> servicos() throws FalhaDoProjeto {
+                return servico.servicosDoProjeto(projeto);
+            }
+
+            @Override
+            public boolean podeRecriar() {
+                return podeCriarProjeto(lab);
+            }
+        }, inicial, pre -> abrirPublicacao(lab, projeto, depois, pre, () -> abrirAssistenteDeDominio(lab, projeto, pre, depois)), null));
+    }
+
+    /** Abre o diálogo de publicar (a prévia e a confirmação), já preenchido pelo assistente, ou em branco no "Publicar na internet" de sempre. */
+    private void abrirPublicacao(ServidorLab lab, String projeto, Runnable depois, br.com.labdesktop.ui.dialogos.DialogoPublicar.Predefinicao pre, Runnable voltar) {
         br.com.labdesktop.cloudflare.ServicoCloudflare servico = lab.cloudflare();
         if (servico.ehLocal()) {
             avisos.atencao("Publicar na internet pede um servidor com o cloudflared (o túnel). Este computador não tem um túnel configurado pelo app.");
@@ -419,7 +496,7 @@ public final class AcoesDaInterface {
         String zona = servico.escolha().map(br.com.labdesktop.cofre.ConfiguracaoCloudflare::zonaNome).orElse("");
         String prefixo = servico.escolha().map(br.com.labdesktop.cofre.ConfiguracaoCloudflare::prefixo).orElse("lab");
         apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoPublicar(new MotorDaPublicacao(lab, servico, publicador, projeto, zona, prefixo), avisos, CopiadorDeTexto.doSistema(),
-            depois == null ? () -> { } : depois));
+            depois == null ? () -> { } : depois, pre, voltar));
     }
 
     private static final String OCUPADO = "Já há uma publicação ou remoção de endereço em andamento neste servidor. Espere ela terminar e tente de novo.";
@@ -532,6 +609,101 @@ public final class AcoesDaInterface {
         }, avisos, depois == null ? () -> { } : depois));
     }
 
+    // =====================================================================================================
+    // Encerrar e reiniciar processos
+    // =====================================================================================================
+
+    /**
+     * "Encerrar" ou "Reiniciar" um processo da lista: abre a confirmação, que só LÊ ao abrir (a identidade real do processo) e só age depois do clique. Só o CLIQUE do usuário chega
+     * aqui, e a mesma trava das outras ações de escrita ({@code labdesktop.acoes}) vale também por dentro (defesa em profundidade: os botões já aparecem desligados sem ela).
+     * Protegido (PID 1, sshd, o agente, o Docker, o próprio app, o sistema) nunca abre.
+     */
+    public void encerrarOuReiniciarProcesso(ServidorLab lab, br.com.labdesktop.processos.ProcessoAlvo alvo, String origem, br.com.labdesktop.processos.Acao acao,
+                                            Runnable depois) {
+        if (recusarSemAsAcoes()) {
+            return;
+        }
+        br.com.labdesktop.processos.ControleDeProcessos controle = lab.controleDeProcessos();
+        br.com.labdesktop.processos.Oferta oferta = controle.avaliar(alvo);
+        if (oferta.protegido()) {
+            avisos.atencao(oferta.protecao());
+            return;
+        }
+        if (acao == br.com.labdesktop.processos.Acao.REINICIAR && !oferta.reiniciarLigado()) {
+            avisos.info(br.com.labdesktop.processos.AvaliadorDeProcessos.SEM_REINICIAR);
+            return;
+        }
+        boolean windows = controle.ambiente().tipo() == br.com.labdesktop.processos.AmbienteDeProcessos.Tipo.COMPUTADOR_WINDOWS;
+        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoProcesso(alvo, oferta, acao, origem, windows ? "Forçar (taskkill /F)" : "Forçar (SIGKILL)",
+            new br.com.labdesktop.ui.dialogos.DialogoProcesso.Motor() {
+                @Override
+                public br.com.labdesktop.processos.Previa preparar() throws br.com.labdesktop.processos.FalhaDeProcesso, InterruptedException {
+                    return controle.preparar(alvo);
+                }
+
+                @Override
+                public br.com.labdesktop.processos.Resultado encerrar(br.com.labdesktop.processos.Previa previa, br.com.labdesktop.processos.ObservadorDeProcesso obs,
+                                                                           br.com.labdesktop.arquivos.Cancelamento cancelamento) throws InterruptedException {
+                    return controle.encerrar(previa, obs, cancelamento);
+                }
+
+                @Override
+                public br.com.labdesktop.processos.Resultado forcar(br.com.labdesktop.processos.Previa previa, br.com.labdesktop.processos.ObservadorDeProcesso obs,
+                                                                         br.com.labdesktop.arquivos.Cancelamento cancelamento) throws InterruptedException {
+                    return controle.forcar(previa, obs, cancelamento);
+                }
+
+                @Override
+                public br.com.labdesktop.processos.Resultado reiniciar(br.com.labdesktop.processos.Previa previa, br.com.labdesktop.processos.ObservadorDeProcesso obs,
+                                                                            br.com.labdesktop.arquivos.Cancelamento cancelamento) throws InterruptedException {
+                    return controle.reiniciar(previa, obs, cancelamento);
+                }
+            }, CopiadorDeTexto.doSistema(), avisos, () -> {
+                lab.atualizarAgora(); // a lista se atualiza na hora, com o que houver
+                if (depois != null) {
+                    depois.run();
+                }
+            }));
+    }
+
+    /**
+     * "Instalar o Git" num servidor: abre a confirmação, que só LÊ ao abrir e mostra os comandos exatos; só roda depois do clique em "Instalar o Git" (e só se o usuário é root ou tem sudo sem
+     * senha; senão mostra o comando para o usuário rodar no Terminal). Em "Este computador" leva a "Preparar este computador", que já confere o git e propõe como instalar.
+     *
+     * <p>Fora da trava {@code labdesktop.acoes}, como o instalador do agente (que também instala pacotes): a confirmação já mostra o que vai rodar e nada roda sem o clique.
+     *
+     * @param depois roda (na EDT) quando o git passou a estar lá (a tela que abriu relê o estado)
+     */
+    public void instalarGit(ServidorLab lab, Runnable depois) {
+        if (lab.ehLocal()) {
+            prepararEsteComputador(lab);
+            return;
+        }
+        if (!lab.estado().conexao().permiteExec()) {
+            avisos.atencao("O app precisa da conexão por chave com o servidor para instalar o git. Conecte primeiro.");
+            return;
+        }
+        br.com.labdesktop.instalador.InstaladorDeGit git = lab.instaladorDeGit();
+        apresentador.mostrar(new br.com.labdesktop.ui.dialogos.DialogoInstalarGit(lab.estado().nome(), new br.com.labdesktop.ui.dialogos.DialogoInstalarGit.Motor() {
+            @Override
+            public br.com.labdesktop.instalador.InstaladorDeGit.Previa conferir() throws Exception {
+                return git.conferir();
+            }
+
+            @Override
+            public br.com.labdesktop.instalador.InstaladorDeGit.Resultado rodar(br.com.labdesktop.instalador.InstaladorDeGit.Previa previa,
+                                                                                         br.com.labdesktop.instalador.InstaladorDeGit.Observador observador,
+                                                                                         br.com.labdesktop.arquivos.Cancelamento cancelamento) throws InterruptedException {
+                return git.instalar(previa, observador, cancelamento);
+            }
+
+            @Override
+            public br.com.labdesktop.instalador.InstaladorDeGit.Estado conferirDeNovo() throws Exception {
+                return git.conferirOGit();
+            }
+        }, CopiadorDeTexto.doSistema(), avisos, depois));
+    }
+
     /** O que o diálogo "Novo projeto" usa do domínio, sobre o servidor de verdade. */
     private final class MotorDeProjetos implements DialogoNovoProjeto.Motor {
         private final ServidorLab lab;
@@ -610,6 +782,29 @@ public final class AcoesDaInterface {
         @Override
         public java.util.Optional<java.nio.file.Path> escolherPasta() {
             return escolhedor.escolherPastaParaImportar();
+        }
+
+        @Override
+        public java.util.Optional<Boolean> gitInstalado() {
+            try {
+                if (lab.ehLocal()) {
+                    // o mesmo critério da conferência de "Preparar este computador": no Mac o /usr/bin/git sem as ferramentas da Apple é só um atalho, e não conta
+                    return java.util.Optional.of(br.com.labdesktop.local.GitLocal.versao(lab.servicosLocais().sonda(), lab.servicosLocais().executor(),
+                        lab.servicosLocais().plataforma().sistema()).isPresent());
+                }
+                return java.util.Optional.of(lab.instaladorDeGit().conferirOGit().instalado());
+            } catch (java.io.IOException | RuntimeException e) {
+                return java.util.Optional.empty();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return java.util.Optional.empty();
+            }
+        }
+
+        @Override
+        public boolean instalarGit(Runnable depois) {
+            AcoesDaInterface.this.instalarGit(lab, depois);
+            return true;
         }
     }
 

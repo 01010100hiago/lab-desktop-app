@@ -98,6 +98,8 @@ final class LinhaProjetoVisual extends Painel {
     private final Botao botaoCompose = Botoes.icone("play", "Iniciar");
     private final Botao botaoAbrirClaude = Botoes.iconePrimario("terminal", "Abrir Claude");
     private final Botao botaoMenu = Botoes.icone("mais-acoes", "Mais ações");
+    /** O que "Adicionar domínio…" do menu faz (recebe o nome do projeto); {@code null}: o item não existe. */
+    private java.util.function.Consumer<String> aoAdicionarDominio;
     // login pendente
     private final JPanel faixaDeLogin = new Painel(new BorderLayout(10, 0)).fundo(Tokens.ATENCAO_SUAVE).borda(Tokens.ATENCAO).raio(10);
     private final Rotulo tituloDoLogin = new Rotulo().negrito();
@@ -408,7 +410,7 @@ final class LinhaProjetoVisual extends Painel {
         botaoAbrirClaude.setVisible(comClaude && acoes && m.oferecerAbrirClaude());
         botaoAbrirClaude.setToolTipText("Abrir Claude em " + m.nome());
         botaoAbrirClaude.getAccessibleContext().setAccessibleName("Abrir Claude em " + m.nome());
-        botaoMenu.setVisible(acoes && m.temMenu());
+        botaoMenu.setVisible(aoAdicionarDominio != null || acoes && m.temMenu());
         botaoMenu.getAccessibleContext().setAccessibleName("Mais ações em " + m.nome());
 
         faixaDeLogin.setVisible(m.temAlerta());
@@ -523,22 +525,32 @@ final class LinhaProjetoVisual extends Painel {
 
     /** O menu "mais ações" com o que vale para o retrato de agora (montado na hora, nunca guardado). */
     JPopupMenu montarMenu() {
-        if (modelo == null || !fluxos.liberadas()) {
+        if (modelo == null || (!fluxos.liberadas() && aoAdicionarDominio == null)) {
             return null;
         }
         JPopupMenu menu = new JPopupMenu();
         String p = modelo.nome();
-        if (modelo.temCompose()) {
+        if (fluxos.liberadas() && modelo.temCompose()) {
             menu.add(item("Reiniciar", "atualizar", false, () -> fluxos.reiniciar(p)));
         }
-        if (modelo.oferecerReiniciarSessao()) {
+        if (fluxos.liberadas() && modelo.oferecerReiniciarSessao()) {
             menu.add(item("Reiniciar sessão (continua a conversa)", "atualizar", false, () -> fluxos.pedirReabrir(p)));
         }
-        if (modelo.oferecerDefinirLimite()) {
+        if (fluxos.liberadas() && modelo.oferecerDefinirLimite()) {
             menu.add(item("Definir limite", "moeda", false, () -> fluxos.definirLimite(p, limite, null)));
         }
-        if (modelo.oferecerFecharSessao()) {
+        if (fluxos.liberadas() && modelo.oferecerFecharSessao()) {
             menu.add(item("Fechar sessão", "fechar", true, () -> fluxos.fecharSessao(p)));
+        }
+        if (aoAdicionarDominio != null) {
+            // "Adicionar domínio…" nunca some: sem as ações ligadas aparece desligado, com a explicação
+            JMenuItem dominio = item("Adicionar domínio…", "externo", false, () -> aoAdicionarDominio.accept(p));
+            dominio.setName("adicionar-dominio");
+            if (!fluxos.liberadas()) {
+                dominio.setEnabled(false);
+                dominio.setToolTipText(TextosDeAcao.TRAVA);
+            }
+            menu.add(dominio);
         }
         return menu;
     }
@@ -617,6 +629,11 @@ final class LinhaProjetoVisual extends Painel {
 
     Botao botaoAbrirClaude() {
         return botaoAbrirClaude;
+    }
+
+    /** Liga o item "Adicionar domínio…" do menu "mais ações" (a lista de projetos o liga ao assistente). */
+    void aoAdicionarDominio(java.util.function.Consumer<String> acao) {
+        this.aoAdicionarDominio = acao;
     }
 
     Botao botaoMenu() {

@@ -12,9 +12,16 @@ public final class PaginaMaquina extends PaginaDoServidor {
     private static final long serialVersionUID = 1L;
 
     private final DetalhesDaMaquina detalhes = new DetalhesDaMaquina();
+    private final BlocoDoGit git;
 
     public PaginaMaquina(ServidorLab servidor, Runnable aoAtualizar) {
+        this(servidor, aoAtualizar, null);
+    }
+
+    /** @param acoes as ações da janela (o "Instalar o Git…" do bloco do git abre a confirmação); {@code null}: o bloco só mostra o estado */
+    PaginaMaquina(ServidorLab servidor, Runnable aoAtualizar, br.com.labdesktop.ui.AcoesDaInterface acoes) {
         super(servidor, aoAtualizar);
+        this.git = new BlocoDoGit(servidor, acoes);
         iniciar();
     }
 
@@ -35,7 +42,22 @@ public final class PaginaMaquina extends PaginaDoServidor {
 
     @Override
     JComponent montarConteudo() {
-        return detalhes;
+        return br.com.labdesktop.ui.componentes.Caixa.coluna(12, detalhes, git);
+    }
+
+    /** A aba apareceu: confere o git neste servidor (só leitura). */
+    @Override
+    void aoAssinarMais() {
+        git.conferir();
+    }
+
+    @Override
+    void aoSoltarMais() {
+        git.soltar();
+    }
+
+    BlocoDoGit git() {
+        return git;
     }
 
     @Override

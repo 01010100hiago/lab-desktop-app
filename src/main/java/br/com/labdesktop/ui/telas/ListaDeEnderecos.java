@@ -30,17 +30,23 @@ final class ListaDeEnderecos extends Painel {
 
     private final boolean mostrarProjeto;
     private final boolean comRemover;
+    private final boolean removerLigado;
     private final transient Consumer<String> aoAbrir;
     private final transient Consumer<String> aoRemover;
     private final List<Botao> botoesDeRemover = new ArrayList<>();
     private final List<Botao> botoesDeAbrir = new ArrayList<>();
     private final List<String> hostnames = new ArrayList<>();
 
-    ListaDeEnderecos(boolean mostrarProjeto, boolean comRemover, Consumer<String> aoAbrir, Consumer<String> aoRemover) {
+    /**
+     * @param mostrarProjeto mostra de que projeto é cada endereço (a aba do servidor)
+     * @param removerLigado  o botão Remover vale: com as ações de escrita desligadas ele aparece DESLIGADO, com a explicação, e não some
+     */
+    ListaDeEnderecos(boolean mostrarProjeto, boolean removerLigado, Consumer<String> aoAbrir, Consumer<String> aoRemover) {
         super();
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         this.mostrarProjeto = mostrarProjeto;
-        this.comRemover = comRemover;
+        this.comRemover = true;
+        this.removerLigado = removerLigado;
         this.aoAbrir = aoAbrir;
         this.aoRemover = aoRemover;
         setName("lista-de-enderecos");
@@ -91,6 +97,10 @@ final class ListaDeEnderecos extends Painel {
             remover.setToolTipText("Tira a regra do túnel e o registro de DNS que o app criou (pede confirmação)");
             remover.getAccessibleContext().setAccessibleName("Remover " + e.hostname());
             remover.addActionListener(x -> aoRemover.accept(e.hostname()));
+            if (!removerLigado) {
+                remover.setEnabled(false);
+                remover.setToolTipText(TextosDeAcao.TRAVA);
+            }
             botoesDeRemover.add(remover);
             direita.add(remover);
         }

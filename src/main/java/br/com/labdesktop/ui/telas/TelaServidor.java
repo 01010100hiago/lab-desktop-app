@@ -148,8 +148,9 @@ public final class TelaServidor extends Painel {
         this.seguranca = new PaginaSeguranca(servidor, aoAtualizar,
             servidor == null || projetos.acoes() == null || servidor.ehLocal() ? null : () -> projetos.acoes().desligarSenha(servidor));
         this.containers = new PaginaContainers(servidor, aoAtualizar);
-        this.processos = new PaginaProcessos(servidor, aoAtualizar);
-        this.maquina = new PaginaMaquina(servidor, aoAtualizar);
+        this.processos = new PaginaProcessos(servidor, aoAtualizar,
+            AcoesDeProcessos.de(servidor, projetos.acoes(), projetos.fluxos()::liberadas));
+        this.maquina = new PaginaMaquina(servidor, aoAtualizar, projetos.acoes());
         this.servicosDeArquivos = servicos;
         this.escolhedor = escolhedor;
         this.arquivos = new GerenciadorDeArquivos(ContextoDeArquivos.de(servidor, null, servicos, projetos.fluxos().liberadas(),
@@ -157,7 +158,7 @@ public final class TelaServidor extends Painel {
 
         this.contextoDeTerminal = servidor == null ? null : ContextoDeTerminal.de(servidor, preferencias, projetos.navegador());
         this.terminais = new PaginaTerminal(contextoDeTerminal, projetos.fluxos().avisos());
-        this.cloudflare = new PaginaCloudflare(servidor, projetos.acoes(), projetos.fluxos().liberadas(), projetos.fluxos().avisos());
+        this.cloudflare = new PaginaCloudflare(servidor, projetos.acoes(), projetos.fluxos().liberadas(), projetos.fluxos().avisos(), projetos::adicionarDominioEscolhendoOProjeto);
 
         for (Aba a : Aba.values()) {
             abas.adicionar(a.id, a.rotulo);
@@ -356,6 +357,11 @@ public final class TelaServidor extends Painel {
             }
 
             @Override
+            public void adicionarDominio(Runnable depois) {
+                projetos.adicionarDominioDe(nome, depois);
+            }
+
+            @Override
             public void conectarCloudflare(Runnable depois) {
                 projetos.conectarCloudflareDe(depois);
             }
@@ -368,6 +374,16 @@ public final class TelaServidor extends Painel {
             @Override
             public void abrirEndereco(String hostname) {
                 projetos.abrirEnderecoDe(hostname);
+            }
+
+            @Override
+            public br.com.labdesktop.processos.Oferta avaliarProcesso(br.com.labdesktop.processos.ProcessoAlvo alvo) {
+                return servidor == null ? null : servidor.controleDeProcessos().avaliar(alvo);
+            }
+
+            @Override
+            public void abrirProcesso(br.com.labdesktop.processos.ProcessoAlvo alvo, String origem, br.com.labdesktop.processos.Acao acao, Runnable depois) {
+                projetos.abrirProcessoDe(alvo, origem, acao, depois);
             }
         }, () -> projetos.urlDeLoginDe(nome), aoAtualizarProjeto, CopiadorDeTexto.doSistema(), servicosDeArquivos, escolhedor,
             contextoDeTerminal);
@@ -457,6 +473,11 @@ public final class TelaServidor extends Painel {
 
     public PaginaContainers containers() {
         return containers;
+    }
+
+    /** Os nomes dos projetos que a lista mostra agora (o menu "Adicionar domínio…" pergunta entre eles). */
+    public java.util.List<String> nomesDosProjetos() {
+        return projetos.nomesDosProjetos();
     }
 
     public PaginaProcessos processos() {

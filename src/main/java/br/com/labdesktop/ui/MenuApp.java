@@ -44,6 +44,7 @@ public final class MenuApp {
     private JMenuItem itemDiminuir;
     private JMenuItem itemNormal;
     private JMenuItem itemNovoProjeto;
+    private JMenuItem itemAdicionarDominio;
     private JMenuItem itemUltimoProjeto;
     private br.com.labdesktop.servidor.Inscricao inscricaoDoEstado;
     private JMenuItem itemVoltarAosProjetos;
@@ -123,6 +124,9 @@ public final class MenuApp {
         itemNovoProjeto = item("novo-projeto", "Novo projeto…", KeyStroke.getKeyStroke(KeyEvent.VK_N, atalho() | java.awt.event.InputEvent.SHIFT_DOWN_MASK),
             () -> painel.novoProjetoNoServidorEmFoco());
         arquivo.add(itemNovoProjeto);
+        // "Adicionar domínio…": no projeto aberto, ou pergunta para qual projeto (sem atalho: não é ação de todo dia)
+        itemAdicionarDominio = item("adicionar-dominio", "Adicionar domínio…", null, () -> painel.adicionarDominioNoServidorEmFoco());
+        arquivo.add(itemAdicionarDominio);
         arquivo.addSeparator();
         // A tecla de comando do sistema (Cmd no Mac, Ctrl nos outros) e a vírgula: o atalho de Ajustes de todo app.
         itemAjustes = item("ajustes", "Ajustes…", KeyStroke.getKeyStroke(KeyEvent.VK_COMMA, atalho()), () -> painel.mostrarAjustes(null));
@@ -336,6 +340,8 @@ public final class MenuApp {
     /** "Novo projeto…" só com as ações liberadas e um servidor em foco que cria projeto (o agente do lab, ou este computador). */
     public void atualizarHabilitacaoDoNovoProjeto() {
         itemNovoProjeto.setEnabled(painel.podeCriarProjetoNoServidorEmFoco());
+        itemAdicionarDominio.setEnabled(painel.podeAdicionarDominioNoServidorEmFoco());
+        itemAdicionarDominio.setToolTipText(painel.motivoDeNaoAdicionarDominio());
     }
 
     /** "Último projeto aberto" só com um projeto para reabrir; "Voltar à lista" só com uma página de projeto aberta. */
@@ -365,6 +371,10 @@ public final class MenuApp {
 
     public JMenuItem itemNovoProjeto() {
         return itemNovoProjeto;
+    }
+
+    public JMenuItem itemAdicionarDominio() {
+        return itemAdicionarDominio;
     }
 
     public JMenuItem itemUltimoProjeto() {

@@ -184,14 +184,17 @@ class PaginasDaCloudflareTest {
     }
 
     @Test
-    void semAsAcoesLiberadasNaoHaBotaoDeRemover() throws Exception {
+    void semAsAcoesLiberadasORemoverApareceDesligadoComAExplicacaoENaoSome() throws Exception {
         c.conectarPorArquivo();
         publicarDemo();
         PaginaCloudflare p = paginaDoServidor(false);
         recarregar(p);
         assertEquals(List.of("lab-demo.example.com"), ed(p::enderecosMostrados));
-        assertEquals(0, ed(() -> p.botoesDeRemover().size()));
+        assertEquals(1, ed(() -> p.botoesDeRemover().size()), "o botão não some");
+        assertFalse(ed(() -> p.botoesDeRemover().get(0).isEnabled()), "mas fica desligado");
+        assertEquals("As ações de escrita estão desligadas nesta versão do app.", ed(() -> p.botoesDeRemover().get(0).getToolTipText()));
         assertEquals(1, ed(() -> p.botoesDeAbrir().size()), "ver e abrir continuam");
+        assertFalse(ed(() -> p.botaoAdicionarDominio().isEnabled()), "Adicionar domínio também aparece desligado");
         assertTrue(CenarioDeCloudflare.textos(p).contains("Remover endereços fica desligado"));
     }
 
@@ -370,14 +373,18 @@ class PaginasDaCloudflareTest {
     }
 
     @Test
-    void semAsAcoesLiberadasNaoHaPublicarNemRemover() throws Exception {
+    void semAsAcoesLiberadasPublicarAdicionarERemoverApareceremDesligados() throws Exception {
         c.conectarPorArquivo();
         publicarDemo();
         TelaProjeto t = telaDoProjeto(false, new SaidaDaInternet());
         recarregar(t);
         PaginaInternet p = t.internet();
-        assertFalse(ed(() -> (p.componentes().contains(p.botaoPublicar()) && p.aparece(p.botaoPublicar()))));
-        assertEquals(0, ed(() -> p.botoesDeRemover().size()));
+        assertTrue(ed(() -> (p.componentes().contains(p.botaoPublicar()) && p.aparece(p.botaoPublicar()))), "o botão não some");
+        assertFalse(ed(() -> p.botaoPublicar().isEnabled()));
+        assertFalse(ed(() -> p.botaoAdicionarDominio().isEnabled()));
+        assertEquals("As ações de escrita estão desligadas nesta versão do app.", ed(() -> p.botaoPublicar().getToolTipText()));
+        assertEquals(1, ed(() -> p.botoesDeRemover().size()));
+        assertFalse(ed(() -> p.botoesDeRemover().get(0).isEnabled()));
         assertEquals(List.of("lab-demo.example.com"), ed(p::enderecosMostrados), "ver continua");
         assertTrue(ed(p::textos).contains("ficam desligados"), ed(p::textos));
     }

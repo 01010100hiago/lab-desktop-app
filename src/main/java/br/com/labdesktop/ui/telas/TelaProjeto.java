@@ -23,6 +23,7 @@ import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
 import br.com.labdesktop.ui.componentes.Selo;
 import br.com.labdesktop.ui.terminal.ContextoDeTerminal;
+import br.com.labdesktop.ui.telas.arquivos.BaixadorDeBackups;
 import br.com.labdesktop.ui.telas.arquivos.ContextoDeArquivos;
 import br.com.labdesktop.ui.telas.arquivos.EscolhedorLocal;
 import br.com.labdesktop.ui.telas.arquivos.GerenciadorDeArquivos;
@@ -50,8 +51,8 @@ import javax.swing.text.JTextComponent;
 
 /**
  * A página de UM projeto (ARQUITETURA 8.1, tradução de {@code projeto.html}): o cabeçalho com "‹ Projetos" (volta à lista; Esc
- * também), o nome e o estado, e as abas por assunto: Visão geral, Logs, Terminal (o shell do projeto e, se o servidor tem Claude, a sessão dele), Arquivos, Backups e
- * Consumo e limite.
+ * também), o nome e o estado, e as abas por assunto: Visão geral, Logs, Terminal (o shell do projeto e, se o servidor tem Claude, a sessão dele), Arquivos, Backups,
+ * Consumo e limite, Internet e Processos.
  * Abre no lugar da página do servidor (quem a abre e fecha é a {@link TelaServidor}); a aba escolhida fica lembrada por projeto
  * enquanto o app estiver aberto ({@link Saida#abaMudou}).
  *
@@ -71,7 +72,8 @@ public final class TelaProjeto extends Painel {
         ARQUIVOS("arquivos", "Arquivos"),
         BACKUPS("backups", "Backups"),
         CONSUMO("consumo", "Consumo e limite"),
-        INTERNET("internet", "Internet");
+        INTERNET("internet", "Internet"),
+        PROCESSOS("processos", "Processos");
 
         private final String id;
         private final String rotulo;
@@ -120,11 +122,22 @@ public final class TelaProjeto extends Painel {
         /** O usuário pediu "Conectar a Cloudflare" (abre o diálogo do token). */
         default void conectarCloudflare(Runnable depois) { }
 
+        /** O usuário pediu "Adicionar domínio" (a janela abre o assistente; o app só escreve no último passo, depois do clique de confirmar). {@code depois} roda quando termina. */
+        default void adicionarDominio(Runnable depois) { }
+
         /** O usuário pediu para remover um endereço publicado (abre o diálogo de confirmação). */
         default void removerEndereco(String hostname, Runnable depois) { }
 
         /** O usuário pediu para abrir um endereço público no navegador. */
         default void abrirEndereco(String hostname) { }
+
+        /** O que se oferece para um processo da lista (só a regra, sem rede); {@code null}: a aba Processos sem botões. */
+        default br.com.labdesktop.processos.Oferta avaliarProcesso(br.com.labdesktop.processos.ProcessoAlvo alvo) {
+            return null;
+        }
+
+        /** O usuário pediu Encerrar ou Reiniciar um processo (a janela abre a confirmação; o app só age depois do clique). */
+        default void abrirProcesso(br.com.labdesktop.processos.ProcessoAlvo alvo, String origem, br.com.labdesktop.processos.Acao acao, Runnable depois) { }
     }
 
     private final transient ServidorLab servidor;
@@ -136,12 +149,16 @@ public final class TelaProjeto extends Painel {
     private final Selo estado = new Selo("", br.com.labdesktop.ui.Gravidade.NEUTRO);
     private final Rotulo leitura = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f);
     private final Botao atualizar = Botoes.mini("Atualizar", "atualizar");
+    /** "Adicionar domínio…" na barra da página do projeto, em toda aba: o usuário não achava onde dar um endereço novo ao projeto. Desligado, com a explicação, quando não vale. */
+    private final Botao adicionarDominio = Botoes.mini("Adicionar domínio…", "externo");
     private final Abas abas = new Abas();
     private final CardLayout cartoes = new CartoesAjustaveis();
     private final JPanel corpo = new Painel(cartoes);
     private final Map<Aba, PaginaDoProjeto> paginas = new EnumMap<>(Aba.class);
     /** A aba Arquivos é o gerenciador de arquivos (SFTP), o mesmo componente da aba do servidor, com a raiz travada neste projeto. */
     private final GerenciadorDeArquivos arquivos;
+    /** A aba Backups baixa pela fila de transferências, com o mesmo contexto do gerenciador de arquivos. */
+    private final BaixadorDeBackups baixador;
     private Aba atual;
     private transient Inscricao inscricaoDoDetalhe;
     private transient Inscricao inscricaoDoEstado;
@@ -199,18 +216,42 @@ public final class TelaProjeto extends Painel {
         this.ctx.adicionarContainer = saida::adicionarContainer;
         this.ctx.podeAdicionarContainer = saida::podeAdicionarContainer;
         this.ctx.publicarNaInternet = saida::publicarNaInternet;
+        this.ctx.adicionarDominio = saida::adicionarDominio;
         this.ctx.conectarCloudflare = saida::conectarCloudflare;
         this.ctx.removerEndereco = saida::removerEndereco;
         this.ctx.abrirEndereco = saida::abrirEndereco;
+        this.ctx.acoesDeProcessos = new AcoesDeProcessos() {
+            @Override
+            public boolean liberadas() {
+                return fluxos != null && fluxos.liberadas();
+            }
+
+            @Override
+            public br.com.labdesktop.processos.Oferta avaliar(br.com.labdesktop.processos.ProcessoAlvo alvo) {
+                br.com.labdesktop.processos.Oferta o = saida.avaliarProcesso(alvo);
+                return o != null ? o : br.com.labdesktop.processos.AvaliadorDeProcessos.avaliar(alvo,
+                    br.com.labdesktop.processos.AmbienteDeProcessos.servidor("", java.util.Set.of()));
+            }
+
+            @Override
+            public void abrir(br.com.labdesktop.processos.ProcessoAlvo alvo, String origem, br.com.labdesktop.processos.Acao acao, Runnable depois) {
+                saida.abrirProcesso(alvo, origem, acao, depois);
+            }
+        };
 
         paginas.put(Aba.VISAO_GERAL, new PaginaVisaoGeral(ctx));
         paginas.put(Aba.LOGS, new PaginaLogs(ctx));
         paginas.put(Aba.TERMINAL, new PaginaTerminalDoProjeto(ctx));
-        this.arquivos = new GerenciadorDeArquivos(ContextoDeArquivos.de(servidor, projeto, servicos, fluxos != null && fluxos.liberadas(),
-            avisos, fluxos == null ? dialogo -> { } : fluxos.apresentador(), escolhedor).comCopiador(copiador));
+        ContextoDeArquivos contextoDeArquivos = ContextoDeArquivos.de(servidor, projeto, servicos, fluxos != null && fluxos.liberadas(),
+            avisos, fluxos == null ? dialogo -> { } : fluxos.apresentador(), escolhedor).comCopiador(copiador);
+        this.arquivos = new GerenciadorDeArquivos(contextoDeArquivos);
+        this.baixador = new BaixadorDeBackups(contextoDeArquivos, ctx.pastaDoProjeto);
+        this.ctx.baixarBackups = baixador::baixar;
+        this.ctx.baixadorDeBackups = baixador;
         paginas.put(Aba.BACKUPS, new PaginaBackups(ctx));
         paginas.put(Aba.CONSUMO, new PaginaConsumo(ctx));
         paginas.put(Aba.INTERNET, new PaginaInternet(ctx));
+        paginas.put(Aba.PROCESSOS, new PaginaProcessosDoProjeto(ctx));
 
         voltar.setToolTipText("Volta para a lista de projetos (Esc)");
         voltar.getAccessibleContext().setAccessibleName("Voltar para a lista de projetos");
@@ -219,7 +260,11 @@ public final class TelaProjeto extends Painel {
         atualizar.setToolTipText("Consulta o servidor agora");
         atualizar.addActionListener(e -> ctx.aoAtualizar.run());
         nome.setToolTipText(projeto);
-        JPanel linha = Caixa.linha(12, voltar, nome, new AEsquerda(estado), Caixa.mola(), leitura, atualizar);
+        adicionarDominio.setName("adicionar-dominio");
+        adicionarDominio.getAccessibleContext().setAccessibleName("Adicionar domínio a este projeto");
+        adicionarDominio.addActionListener(e -> ctx.adicionarDominio.accept(this::recarregarInternet));
+        atualizarBotaoDoDominio();
+        JPanel linha = Caixa.linha(12, voltar, nome, new AEsquerda(estado), Caixa.mola(), leitura, adicionarDominio, atualizar);
         linha.setBorder(javax.swing.BorderFactory.createEmptyBorder(6, 10, 4, 18));
         abas.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 12, 0, 12));
         for (Aba a : Aba.values()) {
@@ -227,10 +272,10 @@ public final class TelaProjeto extends Painel {
             corpo.add(a == Aba.ARQUIVOS ? arquivos : paginas.get(a), a.id);
         }
         if (servidor != null && servidor.ehLocal()) {
-            // "Este computador": logs, backups e consumo são do agente do lab; a página nasce sem eles (e não os pisca até o primeiro detalhe)
+            // "Este computador": logs e consumo são do agente do lab (os backups são da pasta backups/ do projeto, lidos pelo app); a página nasce sem eles (e não os pisca até o primeiro detalhe)
             abas.definirVisivel(Aba.LOGS.id, false);
-            abas.definirVisivel(Aba.BACKUPS.id, false);
             abas.definirVisivel(Aba.CONSUMO.id, false);
+            abas.definirVisivel(Aba.PROCESSOS.id, false); // os programas de um projeto local rodam no Docker: Reiniciar e Parar na Visão geral
         }
         abas.aoSelecionar(id -> mostrarAba(Aba.de(id)));
         JPanel topo = new Painel(new BorderLayout());
@@ -389,13 +434,14 @@ public final class TelaProjeto extends Painel {
 
     /** Editores com alterações não salvas e transferências ainda abertas desta página (para quem vai sair do app). */
     public br.com.labdesktop.ui.Pendencias pendencias() {
-        return new br.com.labdesktop.ui.Pendencias(arquivos.transferenciasEmAberto(), arquivos.editoresComAlteracoes());
+        return new br.com.labdesktop.ui.Pendencias(arquivos.transferenciasEmAberto() + baixador.emAberto(), arquivos.editoresComAlteracoes());
     }
 
     /** A página saiu de vez: fecha o canal SFTP, os editores e os terminais. */
     public void encerrar() {
         soltar();
         arquivos.encerrar();
+        baixador.encerrar();
         fecharTerminais();
     }
 
@@ -469,16 +515,30 @@ public final class TelaProjeto extends Painel {
         redesenhar();
     }
 
+    /** "Adicionar domínio…": ligado quando as ações estão liberadas e o servidor tem túnel; senão desligado e com a razão na dica (nunca some). */
+    private void atualizarBotaoDoDominio() {
+        boolean local = servidor != null && servidor.ehLocal();
+        boolean liberadas = ctx.acoesLiberadas();
+        adicionarDominio.setEnabled(liberadas && !local);
+        adicionarDominio.setToolTipText(local ? "Este computador não tem um túnel da Cloudflare configurado pelo app: o endereço público é de um servidor por SSH."
+            : !liberadas ? TextosDeAcao.TRAVA : "Dá a este projeto um endereço novo na internet, em passos curtos (nada é escrito antes da sua confirmação)");
+    }
+
+    private void recarregarInternet() {
+        internet().recarregar();
+    }
+
     private void redesenhar() {
+        atualizarBotaoDoDominio();
         atualizarCabecalho();
         // Servidor sem Claude: não há consumo nem limite do plano a mostrar, então a aba some (e, se estava aberta, a Visão geral a substitui).
         boolean semClaude = (ctx.estado != null && Boolean.FALSE.equals(ctx.estado.temClaude())) || (ctx.detalhe != null && !ctx.temClaude());
-        // "Este computador": os projetos vêm da pasta e do Docker, sem o agente de projetos; logs, backups e consumo são do agente do lab
+        // "Este computador": os projetos vêm da pasta e do Docker, sem o agente de projetos; logs e consumo são do agente do lab, e os backups vêm da pasta backups/
         boolean local = servidor != null && servidor.ehLocal();
         abas.definirVisivel(Aba.LOGS.id, !local);
-        abas.definirVisivel(Aba.BACKUPS.id, !local);
         abas.definirVisivel(Aba.CONSUMO.id, !semClaude && !local);
-        if ((semClaude || local) && atual == Aba.CONSUMO || local && (atual == Aba.LOGS || atual == Aba.BACKUPS)) {
+        abas.definirVisivel(Aba.PROCESSOS.id, !local);
+        if ((semClaude || local) && atual == Aba.CONSUMO || local && (atual == Aba.LOGS || atual == Aba.PROCESSOS)) {
             mostrarAba(Aba.VISAO_GERAL);
         }
         paginas.values().forEach(PaginaDoProjeto::redesenhar);
@@ -523,6 +583,19 @@ public final class TelaProjeto extends Painel {
         return arquivos;
     }
 
+    /** O contexto da página (os testes trocam o que "Baixar" e as ações de processos fazem). */
+    ContextoDoProjeto contexto() {
+        return ctx;
+    }
+
+    BaixadorDeBackups baixador() {
+        return baixador;
+    }
+
+    PaginaProcessosDoProjeto processos() {
+        return (PaginaProcessosDoProjeto) paginas.get(Aba.PROCESSOS);
+    }
+
     PaginaBackups backups() {
         return (PaginaBackups) paginas.get(Aba.BACKUPS);
     }
@@ -537,6 +610,10 @@ public final class TelaProjeto extends Painel {
 
     Botao botaoVoltar() {
         return voltar;
+    }
+
+    Botao botaoAdicionarDominio() {
+        return adicionarDominio;
     }
 
     Botao botaoAtualizar() {

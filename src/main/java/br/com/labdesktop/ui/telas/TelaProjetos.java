@@ -349,6 +349,29 @@ public final class TelaProjetos extends Painel {
         acoesUi.publicarNaInternet(servidor, projeto, depois);
     }
 
+    /** "Adicionar domínio" a um projeto: abre o assistente (que leva ao "Conectar a Cloudflare" primeiro, se faltar). Só com as ações liberadas. */
+    void adicionarDominioDe(String projeto, Runnable depois) {
+        if (acoesUi == null || servidor == null || !fluxos.liberadas()) {
+            return;
+        }
+        acoesUi.adicionarDominio(servidor, projeto, depois);
+    }
+
+    /** "Adicionar domínio" a partir do servidor (aba Cloudflare): pergunta o projeto e segue para o assistente. Só com as ações liberadas. */
+    void adicionarDominioEscolhendoOProjeto(Runnable depois) {
+        if (acoesUi == null || servidor == null || !fluxos.liberadas()) {
+            return;
+        }
+        acoesUi.adicionarDominioEscolhendoOProjeto(servidor, nomesDosProjetos(), depois);
+    }
+
+    /** Os nomes dos projetos que a lista mostra agora. */
+    public List<String> nomesDosProjetos() {
+        List<String> nomes = new ArrayList<>();
+        modelos.forEach(m -> nomes.add(m.nome()));
+        return nomes;
+    }
+
     /** "Conectar a Cloudflare": o diálogo do token (só lê da Cloudflare e grava no cofre local; não depende da trava das ações). */
     void conectarCloudflareDe(Runnable depois) {
         if (acoesUi == null || servidor == null) {
@@ -363,6 +386,14 @@ public final class TelaProjetos extends Painel {
             return;
         }
         acoesUi.removerEnderecoDaInternet(servidor, hostname, depois);
+    }
+
+    /** Encerrar ou Reiniciar um processo (a aba Processos de um projeto): abre a confirmação. Só com as ações liberadas (a trava vale também dentro das ações da janela). */
+    void abrirProcessoDe(br.com.labdesktop.processos.ProcessoAlvo alvo, String origem, br.com.labdesktop.processos.Acao acao, Runnable depois) {
+        if (acoesUi == null || servidor == null || !fluxos.liberadas()) {
+            return;
+        }
+        acoesUi.encerrarOuReiniciarProcesso(servidor, alvo, origem, acao, depois);
     }
 
     /** Abre no navegador um endereço público da zona conectada. */
@@ -602,7 +633,13 @@ public final class TelaProjetos extends Painel {
         List<LinhaProjetoVisual> ordem = new ArrayList<>(visiveis.size());
         for (LinhaDeProjeto m : visiveis) {
             LinhaProjetoVisual l = linhas.computeIfAbsent(m.nome(),
-                n -> new LinhaProjetoVisual(fluxos, navegador, fluxos::enviarCodigoDeLogin, this::abrirProjeto));
+                n -> {
+                    LinhaProjetoVisual nova = new LinhaProjetoVisual(fluxos, navegador, fluxos::enviarCodigoDeLogin, this::abrirProjeto);
+                    if (acoesUi != null && !servidor.ehLocal()) {
+                        nova.aoAdicionarDominio(projeto -> adicionarDominioDe(projeto, null));
+                    }
+                    return nova;
+                });
             l.mostrarClaude(comClaude);
             l.atualizar(m, limiteDe(m.nome()));
             ordem.add(l);

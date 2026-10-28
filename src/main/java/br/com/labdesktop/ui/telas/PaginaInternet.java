@@ -40,7 +40,8 @@ final class PaginaInternet extends PaginaDoProjeto {
     private final CaixaDoServidor caixa = new CaixaDoServidor("Internet", "rede");
     private final Selo selo = new Selo("", Gravidade.NEUTRO);
     private final Botao conectar = Botoes.miniPrimario("Conectar a Cloudflare…", "link");
-    private final Botao publicar = Botoes.miniPrimario("Publicar na internet…", "rede");
+    private final Botao adicionarDominio = Botoes.miniPrimario("Adicionar domínio…", "externo");
+    private final Botao publicar = Botoes.mini("Publicar na internet…", "rede");
     private final Botao atualizar = Botoes.mini("Atualizar", "atualizar");
     private final TextoCorrido situacao = new TextoCorrido("", 640).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     private final TextoCorrido erro = new TextoCorrido("", 640).corDoToken(Tokens.PERIGO).tamanho(12.5f);
@@ -56,6 +57,9 @@ final class PaginaInternet extends PaginaDoProjeto {
             host -> ctx.removerEndereco.accept(host, this::recarregar));
         conectar.addActionListener(e -> ctx.conectarCloudflare.accept(this::recarregar));
         publicar.addActionListener(e -> ctx.publicarNaInternet.accept(this::recarregar));
+        adicionarDominio.addActionListener(e -> ctx.adicionarDominio.accept(this::recarregar));
+        adicionarDominio.setName("adicionar-dominio");
+        adicionarDominio.setToolTipText("Dá a este projeto um endereço novo na internet, em passos curtos: conta, domínio, nome, serviço e confirmação");
         publicar.setToolTipText("Escolhe o endereço e mostra o que vai mudar antes de qualquer alteração");
         atualizar.addActionListener(e -> recarregar());
         atualizar.setToolTipText("Lê de novo os endereços na Cloudflare");
@@ -165,7 +169,8 @@ final class PaginaInternet extends PaginaDoProjeto {
                 selo.atualizar("NÃO CONECTADA", Gravidade.NEUTRO, null);
                 caixa.linha(texto("Para dar a este projeto um endereço público, conecte a sua conta da Cloudflare. O app usa um token de API que você mesmo cria, com as "
                     + "permissões mínimas, e o guarda só no cofre cifrado."), 0);
-                caixa.linha(Caixa.linha(8, conectar, Caixa.mola()), 10);
+                caixa.linha(Caixa.linha(8, adicionarDominio, conectar, Caixa.mola()), 10);
+                desligarSemAsAcoes();
             }
             case CONECTADO -> desenharConectado();
         }
@@ -196,11 +201,21 @@ final class PaginaInternet extends PaginaDoProjeto {
             lista.definir(enderecos);
             caixa.linha(lista, 10);
         }
-        if (ctx.acoesLiberadas()) {
-            caixa.linha(Caixa.linha(8, publicar, atualizar, Caixa.mola()), 12);
-        } else {
-            caixa.linha(Caixa.linha(8, atualizar, Caixa.mola()), 12);
-            caixa.linha(new Rotulo("Publicar e remover endereços ficam desligados nesta versão (as ações de escrita estão desligadas).").corDoToken(Tokens.TEXTO3).tamanho(12f), 6);
+        caixa.linha(Caixa.linha(8, adicionarDominio, publicar, atualizar, Caixa.mola()), 12);
+        if (!ctx.acoesLiberadas()) {
+            caixa.linha(new Rotulo(TextosDeAcao.TRAVA + " Adicionar, publicar e remover endereços ficam desligados.").corDoToken(Tokens.TEXTO3).tamanho(12f), 6);
+        }
+        desligarSemAsAcoes();
+    }
+
+    /** Sem as ações de escrita ligadas os botões que escrevem aparecem DESLIGADOS, com a explicação, e não somem. */
+    private void desligarSemAsAcoes() {
+        boolean liberadas = ctx.acoesLiberadas();
+        adicionarDominio.setEnabled(liberadas);
+        publicar.setEnabled(liberadas);
+        if (!liberadas) {
+            adicionarDominio.setToolTipText(TextosDeAcao.TRAVA);
+            publicar.setToolTipText(TextosDeAcao.TRAVA);
         }
     }
 
@@ -218,6 +233,10 @@ final class PaginaInternet extends PaginaDoProjeto {
 
     Botao botaoPublicar() {
         return publicar;
+    }
+
+    Botao botaoAdicionarDominio() {
+        return adicionarDominio;
     }
 
     Botao botaoConectar() {

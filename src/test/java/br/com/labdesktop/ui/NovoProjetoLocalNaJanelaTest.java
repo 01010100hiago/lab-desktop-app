@@ -290,6 +290,16 @@ class NovoProjetoLocalNaJanelaTest {
     }
 
     @Test
+    void oItemAdicionarDominioFicaDesligadoEmEsteComputadorComAExplicacao() throws Exception {
+        MenuApp menu = menu();
+        javax.swing.JMenuItem item = menu.itemAdicionarDominio();
+        Visual.naEdt(menu::atualizarHabilitacaoDoNovoProjeto);
+        assertEquals("Adicionar domínio…", Visual.naEdt(item::getText));
+        assertFalse(Visual.naEdt(item::isEnabled), "Este computador não tem túnel da Cloudflare configurado pelo app");
+        assertTrue(Visual.naEdt(() -> item.getToolTipText()).contains("Este computador não tem um túnel"), Visual.naEdt(() -> item.getToolTipText()));
+    }
+
+    @Test
     void oItemDoMenuAcompanhaAMudancaDeTelaSemPrecisarAbrirOMenu() throws Exception {
         // o atalho de um item desabilitado não faz nada: a habilitação não pode esperar o menu ser aberto
         System.clearProperty(FluxosDeProjeto.PROPRIEDADE_ACOES);

@@ -57,6 +57,7 @@ public final class PaginaCloudflare extends Painel {
     private final TextoCorrido explicacao = new TextoCorrido("", 640).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     private final TextoCorrido resultadoDoToken = new TextoCorrido("", 640).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
     private final Botao conectar = Botoes.miniPrimario("Conectar a Cloudflare…", "link");
+    private final Botao adicionarDominio = Botoes.miniPrimario("Adicionar domínio…", "externo");
     private final Botao trocar = Botoes.mini("Trocar a conta…", "editar");
     private final Botao conferirToken = Botoes.mini("Conferir o token", "ok");
     private final Botao desconectar = Botoes.miniPerigo("Desconectar", "fechar");
@@ -69,8 +70,18 @@ public final class PaginaCloudflare extends Painel {
     private List<EnderecoDoApp> enderecos = List.of();
     private boolean carregou;
 
+    private final transient java.util.function.Consumer<Runnable> aoAdicionarDominio;
+
     PaginaCloudflare(ServidorLab servidor, AcoesDaInterface acoes, boolean acoesLiberadas, Notificacoes avisos) {
+        this(servidor, acoes, acoesLiberadas, avisos, depois -> { });
+    }
+
+    /**
+     * @param aoAdicionarDominio o que "Adicionar domínio…" faz (pergunta para qual projeto e abre o assistente); o argumento roda quando termina
+     */
+    PaginaCloudflare(ServidorLab servidor, AcoesDaInterface acoes, boolean acoesLiberadas, Notificacoes avisos, java.util.function.Consumer<Runnable> aoAdicionarDominio) {
         super(new BorderLayout());
+        this.aoAdicionarDominio = aoAdicionarDominio == null ? depois -> { } : aoAdicionarDominio;
         fundo(Tokens.BG);
         this.servidor = servidor;
         this.acoes = acoes;
@@ -90,6 +101,8 @@ public final class PaginaCloudflare extends Painel {
         situacaoDosEnderecos.setVisible(false);
         erroDosEnderecos.setVisible(false);
 
+        adicionarDominio.setName("adicionar-dominio");
+        adicionarDominio.addActionListener(e -> this.aoAdicionarDominio.accept(this::recarregar));
         conectar.addActionListener(e -> conectarOuTrocar());
         trocar.addActionListener(e -> conectarOuTrocar());
         desconectar.addActionListener(e -> {
@@ -235,7 +248,8 @@ public final class PaginaCloudflare extends Painel {
                     + "cria, com as permissões mínimas (DNS só do seu domínio e, se o túnel é gerido pela Cloudflare, o túnel). O token fica só no cofre cifrado deste app.");
                 explicacao.setVisible(true);
                 caixaDaConta.linha(explicacao, 0);
-                caixaDaConta.linha(Caixa.linha(8, conectar, Caixa.mola()), 10);
+                caixaDaConta.linha(Caixa.linha(8, adicionarDominio, conectar, Caixa.mola()), 10);
+                desligarSemAsAcoes();
                 caixaDosEnderecos.linha(texto("Depois de conectar, os endereços criados pelo app aparecem aqui."), 0);
             }
             case CONECTADO -> desenharConectado();
@@ -244,6 +258,12 @@ public final class PaginaCloudflare extends Painel {
         caixaDosEnderecos.terminar();
         revalidate();
         repaint();
+    }
+
+    /** Sem as ações de escrita ligadas o botão aparece desligado, com a explicação, e não some. */
+    private void desligarSemAsAcoes() {
+        adicionarDominio.setEnabled(acoesLiberadas);
+        adicionarDominio.setToolTipText(acoesLiberadas ? "Escolhe um projeto e dá a ele um endereço novo na internet, em passos curtos" : TextosDeAcao.TRAVA);
     }
 
     private static TextoCorrido texto(String t) {
@@ -267,7 +287,8 @@ public final class PaginaCloudflare extends Painel {
             FichaRotulada.Item.de("Começo do nome dos endereços", c.prefixo()),
             FichaRotulada.Item.de("Token", "guardado no cofre, cifrado")));
         caixaDaConta.linha(ficha, 0);
-        caixaDaConta.linha(Caixa.fluxo(java.awt.FlowLayout.LEFT, 8, trocar, conferirToken, desconectar), 10);
+        caixaDaConta.linha(Caixa.fluxo(java.awt.FlowLayout.LEFT, 8, adicionarDominio, trocar, conferirToken, desconectar), 10);
+        desligarSemAsAcoes();
         caixaDaConta.linha(resultadoDoToken, 6);
         if (!erroDosEnderecos.isVisible() && situacaoDosEnderecos.getText().isEmpty() && enderecos.isEmpty()) {
             caixaDosEnderecos.linha(texto("Nenhum endereço criado pelo app ainda. Abra um projeto e use a aba Internet para publicá-lo."), 0);
@@ -294,6 +315,10 @@ public final class PaginaCloudflare extends Painel {
 
     public Modo modo() {
         return modo;
+    }
+
+    public Botao botaoAdicionarDominio() {
+        return adicionarDominio;
     }
 
     public Botao botaoConectar() {

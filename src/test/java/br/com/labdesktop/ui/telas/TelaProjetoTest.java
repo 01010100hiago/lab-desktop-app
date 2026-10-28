@@ -71,6 +71,21 @@ class TelaProjetoTest {
         public boolean podeAdicionarContainer() {
             return podeAdicionar;
         }
+
+        @Override
+        public void adicionarDominio(Runnable depois) {
+            pedidos.add("adicionar-dominio");
+        }
+
+        @Override
+        public br.com.labdesktop.processos.Oferta avaliarProcesso(br.com.labdesktop.processos.ProcessoAlvo alvo) {
+            return br.com.labdesktop.processos.AvaliadorDeProcessos.avaliar(alvo, br.com.labdesktop.processos.AmbienteDeProcessos.servidor("labuser", java.util.Set.of()));
+        }
+
+        @Override
+        public void abrirProcesso(br.com.labdesktop.processos.ProcessoAlvo alvo, String origem, br.com.labdesktop.processos.Acao acao, Runnable depois) {
+            pedidos.add("processo:" + acao + ":" + alvo.pid() + ":" + origem);
+        }
     }
 
     /** Tudo o que um teste de página precisa, montado de uma vez. */
@@ -195,10 +210,10 @@ class TelaProjetoTest {
     }
 
     @Test
-    void sao7AbasNaOrdemDaTelaESoUmaVisivel() {
+    void sao8AbasNaOrdemDaTelaESoUmaVisivel() {
         Visual.tema(Tema.CLARO);
         Cena c = new Cena(true, Aba.VISAO_GERAL).com(EstadoConexao.CONECTADO, FixturesDeApi.detalheDoProjetoSintetico());
-        assertEquals(List.of("Visão geral", "Logs", "Terminal", "Arquivos", "Backups (5)", "Consumo e limite", "Internet"),
+        assertEquals(List.of("Visão geral", "Logs", "Terminal", "Arquivos", "Backups (5)", "Consumo e limite", "Internet", "Processos"),
             java.util.Arrays.stream(Aba.values()).map(a -> Visual.naEdt(() -> c.tela.abas().botao(a.id()).getText())).toList());
         for (Aba a : Aba.values()) {
             Visual.naEdt(() -> c.tela.abas().botao(a.id()).doClick());
@@ -325,8 +340,8 @@ class TelaProjetoTest {
             }
             PaginaDoProjeto p = c.tela.pagina(a);
             assertEquals(SituacaoDaVisao.Modo.CARREGANDO, Visual.naEdt(() -> p.situacao().modo()), a.toString());
-            if (a == Aba.TERMINAL || a == Aba.INTERNET) {
-                // o terminal é SSH puro e a Internet fala só com o cofre e a Cloudflare: não esperam o detalhe do projeto nem mostram esqueleto (TerminalDoProjetoTest)
+            if (a == Aba.TERMINAL || a == Aba.INTERNET || a == Aba.PROCESSOS) {
+                // o terminal é SSH puro, a Internet fala só com o cofre e a Cloudflare e a aba Processos lê o servidor (não o detalhe do projeto): não esperam o detalhe nem mostram esqueleto (TerminalDoProjetoTest)
                 assertFalse(Visual.naEdt(p::mostraEsqueleto), a + ": sem esqueleto");
                 assertTrue(Visual.naEdt(p::mostraCorpo), a + ": o shell está à mão");
                 continue;
