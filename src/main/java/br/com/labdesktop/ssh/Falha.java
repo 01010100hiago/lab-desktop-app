@@ -18,6 +18,8 @@ public record Falha(Tipo tipo, String mensagem) {
         PIN_DIVERGENTE,
         /** O servidor recusou a chave pública do cofre. */
         CHAVE_RECUSADA,
+        /** O app não chegou a usar a chave (não conseguiu assinar ou oferecê-la): a causa está no log, e não no servidor. */
+        CHAVE_NAO_USADA,
         /** A chave guardada no cofre não pôde ser lida. */
         CHAVE_ILEGIVEL,
         /** Rede: recusado, sem rota, prazo estourado, sessão que caiu. */

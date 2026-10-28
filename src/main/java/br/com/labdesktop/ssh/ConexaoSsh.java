@@ -36,6 +36,7 @@ import org.apache.sshd.client.session.ClientSession;
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.SftpClientFactory;
 import org.apache.sshd.common.AttributeRepository.AttributeKey;
+import org.apache.sshd.common.config.keys.KeyUtils;
 import org.apache.sshd.common.session.Session;
 import org.apache.sshd.common.session.SessionListener;
 import org.apache.sshd.common.SshConstants;
@@ -91,11 +92,18 @@ public final class ConexaoSsh implements ConexaoDoServidor {
     private static final AttributeKey<Boolean> CHAVE_RECUSADA = new AttributeKey<>();
     /** Última exceção que o MINA apontou nesta sessão (gravada pelo ouvinte do cliente). */
     private static final AttributeKey<Throwable> ERRO_DA_SESSAO = new AttributeKey<>();
+    /** O servidor respondeu "não" à chave (gravado pelo relator quando o MINA aponta a falha daquela chave). */
+    private static final AttributeKey<Boolean> SERVIDOR_RECUSOU = new AttributeKey<>();
+    /** O app chegou a oferecer a chave ao servidor nesta sessão. */
+    private static final AttributeKey<Boolean> CHAVE_OFERECIDA = new AttributeKey<>();
+    /** A impressão (SHA256:...) da chave do cofre que o app usou nesta sessão: informação pública, vai para a tela e para o log. */
+    private static final AttributeKey<String> IMPRESSAO_DA_CHAVE = new AttributeKey<>();
 
     /** O que uma tentativa que falhou deixou na sessão dela: tudo o que a classificação da falha precisa. */
-    private record Autopsia(VerificadorDeChaveDoServidor.Veredito veredito, boolean chaveRecusada, Throwable erroDaSessao) {
+    private record Autopsia(VerificadorDeChaveDoServidor.Veredito veredito, boolean chaveRecusada, Throwable erroDaSessao, boolean servidorRecusou,
+                           boolean chaveOferecida, String impressaoDaChave) {
 
-        static final Autopsia VAZIA = new Autopsia(null, false, null);
+        static final Autopsia VAZIA = new Autopsia(null, false, null, false, false, null);
 
         /** Lê os atributos; {@code s} é {@code null} quando nem a sessão chegou a existir (TCP não conectou). */
         static Autopsia de(ClientSession s) {
@@ -103,7 +111,8 @@ public final class ConexaoSsh implements ConexaoDoServidor {
                 return VAZIA;
             }
             return new Autopsia(s.getAttribute(VerificadorDeChaveDoServidor.VEREDITO_DA_SESSAO),
-                Boolean.TRUE.equals(s.getAttribute(CHAVE_RECUSADA)), s.getAttribute(ERRO_DA_SESSAO));
+                Boolean.TRUE.equals(s.getAttribute(CHAVE_RECUSADA)), s.getAttribute(ERRO_DA_SESSAO), Boolean.TRUE.equals(s.getAttribute(SERVIDOR_RECUSOU)),
+                Boolean.TRUE.equals(s.getAttribute(CHAVE_OFERECIDA)), s.getAttribute(IMPRESSAO_DA_CHAVE));
         }
     }
 
@@ -536,6 +545,7 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             s = c.connect(servidor.usuario(), servidor.host(), servidor.porta()).verify(cfg.conectar()).getSession();
             fase = Fase.AUTENTICANDO;
             KeyPair par = cofre.keyPairDoServidor(servidor.id());
+            s.setAttribute(IMPRESSAO_DA_CHAVE, KeyUtils.getFingerPrint(par.getPublic()));
             s.addPublicKeyIdentity(par);
             s.auth().verify(cfg.autenticar());
             par = null; // solta a referência: o MINA guarda a que precisa enquanto a sessão existir
@@ -664,22 +674,46 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             return;
         }
         if (autopsia.chaveRecusada() || (fase == Fase.AUTENTICANDO && pareceRecusaDeAutenticacao(erro))) {
+            // A causa REAL vai para o log (redigida): "chave recusada" na tela esconde se o servidor disse não ou se o app nem conseguiu assinar.
+            LOG.warn("Autenticação falhou em {} (fase {}, servidor recusou={}, chave oferecida={}, impressão da chave do app={}): {}; último erro da sessão: {}", servidorId, fase,
+                autopsia.servidorRecusou(), autopsia.chaveOferecida(), autopsia.impressaoDaChave(), descrever(erro), descrever(autopsia.erroDaSessao()));
+            Falha motivo = classificarAutenticacao(autopsia.servidorRecusou(), autopsia.chaveOferecida(), erro, autopsia.impressaoDaChave());
             if (!retentouAutenticacao) {
                 retentouAutenticacao = true;
                 Instant quando = agendador.agora().plus(cfg.esperaErroAutenticacao());
-                mudar(EstadoConexao.ERRO_AUTENTICACAO, MensagensDeFalha.chaveRecusada(), quando);
+                mudar(EstadoConexao.ERRO_AUTENTICACAO, motivo, quando);
                 timer = agendador.agendar(cfg.esperaErroAutenticacao(), () -> post(() -> {
                     if (estado == EstadoConexao.ERRO_AUTENTICACAO && !encerrado) {
                         iniciarTentativa();
                     }
                 }));
             } else {
-                mudar(EstadoConexao.ERRO_AUTENTICACAO, MensagensDeFalha.chaveRecusada(), null);
+                mudar(EstadoConexao.ERRO_AUTENTICACAO, motivo, null);
             }
             return;
         }
         tentativa++;
         reconectarComBackoff(MensagensDeFalha.rede(erro, autopsia.erroDaSessao()));
+    }
+
+    /**
+     * "O servidor recusou a chave" (ele disse não, ou o app a ofereceu e a falha foi de autenticação) contra "o app não conseguiu usar a chave" (nem a ofereceu, ou a assinatura
+     * deu erro de segurança): a ação do usuário é outra (instalar a chave no servidor, ou olhar o log).
+     */
+    static Falha classificarAutenticacao(boolean servidorRecusou, boolean chaveOferecida, Throwable erro, String impressao) {
+        if (servidorRecusou) {
+            return MensagensDeFalha.chaveRecusada(impressao);
+        }
+        boolean errouAoAssinar = false;
+        for (Throwable t = erro; t != null; t = t.getCause()) {
+            if (t instanceof java.security.GeneralSecurityException) {
+                errouAoAssinar = true;
+            }
+        }
+        if (errouAoAssinar || !chaveOferecida) {
+            return MensagensDeFalha.naoUsouAChave(impressao);
+        }
+        return MensagensDeFalha.chaveRecusada(impressao);
     }
 
     private void aoSessaoFechada(long id) {
@@ -853,9 +887,15 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             cliente = ClienteSshFactory.criar(verificador, cfg, AlgoritmosDeHost.paraPins(servidor.pins()));
             cliente.setPublicKeyAuthenticationReporter(new PublicKeyAuthenticationReporter() {
                 @Override
+                public void signalAuthenticationAttempt(ClientSession s, String servico, KeyPair chave, String algoritmo) {
+                    s.setAttribute(CHAVE_OFERECIDA, Boolean.TRUE);
+                }
+
+                @Override
                 public void signalAuthenticationFailure(ClientSession s, String servico, KeyPair chave,
                                                         boolean parcial, List<String> metodos) {
                     s.setAttribute(CHAVE_RECUSADA, Boolean.TRUE);
+                    s.setAttribute(SERVIDOR_RECUSOU, Boolean.TRUE);
                 }
 
                 @Override
@@ -888,6 +928,22 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             }
         }
         return null;
+    }
+
+    /** A exceção e a cadeia de causas em uma linha, já sem segredo (para o log). */
+    private static String descrever(Throwable erro) {
+        if (erro == null) {
+            return "(nenhum)";
+        }
+        StringBuilder b = new StringBuilder();
+        int n = 0;
+        for (Throwable t = erro; t != null && n < 5; t = t.getCause(), n++) {
+            if (n > 0) {
+                b.append(" <- ");
+            }
+            b.append(t.getClass().getSimpleName()).append(": ").append(Redator.redigir(t));
+        }
+        return b.toString();
     }
 
     private static boolean pareceRecusaDeAutenticacao(Throwable erro) {
@@ -940,9 +996,19 @@ public final class ConexaoSsh implements ConexaoDoServidor {
                 + detalhe + ". Se as chaves do servidor foram trocadas, redefina a confirmação do host.");
         }
 
-        static Falha chaveRecusada() {
+        static Falha chaveRecusada(String impressao) {
             return new Falha(Falha.Tipo.CHAVE_RECUSADA,
-                "O servidor recusou a chave do app. Falta instalar a chave pública no acesso do usuário no servidor.");
+                "O servidor recusou a chave do app" + comImpressao(impressao) + ". Confira se esta chave está no authorized_keys do usuário no servidor. "
+                    + "Se você usa mais de um cofre (por exemplo o app instalado e o modo de desenvolvimento), cada cofre tem a sua chave.");
+        }
+
+        static Falha naoUsouAChave(String impressao) {
+            return new Falha(Falha.Tipo.CHAVE_NAO_USADA,
+                "O app não chegou a usar a chave" + comImpressao(impressao) + ": a assinatura falhou ou o servidor não aceita chave pública para este usuário. O servidor não a recusou; o motivo está no log do app.");
+        }
+
+        private static String comImpressao(String impressao) {
+            return impressao == null || impressao.isBlank() ? "" : " (impressão digital " + impressao + ")";
         }
 
         static Falha tokenRecusado() {

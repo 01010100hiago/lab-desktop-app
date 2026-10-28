@@ -175,9 +175,12 @@ public final class ConteudoDosAvisos {
                 : new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente do painel em " + nome + " não responde",
                     "O SSH está de pé; o app insiste a cada poucos segundos (o painel pode estar reiniciando)." + detalhe,
                     List.of(Acao.TENTAR_AGORA));
-            case ERRO_AUTENTICACAO -> new AvisoDeConexao(Gravidade.PERIGO, "chave", nome + " recusou a chave deste app",
-                "Falta instalar a chave deste app no servidor: peça a quem administra o servidor para adicioná-la ao acesso do usuário. "
-                    + "Depois, tente de novo." + detalhe, List.of(Acao.TENTAR_AGORA));
+            case ERRO_AUTENTICACAO -> tipo == Falha.Tipo.CHAVE_NAO_USADA
+                ? new AvisoDeConexao(Gravidade.PERIGO, "chave", "O app não conseguiu usar a chave em " + nome, falha.mensagem() + " Depois, tente de novo.", List.of(Acao.TENTAR_AGORA))
+                : new AvisoDeConexao(Gravidade.PERIGO, "chave", nome + " recusou a chave deste app",
+                    (tipo == Falha.Tipo.CHAVE_RECUSADA ? falha.mensagem() + " " : "")
+                        + "Se a chave não estiver lá, peça a quem administra o servidor para adicioná-la ao acesso do usuário. Depois, tente de novo.",
+                    List.of(Acao.TENTAR_AGORA));
             case ERRO_CHAVE_HOST -> tipo == Falha.Tipo.PIN_DIVERGENTE
                 ? new AvisoDeConexao(Gravidade.PERIGO, "erro", "A chave do servidor " + nome + " mudou",
                     "O app não conecta, para o caso de ser outra máquina fazendo-se passar pelo servidor. " + TEXTO_DA_CHAVE_QUE_MUDOU,

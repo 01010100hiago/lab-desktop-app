@@ -172,6 +172,10 @@ class ConexaoSshTest {
             c.conexao.iniciar();
             Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.ERRO_AUTENTICACAO);
             assertEquals(Falha.Tipo.CHAVE_RECUSADA, c.info().falha().tipo());
+            // A tela diz QUAL chave o app usou e o que conferir (a causa provável: cofre diferente entre o modo de desenvolvimento e o app instalado)
+            String mensagem = c.info().falha().mensagem();
+            assertTrue(mensagem.contains(KeyUtils.getFingerPrint(c.cofre.par().getPublic())), mensagem);
+            assertTrue(mensagem.contains("authorized_keys"), mensagem);
 
             // Primeiro erro: agenda UMA nova tentativa (proximaTentativaEm preenchido)...
             assertTrue(c.historico.stream().anyMatch(i -> i.estado() == EstadoConexao.ERRO_AUTENTICACAO
@@ -545,5 +549,28 @@ class ConexaoSshTest {
             c.conexao.reconectar();
             Espera.naoAcontece(Duration.ofMillis(600), "reconectar com o cofre bloqueado", () -> c.estado() != EstadoConexao.BLOQUEADO_COFRE);
         }
+    }
+
+    @Test
+    void autenticacaoSeparaServidorRecusouDeAppNaoConseguiuUsarAChave() {
+        String imp = "SHA256:abc123";
+        Falha recusou = ConexaoSsh.classificarAutenticacao(true, true, new RuntimeException("No more authentication methods available"), imp);
+        assertEquals(Falha.Tipo.CHAVE_RECUSADA, recusou.tipo());
+        assertTrue(recusou.mensagem().contains(imp) && recusou.mensagem().contains("authorized_keys"), recusou.mensagem());
+
+        // o servidor não disse não, mas a chave foi oferecida e a falha foi de autenticação: continua sendo recusa
+        assertEquals(Falha.Tipo.CHAVE_RECUSADA, ConexaoSsh.classificarAutenticacao(false, true, new RuntimeException("Authentication failed"), imp).tipo());
+
+        // a chave nem foi oferecida: não foi o servidor que recusou
+        Falha nao = ConexaoSsh.classificarAutenticacao(false, false, new RuntimeException("No more authentication methods available"), imp);
+        assertEquals(Falha.Tipo.CHAVE_NAO_USADA, nao.tipo());
+        assertTrue(nao.mensagem().contains(imp) && nao.mensagem().contains("log"), nao.mensagem());
+
+        // a assinatura deu erro de segurança (mesmo com a chave oferecida)
+        Falha assinatura = ConexaoSsh.classificarAutenticacao(false, true, new java.io.IOException("x", new java.security.InvalidKeyException("chave")), imp);
+        assertEquals(Falha.Tipo.CHAVE_NAO_USADA, assinatura.tipo());
+
+        // sem impressão (cofre falhou antes): a frase continua certa
+        assertFalse(ConexaoSsh.classificarAutenticacao(true, true, null, null).mensagem().contains("impressão digital"));
     }
 }
