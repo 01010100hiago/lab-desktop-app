@@ -32,10 +32,17 @@ public final class CaminhosApp {
 
     private final Path pastaDados;
     private final Path pastaLogs;
+    private final Path pastaNativos;
 
-    private CaminhosApp(Path pastaDados, Path pastaLogs) {
+    private CaminhosApp(Path pastaDados, Path pastaLogs, Path pastaNativos) {
         this.pastaDados = pastaDados.toAbsolutePath().normalize();
         this.pastaLogs = pastaLogs.toAbsolutePath().normalize();
+        this.pastaNativos = pastaNativos.toAbsolutePath().normalize();
+    }
+
+    /** Pastas escolhidas: os nativos ficam dentro da pasta de dados (testes e {@code --pasta} não escapam do diretório escolhido). */
+    private CaminhosApp(Path pastaDados, Path pastaLogs) {
+        this(pastaDados, pastaLogs, pastaDados.resolve("nativos"));
     }
 
     /** Os caminhos de produção, sob {@code user.home}. */
@@ -45,7 +52,7 @@ public final class CaminhosApp {
     }
 
     public static CaminhosApp padrao() {
-        return new CaminhosApp(pastaDadosPadrao(), pastaLogsPadrao());
+        return new CaminhosApp(pastaDadosPadrao(), pastaLogsPadrao(), Path.of(PastasDoApp.de(AmbienteDoSistema.detectar()).nativos()));
     }
 
     /** Pasta de dados escolhida, logs no lugar padrão (é o que {@code --pasta} faz). */
@@ -99,6 +106,11 @@ public final class CaminhosApp {
 
     public Path pastaLogs() {
         return pastaLogs;
+    }
+
+    /** Onde o PTY e o JNA extraem as bibliotecas nativas: no Windows em {@code %LOCALAPPDATA%} (não viaja no perfil), nos outros dentro da pasta de dados. */
+    public Path pastaNativos() {
+        return pastaNativos;
     }
 
     public Path arquivoCofre() {

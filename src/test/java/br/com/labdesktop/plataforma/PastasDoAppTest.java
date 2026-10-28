@@ -72,4 +72,17 @@ class PastasDoAppTest {
             assertFalse(p.dados().contains("Program Files") || p.dados().startsWith("/Applications"), "a instalação nunca guarda dado do usuário");
         }
     }
+
+    @Test
+    void osNativosFicamNoLocalNoWindowsENaPastaDeDadosNosOutros() {
+        var win = PastasDoApp.de(AmbienteDoSistema.windowsPadrao("ana"));
+        assertEquals("C:\\Users\\ana\\AppData\\Local\\LabDesktop\\nativos", win.nativos(), "nativos extraídos não viajam no perfil Roaming");
+        assertFalse(win.nativos().contains("Roaming"));
+        assertEquals("/Users/ana/Library/Application Support/LabDesktop/nativos",
+            PastasDoApp.de(AmbienteDoSistema.de(SistemaOperacional.MAC, "/Users/ana", "ana", Map.of())).nativos());
+        assertEquals("/home/ana/.local/share/LabDesktop/nativos",
+            PastasDoApp.de(AmbienteDoSistema.de(SistemaOperacional.LINUX, "/home/ana", "ana", Map.of())).nativos());
+        var local = PastasDoApp.de(AmbienteDoSistema.de(SistemaOperacional.WINDOWS, "C:\\Users\\ana", "ana", Map.of("LOCALAPPDATA", "D:\\Local\\ana")));
+        assertEquals("D:\\Local\\ana\\LabDesktop\\nativos", local.nativos());
+    }
 }
