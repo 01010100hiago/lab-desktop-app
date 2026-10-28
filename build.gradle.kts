@@ -179,6 +179,11 @@ val sistemaNoNome = if (ehMac) "mac" else if (ehWindows) "windows" else "linux"
 val arquiteturaNoNome = System.getProperty("os.arch").lowercase().let { if (it == "aarch64" || it == "arm64") "arm64" else "x64" }
 val nomeDoApp = "Lab Desktop"
 val versaoDoApp = project.version.toString()
+// O macOS não aceita um pacote cuja primeira parte da versão é 0 (o jpackage recusa: "The first number in an app-version cannot be zero"): no Mac, 0.1.0 vira 1.1.0 (soma 1 ao primeiro número).
+// No Windows (.msi) a versão do app vale como está. O nome dos arquivos e `--versao` do app continuam dizendo a versão de verdade (0.1.0).
+val versaoDoPacote: String = versaoDoApp.split(".").let { partes ->
+    if (ehMac && partes.firstOrNull() == "0") (listOf("1") + partes.drop(1)).joinToString(".") else versaoDoApp
+}
 
 // Os módulos do runtime. Os de `jdeps` mais o que o `jdeps` não vê (carregado por nome ou serviço): java.logging (JUL das bibliotecas), java.management e jdk.management (memória total em "Este
 // computador"), jdk.crypto.ec (ECDH/ECDSA do SSH, por ServiceLoader), jdk.unsupported (sun.misc.Unsafe de bibliotecas), jdk.localedata (pt-BR) e jdk.accessibility (leitor de tela).
@@ -216,11 +221,12 @@ tasks.register("verificarModulos") {
     doLast {
         val lib = layout.buildDirectory.dir("install/lab-desktop/lib").get().asFile
         val jars = lib.listFiles { f -> f.name.endsWith(".jar") }!!.map { it.absolutePath }
+        // as mensagens de "split package" (jars que repartem um pacote) saem junto: o que interessa é a ÚLTIMA linha, a lista de módulos
         val processo = ProcessBuilder(listOf(ferramentaDoJdk("jdeps"), "--multi-release", "21", "--ignore-missing-deps", "--print-module-deps", "-cp", lib.absolutePath + File.separator + "*") + jars)
-            .redirectErrorStream(false).start()
-        val saida = processo.inputStream.bufferedReader().readText().trim()
-        processo.errorStream.readBytes()
-        if (processo.waitFor() != 0) throw GradleException("jdeps falhou")
+            .redirectErrorStream(true).start()
+        val todaASaida = processo.inputStream.bufferedReader().readText()
+        if (processo.waitFor() != 0) throw GradleException("jdeps falhou:\n$todaASaida")
+        val saida = todaASaida.lines().map { it.trim() }.lastOrNull { it.isNotEmpty() && !it.startsWith("Warning") } ?: throw GradleException("jdeps não devolveu nada")
         val achados = saida.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         val levados = modulosDoRuntime.split(",").toSet()
         val faltam = achados.filter { it !in levados }
@@ -232,7 +238,8 @@ tasks.register("verificarModulos") {
 // As opções da JVM do app empacotado. Comuns aos três sistemas; as do Mac só no Mac (a barra de menus do sistema e o nome no Dock não existem fora dele).
 fun opcoesDaJvm(): List<String> {
     val comuns = listOf("-Dfile.encoding=UTF-8", "-Xmx768m", "-XX:+DisableAttachMechanism", "-XX:-HeapDumpOnOutOfMemoryError", "-XX:-CreateCoredumpOnCrash")
-    val doMac = if (ehMac) listOf("-Dapple.laf.useScreenMenuBar=true", "-Dapple.awt.application.name=$nomeDoApp", "-Dapple.awt.application.appearance=system") else emptyList()
+    // (o jpackage corta a opção no espaço: "-Dapple.awt.application.name=Lab Desktop" viraria duas; o nome do app no Dock vem do CFBundleName do .app e, rodando solto, do Principal)
+    val doMac = if (ehMac) listOf("-Dapple.laf.useScreenMenuBar=true", "-Dapple.awt.application.appearance=system") else emptyList()
     return comuns + doMac
 }
 
@@ -252,7 +259,7 @@ val jpackageImagem = tasks.register<Exec>("jpackageImagem") {
             ferramentaDoJdk("jpackage"),
             "--type", "app-image",
             "--name", nomeDoApp,
-            "--app-version", versaoDoApp,
+            "--app-version", versaoDoPacote,
             "--vendor", "Thiago Bezerra",
             "--description", "Cliente do Painel do Lab: servidores, projetos, arquivos e terminal",
             "--copyright", "Thiago Bezerra",
@@ -307,7 +314,7 @@ val jpackageInstalador = tasks.register<Exec>("jpackageInstalador") {
             ferramentaDoJdk("jpackage"),
             "--type", if (ehWindows) "msi" else "dmg",
             "--name", nomeDoApp,
-            "--app-version", versaoDoApp,
+            "--app-version", versaoDoPacote,
             "--vendor", "Thiago Bezerra",
             "--dest", destino.get().asFile.absolutePath
         )
