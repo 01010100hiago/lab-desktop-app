@@ -72,7 +72,7 @@ class ChaveRecusadaNaJanelaTest {
         assumeTrue(ShellDeTeste.temShell(), "precisa de /bin/sh");
         Visual.tema(Tema.CLARO);
         ssh = ServidorSshDeTeste.ed25519();
-        ssh.aceitarSenha("admin", SENHA_DO_SERVIDOR);
+        ssh.aceitarSenha("labuser", SENHA_DO_SERVIDOR);
         agente = new AgenteDoLab();
         shell = new ShellDeTeste(Files.createDirectories(tmp.resolve("home")), ssh).outrosComandos(agente.comandosPorSsh());
         cofre = CofreDeChaves.criar(CaminhosApp.de(tmp.resolve("dados"), tmp.resolve("logs")), SENHA_MESTRA.clone(), ParametrosKdf.MINIMO);
@@ -95,7 +95,7 @@ class ChaveRecusadaNaJanelaTest {
     private ServidorLab servidorRecusado() throws Exception {
         InfoChave chave = assistente.gerarChave("lab");
         Pin pin = assistente.sondar("127.0.0.1", ssh.porta()).pin();
-        ServidorLab lab = assistente.cadastrar(new Dados("lab", "127.0.0.1", ssh.porta(), "admin", agente.porta()), chave.id(), pin);
+        ServidorLab lab = assistente.cadastrar(new Dados("lab", "127.0.0.1", ssh.porta(), "labuser", agente.porta()), chave.id(), pin);
         lab.iniciar();
         Espera.ate(PRAZO, () -> "chave recusada (" + lab.estado().conexao() + ")",
             () -> lab.estado().conexao() == EstadoConexao.ERRO_AUTENTICACAO && lab.estado().proximaTentativaEm() == null);
@@ -177,7 +177,7 @@ class ChaveRecusadaNaJanelaTest {
     @Test
     void naoHaBotaoDeChaveNoServidorQueConecta() throws Exception {
         InfoChave chave = assistente.gerarChave("lab");
-        ssh.aceitar(cofre.keyPairDoServidor(assistente.cadastrar(new Dados("lab", "127.0.0.1", ssh.porta(), "admin", agente.porta()), chave.id(),
+        ssh.aceitar(cofre.keyPairDoServidor(assistente.cadastrar(new Dados("lab", "127.0.0.1", ssh.porta(), "labuser", agente.porta()), chave.id(),
             assistente.sondar("127.0.0.1", ssh.porta()).pin()).id()).getPublic());
         ServidorLab lab = gerenciador.servidores().get(0);
         lab.iniciar();

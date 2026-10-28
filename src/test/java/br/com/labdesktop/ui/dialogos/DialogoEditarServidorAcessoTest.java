@@ -20,7 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 @ExtendWith(VerificaEdt.class)
 class DialogoEditarServidorAcessoTest {
 
-    private static final ConfigServidor CFG = ConfigServidor.novo("lab", "192.0.2.5", 2222, "admin", "k1");
+    private static final ConfigServidor CFG = ConfigServidor.novo("lab", "192.0.2.5", 2222, "labuser", "k1");
     private final AvisosGravados avisos = new AvisosGravados();
     private final Clipboard area = new Clipboard("teste");
     private final AtomicInteger gravacoes = new AtomicInteger();
@@ -72,7 +72,7 @@ class DialogoEditarServidorAcessoTest {
         assertFalse(Visual.naEdt(() -> d.botaoInstalarChave().isEnabled()));
         Visual.naEdt(() -> d.botaoInstalarChave().doClick());
         assertEquals(0, instalar.get(), "com mudança pendente o botão não vale");
-        Visual.naEdt(() -> d.campoDoUsuario().setText("admin"));
+        Visual.naEdt(() -> d.campoDoUsuario().setText("labuser"));
         Visual.naEdt(() -> d.botaoInstalarChave().doClick());
         assertEquals(1, instalar.get());
     }

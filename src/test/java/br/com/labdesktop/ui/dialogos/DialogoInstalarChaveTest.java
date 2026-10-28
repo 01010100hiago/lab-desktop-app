@@ -39,7 +39,7 @@ class DialogoInstalarChaveTest {
     private static final Duration PRAZO = Duration.ofSeconds(20);
     private static final String SENHA = "senha-do-servidor-Zk4!";
     private static final Pin PIN = new Pin("ssh-ed25519", "SHA256:mH3s1p2VwY+BAVOJ7MAG7JIZttP/NSiO9T4w4F165f0");
-    private static final DialogoInstalarChave.Alvo ALVO = new DialogoInstalarChave.Alvo("lab", "admin", "192.0.2.5", 2222, List.of(PIN), "lab",
+    private static final DialogoInstalarChave.Alvo ALVO = new DialogoInstalarChave.Alvo("lab", "labuser", "192.0.2.5", 2222, List.of(PIN), "lab",
         "SHA256:5MGLihSpPv/h6+y5NnTZfr2nnOaG8vJ9pEy1z3+jIQg", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExemploDeChavePublicaParaTeste lab-do-mac");
 
     private final AvisosGravados avisos = new AvisosGravados();
@@ -98,11 +98,11 @@ class DialogoInstalarChaveTest {
         nosDoisTemas("1-pedindo-a-senha", () -> abrir(ALVO, (s, p) -> InstaladorDeChave.Resultado.ADICIONADA));
         DialogoInstalarChave d = abrir(ALVO, (s, p) -> InstaladorDeChave.Resultado.ADICIONADA);
         String textos = Visual.naEdt(() -> textosDe(d.raiz()));
-        assertTrue(textos.contains("admin@192.0.2.5:2222"), textos);
+        assertTrue(textos.contains("labuser@192.0.2.5:2222"), textos);
         assertTrue(textos.contains(PIN.impressao()), "a impressão digital do servidor que o usuário confirmou: " + textos);
         assertTrue(textos.contains(ALVO.impressaoDaChave()), "a impressão digital da chave que será instalada: " + textos);
         assertTrue(textos.contains(DialogoInstalarChave.TEXTO_DA_IMPRESSAO), textos);
-        assertEquals("Senha do usuário admin no servidor (usada só agora, não fica guardada)", Visual.naEdt(d::rotuloDoCampo));
+        assertEquals("Senha do usuário labuser no servidor (usada só agora, não fica guardada)", Visual.naEdt(d::rotuloDoCampo));
         assertTrue(Visual.naEdt(() -> d.botaoInstalar().isEnabled() && d.botaoInstalar().isVisible()));
         assertFalse(Visual.naEdt(d::parado));
         assertEquals(d.botaoInstalar(), d.botaoDoEnter());
@@ -121,7 +121,7 @@ class DialogoInstalarChaveTest {
     void senhaVaziaNaoChamaOMotorEDizOQueFazer() {
         DialogoInstalarChave d = abrir(ALVO, (s, p) -> InstaladorDeChave.Resultado.ADICIONADA);
         Visual.naEdt(() -> d.botaoInstalar().doClick());
-        assertEquals("Digite a senha do usuário admin no servidor.", Visual.naEdt(d::textoDoErro));
+        assertEquals("Digite a senha do usuário labuser no servidor.", Visual.naEdt(d::textoDoErro));
         assertTrue(senhasRecebidas.isEmpty());
     }
 
@@ -195,7 +195,7 @@ class DialogoInstalarChaveTest {
 
     @Test
     void semImpressaoDigitalConfirmadaNemDeixaDigitarASenha() {
-        DialogoInstalarChave.Alvo semPin = new DialogoInstalarChave.Alvo("lab", "admin", "192.0.2.5", 2222, List.of(), "lab", ALVO.impressaoDaChave(), ALVO.chavePublica());
+        DialogoInstalarChave.Alvo semPin = new DialogoInstalarChave.Alvo("lab", "labuser", "192.0.2.5", 2222, List.of(), "lab", ALVO.impressaoDaChave(), ALVO.chavePublica());
         nosDoisTemas("5-sem-impressao", () -> {
             DialogoInstalarChave d = abrir(semPin, (s, p) -> {
                 throw new AssertionError("não deve chamar o motor");

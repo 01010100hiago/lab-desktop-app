@@ -55,7 +55,7 @@ import org.junit.jupiter.api.io.TempDir;
 class ReparoDaChaveRecusadaTest {
 
     private static final char[] SENHA_MESTRA = "uma-senha-mestra-de-teste".toCharArray();
-    private static final String USUARIO = "admin";
+    private static final String USUARIO = "labuser";
     private static final String SENHA_DO_SERVIDOR = "senha-do-servidor-Zk4!";
     private static final Duration PRAZO = Duration.ofSeconds(30);
 
