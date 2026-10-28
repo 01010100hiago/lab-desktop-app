@@ -55,16 +55,16 @@ public final class PaletaTerminal extends ColorPalette {
      * vivas. O "preto" fica um degrau acima do fundo, como em todo terminal escuro.
      */
     static final int[] ANSI_ESCURO = {
-        0x2A2D30, 0xC0584D, 0x7E9F65, 0xC99A3F, 0x6F7F92, 0xA9768F, 0x8FA89A, 0xC9CED3,
-        0x747A80, 0xE0786C, 0x9CBF80, 0xE3B866, 0x8D9DB3, 0xC792AB, 0xA9C4B5, 0xF0F2F4};
+        0x2A2D30, 0xC0584D, 0x7E9F65, 0xB7A66A, 0x6F7F92, 0xA9768F, 0x8FA89A, 0xC9CED3,
+        0x747A80, 0xE0786C, 0x9CBF80, 0xCDBD7E, 0x8D9DB3, 0xC792AB, 0xA9C4B5, 0xF0F2F4};
 
     /**
      * Os 16 do ANSI no tema claro: as mesmas famílias, em tons escuros que passam de 4,5 para 1 sobre o fundo branco (o "branco" é
      * um cinza médio e o "branco vivo" é quase preto: num fundo claro, texto branco não se leria).
      */
     static final int[] ANSI_CLARO = {
-        0x1B1F23, 0xB3372F, 0x2B7550, 0x8A6200, 0x566676, 0x8D4F73, 0x3F6B5A, 0x60686F,
-        0x50565B, 0xC4453D, 0x2F7F58, 0x946800, 0x63768A, 0xA05C85, 0x4A7A68, 0x111315};
+        0x1B1F23, 0xB3372F, 0x2B7550, 0x7A6B2A, 0x566676, 0x8D4F73, 0x3F6B5A, 0x60686F,
+        0x50565B, 0xC4453D, 0x2F7F58, 0x7F7233, 0x63768A, 0xA05C85, 0x4A7A68, 0x111315};
 
     private static final int[] NIVEIS_DO_CUBO = {0, 95, 135, 175, 215, 255};
 
