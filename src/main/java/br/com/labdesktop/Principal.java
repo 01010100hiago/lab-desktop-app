@@ -114,7 +114,9 @@ public final class Principal {
         log.info("{} {} iniciando (dados em {}).", Versao.NOME, Versao.atual(), caminhos.pastaDados());
         // Só desenvolvimento: conferido aqui, fora da EDT, porque faz E/S (ver SenhaDeTeste).
         Path arquivoDaSenhaDeTeste = null;
-        if (SenhaDeTeste.pedida(args)) {
+        if (SenhaDeTeste.pedida(args) && !SenhaDeTeste.valeNesteApp()) {
+            log.warn("{} ignorada: o app instalado não abre cofre por senha de teste (só o modo de desenvolvimento).", SenhaDeTeste.OPCAO);
+        } else if (SenhaDeTeste.pedida(args)) {
             StringBuilder motivo = new StringBuilder();
             arquivoDaSenhaDeTeste = SenhaDeTeste.arquivoSeguro(caminhos, motivo).orElse(null);
             if (arquivoDaSenhaDeTeste == null) {

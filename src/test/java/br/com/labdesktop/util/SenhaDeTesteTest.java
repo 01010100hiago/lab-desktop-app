@@ -32,6 +32,8 @@ class SenhaDeTesteTest {
         assertTrue(SenhaDeTeste.pedida(new String[] {"--pasta", "x", "--senha-de-teste"}));
         assertFalse(SenhaDeTeste.pedida(new String[] {"--pasta", "x"}));
         assertFalse(SenhaDeTeste.pedida(null));
+        assertFalse(SenhaDeTeste.valeNesteApp(true), "o app instalado (imagem do jpackage) ignora a senha de teste");
+        assertTrue(SenhaDeTeste.valeNesteApp(false), "rodando pelo Gradle ela continua valendo");
     }
 
     @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")

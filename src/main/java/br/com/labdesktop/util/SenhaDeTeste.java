@@ -22,6 +22,18 @@ public final class SenhaDeTeste {
 
     private SenhaDeTeste() { }
 
+    /** Dentro de uma imagem do jpackage o launcher define esta propriedade; rodando pelo Gradle ou pelo {@code java -cp} ela não existe. */
+    static final String PROPRIEDADE_DO_JPACKAGE = "jpackage.app-version";
+
+    /** A senha de teste só existe para desenvolvimento: o app instalado (imagem do jpackage) a ignora, mesmo com a opção e uma pasta de teste. */
+    public static boolean valeNesteApp() {
+        return valeNesteApp(System.getProperty(PROPRIEDADE_DO_JPACKAGE) != null);
+    }
+
+    static boolean valeNesteApp(boolean imagemEmpacotada) {
+        return !imagemEmpacotada;
+    }
+
     /** {@code true} se a opção veio nos argumentos. */
     public static boolean pedida(String[] args) {
         if (args != null) {
