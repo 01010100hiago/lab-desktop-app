@@ -24,10 +24,10 @@ class TesteCamadas {
 
     /**
      * util, seguranca, cofre, ssh, api, servidor, arquivos (o domínio do gerenciador de arquivos, sobre SFTP), instalador (o instalador do agente:
-     * verificações, passos e pacote, atrás de uma interface de execução) e terminal (o domínio do
+     * verificações, passos e pacote, atrás de uma interface de execução) e local (o servidor "Este computador": processos, verificações, laboratório local) e terminal (o domínio do
      * terminal: transporte, ciclo de vida, classificador e portão de entrada; o JediTerm e o Swing ficam em {@code ui.terminal}).
      */
-    private static final Set<String> DOMINIO = Set.of("util", "seguranca", "cofre", "ssh", "api", "servidor", "arquivos", "terminal", "instalador");
+    private static final Set<String> DOMINIO = Set.of("util", "seguranca", "cofre", "ssh", "api", "servidor", "arquivos", "terminal", "instalador", "local");
 
     private static final Pattern GRAFICOS = Pattern.compile(
         "\\b(javax\\.swing|java\\.awt|com\\.formdev|com\\.jediterm)\\b");
