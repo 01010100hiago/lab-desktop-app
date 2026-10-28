@@ -1,0 +1,51 @@
+# CI do lab-desktop: compila, roda a suíte inteira e confere as dependências (./gradlew build).
+# Sem segredos e sem deploy: nada aqui fala com servidor nenhum (os testes usam um SSH embutido em 127.0.0.1).
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Só leitura: o fluxo não precisa escrever em nada do repositório.
+permissions:
+  contents: read
+
+# Um push novo cancela a execução anterior da mesma branch ou do mesmo pull request.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Pull request de fork roda sem segredos (não há nenhum aqui) e com o token só de leitura.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          # cache do Gradle (wrapper e dependências), chaveado pelos arquivos de build e pelo verification-metadata.xml
+          cache: gradle
+
+      # O gradle.properties do repositório não fixa JDK nenhum (a linha `org.gradle.java.home` está comentada); aqui o Gradle usa o JDK 21 instalado acima.
+      # A verificação de dependências (gradle/verification-metadata.xml) continua ligada: é parte do `build`.
+      # Os testes de interface desenham sem janela (java.awt.headless=true, definido no build.gradle.kts): não precisam de xvfb.
+      - name: Build e testes
+        run: ./gradlew build --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
+
+      # Os PNGs das telas (claro e escuro) e a tabela de contraste, para quem quiser olhar o que a execução desenhou.
+      - name: Guardar telas e relatório de testes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: telas-e-testes
+          path: |
+            build/telas/
+            build/contraste.txt
+            build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 7
