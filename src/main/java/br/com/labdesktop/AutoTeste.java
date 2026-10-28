@@ -131,9 +131,28 @@ public final class AutoTeste {
             }
         }, tmp);
         critica("ssh-mina", t -> {
-            var cliente = br.com.labdesktop.ssh.ClienteSshFactory.criar((a, b, c) -> false, br.com.labdesktop.ssh.ConfigSsh.padrao(), java.util.List.of("ssh-ed25519"));
-            cliente.close();
-            return "MINA SSH com BouncyCastle";
+            // Ida e volta DE VERDADE: um servidor SSH em 127.0.0.1 (porta livre, só nesta prova), uma chave gerada pelo app e a autenticação por ela, com o cliente blindado do app.
+            var hostKey = GeradorDeChaves.gerar("host", "autoteste").paraKeyPair();
+            var usuario = GeradorDeChaves.gerar("usuario", "autoteste").paraKeyPair();
+            var servidor = org.apache.sshd.server.SshServer.setUpDefaultServer();
+            servidor.setHost("127.0.0.1");
+            servidor.setPort(0);
+            servidor.setKeyPairProvider(org.apache.sshd.common.keyprovider.KeyPairProvider.wrap(hostKey));
+            servidor.setPublickeyAuthenticator((u, chave, sessao) -> org.apache.sshd.common.config.keys.KeyUtils.compareKeys(chave, usuario.getPublic()));
+            servidor.start();
+            var cliente = br.com.labdesktop.ssh.ClienteSshFactory.criar((a, b, c) -> true, br.com.labdesktop.ssh.ConfigSsh.padrao(), java.util.List.of("ssh-ed25519"));
+            cliente.start();
+            try (var sessao = cliente.connect("autoteste", "127.0.0.1", servidor.getPort()).verify(java.time.Duration.ofSeconds(20)).getSession()) {
+                sessao.addPublicKeyIdentity(usuario);
+                sessao.auth().verify(java.time.Duration.ofSeconds(20));
+                if (!sessao.isAuthenticated()) {
+                    throw new IllegalStateException("o servidor local não autenticou a chave gerada pelo app");
+                }
+                return "MINA SSH com BouncyCastle: gerou a chave, conectou em 127.0.0.1 e autenticou";
+            } finally {
+                cliente.stop();
+                servidor.stop(true);
+            }
         }, tmp);
         critica("tema-flatlaf", t -> {
             GerenciadorTema.preparar();

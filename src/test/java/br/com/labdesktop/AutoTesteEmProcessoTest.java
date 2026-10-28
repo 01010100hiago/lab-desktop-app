@@ -40,5 +40,6 @@ class AutoTesteEmProcessoTest {
         for (String esperado : new String[] {"OK versao", "OK locale-pt-BR", "OK modulos-do-java", "OK chave-ed25519", "OK cofre-argon2-aes", "OK trava-de-instancia", "OK ssh-mina", "OK tema-flatlaf", "AUTOTESTE OK"}) {
             assertTrue(saida.contains(esperado), "faltou '" + esperado + "' em:\n" + saida);
         }
+        assertTrue(saida.contains("conectou em 127.0.0.1 e autenticou"), "o ssh-mina deve fazer a ida e volta com um servidor local:\n" + saida);
     }
 }

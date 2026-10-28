@@ -69,7 +69,33 @@ public class ConferirEmpacotamento {
         if (saida == 0) {
             saida = rodar(java, classpath, "--autoteste");
         }
+        // O LAUNCHER de verdade (o executável que o usuário abre), com o .cfg dele: pega o que o java -cp acima não pega (opções da JVM do .cfg, caminho do runtime, assinatura, nome do executável).
+        Path launcher = mac ? raiz.resolve("MacOS/Lab Desktop") : windows ? raiz.resolve("Lab Desktop.exe") : raiz.resolve("bin/Lab Desktop");
+        if (!Files.exists(launcher)) {
+            System.err.println("FALTA o launcher da imagem: " + launcher);
+            System.exit(2);
+        }
+        if (saida == 0) {
+            saida = rodarLauncher(launcher, "--versao");
+        }
+        if (saida == 0) {
+            saida = rodarLauncher(launcher, "--autoteste");
+        }
         System.exit(saida);
+    }
+
+    /** Roda o executável da imagem. O JAVA_TOOL_OPTIONS deixa a JVM dele sem janela (o CI do Linux não tem tela); nunca abre o app de verdade: só {@code --versao} e {@code --autoteste}. */
+    static int rodarLauncher(Path launcher, String opcao) throws IOException, InterruptedException {
+        System.out.println("$ \"" + launcher.getFileName() + "\" " + opcao + "   (o launcher da imagem)");
+        ProcessBuilder pb = new ProcessBuilder(List.of(launcher.toString(), opcao)).inheritIO();
+        pb.environment().put("JAVA_TOOL_OPTIONS", "-Djava.awt.headless=true");
+        Process p = pb.start();
+        if (!p.waitFor(180, TimeUnit.SECONDS)) {
+            p.destroyForcibly();
+            System.err.println("TEMPO ESGOTADO no launcher em " + opcao);
+            return 3;
+        }
+        return p.exitValue();
     }
 
     static int rodar(Path java, String classpath, String opcao) throws IOException, InterruptedException {
