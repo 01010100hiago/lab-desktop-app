@@ -57,6 +57,8 @@ public final class InstaladorDeAgente {
     private boolean criouContainer;
     /** Atualização: o agente antigo está guardado como {@code <nome>-anterior} (e se estava rodando antes). */
     private boolean guardouOAnterior;
+    /** Alguém interrompeu a thread durante o desfazer (a flag volta quando ele termina). */
+    private boolean interrompidoNoDesfazer;
     private boolean anteriorRodava;
     private boolean criouVolume;
     private boolean criouImagem;
@@ -386,7 +388,24 @@ public final class InstaladorDeAgente {
     // Desfazer (só o que ESTA execução criou)
     // =====================================================================================================
 
+    /**
+     * Desfaz o que ESTA execução criou. Roda mesmo depois de um Cancelar, e um segundo Cancelar (ou o fechar da janela) NÃO a aborta no meio:
+     * a interrupção da thread é guardada, cada comando de limpeza é repetido se ela o interromper, e a flag volta no fim. Deixar uma
+     * limpeza pela metade (a imagem apagada e a pasta não, o agente antigo sem voltar) é pior que esperar alguns segundos.
+     */
     private List<String> desfazer() {
+        boolean interrompidoAntes = Thread.interrupted();
+        try {
+            return desfazerSemInterrupcao();
+        } finally {
+            if (interrompidoAntes || interrompidoNoDesfazer) {
+                Thread.currentThread().interrupt();
+            }
+            interrompidoNoDesfazer = false;
+        }
+    }
+
+    private List<String> desfazerSemInterrupcao() {
         List<String> feito = new ArrayList<>();
         if (docker == null) {
             return feito;
@@ -440,17 +459,23 @@ public final class InstaladorDeAgente {
         return feito;
     }
 
-    /** Roda um comando de limpeza sem deixar um erro dele esconder o erro original. */
+    /**
+     * Roda um comando de limpeza sem deixar um erro dele esconder o erro original. Interrompido (um Cancelar durante o desfazer), repete o
+     * comando: a limpeza é idempotente e precisa terminar.
+     */
     private boolean tentar(String comando) {
-        try {
-            return rodar(comando, ESCRITA_CURTA).status() == 0;
-        } catch (IOException | InterruptedException e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
+        for (int vez = 0; vez < 3; vez++) {
+            try {
+                return rodar(comando, ESCRITA_CURTA).status() == 0;
+            } catch (InterruptedException e) {
+                Thread.interrupted();
+                interrompidoNoDesfazer = true;
+            } catch (IOException e) {
+                LOG.warn("Não consegui desfazer ({}): {}", comando.length() > 60 ? comando.substring(0, 60) : comando, Redator.redigir(e));
+                return false;
             }
-            LOG.warn("Não consegui desfazer ({}): {}", comando.length() > 60 ? comando.substring(0, 60) : comando, Redator.redigir(e));
-            return false;
         }
+        return false;
     }
 
     // =====================================================================================================

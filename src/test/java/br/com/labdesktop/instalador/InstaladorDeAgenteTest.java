@@ -300,6 +300,24 @@ class InstaladorDeAgenteTest {
         assertFalse(servidor.pastaExiste);
     }
 
+    /** Um segundo Cancelar (ou fechar a janela) interrompe a thread no meio do desfazer: a limpeza termina mesmo assim, nunca fica pela metade. */
+    @Test
+    void interromperADuranteODesfazerNaoAbortaALimpeza() throws Exception {
+        servidor.noGrupoDocker = true;
+        servidor.falharEm(contem(" run -d "), 125, "docker: port is already allocated");
+        servidor.antesDe(c -> c.contains(" rmi "), () -> Thread.currentThread().interrupt()); // o Cancelar de novo, no meio da limpeza
+        verificar(ModoDaInstalacao.INSTALAR);
+        servidor.limparRegistro();
+
+        ResultadoDaInstalacao r = instalar();
+
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertFalse(servidor.imagemExiste, "a imagem saiu");
+        assertFalse(servidor.pastaExiste, "e a pasta também, mesmo com a interrupção no meio: " + r.desfeito());
+        assertTrue(r.desfeito().contains("Apaguei a pasta lab-agente do instalador."), r.desfeito().toString());
+        assertTrue(Thread.interrupted(), "a flag de interrupção volta quando a limpeza termina");
+    }
+
     @Test
     void agenteQueNaoRespondeDesfazTudoQueACriouEMostraOsLogsDoContainer() throws Exception {
         servidor.noGrupoDocker = true;
