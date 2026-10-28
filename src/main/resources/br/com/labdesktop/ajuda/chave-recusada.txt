@@ -5,12 +5,13 @@
 @onde: A frase do motivo | Faixa vermelha no alto da página do servidor
 1. Abra o servidor na barra da esquerda e leia a faixa vermelha no alto: ela diz o motivo.
 2. A causa mais comum é a chave não estar no acesso do usuário. Peça a quem administra o servidor para pôr a linha da chave do app.
-3. Se você tem a senha do usuário, remova o servidor e adicione-o de novo: no passo 2 o app entra com a senha e instala a chave sozinho.
+3. Se o servidor ainda aceita senha, remova-o e adicione de novo: o app instala a chave. Sem senha, use o painel do provedor, outra chave ou o acesso físico.
 4. Quando a chave estiver lá, clique em "Tentar agora".
 [Ir para Servidores](ir:servidores)
 @veja: conectar sem-conexao token-recusado
 ## Mais detalhes
 A linha da chave aparece, com botão de copiar, nas "Opções avançadas" do passo da chave do assistente de Adicionar servidor e de novo no passo da conexão quando o servidor recusa. Se precisar dela outra vez, remova o servidor e adicione-o de novo.
 Se o assistente diz "O servidor não aceitou a chave", confira se o servidor permite login por chave (PubkeyAuthentication) e se a pasta .ssh do usuário tem permissão 700 e o arquivo authorized_keys, 600. Nesse caso o app não mexe em mais nada.
-Se a senha foi recusada, o app diz e apaga o campo; depois de 3 seguidas há uma pausa curta. Se o app diz que a conta pode estar bloqueada, espere uns minutos antes de tentar de novo.
+Se a senha foi recusada, o app diz, apaga o campo e conta quantas tentativas restam: são no máximo 4 em 10 minutos, porque o servidor pode bloquear o seu endereço depois de várias senhas erradas. Se o app diz que a conta pode estar bloqueada, espere uns minutos antes de tentar de novo.
+Outras causas: o servidor lê as chaves de outro lugar (AuthorizedKeysFile ou AuthorizedKeysCommand diferentes do padrão): o app grava em ~/.ssh/authorized_keys e, se o servidor não o lê, a prova falha e o app diz. Se o app avisa que a pasta pessoal aceita escrita por grupo ou outros, quem administra o servidor precisa tirar essa escrita (chmod go-w): o app nunca muda isso.
 Se a faixa diz que o app não conseguiu USAR a chave, o problema é no arquivo da chave no cofre, e não no servidor. Se diz que a chave do servidor MUDOU, não conecte antes de saber o porquê: pode ser outra máquina. Se você reinstalou o servidor, use "Remover servidor" e adicione-o de novo para conferir a impressão digital outra vez.
