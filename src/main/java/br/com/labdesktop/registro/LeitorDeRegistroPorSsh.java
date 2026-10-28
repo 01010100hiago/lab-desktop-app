@@ -31,14 +31,15 @@ public final class LeitorDeRegistroPorSsh implements LeitorDeRegistro {
     private static final String SO_REGEX_DE_USUARIO = "^[a-z_][a-z0-9_-]{0,31}$";
 
     private final ProvisionadorRemoto.Executor executor;
-    private final String usuario;
+    private final Supplier<String> usuario;
     private final Supplier<Instant> relogio;
     private final ZoneId fuso;
 
     /**
-     * @param usuario o usuário do SSH (só entra no TEXTO do comando que o usuário copia; se não tem a forma de um usuário do Linux vira {@code <seu-usuario>})
+     * @param usuario o usuário do SSH, lido a cada leitura (o usuário pode editar o servidor); só entra no TEXTO do comando que o usuário copia, e se não tem a forma de um usuário do
+     *                Linux vira {@code <seu-usuario>}
      */
-    public LeitorDeRegistroPorSsh(ProvisionadorRemoto.Executor executor, String usuario, Supplier<Instant> relogio, ZoneId fuso) {
+    public LeitorDeRegistroPorSsh(ProvisionadorRemoto.Executor executor, Supplier<String> usuario, Supplier<Instant> relogio, ZoneId fuso) {
         this.executor = executor;
         this.usuario = usuario;
         this.relogio = relogio;
@@ -77,7 +78,7 @@ public final class LeitorDeRegistroPorSsh implements LeitorDeRegistro {
             }
         }
         if (semPermissao) {
-            return new ResultadoDoRegistro.SemPermissao("Seu usuário não tem permissão para ler o registro do sistema.", comandoParaDarAcesso(usuario), EXPLICACAO);
+            return new ResultadoDoRegistro.SemPermissao("Seu usuário não tem permissão para ler o registro do sistema.", comandoParaDarAcesso(usuario.get()), EXPLICACAO);
         }
         return new ResultadoDoRegistro.Indisponivel("Este servidor não tem o registro do sistema nos lugares que o app conhece (journalctl, /var/log/syslog e /var/log/messages).");
     }

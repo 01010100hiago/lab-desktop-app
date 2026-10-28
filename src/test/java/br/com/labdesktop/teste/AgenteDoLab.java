@@ -34,6 +34,27 @@ public final class AgenteDoLab implements AutoCloseable {
     /** Quantas vezes o app consultou {@code /api/servidor} e {@code /api/servidor/detalhe} (a prova de "só com a tela visível"). */
     public final AtomicInteger consultasDeServidor = new AtomicInteger();
     public final AtomicInteger consultasDeDetalhe = new AtomicInteger();
+    /** O agente tem o histórico de longo prazo: diz {@code recursos.historico} e responde {@code /api/servidor/historico}. Desligado por padrão (o agente de antes). */
+    public volatile boolean historico;
+    /** As janelas pedidas a {@code /api/servidor/historico}, na ordem (a prova de "só com a tela visível" e de "só se o agente declara"). */
+    public final List<String> janelasPedidas = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** As primeiras células sem dado, por janela (as janelas grandes de um agente recém-ligado). */
+    public volatile int semDadoNoComeco;
+    /** Quanto o agente demora para responder o histórico (prova de "carregando" e de troca de janela no meio). */
+    public volatile long atrasoDoHistoricoMs;
+    /** Quando verdadeiro o histórico responde 500 (o agente com defeito): o app mantém o que tem e diz que não conseguiu. */
+    public volatile boolean historicoComDefeito;
+    /** O relógio do agente (os testes fixam). */
+    public volatile java.time.Instant agoraDoAgente;
+    /** O registro do sistema que o servidor SSH devolve a {@code journalctl}; {@code null}: o servidor de teste não tem {@code journalctl}. */
+    public volatile String saidaDoJournal = "2026-10-28T11:55:01-0300 lab sshd[1203]: Accepted publickey for labuser from 10.0.0.9 port 51234 ssh2\n"
+        + "2026-10-28T11:56:10-0300 lab kernel: usb 1-1: new high-speed USB device number 5\n"
+        + "2026-10-28T11:58:00-0300 lab dockerd[900]: level=warning msg=\"Your kernel does not support swap limit capabilities\"\n"
+        + "2026-10-28T11:59:30-0300 lab sshd[1250]: Failed password for invalid user admin from 203.0.113.9 port 4000 ssh2\n";
+    /** O journalctl não deixa o usuário ver o que é dos outros (não está no grupo systemd-journal): a dica no erro padrão e nada no syslog. */
+    public volatile boolean semPermissaoParaORegistro;
+    /** Os comandos de registro que chegaram por SSH, na ordem. */
+    public final List<String> comandosDeRegistro = new java.util.concurrent.CopyOnWriteArrayList<>();
     /** Os comandos de segurança (somente leitura) que o app mandou por SSH. */
     public final List<String> comandosDeSeguranca = new java.util.concurrent.CopyOnWriteArrayList<>();
     /** O usuário não tem sudo sem senha: os comandos de segurança com sudo falham como no servidor real. */
@@ -143,7 +164,7 @@ public final class AgenteDoLab implements AutoCloseable {
             return sob;
         }
         String caminho = p.caminho();
-        if ("monitor".equals(perfil) && !List.of("/api/versao", "/api/servidor", "/api/servidor/detalhe").contains(caminho)) {
+        if ("monitor".equals(perfil) && !List.of("/api/versao", "/api/servidor", "/api/servidor/detalhe", "/api/servidor/historico").contains(caminho)) {
             return Resposta.json(404, "{\"erro\":\"Esta rota não existe no perfil monitor do agente (só leitura do servidor).\",\"perfil\":\"monitor\"}");
         }
         if (agenteAntigo && "/api/versao".equals(caminho)) {
@@ -151,8 +172,11 @@ public final class AgenteDoLab implements AutoCloseable {
         }
         if ("/api/versao".equals(caminho)) {
             String totp = totpAtivo ? "ativo" : totpPendente ? "pendente" : "desligado";
-            String perfilJson = perfil == null ? "" : ",\"perfil\":\"" + perfil + "\",\"recursos\":"
-                + ("monitor".equals(perfil) ? "{\"claude\":false,\"projetos\":false,\"monitor\":true}" : "{\"claude\":true,\"projetos\":true,\"monitor\":true}");
+            String perfilEfetivo = perfil == null && historico ? "lab" : perfil;
+            String comHistorico = historico ? ",\"historico\":true" : "";
+            String perfilJson = perfilEfetivo == null ? "" : ",\"perfil\":\"" + perfilEfetivo + "\",\"recursos\":"
+                + ("monitor".equals(perfilEfetivo) ? "{\"claude\":false,\"projetos\":false,\"monitor\":true" + comHistorico + "}"
+                    : "{\"claude\":true,\"projetos\":true,\"monitor\":true" + comHistorico + "}");
             return Resposta.json(200, "{\"api\":1,\"painel\":\"v22.5.0\",\"exigeToken\":" + exigeToken + ",\"cliente\":"
                 + (dispositivo == null ? "null" : "\"" + dispositivo + "\"") + ",\"totp\":\"" + totp + "\"" + perfilJson + "}");
         }
@@ -174,6 +198,9 @@ public final class AgenteDoLab implements AutoCloseable {
             consultasDeServidor.incrementAndGet();
             return Resposta.json(200, MocksDoFront.ler("servidor.json"));
         }
+        if ("/api/servidor/historico".equals(caminho) && historico) {
+            return responderHistorico(p);
+        }
         if ("/api/servidor/detalhe".equals(caminho)) {
             consultasDeDetalhe.incrementAndGet();
             return Resposta.json(200, br.com.labdesktop.api.FixturesDeApi.lerRecurso("servidor-detalhe-sintetico.json"));
@@ -189,6 +216,22 @@ public final class AgenteDoLab implements AutoCloseable {
             return Resposta.json(200, "{\"ok\":true,\"saida\":\"[docker-compose.yml] feito\",\"url\":\"/sessao/x\"}");
         }
         return Resposta.json(404, "{\"erro\":\"Projeto não existe.\"}");
+    }
+
+    private Resposta responderHistorico(Pedido p) {
+        String codigo = parametro(p.caminhoComQuery(), "janela");
+        java.util.Optional<br.com.labdesktop.tendencias.JanelaDeTempo> j = br.com.labdesktop.tendencias.JanelaDeTempo.doCodigo(codigo);
+        if (j.isEmpty()) {
+            return Resposta.json(400, "{\"erro\":\"Informe uma janela: janela=10m, 1h, 1d, 7d ou 30d.\",\"validas\":[\"10m\",\"1h\",\"1d\",\"7d\",\"30d\"]}");
+        }
+        janelasPedidas.add(codigo);
+        if (historicoComDefeito) {
+            return Resposta.json(500, "{\"erro\":\"Defeito do agente de teste.\"}");
+        }
+        java.time.Instant agora = agoraDoAgente != null ? agoraDoAgente : java.time.Instant.now();
+        int vazio = j.get().duracao().compareTo(java.time.Duration.ofHours(1)) > 0 ? semDadoNoComeco : 0;
+        Resposta r = Resposta.json(200, HistoricoSintetico.json(j.get(), agora, vazio));
+        return atrasoDoHistoricoMs > 0 ? Resposta.comAtraso(r, atrasoDoHistoricoMs) : r;
     }
 
     private static final java.util.regex.Pattern ROTA_DE_PROJETO = java.util.regex.Pattern.compile(
@@ -281,6 +324,10 @@ public final class AgenteDoLab implements AutoCloseable {
     /** O manipulador que o {@link ServidorSshDeTeste} usa para os comandos do agente. */
     public ServidorSshDeTeste.Manipulador comandosPorSsh() {
         return (linha, stdin, saida) -> {
+            if (linha.startsWith("journalctl -n 200 ") || linha.startsWith("tail -n 200 /var/log/")) {
+                comandosDeRegistro.add(linha);
+                return responderRegistro(linha, saida);
+            }
             if (ehComandoDeSeguranca(linha)) {
                 comandosDeSeguranca.add(linha);
                 return responderSeguranca(linha, saida);
@@ -371,6 +418,29 @@ public final class AgenteDoLab implements AutoCloseable {
                 return falha(saida, "entrada_invalida", "Entrada inválida.");
             }
         };
+    }
+
+    /** As saídas do registro geral do servidor (leitura: nunca sudo). */
+    private int responderRegistro(String linha, StringBuilder saida) {
+        if (linha.startsWith("journalctl")) {
+            if (saidaDoJournal == null) {
+                saida.append(ServidorSshDeTeste.PREFIXO_STDERR).append("sh: 1: journalctl: not found\n");
+                return 127;
+            }
+            if (semPermissaoParaORegistro) {
+                saida.append("-- No entries --\n").append(ServidorSshDeTeste.PREFIXO_STDERR)
+                    .append("Hint: You are currently not seeing messages from other users and the system.\n      Users in groups 'adm', 'systemd-journal' can see all messages.\n");
+                return 0;
+            }
+            saida.append(saidaDoJournal);
+            return 0;
+        }
+        if (semPermissaoParaORegistro) {
+            saida.append(ServidorSshDeTeste.PREFIXO_STDERR).append("tail: cannot open '").append(linha.substring(linha.lastIndexOf(' ') + 1)).append("' for reading: Permission denied\n");
+            return 1;
+        }
+        saida.append(ServidorSshDeTeste.PREFIXO_STDERR).append("tail: cannot open '").append(linha.substring(linha.lastIndexOf(' ') + 1)).append("' for reading: No such file or directory\n");
+        return 1;
     }
 
     private static boolean ehComandoDeSeguranca(String linha) {

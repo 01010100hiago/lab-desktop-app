@@ -14,9 +14,14 @@ import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.ListaProjetos;
 import br.com.labdesktop.api.modelo.TokensDoProjeto;
 import br.com.labdesktop.local.ProjetosLocais;
+import br.com.labdesktop.registro.LeitorDeRegistro;
+import br.com.labdesktop.registro.ResultadoDoRegistro;
+import br.com.labdesktop.tendencias.DadosDeTendencia;
+import br.com.labdesktop.tendencias.JanelaDeTempo;
 import br.com.labdesktop.seguranca.ValidadorDeNomes;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -34,6 +39,8 @@ import java.util.function.Function;
  * CONSUMO(p)      60 s    parado     parado   (só a aba "Consumo e limite" visível)
  * TELA(p)          3 s    18 s       parado   (só a aba Terminal do projeto visível, no modo Claude, e a sessão aberta)
  * LOGS(p,c,n)      5 s    parado     parado   (só a aba "Logs" visível e "atualizar a cada 5 s" marcado)
+ * HISTORICO(j)    10 s a 10 min (cresce com a janela)  ×6   parado   (o bloco de Tendências do Resumo visível e o agente com recursos.historico)
+ * REGISTRO        15 s    parado     parado   (a caixa Registro do Resumo visível e não pausada; por SSH ou docker logs, sem o agente)
  * </pre>
  *
  * Os tópicos do projeto (consumo, tela do Claude e logs) existem POR PROJETO (e por container e número de linhas, nos logs):
@@ -53,6 +60,7 @@ public final class Topico<T> {
     private static final Duration TRES_SEGUNDOS = Duration.ofSeconds(3);
     private static final Duration CINCO_SEGUNDOS = Duration.ofSeconds(5);
     private static final Duration DEZ_SEGUNDOS = Duration.ofSeconds(10);
+    private static final Duration QUINZE_SEGUNDOS = Duration.ofSeconds(15);
     private static final Duration SESSENTA_SEGUNDOS = Duration.ofSeconds(60);
     private static final Duration SEIS_MINUTOS = Duration.ofMinutes(6);
 
@@ -68,6 +76,34 @@ public final class Topico<T> {
     /** Métricas do servidor com histórico de 10 min e processos. */
     public static final Topico<InfoServidor> SERVIDOR = new Topico<>("servidor", ClienteApi::servidor,
         DEZ_SEGUNDOS, SESSENTA_SEGUNDOS, false, InfoServidor::temperatura);
+
+    /**
+     * O histórico de métricas de uma janela, de 10 minutos a 1 mês: um tópico POR JANELA (a chave leva o código), assinado pelo bloco de Tendências do Resumo só enquanto
+     * ele está visível, e só se o agente disse {@code recursos.historico}. O agente só ganha ponto novo a cada passo da faixa, então a cadência cresce com o período
+     * ({@link JanelaDeTempo#cadenciaDeConsulta}); sem foco, um sexto dela.
+     */
+    public static Topico<DadosDeTendencia> historico(JanelaDeTempo janela) {
+        return new Topico<>("historico:" + janela.codigo(), api -> DadosDeTendencia.deHistorico(janela, api.historico(janela.codigo()), Instant.now()),
+            janela.cadenciaDeConsulta(), janela.cadenciaDeConsulta().multipliedBy(6), false, null);
+    }
+
+    /**
+     * O registro geral do servidor, lido por SSH num servidor remoto ou do container do agente em "Este computador"; um por servidor, criado pelo {@code ServidorLab} com o
+     * leitor da conexão dele. A cada 15 s com a caixa visível e não pausada; sem foco PARA (um registro a cada 15 s numa janela esquecida não vale a carga); roda sem o agente
+     * (o SSH e o Docker não dependem dele). Falha de rodar o comando vira erro (o {@code Sondador} dobra o intervalo até 60 s).
+     */
+    static Topico<ResultadoDoRegistro> registro(LeitorDeRegistro leitor) {
+        return new Topico<>("registro", api -> {
+            try {
+                return leitor.ler();
+            } catch (IOException e) {
+                throw new ServidorErro(0, null, "Não consegui ler o registro do servidor agora (sem conexão, ou o comando demorou).");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new ServidorErro(0, null, "A leitura do registro foi interrompida.");
+            }
+        }, QUINZE_SEGUNDOS, null, false, null, true);
+    }
 
     /** Sensores, energia e hardware: mais pesado no servidor, assinado só pela Visão geral visível. */
     public static final Topico<DetalheServidor> DETALHE_SERVIDOR = new Topico<>("servidor-detalhe",

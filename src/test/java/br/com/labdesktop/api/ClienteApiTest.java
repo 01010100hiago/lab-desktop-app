@@ -598,4 +598,63 @@ class ClienteApiTest {
         assertThrows(ErroRede.class, () -> api.versao());
         assertTrue(agente.pedidos.isEmpty());
     }
+
+    // ------------------------------------------------------------------------------------------------
+    // O histórico de métricas
+    // ------------------------------------------------------------------------------------------------
+
+    @Test
+    void historicoPedeAJanelaCertaEParseiaAGradeComNulos() throws Exception {
+        Instant agoraDoAgente = Instant.parse("2026-10-28T15:00:00Z");
+        agente.responder(p -> Resposta.json(200, br.com.labdesktop.teste.HistoricoSintetico.json(br.com.labdesktop.tendencias.JanelaDeTempo.UMA_HORA, agoraDoAgente, 10)));
+        br.com.labdesktop.api.modelo.HistoricoDoAgente h = api.historico("1h");
+        assertEquals("/api/servidor/historico?janela=1h", agente.pedidos.get(0).caminhoComQuery());
+        assertEquals("GET", agente.pedidos.get(0).metodo());
+        assertEquals(20, h.passoS());
+        assertEquals(180, h.cpu().size());
+        assertNull(h.cpu().get(0), "célula sem dado vem como null");
+        assertNull(h.discoUso().get(9));
+        assertNotNull(h.discoUso().get(10));
+        assertEquals(agoraDoAgente, h.quando());
+        assertEquals(agoraDoAgente.minusSeconds(3600), h.inicio());
+        assertEquals(180, h.discoEscritaMaxBps().size());
+    }
+
+    @Test
+    void historicoAceitaSoOsCincoCodigosENaoVaiARedeComOutro() throws Exception {
+        for (String ruim : new String[] {null, "", "2h", "1H", "constructor", "1d&x=1", "../x", "10m "}) {
+            assertThrows(IllegalArgumentException.class, () -> api.historico(ruim), String.valueOf(ruim));
+        }
+        assertEquals(0, agente.pedidos.size(), "nenhuma chamada foi à rede");
+    }
+
+    @Test
+    void historicoDeAgenteDeAntesDa404ENaoDaErroDeTela() {
+        agente.responder(p -> Resposta.texto(404, "não encontrado"));
+        assertInstanceOf(NaoEncontrado.class, assertThrows(ErroApi.class, () -> api.historico("10m")));
+    }
+
+    @Test
+    void historicoComCampoFaltandoOuListaForaDeTipoNaoQuebra() throws Exception {
+        agente.responder(p -> Resposta.json(200, "{\"janela\":\"10m\",\"passo_s\":10,\"cpu\":[0.1,\"texto\",null],\"rx_bps\":[1,2]}"));
+        br.com.labdesktop.api.modelo.HistoricoDoAgente h = api.historico("10m");
+        assertEquals(3, h.cpu().size());
+        assertNull(h.cpu().get(1), "valor com tipo errado vira null, não derruba");
+        assertEquals(List.of(), h.mem(), "campo que não veio vira lista vazia");
+        assertNull(h.inicio());
+    }
+
+    @Test
+    void versaoComRecursosHistoricoELidaEAgenteSemElaNaoTem() throws Exception {
+        agente.responder(p -> Resposta.json(200, "{\"api\":1,\"painel\":\"v22\",\"exigeToken\":false,\"cliente\":\"x\",\"totp\":\"desligado\",\"perfil\":\"monitor\","
+            + "\"recursos\":{\"claude\":false,\"projetos\":false,\"monitor\":true,\"guia_ia\":false,\"historico\":true},\"agente\":\"0.1.0-abc\"}"));
+        assertTrue(api.versao().entendeHistorico());
+        agente.responder(p -> Resposta.json(200, "{\"api\":1,\"painel\":\"v22\",\"exigeToken\":false,\"cliente\":\"x\",\"totp\":\"desligado\",\"perfil\":\"lab\","
+            + "\"recursos\":{\"claude\":true,\"projetos\":true,\"monitor\":true,\"guia_ia\":true}}"));
+        assertFalse(api.versao().entendeHistorico(), "o agente mais antigo não diz historico");
+        agente.responder(p -> Resposta.json(200, VERSAO_JSON));
+        assertFalse(api.versao().entendeHistorico(), "agente mais antigo ainda: sem recursos");
+        agente.responder(p -> Resposta.json(200, "{\"api\":1,\"perfil\":\"lab\",\"recursos\":{\"historico\":false}}"));
+        assertFalse(api.versao().entendeHistorico(), "false explícito não conta");
+    }
 }

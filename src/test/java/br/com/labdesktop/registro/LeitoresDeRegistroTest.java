@@ -49,7 +49,7 @@ class LeitoresDeRegistroTest {
     }
 
     static LeitorDeRegistroPorSsh leitor(Servidor s, String usuario) {
-        return new LeitorDeRegistroPorSsh(s, usuario, () -> AGORA, SP);
+        return new LeitorDeRegistroPorSsh(s, () -> usuario, () -> AGORA, SP);
     }
 
     @Test

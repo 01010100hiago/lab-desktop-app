@@ -115,6 +115,8 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private volatile Supplier<String> pastaDosProjetosLocais;
     /** A leitura de segurança (SSH exec, somente leitura) deste servidor, com o tópico que a entrega às telas. */
     private final Topico<ResumoDeSeguranca> topicoDeSeguranca;
+    /** O registro geral do servidor: por SSH num servidor remoto, ou o do container do agente em "Este computador". */
+    private final Topico<br.com.labdesktop.registro.ResultadoDoRegistro> topicoDeRegistro;
     private final OuvinteDeTopico<LimitesConta> ouvinteDeLimites;
     private final Executor trabalho;
     /** Sob "trava": a assinatura de {@code LIMITES}, que só existe enquanto o servidor tem Claude (ou ainda não disse que não). */
@@ -185,6 +187,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             ? () -> new ResumoDeSeguranca(Instant.now(), Leitura.indisponivel(), Leitura.indisponivel(), Leitura.indisponivel(),
                 Leitura.indisponivel(), Leitura.indisponivel()) // a leitura de segurança é do SSH de um servidor remoto; a aba nem aparece aqui
             : new LeitorDeSegurancaPorSsh(conexao::executar, Instant::now));
+        this.topicoDeRegistro = Topico.registro(local
+            ? new br.com.labdesktop.registro.LeitorDeRegistroLocal(new br.com.labdesktop.local.ExecutorSoDeLeitura(locais.executor()), () -> comoFalarComOAgente().container())
+            : new br.com.labdesktop.registro.LeitorDeRegistroPorSsh(conexao::executar, () -> ultimaConfig.usuario(), Instant::now, java.time.ZoneId.systemDefault()));
         this.desinscreverConexao = conexao.observar(this::aoMudarConexao);
         this.ouvinteDeLimites = new OuvinteDeTopico<LimitesConta>() {
             @Override
@@ -263,6 +268,23 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      */
     public Inscricao assinarSeguranca(OuvinteDeTopico<ResumoDeSeguranca> ouvinte) {
         return sondador.assinar(topicoDeSeguranca, ouvinte);
+    }
+
+    /**
+     * Assina o registro geral do servidor (a caixa do Resumo e a janela "Ver tudo", ao ficarem visíveis). A cada 15 s, só com a janela ativa; nada de rede ou processo na EDT.
+     */
+    public Inscricao assinarRegistro(OuvinteDeTopico<br.com.labdesktop.registro.ResultadoDoRegistro> ouvinte) {
+        return sondador.assinar(topicoDeRegistro, ouvinte);
+    }
+
+    /** O tópico do registro (só para os testes conferirem a cadência). */
+    Topico<br.com.labdesktop.registro.ResultadoDoRegistro> topicoDoRegistroParaTeste() {
+        return topicoDeRegistro;
+    }
+
+    /** Pede já uma leitura do registro (o botão Atualizar da caixa). */
+    public void atualizarRegistroAgora() {
+        sondador.atualizarAgora(topicoDeRegistro);
     }
 
     /** O tópico da lista de projetos: a do agente do lab ({@code /api/projetos}) ou, em "Este computador", a das pastas e do Docker. */
