@@ -1,0 +1,12 @@
+# Como copio as informações do app para pedir ajuda?
+@rotulo: Pedir ajuda
+@busca: copiar informações ajuda chamado versão suporte sobre
+@resumo: Um botão copia a versão, o sistema, o Java e o agente, sem nada secreto, para você colar num chamado.
+@onde: Copiar informações | Ajustes > Sobre > Copiar informações | ajustes-sobre
+1. Abra Ajustes e vá em Sobre (ou menu Arquivo, Sobre o Lab Desktop).
+2. Clique em "Copiar informações".
+3. Cole no seu chamado ou mensagem.
+[Ir para Sobre](ir:ajustes-sobre)
+@veja: sem-conexao dados-do-app
+## Mais detalhes
+O texto leva a versão do app, o sistema, o Java e o agente empacotado. Nada secreto vai junto: nem senha, nem chave, nem token, nem endereço de servidor. Se o problema é com um servidor, copie também a frase da faixa colorida no alto da página dele.

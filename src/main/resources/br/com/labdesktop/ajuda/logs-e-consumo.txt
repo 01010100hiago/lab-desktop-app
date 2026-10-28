@@ -1,0 +1,14 @@
+# Onde vejo os logs e o consumo de um projeto?
+@rotulo: Logs e consumo
+@busca: logs registro consumo limite claude uso semana retomar liberar
+@resumo: Logs e Consumo e limite são abas da página do projeto; o consumo só aparece quando o servidor tem Claude.
+@onde: Logs de um container | Página do projeto > Logs
+@onde: Consumo e limite do Claude | Página do projeto > Consumo e limite
+1. Na aba Projetos, clique na linha do projeto.
+2. Aba Logs: escolha o container; "Atualizar a cada 5 s" mantém a tela viva e "Seguir o fim" acompanha a última linha.
+3. Aba Consumo e limite: mostra quanto o projeto usou do plano do Claude.
+4. Nela, "Definir limite" põe um teto para o projeto; "Retomar" e "Liberar" tiram uma pausa por limite.
+[Ir para Projetos](ir:projetos)
+@veja: servidor projetos
+## Mais detalhes
+A aba Consumo e limite só aparece quando o servidor tem Claude e não aparece em "Este computador". Os botões que mudam limites ficam escondidos até as ações de escrita serem ligadas nesta versão.

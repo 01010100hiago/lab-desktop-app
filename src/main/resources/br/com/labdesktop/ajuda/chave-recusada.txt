@@ -1,0 +1,13 @@
+# O que faço quando aparece "Chave recusada"?
+@rotulo: Chave recusada
+@busca: chave recusada autenticação ssh authorized_keys acesso negado
+@resumo: O servidor respondeu, mas não aceitou a chave deste app para o seu usuário.
+@onde: A frase do motivo | Faixa vermelha no alto da página do servidor
+1. Abra o servidor na barra da esquerda e leia a faixa vermelha no alto: ela diz o motivo.
+2. A causa mais comum é a chave não estar no acesso do usuário. Peça a quem administra o servidor para pôr a linha da chave do app.
+3. Quando a chave estiver lá, clique em "Tentar agora".
+[Ir para Servidores](ir:servidores)
+@veja: conectar sem-conexao token-recusado
+## Mais detalhes
+A linha da chave aparece, com botão de copiar, no passo da chave do assistente de Adicionar servidor e de novo no passo da conexão quando o servidor recusa. Se precisar dela outra vez, remova o servidor e adicione-o de novo: no passo da chave o app mostra o comando.
+Se a faixa diz que o app não conseguiu USAR a chave, o problema é no arquivo da chave no cofre, e não no servidor. Se diz que a chave do servidor MUDOU, não conecte antes de saber o porquê: pode ser outra máquina. Se você reinstalou o servidor, use "Remover servidor" e adicione-o de novo para conferir a impressão digital outra vez.

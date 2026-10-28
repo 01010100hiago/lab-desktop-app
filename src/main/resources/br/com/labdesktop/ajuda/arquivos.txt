@@ -1,0 +1,16 @@
+# Como envio e baixo arquivos?
+@rotulo: Enviar e baixar arquivos
+@busca: arquivos enviar baixar upload download pasta sftp editar apagar renomear
+@resumo: A aba Arquivos navega pelo servidor e baixa o que você selecionar; enviar e apagar dependem de as ações de escrita estarem ligadas.
+@onde: Arquivos do servidor inteiro | Servidor > Arquivos | arquivos
+@onde: Arquivos de um projeto | Página do projeto > Arquivos
+1. Abra a aba Arquivos do servidor (todas as pastas) ou a do projeto (só a pasta dele).
+2. Para baixar: selecione o item, clique em "Baixar" e escolha a pasta do seu computador.
+3. O andamento aparece na lista de transferências, embaixo.
+4. Para enviar: clique em "Enviar" e escolha os itens, ou arraste do seu computador para a lista.
+5. Se já existir um item com o mesmo nome, o app pergunta o que fazer.
+[Ir para Arquivos](ir:arquivos)
+@veja: backups terminal
+## Mais detalhes
+Outras ações: Nova pasta, Novo arquivo, Renomear, Apagar e Mais (mover, copiar o caminho). Um clique duplo num arquivo de texto abre o editor. "Mostrar ocultos" mostra os arquivos que começam com ponto.
+Se a página mostra "Somente leitura nesta versão", dá para navegar, abrir e baixar; enviar, editar, criar, renomear e apagar ficam escondidos até as ações de escrita serem ligadas.

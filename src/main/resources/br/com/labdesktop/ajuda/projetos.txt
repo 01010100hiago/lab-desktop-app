@@ -1,0 +1,16 @@
+# Como crio, importo ou adiciono um container a um projeto?
+@rotulo: Criar e importar projeto
+@busca: criar projeto importar git pasta container compose docker node postgres redis imagem
+@resumo: Crie um projeto do zero ou importe um que já existe, e depois adicione containers vendo o que muda antes de gravar.
+@onde: Novo projeto | Aba Projetos > Novo projeto, ou menu Arquivo > Novo projeto… ({atalho:novo-projeto}) | projetos
+@onde: Adicionar container | Página do projeto > Visão geral > Adicionar container
+1. Na aba Projetos, clique em "Novo projeto" (ou use o menu Arquivo, Novo projeto).
+2. Escolha "Criar do zero" (pasta nova, docker-compose.yml vazio) ou "Importar" (trazer um projeto que já existe).
+3. Importar aceita um repositório Git, uma pasta do seu computador ou uma pasta que já está no servidor.
+4. Para um container, abra a página do projeto, clique em "Adicionar container" e escolha o modelo (Node, Postgres, Redis ou imagem do Docker).
+5. O app mostra o que muda no docker-compose.yml. Clique em "Gravar no docker-compose.yml" e, se quiser, em "Iniciar o projeto".
+[Ir para Projetos](ir:projetos)
+@veja: publicar arquivos
+## Mais detalhes
+Nesta versão do app, os botões que mudam coisas no servidor (Novo projeto, Importar, Adicionar container) ficam escondidos até serem ligados por quem desenvolve o app. Se você não os vê, é por isso.
+O nome do projeto usa letras minúsculas, números e hífen, e é também o nome da pasta. O que já está no projeto nunca é sobrescrito ao importar. Nada é gravado antes do seu clique final.

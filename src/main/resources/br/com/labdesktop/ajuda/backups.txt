@@ -1,0 +1,12 @@
+# Onde vejo os backups de um projeto?
+@rotulo: Ver backups
+@busca: backups cópia segurança tamanho quando baixar
+@resumo: A aba Backups da página do projeto lista os arquivos de backup, do mais novo ao mais antigo.
+@onde: Backups do projeto | Página do projeto > Backups
+1. Na aba Projetos, clique na linha do projeto.
+2. Abra a aba Backups. O número ao lado do nome, como em "Backups (5)", é a quantidade de arquivos.
+3. A lista mostra o arquivo, o tamanho e quando foi feito, em páginas de dez.
+[Ir para Projetos](ir:projetos)
+@veja: arquivos projetos
+## Mais detalhes
+Esta aba só mostra a lista: baixar o backup direto daqui ainda não existe. Ela também não aparece em "Este computador".

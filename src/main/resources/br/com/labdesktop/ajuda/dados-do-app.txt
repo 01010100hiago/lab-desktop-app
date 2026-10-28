@@ -1,0 +1,13 @@
+# Onde ficam as coisas do app no meu computador?
+@rotulo: Onde ficam os dados
+@busca: onde ficam dados cofre pasta preferências log bloquear senha-mestra licença
+@resumo: O cofre cifrado e as preferências ficam numa pasta do app; o caminho aparece em Ajustes, Sobre.
+@onde: Caminho da pasta de dados | Ajustes > Sobre > Pasta de dados | ajustes-sobre
+@onde: Bloquear o cofre | Menu Cofre > Bloquear o cofre ({atalho:bloquear-cofre})
+1. Abra Ajustes, Sobre. A "Pasta de dados" aparece com um botão Copiar (o seu nome de usuário aparece como ~).
+2. Lá dentro estão o cofre, com as chaves e os tokens, e as preferências (tema, abas, janela).
+3. Para trancar o cofre sem fechar o app, use o menu Cofre, "Bloquear o cofre" ({atalho:bloquear-cofre}).
+[Ir para Sobre](ir:ajustes-sobre)
+@veja: pedir-ajuda
+## Mais detalhes
+O cofre só abre com a sua senha-mestra e não existe recuperação dela: guarde-a bem. O Lab Desktop é software livre e gratuito, sob a licença MIT, sem garantia; o texto e a lista das bibliotecas que ele usa estão em Ajustes, Sobre.

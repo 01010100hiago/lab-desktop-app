@@ -1,0 +1,15 @@
+# Como uso o terminal do servidor e do projeto?
+@rotulo: Usar o terminal
+@busca: terminal shell claude sessão comando abas novo terminal
+@resumo: O app abre um terminal de verdade no servidor, e outro dentro de cada projeto, sem precisar do Claude.
+@onde: Terminal do servidor | Servidor > Terminal | terminal
+@onde: Terminal de um projeto | Página do projeto > Terminal
+1. Para o terminal do servidor, abra a aba Terminal: ele já abre um shell sozinho.
+2. Para mais um terminal, use o botão "Novo terminal".
+3. Para o terminal de um projeto, clique na linha do projeto e abra a aba Terminal: ele abre sozinho, já na pasta do projeto.
+4. Se o servidor tem Claude, a aba do projeto ganha o seletor Shell e Claude; o Shell vem escolhido.
+[Ir para Terminal](ir:terminal)
+@veja: servidor logs-e-consumo
+## Mais detalhes
+Há um limite de abas de terminal por servidor; o app avisa quando chega nele. O Claude nunca é obrigatório: o shell abre do mesmo jeito.
+As teclas de comando do app não vão para o programa que está rodando no terminal. Copiar e colar usam as teclas do próprio terminal.

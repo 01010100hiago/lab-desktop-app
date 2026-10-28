@@ -1,0 +1,16 @@
+# Como adiciono um servidor? O que é "Este computador"?
+@rotulo: Adicionar servidor
+@busca: adicionar servidor este computador docker local laboratório editar remover gerenciar
+@resumo: Você pode usar um servidor seu por SSH ou o próprio computador, com o laboratório rodando num container do Docker.
+@onde: Servidores cadastrados | Barra da esquerda > Gerenciar servidores | servidores
+@onde: Editar ou remover um servidor | Menu Servidor > Editar… ou Remover…
+1. Clique em Adicionar, no alto da barra da esquerda. O app pergunta "Onde vão rodar os seus projetos?".
+2. "Outro servidor (SSH)": um servidor na rede ou na internet. Siga o tópico "Como conecto o app a um servidor?".
+3. "Este computador": o laboratório roda aqui, no Docker, sem servidor, sem SSH e sem chave. Só pode haver um.
+4. Em "Este computador", clique em "Preparar este computador": o app só confere o que falta (Docker, disco, memória, porta, git).
+5. O que faltar só é instalado depois que você confirmar. Nada é instalado sozinho.
+[Ir para Servidores](ir:servidores)
+@veja: conectar agente
+## Mais detalhes
+O terminal e os arquivos de "Este computador" funcionam mesmo antes de o laboratório estar pronto.
+Os servidores aparecem na barra da esquerda; em "Gerenciar servidores" ficam os cartões deles. O menu Servidor tem "Editar…" (nome, endereço, porta e usuário) e "Remover…", que tira o servidor do app e pergunta se também apaga a chave.

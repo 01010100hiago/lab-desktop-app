@@ -1,0 +1,10 @@
+# Quais são os atalhos de teclado?
+@rotulo: Atalhos de teclado
+@busca: atalhos teclado tecla comando cmd ctrl menu
+@resumo: A tabela abaixo sai do menu do app, tal como está agora neste computador, então nunca fica desatualizada.
+@onde: Lista dos atalhos | Ajustes > Ajuda > Quais são os atalhos de teclado?
+{tabela-de-atalhos}
+[Ir para Navegação](ir:ajustes-navegacao)
+@veja: aparencia-e-abas
+## Mais detalhes
+Se você mudar a ordem das abas, os atalhos numerados acompanham a nova ordem. No terminal, copiar e colar usam as teclas do próprio terminal; as teclas de comando do app não vão para o programa que está rodando lá.

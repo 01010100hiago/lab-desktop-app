@@ -1,0 +1,13 @@
+# O que faço quando aparece "Token recusado"?
+@rotulo: Token recusado
+@busca: token recusado agente revogado cofre recriado registrar 401
+@resumo: O agente não reconhece mais o token deste computador (foi revogado ou o cofre foi recriado): registre um novo.
+@onde: Registrar o token | Faixa no alto da página do servidor, ou menu Servidor > Registrar o token deste computador…
+1. Abra o servidor e, na faixa do alto, clique em "Registrar token".
+2. Também dá pelo menu Servidor, "Registrar o token deste computador…".
+3. Escolha um nome para este computador e confirme. O app pede um token novo ao agente por SSH e o guarda no cofre.
+4. Se o servidor usa 2FA, o app pede o código do autenticador logo depois.
+[Ir para Servidores](ir:servidores)
+@veja: conectar chave-recusada
+## Mais detalhes
+Se o servidor mostra "Aguardando código", é o 2FA pedindo os 6 dígitos do celular: clique em "Digitar código".

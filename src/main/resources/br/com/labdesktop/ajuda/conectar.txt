@@ -1,0 +1,16 @@
+# Como conecto o app a um servidor?
+@rotulo: Conectar a um servidor
+@busca: conectar chave senha host impressão digital token 2fa ssh autenticador
+@resumo: O app conecta por SSH com uma chave que ele mesmo cria e guarda no cofre; você só confere a impressão digital do servidor.
+@onde: Botão Adicionar (servidor) | Barra da esquerda > Adicionar | servidores
+@onde: Código do autenticador (2FA) | Menu Servidor > Configurar 2FA…
+1. Clique em Adicionar, no alto da barra da esquerda (ou menu Servidor, Adicionar servidor).
+2. Escolha "Outro servidor (SSH)" e preencha nome, endereço, usuário e porta do SSH.
+3. No passo 2 o app cria a chave sozinho; quem administra o servidor põe a linha dela no seu acesso ("Ver comando" copia o comando pronto).
+4. No passo 3, clique em "Testar conexão", compare a impressão digital com a do servidor e clique em "Confere, confiar neste servidor".
+5. O app registra um token deste computador no agente e o estado na barra da esquerda vira "Conectado".
+[Ir para Servidores](ir:servidores)
+@veja: adicionar-servidor agente chave-recusada
+## Mais detalhes
+Sem a conferência da impressão digital o app não conecta. Se o servidor usa o código do autenticador (2FA), o app abre a janela "Código do autenticador" e pede os 6 dígitos do celular; depois de confirmar, este computador fica liberado por 30 dias.
+Para ligar ou desligar o 2FA de um servidor, use o menu Servidor, "Configurar 2FA…" ou "Desativar 2FA…".

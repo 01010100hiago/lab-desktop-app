@@ -1,0 +1,17 @@
+# Como troco o tema e reorganizo as abas?
+@rotulo: Tema e abas
+@busca: tema claro escuro sistema aparência abas ordem esconder restaurar tamanho texto letra
+@resumo: Em Ajustes você escolhe claro, escuro ou o do computador, e põe as abas na ordem que preferir.
+@onde: Tema e tamanho do texto | Ajustes > Aparência ({atalho:ajustes}) | ajustes-aparencia
+@onde: Ordem e abas escondidas | Ajustes > Navegação | ajustes-navegacao
+1. Abra Ajustes, Aparência (atalho: {atalho:ajustes}).
+2. Escolha Sistema, Claro ou Escuro. "Sistema" segue o computador. A troca vale na hora, sem reiniciar.
+3. Ainda ali, "Tamanho do texto" tem Normal, Grande e Maior.
+4. Para as abas, abra Ajustes, Navegação e use as setas de cada linha para subir ou descer.
+5. Desmarque a caixa de uma aba para escondê-la; ela continua na lista, para marcar de volta.
+6. "Restaurar ordem padrão" volta tudo ao que o app traz.
+[Ir para Aparência](ir:ajustes-aparencia)
+[Ir para Navegação](ir:ajustes-navegacao)
+@veja: atalhos
+## Mais detalhes
+A aba que está aberta não pode ser escondida, e sempre sobra pelo menos uma. A ordem vale para todos os servidores e projetos e fica guardada. Os atalhos numerados contam as abas na ordem que você deixar.

@@ -1,0 +1,21 @@
+# Onde vejo como está o servidor?
+@rotulo: Ver como está o servidor
+@busca: resumo segurança containers processos máquina cpu memória disco gráfico relatório registro tendências
+@resumo: As abas Resumo, Containers, Processos e Máquina mostram a saúde do servidor; Segurança mostra quem tentou entrar.
+@onde: Gráficos e Relatório | Servidor > Resumo | resumo
+@onde: Registro do servidor | Servidor > Resumo > Registro do servidor | resumo
+@onde: Quem tentou entrar por SSH | Servidor > Segurança | seguranca
+@onde: Containers do Docker | Servidor > Containers | containers
+@onde: Processos | Servidor > Processos | processos
+@onde: Dados do computador | Servidor > Máquina | maquina
+1. Clique no nome do servidor na barra da esquerda.
+2. Resumo: a saúde geral, gráficos de CPU, memória, disco e rede, o botão Relatório e o Registro do servidor.
+3. Containers: os containers do Docker e o estado de cada um. Processos: o que roda e quanto gasta.
+4. Máquina: os dados do computador do servidor.
+5. Segurança: tentativas de acesso, origens, logins aceitos, firewall e portas, e as regras do SSH.
+[Ir para Resumo](ir:resumo)
+[Ir para Segurança](ir:seguranca)
+@veja: agente terminal
+## Mais detalhes
+Sem o agente instalado, as abas de dados mostram o aviso "agente não instalado" com o botão para instalar; a tela Segurança já funciona só com o SSH.
+Algumas abas só aparecem quando o servidor tem o recurso (por exemplo, Segurança não existe em Este computador). A ordem delas você muda em Ajustes, Navegação.

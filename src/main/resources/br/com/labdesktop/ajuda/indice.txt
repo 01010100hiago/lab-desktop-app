@@ -1,0 +1,25 @@
+# Os tópicos da Ajuda, por tarefa, na ordem em que aparecem. [Nome] abre uma categoria (no máximo 7, nome curto) e os nomes de arquivo abaixo dela (no máximo 6)
+# são os tópicos dela: um arquivo .txt por tópico nesta pasta. Um teste confere tudo isto.
+[Comece aqui]
+conectar
+adicionar-servidor
+agente
+[Projetos]
+projetos
+publicar
+[Arquivos e backups]
+arquivos
+backups
+[Servidor]
+servidor
+terminal
+logs-e-consumo
+[Ajustes e aparência]
+aparencia-e-abas
+atalhos
+dados-do-app
+[Quando algo dá errado]
+chave-recusada
+token-recusado
+sem-conexao
+pedir-ajuda
