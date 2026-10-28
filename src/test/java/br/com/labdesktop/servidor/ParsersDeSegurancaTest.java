@@ -223,7 +223,7 @@ class ParsersDeSegurancaTest {
         assertEquals("sshd", p.get(1).processo());
         assertEquals("todas as interfaces", p.get(1).escopo());
         assertEquals("docker-proxy", p.get(2).processo());
-        assertEquals("só em 10.0.0.10", p.get(2).escopo());
+        assertEquals("só em 192.0.2.5", p.get(2).escopo());
         assertEquals("", p.get(0).processo());
     }
 

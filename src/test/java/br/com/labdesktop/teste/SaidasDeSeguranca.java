@@ -98,7 +98,7 @@ public final class SaidasDeSeguranca {
         LISTEN 0      128          0.0.0.0:2222       0.0.0.0:*    users:(("sshd",pid=701,fd=3))
         LISTEN 0      128             [::]:2222          [::]:*    users:(("sshd",pid=701,fd=4))
         LISTEN 0      4096       127.0.0.1:7000       0.0.0.0:*
-        LISTEN 0      4096     10.0.0.10:8080       0.0.0.0:*    users:(("docker-proxy",pid=900,fd=7))
+        LISTEN 0      4096     192.0.2.5:8080       0.0.0.0:*    users:(("docker-proxy",pid=900,fd=7))
         LISTEN 0      511                *:80                *:*
         LISTEN 0      128            [::1]:631           [::]:*
         LISTEN 0      4096   127.0.0.53%lo:53        0.0.0.0:*

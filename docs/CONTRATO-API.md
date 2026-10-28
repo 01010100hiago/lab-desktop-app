@@ -527,7 +527,7 @@ Permissões mínimas do token: Zona > Zona > Ler, Zona > DNS > Editar (só na zo
 
 ## 7. Notas para quem implementa o cliente
 
-- Fixtures: `scripts/capturar-fixtures.sh` grava em `src/test/resources/lab-real/` uma resposta real de cada rota de leitura (3.2 a 3.11, com um projeto comum, o `lab` e um projeto sem sessão). Contêm nomes e descrições reais de projetos do lab: por isso `usuario/lab-real/` está no `.gitignore` e não deve ser publicado.
+- Fixtures: `scripts/capturar-fixtures.sh` grava em `src/test/resources/lab-real/` uma resposta real de cada rota de leitura (3.2 a 3.11, com um projeto comum, o `lab` e um projeto sem sessão). Contêm nomes e descrições reais de projetos do lab: por isso `src/test/resources/lab-real/` está no `.gitignore` e não deve ser publicado.
 - 404 `Sessão não está aberta.` e 409 de pausa são fluxo normal, não erro de tela.
 - Qualquer `ErroRede` não é erro de tela: o Sondador pergunta ao estado da conexão (reconectando, agente fora) e mantém o último snapshot com a faixa "sem conexão desde HH:MM".
 - Dado vindo do servidor é não confiável (descrição de projeto, README, branch, nome de container, texto da tela, `login.url`): texto sem HTML, controles e bidi removidos, URLs só por lista de permitidos.
