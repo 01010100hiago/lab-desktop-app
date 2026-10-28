@@ -349,7 +349,7 @@ class DialogoAdicionarServidorSenhaTest {
         assertEquals("chave", Visual.naEdt(d::paginaAtual));
         assertEquals(List.of(), cofre.servidores(), "nenhum servidor no cofre");
         assertTrue(agente.tokens.isEmpty());
-        assertEquals(List.of(ComandosDoAcesso.instalarChave()), shell.recebidos, "só instalou a chave: nenhum outro comando");
+        assertEquals(List.of(ComandosDoAcesso.instalarChave(), ComandosDoAcesso.lerPermissoesDaPastaPessoal()), shell.recebidos, "só instalou a chave e leu permissões: nenhum outro comando");
         assertFalse(Visual.naEdt(d::senhaFoiUsada));
     }
 

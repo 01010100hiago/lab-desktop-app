@@ -1145,6 +1145,9 @@ public final class DialogoAdicionarServidor extends Dialogo {
                 return;
             }
             senhaUsada = true;
+            if (instalada == br.com.labdesktop.acesso.InstaladorDeChave.Resultado.ADICIONADA_APESAR_DE_LINHA_INUTIL) {
+                avisos.atencao("A chave já aparecia no authorized_keys só comentada ou com uma restrição (command= ou from=). O app acrescentou uma linha própria e deixou a antiga como estava.");
+            }
             cadastrar(dados, daVez, pin);
         }, falha -> {
             ocupar(false);

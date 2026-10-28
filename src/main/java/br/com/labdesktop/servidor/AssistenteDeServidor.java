@@ -1,5 +1,7 @@
 package br.com.labdesktop.servidor;
 
+import br.com.labdesktop.acesso.ComandosDoAcesso;
+import br.com.labdesktop.acesso.DiagnosticoDePermissoes;
 import br.com.labdesktop.acesso.InstaladorDeChave;
 import br.com.labdesktop.acesso.LimiteDeTentativas;
 import br.com.labdesktop.cofre.ChaveSsh;
@@ -335,16 +337,25 @@ public final class AssistenteDeServidor {
             }
             ChaveSsh daVez = cofre.chaveSsh(chave.id()).orElseThrow(() -> new CofreException("A chave deste servidor não está no cofre."));
             InstaladorDeChave.Resultado instalada;
+            List<String> permissoesRuins = List.of();
             progresso.accept(EtapaDoPrimeiroAcesso.ENTRANDO);
             try (SessaoComSenha sessao = abrirComSenha(dados, pin, senha, conta)) {
                 progresso.accept(EtapaDoPrimeiroAcesso.INSTALANDO);
                 instalada = InstaladorDeChave.instalar(sessao::executar, daVez.publica(), dados.portaDoAgente());
+                permissoesRuins = lerPermissoesRuins(sessao); // só lê; se a prova falhar, a frase diz o que o StrictModes pode estar recusando
             } catch (IOException e) {
                 throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO,
                     "A conexão com o servidor caiu antes de a chave ser instalada. Confira a rede e tente de novo.", e);
             }
             progresso.accept(EtapaDoPrimeiroAcesso.PROVANDO);
-            new ProvaPorChave(dados.host().strip(), dados.porta(), dados.usuario().strip(), daVez.paraKeyPair(), List.of(pin), cfgSsh).provar();
+            try {
+                new ProvaPorChave(dados.host().strip(), dados.porta(), dados.usuario().strip(), daVez.paraKeyPair(), List.of(pin), cfgSsh).provar();
+            } catch (FalhaDeEntradaPorSenha f) {
+                if (f.motivo() == FalhaDeEntradaPorSenha.Motivo.SEM_LOGIN_POR_CHAVE && !permissoesRuins.isEmpty()) {
+                    throw new FalhaDeEntradaPorSenha(f.motivo(), f.getMessage() + " Achei isto: " + String.join(" ", permissoesRuins), f);
+                }
+                throw f;
+            }
             LOG.debug("Primeiro acesso: chave {} ({}).", chave.id(), instalada);
             return instalada;
         } finally {
@@ -366,6 +377,19 @@ public final class AssistenteDeServidor {
     private static String descreverEspera(Duration d) {
         long s = Math.max(1, d.toSeconds() + 1);
         return s >= 120 ? (s + 59) / 60 + " minutos" : s + " s";
+    }
+
+    /** O que o {@code ls -l} diz de permissões que o sshd recusa (vazio se nada, ou se a leitura falhou: é só um palpite a mais para a mensagem). */
+    private static List<String> lerPermissoesRuins(SessaoComSenha sessao) {
+        try {
+            var r = sessao.executar(ComandosDoAcesso.lerPermissoesDaPastaPessoal(), new byte[0], Duration.ofSeconds(10));
+            return DiagnosticoDePermissoes.problemas(r.stdout());
+        } catch (IOException e) {
+            return List.of();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return List.of();
+        }
     }
 
     private SessaoComSenha abrirComSenha(Dados dados, Pin pin, char[] senha, String conta) throws FalhaDeEntradaPorSenha {

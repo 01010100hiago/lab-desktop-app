@@ -114,8 +114,8 @@ class PrimeiroAcessoPorSenhaTest {
         assertEquals(List.of(EtapaDoPrimeiroAcesso.ENTRANDO, EtapaDoPrimeiroAcesso.INSTALANDO, EtapaDoPrimeiroAcesso.PROVANDO), etapas);
         exigirZerada(digitada);
         assertEquals(List.of(SENHA_DO_SERVIDOR), ssh.senhasVistas, "a senha foi enviada UMA vez");
-        assertEquals(List.of(ComandosDoAcesso.instalarChave(), br.com.labdesktop.ssh.ProvaPorChave.COMANDO_DA_PROVA), shell.recebidos,
-            "só dois comandos: instalar a chave e o 'echo' da prova (nada de token nem de agente)");
+        assertEquals(List.of(ComandosDoAcesso.instalarChave(), ComandosDoAcesso.lerPermissoesDaPastaPessoal(), br.com.labdesktop.ssh.ProvaPorChave.COMANDO_DA_PROVA), shell.recebidos,
+            "instalar a chave, ler as permissões (só leitura) e o 'echo' da prova (nada de token nem de agente)");
         assertTrue(Files.readString(shell.authorizedKeys()).contains(chave.publica().split(" ")[1]));
         assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(shell.authorizedKeys())));
         assertTrue(ssh.autenticacoesAceitas.get() >= 1, "a prova entrou por chave numa conexão nova");
@@ -276,9 +276,25 @@ class PrimeiroAcessoPorSenhaTest {
         assertTrue(e.getMessage().contains("não aceitou a chave"), e.getMessage());
         assertTrue(e.getMessage().contains("permite login por chave"), e.getMessage());
         exigirZerada(digitada);
-        assertEquals(List.of(ComandosDoAcesso.instalarChave()), shell.recebidos, "só a instalação da chave rodou: nada de token, agente ou limpeza");
+        assertEquals(List.of(ComandosDoAcesso.instalarChave(), ComandosDoAcesso.lerPermissoesDaPastaPessoal()), shell.recebidos, "só a instalação da chave e uma leitura de permissões rodaram: nada de token, agente ou limpeza");
         assertEquals(List.of(), cofre.servidores(), "nenhum servidor entrou no cofre");
         assertTrue(agente.tokens.isEmpty());
+    }
+
+    @Test
+    void provaQueFalhaComPastaPessoalGravavelPorGrupoCitaOStrictModesSemAlterarNada() throws Exception {
+        shell.honrarAuthorizedKeys(false);
+        Path home = tmp.resolve("home");
+        Files.setPosixFilePermissions(home, PosixFilePermissions.fromString("rwxrwxr-x"));
+        InfoChave chave = assistente.gerarChave("lab");
+        Pin pin = assistente.sondar("127.0.0.1", ssh.porta()).pin();
+
+        FalhaDeEntradaPorSenha e = assertThrows(FalhaDeEntradaPorSenha.class,
+            () -> assistente.instalarAChaveComSenha(dados(), chave, pin, senha(SENHA_DO_SERVIDOR), x -> { }));
+
+        assertEquals(Motivo.SEM_LOGIN_POR_CHAVE, e.motivo());
+        assertTrue(e.getMessage().contains("a pasta pessoal do usuário") && e.getMessage().contains("StrictModes"), e.getMessage());
+        assertEquals("rwxrwxr-x", PosixFilePermissions.toString(Files.getPosixFilePermissions(home)), "o app não alterou a pasta pessoal");
     }
 
     @Test

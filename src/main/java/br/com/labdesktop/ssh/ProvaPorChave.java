@@ -56,9 +56,10 @@ public final class ProvaPorChave implements ProvaDeChave {
             s.addPublicKeyIdentity(chave);
             s.auth().verify(cfg.autenticar());
             ResultadoExec r = new ExecRemoto(s, cfg.abrirCanal()).executar(COMANDO_DA_PROVA, new byte[0], Duration.ofSeconds(15));
-            if (r.status() != 0 || !r.stdout().strip().equals(RESPOSTA_ESPERADA)) {
+            // O shell do usuário pode imprimir coisa própria (um .bashrc): basta uma linha igual à resposta, não a saída inteira igual.
+            if (r.status() != 0 || r.stdout().lines().noneMatch(l -> l.strip().equals(RESPOSTA_ESPERADA))) {
                 throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_LOGIN_POR_CHAVE,
-                    "A chave entrou, mas o servidor não deixou rodar o comando de teste. Nada mais foi alterado.");
+                    "A chave entrou, mas o servidor não deixou rodar o comando de teste (ou o shell do usuário atrapalhou a resposta).");
             }
         } catch (InterruptedIOException e) {
             Thread.currentThread().interrupt();
@@ -91,8 +92,8 @@ public final class ProvaPorChave implements ProvaDeChave {
             if (m != null && (m.contains("No more authentication methods") || m.contains("Authentication failed")
                 || m.contains("authentication failed"))) {
                 return new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_LOGIN_POR_CHAVE,
-                    "O servidor não aceitou a chave. Confira se ele permite login por chave e se a pasta .ssh e o arquivo "
-                        + "authorized_keys do usuário têm as permissões certas. Nada mais foi alterado.");
+                    "O servidor não aceitou a chave. Confira se ele permite login por chave e se a pasta pessoal, a pasta .ssh e o arquivo "
+                        + "authorized_keys do usuário têm as permissões certas (sem escrita para grupo e outros).");
             }
         }
         return new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, SondagemDeHost.traduzirFalha(host, porta, causa), causa);

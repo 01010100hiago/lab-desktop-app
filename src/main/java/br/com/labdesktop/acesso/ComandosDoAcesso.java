@@ -25,9 +25,15 @@ public final class ComandosDoAcesso {
     public static final String NOME_DO_ARQUIVO_PROPRIO = "10-lab-desktop.conf";
     /** O caminho do arquivo que o app cria. */
     public static final String ARQUIVO_PROPRIO = PASTA_DA_CONFIG + "/" + NOME_DO_ARQUIVO_PROPRIO;
-    /** O que a instalação da chave imprime quando acrescentou a linha. */
+    /** A linha que marca o começo do que a instalação da chave quer dizer (o que o shell do usuário imprimir antes, como num {@code .bashrc}, fica de fora). */
+    public static final String MARCADOR_DE_INICIO = "@@lab-desktop-inicio@@";
+    /** A linha que marca o fim. Sem ela o comando não terminou. */
+    public static final String MARCADOR_DE_FIM = "@@lab-desktop-fim@@";
+    /** O que a instalação da chave diz quando acrescentou a linha. */
     public static final String SAIDA_ADICIONADA = "adicionada";
-    /** O que ela imprime quando a chave já estava no arquivo (nada foi acrescentado). */
+    /** Acrescentou, mas a chave já aparecia no arquivo só COMENTADA ou com uma restrição ({@code command=}, {@code from=}, {@code restrict}), que não serve ao app. */
+    public static final String SAIDA_ADICIONADA_APESAR = "adicionada-apesar";
+    /** A chave já estava no arquivo numa linha que serve (nada foi acrescentado). */
     public static final String SAIDA_JA_EXISTIA = "ja-existia";
 
     /** Sem permissão de administrador (o usuário é root, ou não precisa de nada). */
@@ -48,8 +54,12 @@ public final class ComandosDoAcesso {
     /**
      * Instala a chave no {@code ~/.ssh/authorized_keys} do usuário que está logado. Lê DUAS linhas do stdin: a primeira é só o conteúdo da
      * chave (base64), para achar duplicata; a segunda é a linha completa a acrescentar. Cria a pasta {@code .ssh} (700) e o arquivo (600) se
-     * faltarem, ajusta as permissões, não duplica e preserva o que já existe (inclusive um arquivo sem a quebra de linha final). Imprime
-     * {@value #SAIDA_ADICIONADA} ou {@value #SAIDA_JA_EXISTIA}. Códigos de saída: 2 sem pasta pessoal, 3 permissões, 4 entrada inválida, 5 gravação.
+     * faltarem, ajusta as permissões, não duplica e preserva o que já existe (inclusive um arquivo sem a quebra de linha final). A duplicata é
+     * procurada só em linhas que NÃO são comentário e NÃO têm {@code command=}, {@code from=} ou {@code restrict}: uma chave só comentada ou restrita
+     * ganha uma linha nossa ({@value #SAIDA_ADICIONADA_APESAR}). A resposta vai entre {@link #MARCADOR_DE_INICIO} e {@link #MARCADOR_DE_FIM}
+     * ({@value #SAIDA_ADICIONADA}, {@value #SAIDA_ADICIONADA_APESAR} ou {@value #SAIDA_JA_EXISTIA}), então o que o shell do usuário imprimir por conta
+     * própria não atrapalha. Códigos de saída: 2 sem pasta pessoal, 3 permissões da pasta .ssh, 4 entrada inválida, 5 não criou o arquivo,
+     * 6 falhou ao acrescentar a linha (pode ter ficado pela metade), 7 acrescentou mas não conseguiu fechar a permissão do arquivo.
      * É ESCRITA, mas só na pasta pessoal do usuário e sem {@code sudo}.
      */
     public static String instalarChave() {
@@ -62,10 +72,21 @@ public final class ComandosDoAcesso {
             + "[ -n \"$linha\" ] || exit 4; "
             + "arq=\"$HOME/.ssh/authorized_keys\"; "
             + "[ -e \"$arq\" ] || : > \"$arq\" || exit 5; "
-            + "if grep -qF -e \"$blob\" \"$arq\"; then echo " + SAIDA_JA_EXISTIA + "; "
-            + "else if [ -s \"$arq\" ] && [ -n \"$(tail -c1 \"$arq\")\" ]; then echo >> \"$arq\"; fi; "
-            + "printf \"%s\\n\" \"$linha\" >> \"$arq\" || exit 5; echo " + SAIDA_ADICIONADA + "; fi; "
-            + "chmod 600 \"$arq\" || exit 3'";
+            + "echo " + MARCADOR_DE_INICIO + "; "
+            + "if grep -v \"^[[:space:]]*#\" \"$arq\" | grep -F -e \"$blob\" | grep -qv -e \"command=\" -e \"from=\" -e \"restrict\"; then echo " + SAIDA_JA_EXISTIA + "; "
+            + "else prior=" + SAIDA_ADICIONADA + "; grep -qF -e \"$blob\" \"$arq\" && prior=" + SAIDA_ADICIONADA_APESAR + "; "
+            + "if [ -s \"$arq\" ] && [ -n \"$(tail -c1 \"$arq\")\" ]; then echo >> \"$arq\"; fi; "
+            + "printf \"%s\\n\" \"$linha\" >> \"$arq\" || exit 6; echo \"$prior\"; fi; "
+            + "chmod 600 \"$arq\" || exit 7; "
+            + "echo " + MARCADOR_DE_FIM + "'";
+    }
+
+    /**
+     * Lê (sem alterar nada) as permissões da pasta pessoal, da {@code .ssh} e do {@code authorized_keys}: o {@code sshd} com {@code StrictModes} recusa a chave se a
+     * pasta pessoal aceita escrita por grupo ou outros. Uma linha {@code ls -l} por item.
+     */
+    public static String lerPermissoesDaPastaPessoal() {
+        return "sh -c 'ls -ld \"$HOME\" \"$HOME/.ssh\" \"$HOME/.ssh/authorized_keys\"'";
     }
 
     // =====================================================================================================

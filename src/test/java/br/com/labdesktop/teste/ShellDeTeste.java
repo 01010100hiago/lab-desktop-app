@@ -104,7 +104,8 @@ public final class ShellDeTeste implements ProvisionadorRemoto.Executor {
             }
         }
         if (outros != null && !linha.equals(br.com.labdesktop.acesso.ComandosDoAcesso.instalarChave())
-            && !linha.equals(br.com.labdesktop.ssh.ProvaPorChave.COMANDO_DA_PROVA)) {
+            && !linha.equals(br.com.labdesktop.ssh.ProvaPorChave.COMANDO_DA_PROVA)
+            && !linha.equals(br.com.labdesktop.acesso.ComandosDoAcesso.lerPermissoesDaPastaPessoal())) {
             recebidos.add(linha);
             return outros.executar(linha, stdin, saida);
         }

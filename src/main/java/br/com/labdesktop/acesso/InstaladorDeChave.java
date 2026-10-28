@@ -18,7 +18,12 @@ import java.util.regex.Pattern;
 public final class InstaladorDeChave {
 
     /** O que o comando fez. */
-    public enum Resultado { ADICIONADA, JA_EXISTIA }
+    public enum Resultado {
+        ADICIONADA,
+        JA_EXISTIA,
+        /** A chave já aparecia só comentada ou com restrição: o app acrescentou uma linha própria (a antiga ficou como estava). */
+        ADICIONADA_APESAR_DE_LINHA_INUTIL
+    }
 
     private static final Duration PRAZO = Duration.ofSeconds(20);
     private static final Pattern PUBLICA = Pattern.compile("^ssh-ed25519 ([A-Za-z0-9+/]{43,100}={0,2})(?: (.{0,200}))?$");
@@ -77,25 +82,44 @@ public final class InstaladorDeChave {
         byte[] entrada = (conteudoDaChave(publica) + "\n" + linha + "\n").getBytes(StandardCharsets.UTF_8);
         ResultadoExec r = executor.executar(ComandosDoAcesso.instalarChave(), entrada, PRAZO);
         if (r.status() == 0) {
-            String saida = r.stdout().strip();
-            if (saida.equals(ComandosDoAcesso.SAIDA_ADICIONADA)) {
+            String resposta = respostaEntreOsMarcadores(r.stdout());
+            if (ComandosDoAcesso.SAIDA_ADICIONADA.equals(resposta)) {
                 return Resultado.ADICIONADA;
             }
-            if (saida.equals(ComandosDoAcesso.SAIDA_JA_EXISTIA)) {
+            if (ComandosDoAcesso.SAIDA_JA_EXISTIA.equals(resposta)) {
                 return Resultado.JA_EXISTIA;
             }
+            if (ComandosDoAcesso.SAIDA_ADICIONADA_APESAR.equals(resposta)) {
+                return Resultado.ADICIONADA_APESAR_DE_LINHA_INUTIL;
+            }
         }
-        throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.FALHOU_AO_INSTALAR, "Entrei com a senha, mas não consegui instalar a chave: "
-            + explicar(r.status()) + " Nada mais foi alterado no servidor.");
+        throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.FALHOU_AO_INSTALAR, "Entrei com a senha, mas a instalação da chave não terminou bem: "
+            + explicar(r.status()));
+    }
+
+    /**
+     * A resposta do comando: a linha logo depois do marcador de início, desde que o marcador de fim venha depois. Qualquer outra coisa que o shell do usuário
+     * imprima (um {@code .bashrc} que escreve, um aviso) fica de fora; sem os dois marcadores, {@code null}.
+     */
+    static String respostaEntreOsMarcadores(String stdout) {
+        String[] linhas = stdout.split("\\R");
+        for (int i = 0; i < linhas.length; i++) {
+            if (linhas[i].strip().equals(ComandosDoAcesso.MARCADOR_DE_INICIO) && i + 2 < linhas.length && linhas[i + 2].strip().equals(ComandosDoAcesso.MARCADOR_DE_FIM)) {
+                return linhas[i + 1].strip();
+            }
+        }
+        return null;
     }
 
     private static String explicar(int codigo) {
         return switch (codigo) {
-            case 2 -> "o servidor não informou a pasta pessoal do usuário.";
-            case 3 -> "não consegui ajustar as permissões da pasta .ssh deste usuário.";
-            case 4 -> "o servidor recebeu a chave num formato que não esperava.";
-            case 5 -> "não consegui gravar o arquivo authorized_keys (disco cheio ou sem permissão).";
-            default -> "o comando de instalação terminou com um erro inesperado (código " + codigo + ").";
+            case 2 -> "o servidor não informou a pasta pessoal do usuário. Nada foi acrescentado ao authorized_keys.";
+            case 3 -> "não consegui ajustar as permissões da pasta .ssh deste usuário. Nada foi acrescentado ao authorized_keys.";
+            case 4 -> "o servidor recebeu a chave num formato que não esperava. Nada foi acrescentado ao authorized_keys.";
+            case 5 -> "não consegui criar o arquivo authorized_keys (disco cheio ou sem permissão). Nada foi acrescentado a ele.";
+            case 6 -> "não consegui gravar a linha no authorized_keys (disco cheio?). A chave pode ter sido instalada só em parte: confira o arquivo.";
+            case 7 -> "a linha foi acrescentada, mas não consegui fechar a permissão do arquivo (deveria ser 600). A chave está instalada: confira a permissão.";
+            default -> "o comando terminou com um erro inesperado (código " + codigo + "), então a chave pode ter sido instalada. Confira o authorized_keys.";
         };
     }
 }
