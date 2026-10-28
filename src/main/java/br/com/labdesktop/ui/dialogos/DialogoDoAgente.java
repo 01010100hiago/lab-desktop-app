@@ -145,6 +145,10 @@ public final class DialogoDoAgente extends Dialogo {
     private boolean executando;
     private boolean terminouComSucesso;
     private final AtomicBoolean cancelado = new AtomicBoolean();
+    /** Quanto o botão fica em "Cancelando…" antes de oferecer "Fechar mesmo assim" (o desfazer continua em segundo plano). */
+    private static volatile int prazoParaFecharMesmoAssimMs = 8000;
+    private javax.swing.Timer prazoDoCancelamento;
+    private boolean podeFecharMesmoAssim;
     private final AtomicReference<Thread> trabalhador = new AtomicReference<>();
 
     /**
@@ -622,6 +626,12 @@ public final class DialogoDoAgente extends Dialogo {
         if (executando || !confirmar.isEnabled()) {
             return;
         }
+        if (!campoDoContainer.getText().strip().equals(parametros.container())) {
+            // O nome do container mudou nas opções avançadas e ainda não foi conferido: as verificações (porta, container existente) eram de
+            // outro nome. Confere de novo antes de instalar, em vez de instalar com o nome velho ou sem conferir o novo.
+            conferirDepoisDeEditarOContainer();
+            return;
+        }
         executar();
     }
 
@@ -631,6 +641,7 @@ public final class DialogoDoAgente extends Dialogo {
         }
         executando = true;
         cancelado.set(false);
+        pararOPrazoDoCancelamento();
         terminouComSucesso = false;
         concluir.setVisible(false);
         fecharAoFim.setVisible(false);
@@ -671,8 +682,15 @@ public final class DialogoDoAgente extends Dialogo {
                     Fundo.naEdt(() -> aoTerminarRemocao(null, e));
                 }
             } else {
-                ResultadoDaInstalacao r = deste.instalar(obs, cancelamento);
-                Fundo.naEdt(() -> aoTerminarInstalacao(r));
+                ResultadoDaInstalacao r;
+                try {
+                    r = deste.instalar(obs, cancelamento);
+                } catch (RuntimeException e) {
+                    // Um erro inesperado (nome inválido que escapou, falha de programa) não pode deixar a janela presa em "executando".
+                    r = new ResultadoDaInstalacao(ResultadoDaInstalacao.Desfecho.FALHOU, null, MensagensDeErro.de(e), List.of());
+                }
+                ResultadoDaInstalacao resultado = r;
+                Fundo.naEdt(() -> aoTerminarInstalacao(resultado));
             }
         });
         trabalhador.set(t);
@@ -711,6 +729,7 @@ public final class DialogoDoAgente extends Dialogo {
 
     private void aoTerminarInstalacao(ResultadoDaInstalacao r) {
         executando = false;
+        pararOPrazoDoCancelamento();
         trabalhador.set(null);
         cancelarExecucao.setVisible(false);
         switch (r.desfecho()) {
@@ -731,6 +750,7 @@ public final class DialogoDoAgente extends Dialogo {
 
     private void aoTerminarRemocao(ResultadoDaRemocao r, Throwable falha) {
         executando = false;
+        pararOPrazoDoCancelamento();
         trabalhador.set(null);
         cancelarExecucao.setVisible(false);
         if (falha != null) {
@@ -802,6 +822,13 @@ public final class DialogoDoAgente extends Dialogo {
     @Override
     protected void aoCancelar() {
         if (executando) {
+            if (cancelado.get()) {
+                // Segundo pedido (Esc, X ou o botão): se o trabalho já passou do prazo de desfazer, fecha a janela mesmo assim.
+                if (podeFecharMesmoAssim) {
+                    fechar();
+                }
+                return;
+            }
             cancelado.set(true);
             cancelarExecucao.setEnabled(false);
             cancelarExecucao.setText("Cancelando…");
@@ -809,13 +836,42 @@ public final class DialogoDoAgente extends Dialogo {
             if (t != null) {
                 t.interrupt(); // solta o comando em andamento (o canal exec fecha); o instalador desfaz e termina
             }
+            // O botão nunca fica para sempre em "Cancelando…": passado o prazo, oferece fechar a janela (o desfazer segue sozinho).
+            prazoDoCancelamento = new javax.swing.Timer(prazoParaFecharMesmoAssimMs, e -> {
+                if (executando) {
+                    podeFecharMesmoAssim = true;
+                    cancelarExecucao.setText("Fechar mesmo assim");
+                    cancelarExecucao.setEnabled(true);
+                }
+            });
+            prazoDoCancelamento.setRepeats(false);
+            prazoDoCancelamento.start();
             return;
         }
         fechar();
     }
 
+    /** Só os testes: encurta o tempo até o botão virar "Fechar mesmo assim". */
+    public static void definirPrazoParaFecharMesmoAssimParaTeste(int milissegundos) {
+        prazoParaFecharMesmoAssimMs = milissegundos;
+    }
+
+    /** A janela já foi fechada? (testes) */
+    public boolean fechada() {
+        return jaFechou();
+    }
+
+    private void pararOPrazoDoCancelamento() {
+        podeFecharMesmoAssim = false;
+        if (prazoDoCancelamento != null) {
+            prazoDoCancelamento.stop();
+            prazoDoCancelamento = null;
+        }
+    }
+
     @Override
     protected void aoFechar() {
+        pararOPrazoDoCancelamento();
         Thread t = trabalhador.get();
         if (t != null) {
             t.interrupt();

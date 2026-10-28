@@ -427,6 +427,51 @@ class ConexaoSshTest {
         }
     }
 
+    /**
+     * O Cancelar da tela interrompe a thread do instalador. O {@code waitFor} do MINA engole a interrupção, então o comando que BLOQUEIA de
+     * verdade (aqui, um servidor que nunca responde) só solta se o {@code ExecRemoto} esperar em fatias e conferir a interrupção entre elas.
+     */
+    @Test
+    void interromperAThreadSoltaUmExecQueBloqueiaDeVerdadeEFechaOCanal() throws Exception {
+        try (CenarioDeConexao c = CenarioDeConexao.novo()) {
+            java.util.concurrent.CountDownLatch nuncaChega = new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.CountDownLatch comecou = new java.util.concurrent.CountDownLatch(1);
+            c.ssh.comandoRemoto((cmd, stdin, out) -> {
+                comecou.countDown();
+                try {
+                    nuncaChega.await(60, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return 0;
+            });
+            c.conexao.iniciar();
+            Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.CONECTADO);
+
+            java.util.concurrent.atomic.AtomicReference<Throwable> erro = new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.CountDownLatch terminou = new java.util.concurrent.CountDownLatch(1);
+            Thread t = Thread.ofVirtual().start(() -> {
+                try {
+                    c.conexao.executar("sleep 600", new byte[0], Duration.ofMinutes(5));
+                } catch (Throwable e) {
+                    erro.set(e);
+                } finally {
+                    terminou.countDown();
+                }
+            });
+            assertTrue(comecou.await(10, java.util.concurrent.TimeUnit.SECONDS), "o comando chegou ao servidor");
+            Espera.dormir(300); // bloqueado de verdade no waitFor
+            assertEquals(1, terminou.getCount(), "o comando segue bloqueado");
+
+            long inicio = System.nanoTime();
+            t.interrupt();
+            assertTrue(terminou.await(5, java.util.concurrent.TimeUnit.SECONDS), "a interrupção soltou o comando em poucos segundos");
+            assertTrue(erro.get() instanceof InterruptedException, "vira InterruptedException: " + erro.get());
+            assertTrue(java.time.Duration.ofNanos(System.nanoTime() - inicio).toSeconds() < 3);
+            nuncaChega.countDown();
+        }
+    }
+
     @Test
     void execSemSessaoFalhaComMensagemClara() throws Exception {
         try (CenarioDeConexao c = CenarioDeConexao.novo()) {

@@ -351,6 +351,51 @@ class DialogoDoAgenteTest {
         assertEquals(0, mudancasNoServidor.get());
     }
 
+    /**
+     * O comando que NÃO obedece à interrupção (um canal que não solta) não pode prender a janela: o botão não fica para sempre em
+     * "Cancelando…"; passado o prazo vira "Fechar mesmo assim", e o clique (ou Esc) fecha.
+     */
+    @Test
+    void cancelarComComandoQueNaoSoltaOferecePassadoOPrazoFecharMesmoAssim() throws Exception {
+        DialogoDoAgente.definirPrazoParaFecharMesmoAssimParaTeste(300);
+        CountDownLatch noBuild = new CountDownLatch(1);
+        CountDownLatch soltar = new CountDownLatch(1);
+        try {
+            servidor.antesDe(c -> c.contains(" build "), () -> {
+                noBuild.countDown();
+                boolean interrompido = false;
+                while (true) { // ignora a interrupção de propósito, como o waitFor do MINA
+                    try {
+                        soltar.await(10, TimeUnit.SECONDS);
+                        break;
+                    } catch (InterruptedException e) {
+                        interrompido = true;
+                    }
+                }
+                if (interrompido) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
+            esperarPagina(d, "confirmar");
+            Visual.naEdt(() -> d.botaoConfirmar().doClick());
+            assertTrue(noBuild.await(PRAZO.toSeconds(), TimeUnit.SECONDS));
+
+            Visual.naEdt(() -> d.botaoCancelarExecucao().doClick());
+            assertEquals("Cancelando…", Visual.naEdt(() -> d.botaoCancelarExecucao().getText()));
+            assertFalse(Visual.naEdt(() -> d.botaoCancelarExecucao().isEnabled()));
+            Espera.ate(PRAZO, "o botão deixa de ficar em Cancelando…", () -> "Fechar mesmo assim".equals(Visual.naEdt(() -> d.botaoCancelarExecucao().getText())));
+            assertTrue(Visual.naEdt(() -> d.botaoCancelarExecucao().isEnabled()));
+            assertFalse(Visual.naEdt(d::fechada));
+
+            Visual.naEdt(() -> d.botaoCancelarExecucao().doClick());
+            assertTrue(Visual.naEdt(d::fechada), "o segundo pedido fecha a janela");
+        } finally {
+            soltar.countDown();
+            DialogoDoAgente.definirPrazoParaFecharMesmoAssimParaTeste(8000);
+        }
+    }
+
     private static void assertNull(Object o) {
         org.junit.jupiter.api.Assertions.assertNull(o);
     }

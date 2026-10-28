@@ -5,10 +5,11 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.time.Duration;
-import java.util.EnumSet;
-import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.apache.sshd.client.channel.ChannelExec;
-import org.apache.sshd.client.channel.ClientChannelEvent;
 import org.apache.sshd.client.session.ClientSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,10 +63,7 @@ public final class ExecRemoto {
                 entrada.write(stdin);
                 entrada.flush();
             } // fechar a entrada manda o EOF: o comando do agente termina de ler o stdin
-            Set<ClientChannelEvent> eventos = canal.waitFor(EnumSet.of(ClientChannelEvent.CLOSED), prazo);
-            if (eventos.contains(ClientChannelEvent.TIMEOUT)) {
-                throw new IOException("O comando remoto não terminou em " + prazo.toSeconds() + " s.");
-            }
+            esperarOFim(canal, prazo);
             Integer status = canal.getExitStatus();
             ResultadoExec r = new ResultadoExec(status == null ? -1 : status, out.bytes(), err.bytes(),
                 out.truncado() || err.truncado());
@@ -74,6 +72,27 @@ public final class ExecRemoto {
         } catch (InterruptedIOException e) {
             Thread.currentThread().interrupt();
             throw new InterruptedException("Interrompido durante o comando remoto.");
+        }
+    }
+
+    /**
+     * Espera o canal fechar numa {@link CompletableFuture} ligada ao fechamento do canal. Não se usa {@code canal.waitFor}: o do MINA 2.20 engole a
+     * {@code InterruptedException} sem devolver a flag, então o Cancelar da tela (que interrompe a thread) nunca soltaria um comando que
+     * bloqueia. A espera da {@code CompletableFuture} respeita a interrupção. Interrompido, FECHA o canal (o comando remoto recebe o hangup) e
+     * lança {@link InterruptedException}; passou do prazo, lança {@link IOException}.
+     */
+    private static void esperarOFim(ChannelExec canal, Duration prazo) throws IOException, InterruptedException {
+        CompletableFuture<Void> fechou = new CompletableFuture<>();
+        canal.addCloseFutureListener(f -> fechou.complete(null));
+        try {
+            fechou.get(prazo.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            canal.close(true);
+            throw e;
+        } catch (TimeoutException e) {
+            throw new IOException("O comando remoto não terminou em " + prazo.toSeconds() + " s.");
+        } catch (ExecutionException e) {
+            throw new IOException("O canal do comando remoto falhou.", e);
         }
     }
 
