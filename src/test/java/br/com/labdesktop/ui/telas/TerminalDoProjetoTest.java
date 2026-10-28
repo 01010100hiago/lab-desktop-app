@@ -328,6 +328,29 @@ class TerminalDoProjetoTest {
     }
 
     @Test
+    void aAbaNoShellNosDoisTemasSaiNosPngsDeTela() {
+        cenario.terminal.roteiro(s -> {
+            s.escrever("labuser@lab:/srv/lab/projects/orbita$ ls\r\n\u001b[1;34mdocker-compose.yml\u001b[0m  README.md  \u001b[32msrc\u001b[0m\r\n");
+            s.escrever("labuser@lab:/srv/lab/projects/orbita$ ");
+            ServidorDeTerminalFalso.roteiroQueNaoLe(s);
+        });
+        alimentar(TelaProjetoTest.detalheCom("\"aberta\": true", "\"aberta\": false")); // sessão fechada: abre no Shell, com o seletor
+        mostrarAAba();
+        iniciar(pagina()::painelDoShell);
+        var shell = Visual.naEdt(() -> pagina().painelDoShell());
+        Espera.ate(PRAZO, () -> "estado=" + shell.sessao().estado(), () -> shell.sessao().estado().ativa() && Visual.naEdt(() -> shell.widget() != null));
+        Espera.ate(PRAZO, "o prompt chegou", () -> Visual.naEdt(() -> shell.widget().getTerminalTextBuffer().getScreenLines()).contains("README.md"));
+        Visual.tema(Tema.CLARO);
+        Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(tela));
+        Visual.salvar(Visual.renderizar(tela, 1100, 700), "projeto-terminal-shell-claro");
+        Visual.tema(Tema.ESCURO);
+        Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(tela));
+        Visual.salvar(Visual.renderizar(tela, 1100, 700), "projeto-terminal-shell-escuro");
+        Visual.tema(Tema.CLARO);
+        Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(tela));
+    }
+
+    @Test
     void sessaoQueAbreComOClaudeSelecionadoAbreOTerminalSoEFechadoPeloDonoNaoVoltaSozinho() {
         alimentar(TelaProjetoTest.detalheCom("\"aberta\": true", "\"aberta\": false"));
         mostrarAAba();

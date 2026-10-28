@@ -387,6 +387,16 @@ public final class PainelTerminal extends Painel {
         return w;
     }
 
+    /**
+     * Um tamanho modesto: o JediTerm pede 120 por 32 caracteres (uns 600 px de altura), e uma página com área rolável (a aba Terminal do
+     * projeto) ganharia uma barra de rolagem de página por cima da do terminal em janelas baixas. Quem põe o painel numa tela é quem
+     * dá o tamanho de verdade (o terminal mede o que recebeu depois do layout).
+     */
+    @Override
+    public java.awt.Dimension getPreferredSize() {
+        return new java.awt.Dimension(480, 240);
+    }
+
     /** As cores com que um widget foi criado: o que precisa mudar quando o usuário troca o tema do app. */
     private record TemaDoWidget(ConfigTerminal config) { }
 
