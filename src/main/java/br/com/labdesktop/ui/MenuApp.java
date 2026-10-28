@@ -38,6 +38,7 @@ public final class MenuApp {
     private final Runnable mostrarSobre;
     private final Map<Item, JMenuItem> itensDoServidor = new EnumMap<>(Item.class);
     private final JMenu menuServidor = new JMenu("Servidor");
+    private JMenuItem itemSair;
     private JMenuItem itemAumentar;
     private JMenuItem itemDiminuir;
     private JMenuItem itemNormal;
@@ -48,8 +49,16 @@ public final class MenuApp {
     private final JMenuBar barra = new JMenuBar();
     private final Map<Tema, JRadioButtonMenuItem> itensDeTema = new EnumMap<>(Tema.class);
 
+    private final ComportamentoDaJanela comportamento;
+
     public MenuApp(JFrame janela, PainelPrincipal painel, GerenciadorTema tema, PreferenciasAtuais preferencias,
                    Runnable bloquearCofre, Runnable mostrarSobre) {
+        this(janela, painel, tema, preferencias, bloquearCofre, mostrarSobre, ComportamentoDaJanela.padrao());
+    }
+
+    public MenuApp(JFrame janela, PainelPrincipal painel, GerenciadorTema tema, PreferenciasAtuais preferencias,
+                   Runnable bloquearCofre, Runnable mostrarSobre, ComportamentoDaJanela comportamento) {
+        this.comportamento = comportamento;
         this.janela = janela;
         this.painel = painel;
         this.tema = tema;
@@ -86,6 +95,13 @@ public final class MenuApp {
             bloquearCofre));
         cofre.addSeparator();
         cofre.add(item("Sobre o Lab Desktop", null, mostrarSobre));
+        if (comportamento.temItemSair()) {
+            // Windows e Linux: não há o Cmd+Q do menu do app. No Windows o atalho do sistema é Alt+F4 (fechar a janela também sai); no Linux, Ctrl+Q.
+            cofre.addSeparator();
+            itemSair = item("Sair", comportamento.sistema() == br.com.labdesktop.plataforma.SistemaOperacional.LINUX ? KeyStroke.getKeyStroke(KeyEvent.VK_Q, atalho()) : null,
+                comportamento.sair());
+            cofre.add(itemSair);
+        }
         barra.add(cofre);
 
         // --- Arquivo ---
@@ -288,6 +304,11 @@ public final class MenuApp {
     }
 
     // ---- para os testes ----
+
+    /** O item "Sair" (só no Windows e no Linux); {@code null} no Mac. */
+    public JMenuItem itemSair() {
+        return itemSair;
+    }
 
     public JMenuItem itemAumentarTexto() {
         return itemAumentar;

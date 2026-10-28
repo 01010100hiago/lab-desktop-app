@@ -6,6 +6,7 @@ import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.GerenciadorServidores;
 import br.com.labdesktop.ssh.ConfigSsh;
 import br.com.labdesktop.ssh.MonitorDeSono;
+import br.com.labdesktop.ssh.VigiaDeRelogio;
 import br.com.labdesktop.ui.GerenciadorTema;
 import br.com.labdesktop.ui.JanelaPrincipal;
 import br.com.labdesktop.ui.PreferenciasAtuais;
@@ -53,6 +54,7 @@ public final class Aplicacao {
     private JanelaPrincipal janela;
     private MonitorDeSono monitorDeSono;
     private Runnable desfazerSono = () -> { };
+    private VigiaDeRelogio vigiaDeRelogio;
     private boolean encerrando;
 
     /**
@@ -77,8 +79,9 @@ public final class Aplicacao {
 
     /** Liga tudo e mostra o diálogo da senha-mestra. Na EDT. */
     public void iniciar() {
+        br.com.labdesktop.ui.IconesDoApp.aplicarAoApp();
         tema.instalar(); // o claro/escuro do sistema já foi lido na partida; ao ganhar foco a janela confere de novo
-        integrarComOMac();
+        integrarComOSistema();
         desbloquear();
     }
 
@@ -143,11 +146,11 @@ public final class Aplicacao {
         gerenciador = new GerenciadorServidores(aberto, new PedidoDeCodigoPorDialogo(apresentadorTardio));
         AssistenteDeServidor assistente = new AssistenteDeServidor(aberto, gerenciador, ConfigSsh.padrao());
         janela = new JanelaPrincipal(gerenciador, assistente, tema, preferencias, this::bloquearCofre,
-            br.com.labdesktop.arquivos.ServicosDeArquivos.de(caminhos));
+            br.com.labdesktop.arquivos.ServicosDeArquivos.de(caminhos), br.com.labdesktop.ui.ComportamentoDaJanela.doSistema(this::encerrar));
 
         monitorDeSono = new MonitorDeSono();
         desfazerSono = gerenciador.acompanhar(monitorDeSono);
-        registrarSonoNoMac();
+        registrarSono();
 
         gerenciador.iniciarTodos();
         janela.setVisible(true);
@@ -187,6 +190,10 @@ public final class Aplicacao {
         cofre = null;
         desfazerSono.run();
         desfazerSono = () -> { };
+        if (vigiaDeRelogio != null) {
+            vigiaDeRelogio.close();
+            vigiaDeRelogio = null;
+        }
         if (j != null) {
             j.encerrar(); // solta as telas (e as inscrições) antes de os segredos sumirem
         }
@@ -213,7 +220,8 @@ public final class Aplicacao {
     // macOS
     // ---------------------------------------------------------------------------------------------
 
-    private void integrarComOMac() {
+    /** Cmd+Q, "Sobre" e o clique no Dock do macOS (cada um só onde o {@code Desktop} diz que existe; no Windows e no Linux nada disto é ligado). */
+    private void integrarComOSistema() {
         if (!Desktop.isDesktopSupported()) {
             return;
         }
@@ -236,14 +244,20 @@ public final class Aplicacao {
         }
     }
 
-    private void registrarSonoNoMac() {
+    /**
+     * O aviso de que o computador dormiu: o evento do sistema onde o Java o entrega (macOS) e, onde não há evento (Windows, Linux), o {@link VigiaDeRelogio}, que vê o relógio saltar
+     * (ARQUITETURA 6.3 e 11.4). Escolhido pela CAPACIDADE do {@code Desktop}, não pelo nome do sistema.
+     */
+    private void registrarSono() {
         try {
             if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_EVENT_SYSTEM_SLEEP)) {
                 Desktop.getDesktop().addAppEventListener(monitorDeSono);
+                return;
             }
         } catch (RuntimeException e) {
-            LOG.warn("Não consegui ligar o aviso de sono do Mac: {}", e.toString());
+            LOG.warn("Não consegui ligar o aviso de sono do sistema: {}", e.toString());
         }
+        vigiaDeRelogio = VigiaDeRelogio.iniciar(monitorDeSono);
     }
 
     /** Clique no ícone do Dock com a janela escondida: mostra de novo. */

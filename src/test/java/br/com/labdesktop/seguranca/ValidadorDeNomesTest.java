@@ -62,7 +62,7 @@ class ValidadorDeNomesTest {
     }
 
     @Test
-    void sugereNomeDeDispositivoAPartirDoNomeDoMac() {
+    void sugereNomeDeDispositivoAPartirDoNomeDoComputador() {
         assertEquals("mac-de-teste", ValidadorDeNomes.sugerirNomeDeDispositivo("Mac-de-Teste.local"));
         assertEquals("macbook-pro-de-maria", ValidadorDeNomes.sugerirNomeDeDispositivo("MacBook Pro de Maria"));
         assertEquals("mac", ValidadorDeNomes.sugerirNomeDeDispositivo(""));

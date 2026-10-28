@@ -155,6 +155,7 @@ public abstract class Dialogo {
     /** Mostra o diálogo modal sobre {@code pai} e só volta quando ele fechar. Na EDT. */
     public final void mostrar(Window pai) {
         janela = new JDialog(pai, titulo, Dialog.ModalityType.APPLICATION_MODAL);
+        br.com.labdesktop.ui.IconesDoApp.aplicar(janela); // sem janela pai (a senha-mestra) o diálogo aparece na barra de tarefas do Windows: com o ícone do app
         janela.setContentPane(raiz);
         janela.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
         janela.addWindowListener(new WindowAdapter() {

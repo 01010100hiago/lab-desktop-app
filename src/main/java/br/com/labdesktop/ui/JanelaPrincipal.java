@@ -46,6 +46,7 @@ public final class JanelaPrincipal extends JFrame {
     private final PainelPrincipal painel;
     private final Apresentador apresentador;
     private final Timer gravarJanela;
+    private final ComportamentoDaJanela comportamento;
 
     public JanelaPrincipal(GerenciadorServidores gerenciador, AssistenteDeServidor assistente, GerenciadorTema tema,
                            PreferenciasAtuais preferencias, Runnable bloquearCofre) {
@@ -56,11 +57,31 @@ public final class JanelaPrincipal extends JFrame {
     public JanelaPrincipal(GerenciadorServidores gerenciador, AssistenteDeServidor assistente, GerenciadorTema tema,
                            PreferenciasAtuais preferencias, Runnable bloquearCofre,
                            br.com.labdesktop.arquivos.ServicosDeArquivos servicosDeArquivos) {
+        this(gerenciador, assistente, tema, preferencias, bloquearCofre, servicosDeArquivos, ComportamentoDaJanela.padrao());
+    }
+
+    /** @param comportamento o que fechar a janela faz e se o menu leva "Sair" (o Mac esconde; o Windows e o Linux saem) */
+    public JanelaPrincipal(GerenciadorServidores gerenciador, AssistenteDeServidor assistente, GerenciadorTema tema,
+                           PreferenciasAtuais preferencias, Runnable bloquearCofre,
+                           br.com.labdesktop.arquivos.ServicosDeArquivos servicosDeArquivos, ComportamentoDaJanela comportamento) {
         super(Versao.NOME);
         this.gerenciador = gerenciador;
         this.preferencias = preferencias;
         this.tema = tema;
-        setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
+        this.comportamento = comportamento;
+        IconesDoApp.aplicar(this);
+        if (comportamento.fecharEscondeAJanela()) {
+            setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
+        } else {
+            // Windows e Linux: fechar a janela é sair do app (senão ela some e o app fica vivo, invisível, segurando a trava de instância)
+            setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+            addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent e) {
+                    comportamento.sair().run();
+                }
+            });
+        }
         setMinimumSize(new Dimension(LARGURA_MINIMA, ALTURA_MINIMA));
 
         this.avisos = Toasts.instalar(getRootPane());
@@ -69,13 +90,18 @@ public final class JanelaPrincipal extends JFrame {
             preferencias::get);
         setContentPane(painel);
         setJMenuBar(new MenuApp(this, painel, tema, preferencias, bloquearCofre,
-            () -> apresentador.mostrar(new DialogoSobre())).barra());
+            () -> apresentador.mostrar(new DialogoSobre()), comportamento).barra());
 
         aplicarTamanhoGuardado();
         this.gravarJanela = new Timer(700, e -> guardarTamanho());
         gravarJanela.setRepeats(false);
         ligarEstadoDaJanela();
         getAccessibleContext().setAccessibleName(Versao.NOME);
+    }
+
+    /** O que fechar a janela faz (e se há "Sair"): para os testes. */
+    public ComportamentoDaJanela comportamento() {
+        return comportamento;
     }
 
     private void aplicarTamanhoGuardado() {

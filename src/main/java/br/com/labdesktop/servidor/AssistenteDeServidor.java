@@ -18,7 +18,7 @@ import br.com.labdesktop.ssh.EstadoConexao;
 import br.com.labdesktop.ssh.Falha;
 import br.com.labdesktop.ssh.SondagemDeHost;
 import br.com.labdesktop.ssh.SondagemException;
-import br.com.labdesktop.util.NomeDoMac;
+import br.com.labdesktop.util.NomeDoComputador;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -150,7 +150,7 @@ public final class AssistenteDeServidor {
      * diálogo fechar nesse meio tempo, a chave não se perde).
      */
     public InfoChave gerarChave(String nome) throws CofreException {
-        ChaveSsh chave = GeradorDeChaves.gerar(nome, NomeDoMac.hostname());
+        ChaveSsh chave = GeradorDeChaves.gerar(nome, NomeDoComputador.hostname());
         try {
             cofre.adicionarChave(chave); // o cofre passa a ser o responsável
         } catch (CofreException | RuntimeException e) {
@@ -187,7 +187,7 @@ public final class AssistenteDeServidor {
      * @param passphrase passphrase da chave, ou {@code null}; não é zerada aqui (é de quem chama)
      */
     public InfoChave importarChave(Path arquivo, char[] passphrase, String nome) throws CofreException {
-        ChaveSsh chave = ImportadorDeChaves.importarDeArquivo(arquivo, passphrase, nome, NomeDoMac.hostname());
+        ChaveSsh chave = ImportadorDeChaves.importarDeArquivo(arquivo, passphrase, nome, NomeDoComputador.hostname());
         // O mesmo arquivo importado de novo (para outro servidor, ou outro nome do mesmo) não cria uma segunda cópia: o
         // servidor enxerga UMA chave só, e duas entradas com a mesma chave pública enganariam a conta de "quem mais a usa"
         // na hora de remover um servidor e tirar a chave do authorized_keys.
@@ -437,6 +437,6 @@ public final class AssistenteDeServidor {
 
     /** O {@code nome_do_dispositivo} sugerido a partir do nome do Mac. Roda um processo (até ~2 s): fora da EDT. */
     public static String sugerirNomeDoDispositivo() {
-        return ValidadorDeNomes.sugerirNomeDeDispositivo(NomeDoMac.hostname());
+        return ValidadorDeNomes.sugerirNomeDeDispositivo(NomeDoComputador.hostname());
     }
 }

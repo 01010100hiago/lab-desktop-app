@@ -756,7 +756,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
                 }
                 String nome = nomeDoDispositivoAtual();
                 if (nome == null) {
-                    nome = ValidadorDeNomes.sugerirNomeDeDispositivo(br.com.labdesktop.util.NomeDoMac.hostname());
+                    nome = ValidadorDeNomes.sugerirNomeDeDispositivo(br.com.labdesktop.util.NomeDoComputador.hostname());
                 }
                 ProvisionadorRemoto prov = ProvisionadorRemoto.para(conexao::executar, parametros.container(), docker);
                 reprovisionarTokenCom(prov, nome);
@@ -841,7 +841,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * <p>Exige a conexão SSH de pé (qualquer estado com sessão: serve no {@code TOKEN_RECUSADO}, quando o agente
      * não aceita o token antigo).
      *
-     * @param nomeDoDispositivo {@code ^[a-z0-9-]{1,40}$}; por exemplo {@code ValidadorDeNomes.sugerirNomeDeDispositivo(NomeDoMac.hostname())}
+     * @param nomeDoDispositivo {@code ^[a-z0-9-]{1,40}$}; por exemplo {@code ValidadorDeNomes.sugerirNomeDeDispositivo(NomeDoComputador.hostname())}
      */
     public void registrarToken(String nomeDoDispositivo) throws ErroProvisionamento, CofreException {
         registrarTokenCom(provisionadorAtual(), nomeDoDispositivo);

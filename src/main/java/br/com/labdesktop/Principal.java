@@ -3,6 +3,7 @@ package br.com.labdesktop;
 import br.com.labdesktop.cofre.CofreDeChaves;
 import br.com.labdesktop.cofre.CofreEmUsoException;
 import br.com.labdesktop.cofre.TravaDeInstancia;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.ui.GerenciadorTema;
 import br.com.labdesktop.ui.PreferenciasAtuais;
 import br.com.labdesktop.ui.componentes.Icones;
@@ -11,6 +12,7 @@ import br.com.labdesktop.util.CaminhosApp;
 import br.com.labdesktop.util.ConfiguracaoDeLog;
 import br.com.labdesktop.util.EdtWatchdog;
 import br.com.labdesktop.util.Fundo;
+import br.com.labdesktop.util.NativosDoApp;
 import br.com.labdesktop.util.Preferencias;
 import br.com.labdesktop.util.SenhaDeTeste;
 import java.awt.GraphicsEnvironment;
@@ -34,10 +36,22 @@ public final class Principal {
     private Principal() { }
 
     public static void main(String[] args) {
+        // Sem janela, sem pasta de dados, sem trava: para o instalador e o CI conferirem o app empacotado (ARQUITETURA 11.4).
+        if (temOpcao(args, "--versao")) {
+            System.out.println(Versao.NOME + " " + Versao.atual());
+            System.exit(0);
+            return;
+        }
+        if (temOpcao(args, "--autoteste")) {
+            System.exit(AutoTeste.executar(System.out));
+            return;
+        }
         // Antes de qualquer classe do AWT: no .app vêm como opções da JVM, isto cobre o `./gradlew run` quando alguém
-        // rodar a classe direto (ARQUITETURA 4.4, passo 1).
-        System.setProperty("apple.laf.useScreenMenuBar", "true");
-        System.setProperty("apple.awt.application.name", Versao.NOME);
+        // rodar a classe direto (ARQUITETURA 4.4, passo 1). Só o Mac tem barra de menus do sistema e nome de app no Dock.
+        if (SistemaOperacional.detectar() == SistemaOperacional.MAC) {
+            System.setProperty("apple.laf.useScreenMenuBar", "true");
+            System.setProperty("apple.awt.application.name", Versao.NOME);
+        }
 
         if (GraphicsEnvironment.isHeadless()) {
             System.err.println(Versao.NOME + " precisa de uma tela (a JVM está em modo sem cabeça).");
@@ -51,6 +65,11 @@ public final class Principal {
             System.err.println(e.getMessage());
             System.exit(2);
             return;
+        }
+        try {
+            NativosDoApp.apontar(caminhos); // antes de qualquer PTY ou JNA: os nativos extraídos ficam na pasta de dados, não em /tmp nem em %TEMP%
+        } catch (IOException e) {
+            System.err.println("Não consegui preparar a pasta dos nativos: " + e.getMessage()); // o app abre mesmo assim, com a pasta temporária do sistema
         }
         try {
             ConfiguracaoDeLog.configurar(caminhos);
@@ -116,6 +135,17 @@ public final class Principal {
             }
             app.iniciar();
         });
+    }
+
+    private static boolean temOpcao(String[] args, String opcao) {
+        if (args != null) {
+            for (String a : args) {
+                if (opcao.equals(a)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Antes de o tema existir: uma caixa simples, que não depende de nada do app. */
