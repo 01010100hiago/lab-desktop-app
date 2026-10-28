@@ -237,6 +237,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
 
     /** "Tentar agora": pula a espera do backoff (e é o que se faz depois de confiar no host). */
     public void tentarAgora() {
+        atualizarEstado(e -> e.comSituacaoDoAgente(SituacaoDoAgente.DESCONHECIDA)); // o que se sabia do agente pode ter mudado
         conexao.tentarAgora();
     }
 
@@ -328,6 +329,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             return SondaDoAgente.Resultado.AGENTE_DESATUALIZADO;
         } catch (ErroApi e) {
             LOG.info("O agente de {} não respondeu à sonda: {}", id, e.mensagem());
+            diagnosticarOAgente(); // uma LEITURA por SSH: o agente está instalado? (a tela diferencia "não instalado" de "fora")
             return SondaDoAgente.Resultado.AGENTE_FORA;
         } catch (CofreBloqueadoException e) {
             return SondaDoAgente.Resultado.AGENTE_FORA; // o cofre fechou no meio; a conexão trata o bloqueio
@@ -474,8 +476,8 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         trabalho.execute(() -> {
             try {
                 SituacaoDoAgente lida = new LeitorDaSituacaoDoAgente(conexao::executar, ParametrosDaInstalacao.CONTAINER_PADRAO).ler();
-                atualizarEstado(e -> e.conexao() == br.com.labdesktop.ssh.EstadoConexao.SSH_OK_SEM_AGENTE
-                    ? e.comSituacaoDoAgente(lida) : e);
+                atualizarEstado(e -> e.conexao() == br.com.labdesktop.ssh.EstadoConexao.CONECTADO
+                    ? e : e.comSituacaoDoAgente(lida));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } catch (RuntimeException e) {
@@ -501,8 +503,14 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     /** O instalador terminou (instalou, atualizou ou removeu): repete o teste do agente para o estado refletir o que há no servidor. */
     public void aoMudarOAgenteNoServidor() {
         atualizarEstado(e -> e.comSituacaoDoAgente(SituacaoDoAgente.DESCONHECIDA));
-        descartarApi(); // o agente é outro (ou sumiu): a próxima API nasce limpa
-        conexao.tentarAgora();
+        if (estado().conexao() == br.com.labdesktop.ssh.EstadoConexao.CONECTADO) {
+            // Atualizou ou removeu com o agente respondendo: o token e a API continuam (os dados ficam) e a conexão confere agora se o
+            // agente ainda responde (se sumiu, vai para "agente fora" e a leitura diz que não está instalado).
+            conexao.verificarAgora();
+        } else {
+            descartarApi(); // o agente é outro: a próxima API nasce limpa
+            conexao.tentarAgora();
+        }
     }
 
     private GanchosDaInstalacao ganchosDeInstalacao() {

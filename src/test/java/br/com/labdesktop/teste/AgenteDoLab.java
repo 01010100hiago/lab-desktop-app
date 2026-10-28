@@ -70,6 +70,16 @@ public final class AgenteDoLab implements AutoCloseable {
     /** O painel de antes do app nativo: sem {@code GET /api/versao} (404) e sem o acesso do app (o node falha). */
     public volatile boolean agenteAntigo;
     /**
+     * {@code null}: o agente responde {@code /api/versao} como o de antes dos recursos (sem {@code perfil} nem {@code recursos}).
+     * {@code "lab"} ou {@code "monitor"}: responde com os campos novos; o monitor só responde as rotas de leitura da máquina e dá 404
+     * (JSON do perfil) em todo o resto, como o agente de verdade.
+     */
+    public volatile String perfil;
+    /** O que a leitura "o agente está instalado?" (por SSH) responde: {@code ausente}, {@code sem-docker}, {@code sem-permissao}, {@code existe:running}... */
+    public volatile String diagnostico = "existe:running";
+    /** As leituras de diagnóstico que chegaram por SSH (fora de {@link #comandosCli}, que são só os comandos do agente). */
+    public final List<String> comandosDeDiagnostico = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /**
      * Respostas sob medida de uma rota (depois da autenticação e do 2FA, antes das rotas padrão): devolve {@code null}
      * para deixar a rota padrão responder. Os testes de tela programam aqui o 409 de abrir sessão, o Retomar que passa
      * com {@code liberar:true} e afins.
@@ -133,13 +143,18 @@ public final class AgenteDoLab implements AutoCloseable {
             return sob;
         }
         String caminho = p.caminho();
+        if ("monitor".equals(perfil) && !List.of("/api/versao", "/api/servidor", "/api/servidor/detalhe").contains(caminho)) {
+            return Resposta.json(404, "{\"erro\":\"Esta rota não existe no perfil monitor do agente (só leitura do servidor).\",\"perfil\":\"monitor\"}");
+        }
         if (agenteAntigo && "/api/versao".equals(caminho)) {
             return Resposta.texto(404, "não encontrado");
         }
         if ("/api/versao".equals(caminho)) {
             String totp = totpAtivo ? "ativo" : totpPendente ? "pendente" : "desligado";
+            String perfilJson = perfil == null ? "" : ",\"perfil\":\"" + perfil + "\",\"recursos\":"
+                + ("monitor".equals(perfil) ? "{\"claude\":false,\"projetos\":false,\"monitor\":true}" : "{\"claude\":true,\"projetos\":true,\"monitor\":true}");
             return Resposta.json(200, "{\"api\":1,\"painel\":\"v22.5.0\",\"exigeToken\":" + exigeToken + ",\"cliente\":"
-                + (dispositivo == null ? "null" : "\"" + dispositivo + "\"") + ",\"totp\":\"" + totp + "\"}");
+                + (dispositivo == null ? "null" : "\"" + dispositivo + "\"") + ",\"totp\":\"" + totp + "\"" + perfilJson + "}");
         }
         if ("/api/limites".equals(caminho)) {
             chamadasDeLimites.incrementAndGet();
@@ -269,6 +284,11 @@ public final class AgenteDoLab implements AutoCloseable {
             if (ehComandoDeSeguranca(linha)) {
                 comandosDeSeguranca.add(linha);
                 return responderSeguranca(linha, saida);
+            }
+            if (linha.startsWith("sh -c 'command -v docker")) { // "o agente está instalado?": só leitura
+                comandosDeDiagnostico.add(linha);
+                saida.append(diagnostico).append('\n');
+                return 0;
             }
             comandosCli.add(linha);
             entradasCli.add(stdin);
