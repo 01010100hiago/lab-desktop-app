@@ -42,14 +42,14 @@ jobs:
           cache: gradle
 
       # O .msi do jpackage (JDK 21) precisa do WiX Toolset 3.x (candle.exe e light.exe) no PATH; o 4 e o 5 não servem a este JDK.
-      # Se o runner já traz o WiX 3, usa; senão instala pelo Chocolatey (o pacote "wixtoolset" é o 3.x).
+      # Se o runner já traz o WiX 3, usa; senão instala pelo Chocolatey (o pacote "wixtoolset" é o 3.x; a versão é FIXA para o instalador não mudar sozinho: se o Chocolatey disser que 3.14.1 não existe, troque por 3.11.2).
       - name: WiX Toolset 3 (só Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $achou = Get-Command candle.exe -ErrorAction SilentlyContinue
           if (-not $achou) {
-            choco install wixtoolset --no-progress -y
+            choco install wixtoolset --version=3.14.1 --no-progress -y
             $wix = Get-ChildItem "C:\Program Files (x86)" -Directory -Filter "WiX Toolset*" | Select-Object -First 1
             if (-not $wix) { throw "WiX Toolset não foi instalado" }
             "$($wix.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
