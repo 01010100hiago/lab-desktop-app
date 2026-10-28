@@ -126,7 +126,12 @@ class LaboratorioLocalTest {
         criar();
         List<String> run = pc.containers.get("painel-lab").argumentos;
         assertTrue(run.contains("127.0.0.1:7070:7070"));
-        assertFalse(run.contains("host") && run.indexOf("--network") >= 0);
+        assertFalse(run.contains("--net=host") || run.contains("--network=host") || run.contains("--privileged") || run.contains("--network") || run.contains("--net"),
+            "nada de rede do host nem de privilégio total: " + run);
+        String junto = String.join(" ", run);
+        assertFalse(junto.contains("--network host") || junto.contains("--net host") || junto.contains("--cap-add") || junto.contains("--userns"), junto);
+        assertFalse(run.stream().anyMatch(a -> a.startsWith("0.0.0.0") || a.equals("-P") || a.equals("--publish-all")), "a porta é só do loopback: " + run);
+        assertTrue(run.contains("--pid") && run.contains("host") && run.indexOf("host") == run.indexOf("--pid") + 1, "só o pid do host, dito no aviso: " + run);
         assertTrue(run.contains(projetos + ":" + projetos), "no Mac a pasta entra no container no MESMO caminho: " + run);
         assertTrue(run.contains("PAINEL_EXIGE_TOKEN=1"));
         assertTrue(run.contains("PAINEL_ESCUTA=todas"));
