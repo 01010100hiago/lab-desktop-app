@@ -1,5 +1,7 @@
 package br.com.labdesktop.util;
 
+import br.com.labdesktop.plataforma.AmbienteDoSistema;
+import br.com.labdesktop.plataforma.PastasDoApp;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
@@ -8,16 +10,20 @@ import java.util.Objects;
  * Onde o app guarda as coisas no disco (ARQUITETURA 5.1). Imutável e sem E/S até {@link #prepararPastas()}.
  *
  * <pre>
- * ~/Library/Application Support/LabDesktop/   (0700)
- *     cofre.labcofre  (0600)   cofre.labcofre.bak   cofre.labcofre.tmp   cofre.lock
+ * &lt;pasta de dados&gt;/   (só o dono: 0700 no Mac e no Linux, ACL do dono no Windows)
+ *     cofre.labcofre  (só o usuário)   cofre.labcofre.bak   cofre.labcofre.tmp   cofre.lock
  *     preferencias.json        estado-avisos.json       memoria-arquivos.json
- *     backups-arquivos/<servidor>/<data-hora>/<caminho>   (cópias de segurança dos arquivos editados, 0700)
- * ~/Library/Logs/LabDesktop/lab-desktop.log
+ *     backups-arquivos/&lt;servidor&gt;/&lt;data-hora&gt;/&lt;caminho&gt;   (cópias de segurança dos arquivos editados)
+ * &lt;pasta de logs&gt;/lab-desktop.log
  * </pre>
  *
+ * <p>As pastas padrão de cada sistema estão em {@link PastasDoApp}: no Mac {@code ~/Library/Application Support/LabDesktop} e
+ * {@code ~/Library/Logs/LabDesktop}; no Windows {@code %APPDATA%\LabDesktop} e {@code %LOCALAPPDATA%\LabDesktop\Logs}; no Linux o
+ * {@code XDG_DATA_HOME} e o {@code XDG_STATE_HOME}.
+ *
  * <p>{@code --pasta <dir>} troca a pasta de dados (testes, desenvolvimento com {@code cofre-dev}, abrir um
- * backup do cofre em outro lugar). Os logs continuam no lugar padrão, para a verificação de segredos em
- * {@code ~/Library/Logs/LabDesktop} valer também nesse modo.
+ * backup do cofre em outro lugar). Os logs continuam no lugar padrão, para a verificação de segredos na pasta de logs
+ * valer também nesse modo.
  */
 public final class CaminhosApp {
 
@@ -80,11 +86,11 @@ public final class CaminhosApp {
     }
 
     private static Path pastaDadosPadrao() {
-        return Path.of(System.getProperty("user.home"), "Library", "Application Support", "LabDesktop");
+        return Path.of(PastasDoApp.de(AmbienteDoSistema.detectar()).dados());
     }
 
     private static Path pastaLogsPadrao() {
-        return Path.of(System.getProperty("user.home"), "Library", "Logs", "LabDesktop");
+        return Path.of(PastasDoApp.de(AmbienteDoSistema.detectar()).logs());
     }
 
     public Path pastaDados() {

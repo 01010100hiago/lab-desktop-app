@@ -20,7 +20,7 @@ import br.com.labdesktop.local.PassoDoLaboratorio;
 import br.com.labdesktop.local.PlanoDeInstalacao;
 import br.com.labdesktop.local.PlataformaLocal;
 import br.com.labdesktop.local.RelatorioDoComputador;
-import br.com.labdesktop.local.SistemaOperacional;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.local.VerificacoesDoComputador;
 import br.com.labdesktop.teste.ComputadorSimulado;
 import br.com.labdesktop.teste.SondaFalsa;

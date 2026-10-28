@@ -12,7 +12,7 @@ import br.com.labdesktop.cofre.ParametrosKdf;
 import br.com.labdesktop.local.ConfigLocal;
 import br.com.labdesktop.local.PlataformaLocal;
 import br.com.labdesktop.local.ServicosLocais;
-import br.com.labdesktop.local.SistemaOperacional;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.GerenciadorServidores;
 import br.com.labdesktop.servidor.ServidorLab;

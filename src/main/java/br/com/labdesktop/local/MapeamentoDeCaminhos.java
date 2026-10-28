@@ -1,6 +1,7 @@
 package br.com.labdesktop.local;
 
 import java.util.regex.Pattern;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
  * O caminho de uma pasta do computador (o ANFITRIÃO) como o container do agente a enxerga. É o que faz os {@code volumes} dos projetos (o

@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
  * Um teste REAL de processo local, só com programas inofensivos do próprio JDK: o {@code java} que roda esta suíte (e arquivos {@code .java} de

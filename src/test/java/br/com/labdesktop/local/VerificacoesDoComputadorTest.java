@@ -11,6 +11,7 @@ import br.com.labdesktop.teste.SondaFalsa;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
  * "Preparar este computador": cada verificação com o executor falso (Docker ausente, parado, ok, pouco disco, sem WSL, porta ocupada,

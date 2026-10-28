@@ -3,6 +3,7 @@ package br.com.labdesktop.local;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
  * Tudo o que muda de um sistema para outro no laboratório local, num lugar só e como texto puro (por isso os três sistemas se testam num Mac,

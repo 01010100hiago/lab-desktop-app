@@ -23,7 +23,7 @@ import br.com.labdesktop.local.ConfigLocal;
 import br.com.labdesktop.local.ParametrosDoLaboratorio;
 import br.com.labdesktop.local.PlataformaLocal;
 import br.com.labdesktop.local.ServicosLocais;
-import br.com.labdesktop.local.SistemaOperacional;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.ssh.ConfigSsh;
 import br.com.labdesktop.ssh.EstadoConexao;
 import br.com.labdesktop.teste.AgenteDoLab;

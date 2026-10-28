@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
  * "Preparar este computador", a conferência: SÓ LEITURA, por comandos fixos de {@link ComandosLocais} e pela {@link SondaDoComputador}. Nada se

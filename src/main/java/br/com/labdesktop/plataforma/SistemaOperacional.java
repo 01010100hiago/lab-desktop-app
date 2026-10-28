@@ -1,4 +1,4 @@
-package br.com.labdesktop.local;
+package br.com.labdesktop.plataforma;
 
 import java.util.Locale;
 

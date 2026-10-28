@@ -14,11 +14,11 @@ import org.junit.jupiter.api.io.TempDir;
 class CaminhosAppTest {
 
     @Test
-    void padraoFicaSobLibraryDoUsuario() {
+    void padraoSegueAsPastasDoSistemaDesteComputador() {
         CaminhosApp c = CaminhosApp.padrao();
-        String home = System.getProperty("user.home");
-        assertEquals(Path.of(home, "Library", "Application Support", "LabDesktop"), c.pastaDados());
-        assertEquals(Path.of(home, "Library", "Logs", "LabDesktop"), c.pastaLogs());
+        var pastas = br.com.labdesktop.plataforma.PastasDoApp.de(br.com.labdesktop.plataforma.AmbienteDoSistema.detectar());
+        assertEquals(Path.of(pastas.dados()), c.pastaDados());
+        assertEquals(Path.of(pastas.logs()), c.pastaLogs());
         assertEquals(c.pastaDados().resolve("cofre.labcofre"), c.arquivoCofre());
         assertEquals(c.pastaDados().resolve("cofre.labcofre.bak"), c.arquivoCofreBak());
         assertEquals(c.pastaDados().resolve("cofre.labcofre.tmp"), c.arquivoCofreTmp());
@@ -30,8 +30,8 @@ class CaminhosAppTest {
     void pastaPorArgumentoComEspacoEComIgual() {
         assertEquals(Path.of("cofre-dev").toAbsolutePath().normalize(),
             CaminhosApp.deArgumentos(new String[] {"--pasta", "cofre-dev"}).pastaDados());
-        assertEquals(Path.of("/algum/lugar"),
-            CaminhosApp.deArgumentos(new String[] {"--x", "--pasta=/algum/lugar"}).pastaDados());
+        Path absoluta = Path.of("algum", "lugar").toAbsolutePath().normalize();
+        assertEquals(absoluta, CaminhosApp.deArgumentos(new String[] {"--x", "--pasta=" + absoluta}).pastaDados());
     }
 
     @Test

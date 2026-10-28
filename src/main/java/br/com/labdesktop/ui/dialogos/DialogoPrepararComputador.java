@@ -454,8 +454,8 @@ public final class DialogoPrepararComputador extends Dialogo {
         return Caixa.linha(8, marca, Caixa.coluna(4, coluna.toArray(Component[]::new)));
     }
 
-    private br.com.labdesktop.local.SistemaOperacional sistemaDoComputador() {
-        return relatorio != null ? relatorio.sistema() : br.com.labdesktop.local.SistemaOperacional.detectar();
+    private br.com.labdesktop.plataforma.SistemaOperacional sistemaDoComputador() {
+        return relatorio != null ? relatorio.sistema() : br.com.labdesktop.plataforma.SistemaOperacional.detectar();
     }
 
     private void montarOQueVaiAcontecer() {

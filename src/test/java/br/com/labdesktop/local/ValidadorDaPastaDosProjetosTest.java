@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /** A pasta dos projetos que o container recebe com escrita: nunca a raiz, a pasta pessoal nem as do sistema; a regra vale nos três sistemas. */
 class ValidadorDaPastaDosProjetosTest {

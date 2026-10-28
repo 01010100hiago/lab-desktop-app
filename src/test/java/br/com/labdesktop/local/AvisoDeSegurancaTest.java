@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import br.com.labdesktop.instalador.PacoteDoAgente;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /** O aviso de segurança diz o que o {@code docker run} dá de fato ao container, em cada sistema. */
 class AvisoDeSegurancaTest {

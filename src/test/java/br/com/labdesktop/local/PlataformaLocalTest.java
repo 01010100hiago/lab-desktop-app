@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /** O que muda de um sistema para outro, como texto puro: os três sistemas se testam num Mac. */
 class PlataformaLocalTest {

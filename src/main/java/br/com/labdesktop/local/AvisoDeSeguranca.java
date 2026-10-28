@@ -2,6 +2,7 @@ package br.com.labdesktop.local;
 
 import java.util.ArrayList;
 import java.util.List;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
  * O aviso de segurança que o usuário lê ANTES de criar o laboratório local, em palavras simples e dizendo o que o container do agente recebe de

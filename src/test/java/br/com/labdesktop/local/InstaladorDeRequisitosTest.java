@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
  * Cada "Instalar" mostra exatamente o comando e só executa depois do clique: a prova é que NADA roda antes de {@code instalar} ser chamado

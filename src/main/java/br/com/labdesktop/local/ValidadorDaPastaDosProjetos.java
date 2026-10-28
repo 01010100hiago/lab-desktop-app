@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
  * Confere a pasta dos projetos ANTES de criá-la ou de montá-la no container: o container do agente recebe essa pasta com permissão de escrita,

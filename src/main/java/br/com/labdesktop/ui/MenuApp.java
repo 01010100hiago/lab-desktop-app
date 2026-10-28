@@ -2,9 +2,9 @@ package br.com.labdesktop.ui;
 
 import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.ui.MenuDoServidor.Item;
+import br.com.labdesktop.ui.componentes.Teclas;
 import br.com.labdesktop.ui.tema.Fontes;
 import br.com.labdesktop.util.Preferencias.Tema;
-import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.util.EnumMap;
 import java.util.List;
@@ -64,13 +64,9 @@ public final class MenuApp {
         return barra;
     }
 
-    /** A tecla de comando do sistema (Cmd no Mac). Sem tela (os testes de interface) o Toolkit não responde: vale o Cmd do Mac. */
+    /** A tecla de comando do sistema (Cmd no Mac, Ctrl nos outros): {@link Teclas#comando()}, decidida pelo sistema e não pelo Toolkit. */
     private static int atalho() {
-        try {
-            return Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
-        } catch (java.awt.HeadlessException e) {
-            return java.awt.event.InputEvent.META_DOWN_MASK;
-        }
+        return Teclas.comando();
     }
 
     private static JMenuItem item(String texto, KeyStroke tecla, Runnable acao) {

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /** O caminho da pasta dos projetos como o container do agente a enxerga, nos três sistemas (a regra do Windows é texto puro, testada num Mac). */
 class MapeamentoDeCaminhosTest {

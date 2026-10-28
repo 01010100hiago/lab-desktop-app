@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
  * Acha um programa neste computador: nas pastas do {@code PATH} e nas pastas conhecidas da plataforma. Um aplicativo aberto pelo Finder (ou pelo

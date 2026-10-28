@@ -2,6 +2,7 @@ package br.com.labdesktop.local;
 
 import java.util.ArrayList;
 import java.util.List;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
  * Os planos de instalação do que pode faltar (Docker, git, WSL 2), por sistema e pelo que o computador já tem (Homebrew, winget). Só monta

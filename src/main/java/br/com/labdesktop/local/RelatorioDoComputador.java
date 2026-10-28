@@ -1,6 +1,7 @@
 package br.com.labdesktop.local;
 
 import java.util.List;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
  * O resultado de "Preparar este computador" (só leitura).

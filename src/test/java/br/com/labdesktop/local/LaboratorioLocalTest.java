@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /** "Criar meu laboratório local" e "Remover laboratório local" com o computador simulado: passos, idempotência, desfazer e o que nunca se apaga. */
 class LaboratorioLocalTest {
