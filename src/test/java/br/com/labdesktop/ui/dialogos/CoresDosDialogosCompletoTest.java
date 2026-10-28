@@ -70,6 +70,11 @@ class CoresDosDialogosCompletoTest {
             DubleDeInterface.de(DialogoPrepararComputador.Motor.class), () -> { }, avisos, copiador()));
         m.put("registro do servidor", () -> new DialogoRegistro("lab", null, copiador(), avisos, () -> FUSO));
         m.put("editar servidor", () -> new DialogoEditarServidor(ConfigServidor.novo("lab", "192.0.2.5", 2222, "labuser", "k1"), dados -> null, avisos));
+        m.put("editar servidor (com acesso)", () -> new DialogoEditarServidor(ConfigServidor.novo("lab", "192.0.2.5", 2222, "labuser", "k1"), dados -> null, avisos,
+            new DialogoEditarServidor.Acesso("lab", "SHA256:5MGLihSpPv/h6+y5NnTZfr2nnOaG8vJ9pEy1z3+jIQg", "ssh-ed25519 AAAAexemplo lab", () -> { }), copiador()));
+        m.put("instalar a chave com a senha", () -> new DialogoInstalarChave(new DialogoInstalarChave.Alvo("lab", "labuser", "192.0.2.5", 2222,
+            List.of(new br.com.labdesktop.cofre.Pin("ssh-ed25519", "SHA256:mH3s1p2VwY+BAVOJ7MAG7JIZttP/NSiO9T4w4F165f0")), "lab",
+            "SHA256:5MGLihSpPv/h6+y5NnTZfr2nnOaG8vJ9pEy1z3+jIQg", "ssh-ed25519 AAAAexemplo lab"), (senha, progresso) -> null, copiador(), avisos));
         m.put("remover servidor", () -> new DialogoRemoverServidor("lab", "labuser", true, List.of("outro"), Origem.GERADA_PELO_APP, opcoes -> null, avisos));
         m.put("remover servidor local", () -> DialogoRemoverServidor.paraEsteComputador("Este computador", false, opcoes -> null, avisos));
         m.put("limite excedido (teto)", () -> new DialogoLimiteExcedido("app-loja", conflito("{\"erro\":\"Ainda acima do limite\",\"usado_pp\":22.1,\"teto_pct\":20,\"pct_conta\":93.0,\"freio_pct\":null}"),

@@ -123,9 +123,26 @@ class AvisosDoComputadorLocalTest {
         assertFalse(no_ar.contains(Item.REMOVER_AGENTE));
         assertFalse(no_ar.contains(Item.EDITAR));
         assertFalse(no_ar.contains(Item.INSTALAR_AGENTE));
+        assertFalse(no_ar.contains(Item.INSTALAR_CHAVE), "Este computador não usa SSH nem chave");
+        assertFalse(itens.contains(Item.INSTALAR_CHAVE));
 
         // o remoto nada ganhou
         assertFalse(MenuDoServidor.itensPara(remoto(EstadoConexao.CONECTADO, SituacaoDoAgente.DESCONHECIDA)).contains(Item.PREPARAR_COMPUTADOR));
         assertTrue(MenuDoServidor.itensPara(remoto(EstadoConexao.CONECTADO, SituacaoDoAgente.DESCONHECIDA)).contains(Item.EDITAR));
+    }
+
+    @Test
+    void instalarAChaveComASenhaEDeServidorSshEmQualquerEstadoMenosCofreBloqueado() {
+        for (EstadoConexao c : EstadoConexao.values()) {
+            List<Item> itens = MenuDoServidor.itensPara(remoto(c, SituacaoDoAgente.DESCONHECIDA));
+            assertEquals(c != EstadoConexao.BLOQUEADO_COFRE, itens.contains(Item.INSTALAR_CHAVE), "estado " + c);
+            if (itens.contains(Item.INSTALAR_CHAVE)) {
+                assertEquals(itens.indexOf(Item.EDITAR) + 1, itens.indexOf(Item.INSTALAR_CHAVE), "ao lado de Editar em " + c);
+            }
+        }
+        EstadoServidor recusado = new EstadoServidor("s2", "vps-1", EstadoConexao.ERRO_AUTENTICACAO, new Falha(Falha.Tipo.CHAVE_RECUSADA, "recusou"), 0, null, null, 1,
+            Estado2fa.DESLIGADO, "mac", null, null, SituacaoDoAgente.DESCONHECIDA, false);
+        List<Item> itens = MenuDoServidor.itensPara(recusado);
+        assertTrue(itens.indexOf(Item.INSTALAR_CHAVE) < itens.indexOf(Item.EDITAR), "com a chave recusada o botão vem antes de Editar: " + itens);
     }
 }

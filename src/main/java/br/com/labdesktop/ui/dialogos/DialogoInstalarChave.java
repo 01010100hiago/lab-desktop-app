@@ -106,9 +106,9 @@ public final class DialogoInstalarChave extends Dialogo {
         entrada.rotularPara(alvo.usuario());
         ficha.definir(List.of(
             FichaRotulada.Item.de("Servidor", alvo.endereco()),
-            FichaRotulada.Item.de("Impressão digital do servidor (a que você confirmou)", impressaoDoServidor()),
+            FichaRotulada.Item.de(rotuloDaImpressao(), impressaoDoServidor()),
             FichaRotulada.Item.de("Chave deste app (a que será instalada)", alvo.nomeDaChave() + "  " + alvo.impressaoDaChave())));
-        blocoDaSenha = entrada.bloco(TEXTO_DA_SENHA, erro);
+        blocoDaSenha = entrada.bloco(TEXTO_DA_SENHA);
         selo.setVisible(true);
         blocoDoFim = Caixa.coluna(8, selo, textoDoFim, ondeDesligarASenha);
         blocoDoFim.setVisible(false);
@@ -122,6 +122,7 @@ public final class DialogoInstalarChave extends Dialogo {
             dicaDaImpressao,
             Caixa.linha(0, copiarChave, Caixa.mola()),
             blocoDaSenha,
+            erro,
             blocoDoFim), rodape(null, fechar, cancelar, instalar));
         botaoPadrao(instalar);
         instalar.addActionListener(e -> instalar());
@@ -133,13 +134,14 @@ public final class DialogoInstalarChave extends Dialogo {
         }
     }
 
+    private String rotuloDaImpressao() {
+        List<Pin> pins = alvo.impressoesDoServidor();
+        return pins == null || pins.isEmpty() ? "Impressão digital do servidor" : "Impressão digital do servidor (" + pins.get(0).algoritmo() + ", a que você confirmou)";
+    }
+
     private String impressaoDoServidor() {
         List<Pin> pins = alvo.impressoesDoServidor();
-        if (pins == null || pins.isEmpty()) {
-            return SEM_IMPRESSAO;
-        }
-        Pin p = pins.get(0);
-        return p.algoritmo() + "  " + p.impressao();
+        return pins == null || pins.isEmpty() ? SEM_IMPRESSAO : pins.get(0).impressao();
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -197,6 +199,16 @@ public final class DialogoInstalarChave extends Dialogo {
 
     public boolean ocupado() {
         return ocupado;
+    }
+
+    /** Esc, como o usuário o aperta (para os testes). */
+    public void aoEsc() {
+        aoCancelar();
+    }
+
+    /** A janela já fechou (para os testes). */
+    public boolean jaFechouParaTeste() {
+        return jaFechou();
     }
 
     public FichaRotulada ficha() {
@@ -290,6 +302,7 @@ public final class DialogoInstalarChave extends Dialogo {
         parado = true;
         dizerErro(erro, mensagem);
         entrada.habilitar(false);
+        blocoDaSenha.setVisible(false); // sem senha para digitar: só a frase do que fazer e o botão Fechar
         instalar.setVisible(false);
         cancelar.setVisible(false);
         fechar.setVisible(true);

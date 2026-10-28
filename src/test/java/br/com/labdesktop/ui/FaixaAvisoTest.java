@@ -63,6 +63,26 @@ class FaixaAvisoTest {
     }
 
     @Test
+    void chaveRecusadaTemOBotaoDeInstalarAChaveComASenhaQueSoAvisaOOuvinte() {
+        for (Tema tema : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
+            Visual.tema(tema);
+            FaixaAviso f = faixa();
+            Visual.naEdt(() -> f.atualizar(new EstadoServidor("s1", "lab", EstadoConexao.ERRO_AUTENTICACAO, new Falha(Falha.Tipo.CHAVE_RECUSADA, "O servidor recusou a chave."),
+                0, null, null, 1, Estado2fa.DESLIGADO, "mac", null, null)));
+            assertEquals("Instalar a chave com a senha…", Visual.naEdt(() -> f.botaoDaAcao(Acao.INSTALAR_CHAVE).getText()));
+            assertNotNull(Visual.naEdt(() -> f.botaoDaAcao(Acao.TENTAR_AGORA)));
+            assertTrue(acoes.isEmpty(), "mostrar a faixa não aciona nada");
+            Visual.naEdt(() -> f.botaoDaAcao(Acao.INSTALAR_CHAVE).doClick());
+            assertEquals(List.of(Acao.INSTALAR_CHAVE), acoes);
+            acoes.clear();
+            Visual.naEdt(() -> f.atualizar(new EstadoServidor("s1", "lab", EstadoConexao.ERRO_AUTENTICACAO, new Falha(Falha.Tipo.CHAVE_NAO_USADA, "não usou"),
+                0, null, null, 1, Estado2fa.DESLIGADO, "mac", null, null)));
+            assertNull(Visual.naEdt(() -> f.botaoDaAcao(Acao.INSTALAR_CHAVE)), "a chave que o app nem conseguiu usar não se conserta com a senha do servidor");
+        }
+        Visual.tema(Tema.CLARO);
+    }
+
+    @Test
     void semAvisoFicaEscondida() {
         Visual.tema(Tema.CLARO);
         FaixaAviso f = faixa();

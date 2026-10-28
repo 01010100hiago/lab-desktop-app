@@ -69,6 +69,11 @@ class SenhaSemEfeitoSozinhoTest {
             "só o assistente abre uma sessão com senha");
         assertEquals(List.of(), quemUsa(Pattern.compile("\\binstalarAChaveComSenha\\("), Set.of("servidor/AssistenteDeServidor.java", "ui/dialogos/DialogoAdicionarServidor.java")),
             "só o diálogo do assistente (no clique de Entrar e instalar a chave) chama o primeiro acesso");
+        assertEquals(List.of(), quemUsa(Pattern.compile("\\brepararAChaveComSenha\\("), Set.of("servidor/AssistenteDeServidor.java", "ui/AcoesDaInterface.java")),
+            "o reparo da chave recusada só nasce no clique de 'Instalar a chave com a senha…' (AcoesDaInterface liga o botão do diálogo ao assistente)");
+        assertEquals(List.of(), quemUsa(Pattern.compile("\\binstalarChaveComSenha\\("), Set.of("ui/AcoesDaInterface.java", "ui/MenuDoServidor.java", "ui/Navegacao.java")),
+            "a ação de reparar a chave só é chamada por botões e itens de menu (cada um é um clique do usuário)");
+        assertEquals(List.of(), quemUsa(Pattern.compile("\\bnew DialogoInstalarChave\\("), Set.of("ui/AcoesDaInterface.java")), "só a ação do clique abre o diálogo");
         assertEquals(List.of(), quemUsa(Pattern.compile("\\bSessaoComSenha\\b"), Set.of("servidor/AssistenteDeServidor.java", "ssh/SessaoComSenha.java")),
             "nada de conexão, sondador ou tela enxerga a sessão com senha");
         assertEquals(List.of(), quemUsa(Pattern.compile("\\bEntradaPorSenha\\b"), Set.of("ssh/EntradaPorSenha.java", "ssh/SessaoComSenha.java")),

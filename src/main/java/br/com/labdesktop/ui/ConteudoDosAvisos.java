@@ -83,8 +83,8 @@ public final class ConteudoDosAvisos {
         + "outra máquina.";
 
     /** O que fazer quando o servidor recusa a chave do app, em palavras simples: o botão "Instalar a chave com a senha…" resolve se o usuário ainda tem senha. */
-    public static final String TEXTO_DA_CHAVE_RECUSADA = "Se você ainda tem a senha do usuário no servidor, clique em \"Instalar a chave com a senha…\": o app usa a senha uma vez, "
-        + "instala a chave e confere que ela entra. Sem senha, peça a quem administra o servidor para adicionar a chave ao acesso do usuário. Depois, tente de novo.";
+    public static final String TEXTO_DA_CHAVE_RECUSADA = "Se você ainda tem a senha do usuário no servidor, use \"Instalar a chave com a senha…\": o app usa a senha uma vez e confere que a chave "
+        + "entra. Sem a senha, peça a quem administra o servidor para adicionar a chave.";
 
     /**
      * O que o usuário lê, na faixa de aviso, no Resumo e no cartão do servidor, quando o SSH conecta e o agente não está instalado. É uma
