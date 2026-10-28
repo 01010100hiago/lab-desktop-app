@@ -46,9 +46,19 @@ public final class SessaoComSenha implements AutoCloseable {
      */
     public static SessaoComSenha abrir(String host, int porta, String usuario, Pin pin, char[] senha, ConfigSsh cfg)
         throws FalhaDeEntradaPorSenha {
-        VerificadorDeChaveDoServidor verificador = new VerificadorDeChaveDoServidor(() -> List.of(pin));
+        return abrir(host, porta, usuario, List.of(pin), senha, cfg);
+    }
+
+    /**
+     * Como {@link #abrir(String, int, String, Pin, char[], ConfigSsh)}, com as impressões digitais já guardadas de um servidor que existe (uma por algoritmo): a chave do servidor
+     * tem de bater com uma delas, senão a conexão fecha antes do pedido de autenticação e a senha nem é escrita.
+     */
+    public static SessaoComSenha abrir(String host, int porta, String usuario, List<Pin> pins, char[] senha, ConfigSsh cfg)
+        throws FalhaDeEntradaPorSenha {
+        List<Pin> confirmadas = List.copyOf(pins);
+        VerificadorDeChaveDoServidor verificador = new VerificadorDeChaveDoServidor(() -> confirmadas);
         EntradaPorSenha.Relato relato = new EntradaPorSenha.Relato();
-        SshClient cliente = ClienteSshFactory.criar(verificador, cfg, AlgoritmosDeHost.paraPins(List.of(pin)));
+        SshClient cliente = ClienteSshFactory.criar(verificador, cfg, AlgoritmosDeHost.paraPins(confirmadas));
         cliente.setUserAuthFactories(List.of(new EntradaPorSenha.Fabrica(senha, relato)));
         cliente.start();
         ClientSession s = null;

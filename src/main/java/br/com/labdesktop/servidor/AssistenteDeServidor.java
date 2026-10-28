@@ -327,40 +327,116 @@ public final class AssistenteDeServidor {
             if (senha == null || senha.length == 0) {
                 throw new IllegalArgumentException("Digite a senha do usuário no servidor.");
             }
-            String conta = LimiteDeTentativas.chave(dados.host(), dados.porta(), dados.usuario());
-            var pausa = limiteDeSenha.pausaRestante(conta);
-            if (pausa.isPresent()) {
-                throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.MUITAS_TENTATIVAS,
-                    "Espere " + descreverEspera(pausa.get()) + " antes de tentar de novo: o servidor pode bloquear o seu endereço depois de várias senhas erradas."
-                        + (limiteDeSenha.restantes(conta) == 0 ? " O app já tentou " + MAXIMO_DE_SENHAS_RECUSADAS + " senhas nos últimos "
-                            + JANELA_DAS_SENHAS_RECUSADAS.toMinutes() + " minutos." : ""));
-            }
             ChaveSsh daVez = cofre.chaveSsh(chave.id()).orElseThrow(() -> new CofreException("A chave deste servidor não está no cofre."));
-            InstaladorDeChave.Resultado instalada;
-            List<String> permissoesRuins = List.of();
-            progresso.accept(EtapaDoPrimeiroAcesso.ENTRANDO);
-            try (SessaoComSenha sessao = abrirComSenha(dados, pin, senha, conta)) {
-                progresso.accept(EtapaDoPrimeiroAcesso.INSTALANDO);
-                instalada = InstaladorDeChave.instalar(sessao::executar, daVez.publica(), dados.portaDoAgente());
-                permissoesRuins = lerPermissoesRuins(sessao); // só lê; se a prova falhar, a frase diz o que o StrictModes pode estar recusando
-            } catch (IOException e) {
-                throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO,
-                    "A conexão com o servidor caiu antes de a chave ser instalada. Confira a rede e tente de novo.", e);
-            }
-            progresso.accept(EtapaDoPrimeiroAcesso.PROVANDO);
-            try {
-                new ProvaPorChave(dados.host().strip(), dados.porta(), dados.usuario().strip(), daVez.paraKeyPair(), List.of(pin), cfgSsh).provar();
-            } catch (FalhaDeEntradaPorSenha f) {
-                if (f.motivo() == FalhaDeEntradaPorSenha.Motivo.SEM_LOGIN_POR_CHAVE && !permissoesRuins.isEmpty()) {
-                    throw new FalhaDeEntradaPorSenha(f.motivo(), f.getMessage() + " Achei isto: " + String.join(" ", permissoesRuins), f);
-                }
-                throw f;
-            }
-            LOG.debug("Primeiro acesso: chave {} ({}).", chave.id(), instalada);
-            return instalada;
+            return entrarInstalarEProvar(dados, daVez, List.of(pin), senha, progresso);
         } finally {
             Zeragem.zerar(senha);
         }
+    }
+
+    /** O que o usuário lê quando o host de um servidor que já existe não é o que ele confirmou: o app para, não manda a senha e NUNCA confia de novo sozinho. */
+    public static final String TEXTO_DO_HOST_QUE_MUDOU = "A chave do servidor mudou desde que você o cadastrou. A senha NÃO foi enviada e nada foi alterado. O app nunca "
+        + "volta a confiar sozinho: se você reinstalou o servidor, use \"Remover servidor\" e adicione-o de novo para conferir a impressão digital outra vez. Se não "
+        + "reinstalou, não continue: pode ser outra máquina.";
+
+    /** O que o usuário lê quando o servidor que já existe ainda não tem impressão digital confirmada. */
+    public static final String TEXTO_SEM_IMPRESSAO = "Este servidor ainda não tem a impressão digital confirmada, e o app não manda senha a um servidor que você não conferiu. "
+        + "Feche esta janela e use \"Conferir a impressão do servidor\" primeiro.";
+
+    /** O que o usuário lê quando o servidor que já existe não aceita entrar com senha: o caminho é entregar a chave a quem administra o servidor. */
+    public static final String TEXTO_SERVIDOR_SEM_SENHA = "Este servidor não aceita entrar com senha (só com chave). Peça a quem administra o servidor para adicionar a chave "
+        + "deste app ao acesso do usuário: em Editar, na parte Acesso, o botão para copiar a chave pública.";
+
+    /** Quem é o servidor para a tela "Instalar a chave com a senha": a chave do cofre que o app oferece e a impressão digital guardada do host. */
+    public record AcessoDoServidor(ConfigServidor config, InfoChave chave) { }
+
+    /** A chave do cofre que o app oferece a este servidor (sem a parte privada), ou vazio se o servidor é "Este computador" ou a chave sumiu do cofre. */
+    public java.util.Optional<AcessoDoServidor> acessoDo(ServidorLab lab) {
+        return cofre.servidor(lab.id()).filter(c -> !c.ehLocal()).flatMap(c -> cofre.infoDaChave(c.chaveId()).map(k -> new AcessoDoServidor(c, k)));
+    }
+
+    /**
+     * Conserta um servidor que JÁ está cadastrado e que o lab recusa ("Chave recusada"): é o primeiro acesso por senha (entrar com a senha UMA vez, instalar a chave
+     * pública do cofre com o mesmo comando fixo e sem {@code sudo}, PROVAR numa conexão nova só por chave), mas sobre o cadastro que já existe: o host é conferido contra a
+     * impressão digital JÁ guardada (se mudou, para antes de mandar a senha, e o app nunca confia de novo sozinho), a chave é a do cofre que o app oferece a este servidor e
+     * o freio das senhas é o mesmo do assistente. Com a prova passando, manda o servidor reconectar. NÃO desliga a senha do servidor: isso continua sendo o fluxo de
+     * Segurança. Fora da trava {@code labdesktop.acoes}, como o resto de gerenciar o servidor.
+     *
+     * <p>A senha é um {@code char[]} que passa a ser DESTE método: é zerada ao terminar, deu certo, deu errado ou foi interrompido. Bloqueia (rede): fora da EDT.
+     *
+     * @return se a chave foi acrescentada agora ou já estava lá
+     * @throws FalhaDeEntradaPorSenha senha errada, servidor sem senha, host que mudou, sem impressão confirmada, sem login por chave, pausa do freio
+     */
+    public InstaladorDeChave.Resultado repararAChaveComSenha(ServidorLab lab, char[] senha, Consumer<EtapaDoPrimeiroAcesso> progresso)
+        throws FalhaDeEntradaPorSenha, CofreException, InterruptedException {
+        try {
+            ConfigServidor cfg = cofre.servidor(lab.id()).orElseThrow(() -> new IllegalArgumentException("Esse servidor não está mais na lista."));
+            if (cfg.ehLocal()) {
+                throw new IllegalArgumentException("Este computador não usa SSH nem chave.");
+            }
+            if (senha == null || senha.length == 0) {
+                throw new IllegalArgumentException("Digite a senha do usuário " + cfg.usuario() + " no servidor.");
+            }
+            if (cfg.pins().isEmpty()) {
+                throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_IMPRESSAO_CONFIRMADA, TEXTO_SEM_IMPRESSAO);
+            }
+            Dados dados = new Dados(cfg.nome(), cfg.host(), cfg.porta(), cfg.usuario(), cfg.portaAgente());
+            dados.validar();
+            ChaveSsh daVez = cofre.chaveSsh(cfg.chaveId()).orElseThrow(() -> new CofreException("A chave deste servidor não está no cofre."));
+            InstaladorDeChave.Resultado r;
+            try {
+                r = entrarInstalarEProvar(dados, daVez, cfg.pins(), senha, progresso);
+            } catch (FalhaDeEntradaPorSenha f) {
+                switch (f.motivo()) {
+                    case HOST_MUDOU -> throw new FalhaDeEntradaPorSenha(f.motivo(), TEXTO_DO_HOST_QUE_MUDOU, f);
+                    case SERVIDOR_SEM_SENHA -> throw new FalhaDeEntradaPorSenha(f.motivo(), TEXTO_SERVIDOR_SEM_SENHA, f);
+                    default -> throw f;
+                }
+            }
+            lab.tentarAgora(); // a prova passou: reconecta agora, sem esperar o intervalo do backoff
+            return r;
+        } finally {
+            Zeragem.zerar(senha);
+        }
+    }
+
+    /**
+     * O miolo do primeiro acesso, dividido pelo assistente de adicionar servidor e pelo reparo de um servidor que já existe: o freio das senhas, entrar com a senha (só
+     * se a chave do host bate com {@code pins}), instalar a chave e provar numa conexão nova. A senha é de quem chama, que a zera.
+     */
+    private InstaladorDeChave.Resultado entrarInstalarEProvar(Dados dados, ChaveSsh daVez, List<Pin> pins, char[] senha,
+                                                              Consumer<EtapaDoPrimeiroAcesso> progresso)
+        throws FalhaDeEntradaPorSenha, CofreException, InterruptedException {
+        String conta = LimiteDeTentativas.chave(dados.host(), dados.porta(), dados.usuario());
+        var pausa = limiteDeSenha.pausaRestante(conta);
+        if (pausa.isPresent()) {
+            throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.MUITAS_TENTATIVAS,
+                "Espere " + descreverEspera(pausa.get()) + " antes de tentar de novo: o servidor pode bloquear o seu endereço depois de várias senhas erradas."
+                    + (limiteDeSenha.restantes(conta) == 0 ? " O app já tentou " + MAXIMO_DE_SENHAS_RECUSADAS + " senhas nos últimos "
+                        + JANELA_DAS_SENHAS_RECUSADAS.toMinutes() + " minutos." : ""));
+        }
+        InstaladorDeChave.Resultado instalada;
+        List<String> permissoesRuins = List.of();
+        progresso.accept(EtapaDoPrimeiroAcesso.ENTRANDO);
+        try (SessaoComSenha sessao = abrirComSenha(dados, pins, senha, conta)) {
+            progresso.accept(EtapaDoPrimeiroAcesso.INSTALANDO);
+            instalada = InstaladorDeChave.instalar(sessao::executar, daVez.publica(), dados.portaDoAgente());
+            permissoesRuins = lerPermissoesRuins(sessao); // só lê; se a prova falhar, a frase diz o que o StrictModes pode estar recusando
+        } catch (IOException e) {
+            throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO,
+                "A conexão com o servidor caiu antes de a chave ser instalada. Confira a rede e tente de novo.", e);
+        }
+        progresso.accept(EtapaDoPrimeiroAcesso.PROVANDO);
+        try {
+            new ProvaPorChave(dados.host().strip(), dados.porta(), dados.usuario().strip(), daVez.paraKeyPair(), pins, cfgSsh).provar();
+        } catch (FalhaDeEntradaPorSenha f) {
+            if (f.motivo() == FalhaDeEntradaPorSenha.Motivo.SEM_LOGIN_POR_CHAVE && !permissoesRuins.isEmpty()) {
+                throw new FalhaDeEntradaPorSenha(f.motivo(), f.getMessage() + " Achei isto: " + String.join(" ", permissoesRuins), f);
+            }
+            throw f;
+        }
+        LOG.debug("Primeiro acesso: chave {} ({}).", daVez.id(), instalada);
+        return instalada;
     }
 
     /** A frase do motivo com o que o usuário precisa saber do freio: a partir da 2ª recusa, quantas tentativas restam e que o servidor pode bloquear o endereço. */
@@ -392,9 +468,9 @@ public final class AssistenteDeServidor {
         }
     }
 
-    private SessaoComSenha abrirComSenha(Dados dados, Pin pin, char[] senha, String conta) throws FalhaDeEntradaPorSenha {
+    private SessaoComSenha abrirComSenha(Dados dados, List<Pin> pins, char[] senha, String conta) throws FalhaDeEntradaPorSenha {
         try {
-            SessaoComSenha s = SessaoComSenha.abrir(dados.host().strip(), dados.porta(), dados.usuario().strip(), pin, senha, cfgSsh);
+            SessaoComSenha s = SessaoComSenha.abrir(dados.host().strip(), dados.porta(), dados.usuario().strip(), pins, senha, cfgSsh);
             Zeragem.zerar(senha); // já autenticou: a senha não serve mais a ninguém, nem ao resto da operação
             limiteDeSenha.registrarSucesso(conta);
             return s;

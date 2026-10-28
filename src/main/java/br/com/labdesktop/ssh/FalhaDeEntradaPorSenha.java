@@ -28,7 +28,9 @@ public final class FalhaDeEntradaPorSenha extends Exception {
         /** O comando que instala a chave não terminou bem. */
         FALHOU_AO_INSTALAR,
         /** Pausa de proteção: tentativas demais seguidas. */
-        MUITAS_TENTATIVAS
+        MUITAS_TENTATIVAS,
+        /** Um servidor que já existe e ainda não tem impressão digital confirmada: o app não manda senha a quem não conferiu. */
+        SEM_IMPRESSAO_CONFIRMADA
     }
 
     private final Motivo motivo;
