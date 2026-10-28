@@ -3,6 +3,7 @@ package br.com.labdesktop.ui;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.Pausado;
 import br.com.labdesktop.servidor.EstadoServidor;
+import br.com.labdesktop.servidor.SituacaoDoAgente;
 import br.com.labdesktop.ssh.Falha;
 import br.com.labdesktop.util.Formato;
 import java.time.Duration;
@@ -28,6 +29,8 @@ public final class ConteudoDosAvisos {
         DIGITAR_CODIGO("Digitar código"),
         CONFERIR_IMPRESSAO("Conferir impressão"),
         REGISTRAR_TOKEN("Registrar token"),
+        /** Abre a confirmação "Instalar agente" (o app nunca instala sozinho: é só o botão que leva ao diálogo). */
+        INSTALAR_AGENTE("Instalar agente"),
         /** Abre o diálogo "Remover servidor" (que pede confirmação): o caminho para quem reinstalou o servidor. */
         REMOVER_SERVIDOR("Remover servidor");
 
@@ -74,6 +77,13 @@ public final class ConteudoDosAvisos {
     public static final String TEXTO_DA_CHAVE_QUE_MUDOU = "Se você reinstalou o servidor, use \"Remover servidor\" e "
         + "adicione-o de novo para o app conferir a impressão digital outra vez. Se não reinstalou, não conecte: pode ser "
         + "outra máquina.";
+
+    /**
+     * O que o usuário lê, na faixa de aviso, no Resumo e no cartão do servidor, quando o SSH conecta e o agente não está instalado. É uma
+     * pergunta com resposta, não um erro: Segurança, Arquivos e Terminal funcionam do mesmo jeito.
+     */
+    public static final String TEXTO_DO_AGENTE_NAO_INSTALADO = "O servidor responde por SSH, mas o agente ainda não está instalado. "
+        + "Sem ele você não vê CPU, memória, containers nem projetos (Segurança e Arquivos já funcionam).";
 
     /** No máximo 3 nomes de sessões pausadas na faixa. */
     public static final int MAX_PAUSADAS = 3;
@@ -136,6 +146,14 @@ public final class ConteudoDosAvisos {
             case SSH_OK_SEM_AGENTE -> tipo == Falha.Tipo.AGENTE_DESATUALIZADO
                 ? new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente de " + nome + " é de antes do app nativo",
                     "Falta publicar o painel com o acesso.js: a rota /api/versao não existe lá (404).", List.of(Acao.TENTAR_AGORA))
+                : e.situacaoDoAgente() == SituacaoDoAgente.NAO_INSTALADO
+                ? new AvisoDeConexao(Gravidade.ATENCAO, "servidor", "O agente ainda não está instalado em " + nome,
+                    TEXTO_DO_AGENTE_NAO_INSTALADO, List.of(Acao.INSTALAR_AGENTE))
+                : e.situacaoDoAgente() == SituacaoDoAgente.SEM_PERMISSAO_NO_DOCKER
+                ? new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "Sem permissão no Docker de " + nome,
+                    "O servidor responde por SSH, mas este usuário não pode usar o Docker, então o app não sabe se o agente está instalado. "
+                        + "Clique em Instalar agente para ver o que falta e o comando exato para quem administra o servidor.",
+                    List.of(Acao.INSTALAR_AGENTE))
                 : new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente do painel em " + nome + " não responde",
                     "O SSH está de pé; o app insiste a cada poucos segundos (o painel pode estar reiniciando)." + detalhe,
                     List.of(Acao.TENTAR_AGORA));

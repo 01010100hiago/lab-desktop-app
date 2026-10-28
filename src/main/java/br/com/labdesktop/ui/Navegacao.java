@@ -85,6 +85,7 @@ public final class Navegacao extends Painel {
             FluxosDeProjeto fluxos = new FluxosDeProjeto(lab, avisos, apresentador, FluxosDeProjeto.liberadasPorPropriedade());
             TelaProjetos projetos = new TelaProjetos(lab, fluxos, navegador, acoes);
             TelaServidor t = new TelaServidor(lab, projetos, () -> acoes.atualizar(lab), servicosDeArquivos, escolhedor, preferencias);
+            t.aoInstalarAgente(() -> acoes.instalarAgente(lab));
             add(t, PREFIXO_DO_SERVIDOR + id);
             return t;
         });

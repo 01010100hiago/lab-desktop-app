@@ -295,6 +295,13 @@ public abstract class PaginaDoServidor extends Painel {
         }
     }
 
+    /** O que o botão "Instalar agente" do aviso faz (abre a confirmação; o app nunca instala sozinho). Sem isto, o aviso não leva o botão. */
+    public final void aoInstalarAgente(Runnable acao) {
+        faixaDeDados.definirAoInstalar(acao);
+        semDados.definirAoInstalar(acao);
+        redesenhar();
+    }
+
     /** Troca o relógio e o fuso (os testes fixam a hora para o "há 4 d" não variar). */
     final void relogio(Supplier<Instant> novo, ZoneId novoFuso) {
         this.relogio = novo;
@@ -435,18 +442,37 @@ public abstract class PaginaDoServidor extends Painel {
         private static final long serialVersionUID = 1L;
         private final Rotulo titulo = new Rotulo().negrito().tamanho(13f).truncavel();
         private final TextoCorrido texto = new TextoCorrido("", 600).tamanho(12.5f).corDoToken(Tokens.TEXTO2);
+        private final Botao instalar = Botoes.miniPrimario("Instalar agente", "servidor");
+        private Runnable aoInstalar;
 
         public FaixaDeDados() {
             super(new BorderLayout(0, 4));
             setBorder(javax.swing.BorderFactory.createEmptyBorder(9, 14, 9, 14));
             add(titulo, BorderLayout.NORTH);
             add(texto, BorderLayout.CENTER);
+            instalar.setVisible(false);
+            instalar.addActionListener(e -> {
+                if (aoInstalar != null) {
+                    aoInstalar.run();
+                }
+            });
+            add(Caixa.linha(0, instalar, Caixa.mola()), BorderLayout.SOUTH);
             setVisible(false);
             setName("faixa-de-dados");
         }
 
+        /** O que o botão Instalar agente faz (a tela que a usa). */
+        public void definirAoInstalar(Runnable acao) {
+            this.aoInstalar = acao;
+        }
+
+        public Botao botaoInstalar() {
+            return instalar;
+        }
+
         public void mostrar(SituacaoDaVisao s) {
             setVisible(s.temAviso());
+            instalar.setVisible(s.temAviso() && s.oferecerInstalar() && aoInstalar != null);
             if (!s.temAviso()) {
                 return;
             }
@@ -479,6 +505,8 @@ public abstract class PaginaDoServidor extends Painel {
         private final Rotulo titulo = new Rotulo().negrito().tamanho(15f);
         private final TextoCorrido texto = new TextoCorrido("", 520).corDoToken(Tokens.TEXTO2);
         private final Botao tentar;
+        private final Botao instalar = Botoes.primario("Instalar agente", "servidor");
+        private Runnable aoInstalar;
         private final String assunto;
 
         SemDados(Runnable aoTentar) {
@@ -495,12 +523,28 @@ public abstract class PaginaDoServidor extends Painel {
             tentar.addActionListener(e -> aoTentar.run());
             add(titulo, BorderLayout.NORTH);
             add(texto, BorderLayout.CENTER);
-            add(Caixa.linha(0, tentar, Caixa.mola()), BorderLayout.SOUTH);
+            instalar.setVisible(false);
+            instalar.addActionListener(e -> {
+                if (aoInstalar != null) {
+                    aoInstalar.run();
+                }
+            });
+            add(Caixa.linha(8, instalar, tentar, Caixa.mola()), BorderLayout.SOUTH);
             setVisible(false);
             setName("sem-dados");
         }
 
+        void definirAoInstalar(Runnable acao) {
+            this.aoInstalar = acao;
+        }
+
+        Botao botaoInstalar() {
+            return instalar;
+        }
+
         void mostrar(String erro, SituacaoDaVisao situacao) {
+            instalar.setVisible(erro == null && situacao != null && situacao.oferecerInstalar() && aoInstalar != null);
+            tentar.setVisible(!instalar.isVisible());
             titulo.setIcon(Icones.colorido("rede", 20, Tokens.TEXTO3));
             titulo.setIconTextGap(8);
             if (erro != null) {

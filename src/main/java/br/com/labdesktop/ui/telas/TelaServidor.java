@@ -87,6 +87,9 @@ public final class TelaServidor extends Painel {
     private final CardLayout cartoes = new CartoesAjustaveis();
     private final JPanel corpo = new Painel(cartoes);
     private Aba atual = Aba.RESUMO;
+    /** O servidor tem projetos, segundo o agente (desconhecido vale sim): sem projetos, a aba Projetos some. */
+    private boolean temProjetos = true;
+    private transient br.com.labdesktop.servidor.Inscricao inscricaoDoEstado;
 
     private static final String CARTAO_PAGINA = "pagina";
     private static final String CARTAO_PROJETO = "projeto";
@@ -164,10 +167,43 @@ public final class TelaServidor extends Painel {
         cartoes.show(corpo, Aba.RESUMO.id);
         projetos.aoAbrirProjeto(this::abrirProjeto);
         getAccessibleContext().setAccessibleName("Servidor");
+        if (servidor != null) {
+            inscricaoDoEstado = servidor.observarEstado(e -> aplicarRecursos(e.temProjetos()));
+        }
+    }
+
+    /**
+     * O que o agente diz que o servidor tem ({@code recursos} de {@code /api/versao}): sem projetos (o agente do perfil monitor), a aba
+     * Projetos não aparece e, se estava aberta, o Resumo a substitui. Desconhecido nunca esconde nada.
+     */
+    public void aplicarRecursos(boolean comProjetos) {
+        this.temProjetos = comProjetos;
+        abas.definirVisivel(Aba.PROJETOS.id, comProjetos);
+        if (!comProjetos && (atual == Aba.PROJETOS || projetoAberto != null)) {
+            mostrarAba(Aba.RESUMO);
+        }
+    }
+
+    /** A aba Projetos está disponível neste servidor? */
+    public boolean temProjetos() {
+        return temProjetos;
+    }
+
+    /**
+     * O que o botão "Instalar agente" dos avisos faz (as abas de dados mostram o aviso fixo "agente não instalado" com ele). O app só liga
+     * isto ao diálogo de confirmação: nunca instala sozinho.
+     */
+    public void aoInstalarAgente(Runnable acao) {
+        for (PaginaDoServidor p : new PaginaDoServidor[] {resumo, seguranca, containers, processos, maquina}) {
+            p.aoInstalarAgente(acao);
+        }
     }
 
     /** Mostra uma aba (e marca o rótulo). Se havia uma página de projeto aberta, ela fecha: o usuário pediu outro assunto. */
     public void mostrarAba(Aba aba) {
+        if (aba == Aba.PROJETOS && !temProjetos) {
+            aba = Aba.RESUMO; // atalho (Cmd+1) ou voltar da lista: sem projetos, a aba não existe
+        }
         fecharProjetoSemMostrar();
         atual = aba;
         abas.selecionar(aba.id);
@@ -326,6 +362,10 @@ public final class TelaServidor extends Painel {
 
     /** Solta as assinaturas de todas as abas (o servidor saiu da lista ou o cofre foi bloqueado). */
     public void soltar() {
+        if (inscricaoDoEstado != null) {
+            inscricaoDoEstado.close();
+            inscricaoDoEstado = null;
+        }
         resumo.soltar();
         seguranca.soltar();
         containers.soltar();

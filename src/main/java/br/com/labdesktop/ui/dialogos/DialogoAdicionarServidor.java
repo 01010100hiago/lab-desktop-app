@@ -3,6 +3,7 @@ package br.com.labdesktop.ui.dialogos;
 import br.com.labdesktop.cofre.ImportacaoDeChaveException;
 import br.com.labdesktop.cofre.InfoChave;
 import br.com.labdesktop.servidor.AssistenteDeServidor;
+import br.com.labdesktop.servidor.AssistenteDeServidor.Conclusao;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Dados;
 import br.com.labdesktop.servidor.AssistenteDeServidor.ErroDoAssistente;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Etapa;
@@ -38,6 +39,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
@@ -92,6 +94,15 @@ public final class DialogoAdicionarServidor extends Dialogo {
     public static final String TEXTO_DA_CHAVE = "O app cria uma chave só para este servidor e a guarda cifrada dentro do "
         + "cofre. Não existe arquivo para guardar nem senha extra para lembrar além da senha-mestra.";
 
+    /** A pergunta do último passo quando o SSH conectou e o servidor não tem o agente (sem a palavra "erro"). */
+    public static final String TEXTO_DA_PERGUNTA_DO_AGENTE = "O servidor está conectado por SSH, mas o agente ainda não está instalado "
+        + "nele. Quer instalar agora? Sem o agente você usa o servidor só por SSH (terminal, Segurança e Arquivos funcionam), mas não vê "
+        + "CPU, memória, containers nem projetos.";
+
+    /** O último passo quando o SSH conectou, o servidor não tem o agente e ESTE app não leva o pacote do agente (nada a perguntar). */
+    public static final String TEXTO_SEM_O_AGENTE_NO_APP = "O servidor está conectado por SSH. "
+        + br.com.labdesktop.instalador.PacoteDoAgenteAusenteException.TEXTO;
+
     /** A dica do campo "Porta do painel no servidor", a mesma no assistente e em "Editar servidor". */
     public static final String DICA_DA_PORTA_DO_PAINEL = "Deixe 7000, a não ser que o painel do servidor use outra porta.";
 
@@ -113,6 +124,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private final ConfirmadorDeHost confirmadorDeHost;
     private final SeletorDeArquivo seletorDeArquivo;
     private final CopiadorDeTexto copiador;
+    /** Abre a confirmação "Instalar agente" para o servidor; o {@code Runnable} roda (na EDT) se o agente ficou instalado. */
+    private final BiConsumer<ServidorLab, Runnable> instalarAgente;
 
     private final CardLayout paginas = new br.com.labdesktop.ui.componentes.CartoesAjustaveis();
     private final JPanel pilha = new Painel(paginas);
@@ -166,6 +179,10 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private final Botao substituirToken = Botoes.perigo("Substituir o token do servidor", "chave");
     private final Botao concluir = Botoes.primario("Concluir", "ok");
     private final Botao fecharConexao = Botoes.fantasma("Fechar", null);
+    /** O fim do passo 3 quando o SSH conectou e o agente não existe: uma pergunta, não um erro. */
+    private final Botao instalarOAgente = Botoes.primario("Instalar agente", "servidor");
+    private final Botao agoraNao = Botoes.secundario("Agora não, usar só por SSH", null);
+    private boolean perguntandoDoAgente;
     private ServidorLab lab;
     private Inscricao inscricaoDoEstado;
     private String nomeDoDispositivo = "mac";
@@ -191,7 +208,16 @@ public final class DialogoAdicionarServidor extends Dialogo {
     public DialogoAdicionarServidor(AssistenteDeServidor assistente, boolean primeiro, Notificacoes avisos,
                                     Consumer<ServidorLab> aoConcluir, ConfirmadorDeHost confirmadorDeHost,
                                     SeletorDeArquivo seletorDeArquivo, CopiadorDeTexto copiador) {
+        this(assistente, primeiro, avisos, aoConcluir, confirmadorDeHost, seletorDeArquivo, copiador, null);
+    }
+
+    /** Com o que abre a confirmação "Instalar agente" (a pergunta do último passo, quando o servidor não tem o agente). */
+    public DialogoAdicionarServidor(AssistenteDeServidor assistente, boolean primeiro, Notificacoes avisos,
+                                    Consumer<ServidorLab> aoConcluir, ConfirmadorDeHost confirmadorDeHost,
+                                    SeletorDeArquivo seletorDeArquivo, CopiadorDeTexto copiador,
+                                    BiConsumer<ServidorLab, Runnable> instalarAgente) {
         super("Adicionar servidor");
+        this.instalarAgente = instalarAgente != null ? instalarAgente : (lab, depois) -> { };
         this.assistente = assistente;
         this.avisos = avisos;
         this.aoConcluir = aoConcluir;
@@ -217,7 +243,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         pilha.add(montarPaginaDeConexao(), PAGINA_CONEXAO);
         pilhaDeRodapes.add(rodape(null, cancelar, continuar), PAGINA_DADOS);
         pilhaDeRodapes.add(rodape(voltar, cancelarNoPassoDaChave, testar), PAGINA_CHAVE);
-        pilhaDeRodapes.add(rodape(null, fecharConexao, substituirToken, tentarDeNovo, concluir), PAGINA_CONEXAO);
+        pilhaDeRodapes.add(rodape(null, fecharConexao, agoraNao, instalarOAgente, substituirToken, tentarDeNovo, concluir), PAGINA_CONEXAO);
         conteudoComRodape(pilha, pilhaDeRodapes);
 
         ligarEventos();
@@ -330,6 +356,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
             linhas.add(r);
         }
         substituirToken.setVisible(false);
+        instalarOAgente.setVisible(false);
+        agoraNao.setVisible(false);
         concluir.setEnabled(false);
         return Caixa.coluna(14,
             cabecalho("rede", "Conectar e registrar o token"),
@@ -367,6 +395,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
         substituirToken.addActionListener(e -> substituirOToken());
         concluir.addActionListener(e -> concluirDeVez());
         fecharConexao.addActionListener(e -> aoCancelar());
+        instalarOAgente.addActionListener(e -> instalarAgente.accept(lab, this::executarConclusao));
+        agoraNao.addActionListener(e -> concluirSoPorSsh());
     }
 
     private void mostrarPagina(String nomeDaPagina) {
@@ -472,6 +502,21 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     public Botao botaoSubstituirToken() {
         return substituirToken;
+    }
+
+    /** "Instalar agente", do fim do passo 3 quando o servidor não tem o agente. */
+    public Botao botaoInstalarAgente() {
+        return instalarOAgente;
+    }
+
+    /** "Agora não, usar só por SSH". */
+    public Botao botaoAgoraNao() {
+        return agoraNao;
+    }
+
+    /** O passo 3 está mostrando a pergunta "quer instalar o agente?" (e não um erro). */
+    public boolean perguntandoDoAgente() {
+        return perguntandoDoAgente;
     }
 
     public Botao botaoCopiarChave() {
@@ -928,6 +973,11 @@ public final class DialogoAdicionarServidor extends Dialogo {
                 r.corDoToken(Tokens.TEXTO3);
             }
         }
+        // O agente do perfil monitor não tem limites do plano: a linha "Lendo os limites" não se aplica a este servidor.
+        Rotulo limites = linhasDasEtapas.get(Etapa.LENDO_LIMITES);
+        if (limites != null && atual == Etapa.PRONTO && lab != null && Boolean.FALSE.equals(lab.estado().temClaude())) {
+            limites.setVisible(false);
+        }
     }
 
     private void marcarFalhaNaEtapaEmAndamento() {
@@ -942,22 +992,66 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private void executarConclusao() {
         mensagemDaConexao.setText("");
         substituirToken.setVisible(false);
+        instalarOAgente.setVisible(false);
+        agoraNao.setVisible(false);
+        perguntandoDoAgente = false;
         concluir.setEnabled(false);
         tentarDeNovo.setEnabled(false);
         instrucaoNaConexao.esconder();
         marcarEtapa(Etapa.CONECTANDO);
         reajustar();
-        Tarefas.rodar(() -> {
-            assistente.concluir(lab, nomeDoDispositivo, etapa -> br.com.labdesktop.util.Fundo.naEdt(() -> marcarEtapa(etapa)));
-            return Boolean.TRUE;
-        }, ok -> {
+        Tarefas.rodar(() -> assistente.concluir(lab, nomeDoDispositivo,
+            etapa -> br.com.labdesktop.util.Fundo.naEdt(() -> marcarEtapa(etapa))), conclusao -> {
+            if (conclusao == Conclusao.AGENTE_NAO_INSTALADO) {
+                perguntarSobreOAgente();
+                return;
+            }
             concluido = true;
             tentarDeNovo.setVisible(false);
             concluir.setEnabled(true);
-            mensagemDaConexao.setText("Tudo certo: o servidor respondeu, o token deste Mac está registrado e os limites do "
-                + "plano chegaram. Clique em Concluir para ver os projetos.");
+            boolean semClaude = Boolean.FALSE.equals(lab.estado().temClaude());
+            mensagemDaConexao.setText(semClaude
+                ? "Tudo certo: o servidor respondeu e o token deste Mac está registrado. Clique em Concluir para ver o servidor."
+                : "Tudo certo: o servidor respondeu, o token deste Mac está registrado e os limites do "
+                    + "plano chegaram. Clique em Concluir para ver os projetos.");
             reajustar();
         }, this::falhouAConclusao);
+    }
+
+    /**
+     * O SSH conectou e o servidor ainda não tem o agente. NÃO é erro: a tela pergunta, sem vermelho e sem a palavra "erro", e o usuário
+     * escolhe instalar (abre a confirmação) ou usar só por SSH (terminal, Segurança e Arquivos funcionam). O registro do token só roda
+     * depois que o agente existir.
+     */
+    private void perguntarSobreOAgente() {
+        perguntandoDoAgente = true;
+        marcarEtapa(Etapa.CONECTANDO);
+        for (Map.Entry<Etapa, Rotulo> par : linhasDasEtapas.entrySet()) {
+            if (par.getKey() == Etapa.CONECTANDO) {
+                par.getValue().setIcon(iconesDasEtapas.get(Etapa.CONECTANDO)[2]); // conectar deu certo
+                par.getValue().corDoToken(Tokens.TEXTO);
+            }
+        }
+        tentarDeNovo.setVisible(false);
+        concluir.setEnabled(false);
+        boolean comAgente = br.com.labdesktop.instalador.PacoteDoAgente.disponivel();
+        instalarOAgente.setVisible(comAgente);
+        agoraNao.setVisible(true);
+        mensagemDaConexao.setText(comAgente ? TEXTO_DA_PERGUNTA_DO_AGENTE : TEXTO_SEM_O_AGENTE_NO_APP);
+        botaoPadrao(comAgente ? instalarOAgente : agoraNao);
+        reajustar();
+    }
+
+    /** "Agora não, usar só por SSH": o servidor já está no cofre; fica o aviso fixo no cartão dele, com o botão Instalar agente. */
+    private void concluirSoPorSsh() {
+        if (lab == null) {
+            return;
+        }
+        concluido = true;
+        avisos.ok("Servidor " + lab.estado().nome() + " adicionado, só por SSH. Instale o agente quando quiser: o botão está no cartão do servidor.");
+        ServidorLab pronto = lab;
+        fechar();
+        aoConcluir.accept(pronto);
     }
 
     private void falhouAConclusao(Throwable falha) {

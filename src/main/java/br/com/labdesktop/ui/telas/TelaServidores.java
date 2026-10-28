@@ -19,6 +19,8 @@ import br.com.labdesktop.ui.componentes.Icones;
 import br.com.labdesktop.ui.componentes.Painel;
 import br.com.labdesktop.ui.componentes.Rotulo;
 import br.com.labdesktop.ui.componentes.Selo;
+import br.com.labdesktop.ui.componentes.TextoCorrido;
+import br.com.labdesktop.ui.ConteudoDosAvisos;
 import br.com.labdesktop.ui.tema.Tokens;
 import br.com.labdesktop.util.Formato;
 import java.awt.BorderLayout;
@@ -171,6 +173,10 @@ public final class TelaServidores extends Painel {
         private final Selo selo2fa = new Selo("2FA desligado", Gravidade.NEUTRO);
         private final Rotulo impressao = new Rotulo().mono(12f).corDoToken(Tokens.TEXTO2).truncavel();
         private final JPanel linhaDeAcoes = new Painel();
+        /** O aviso FIXO de "agente não instalado" (nunca uma janela que aparece sozinha): o botão Instalar agente está na linha de ações. */
+        private final TextoCorrido avisoDoAgente = new TextoCorrido("", 640).corDoToken(Tokens.TEXTO).tamanho(12.5f);
+        private final Rotulo tituloDoAvisoDoAgente = new Rotulo().negrito().tamanho(13f);
+        private final JPanel quadroDoAviso = new Painel(new BorderLayout(0, 4)).fundo(Tokens.ATENCAO_SUAVE).borda(Tokens.ATENCAO).raio(10);
         private final Inscricao inscricao;
         private List<Item> itensAtuais = List.of();
         private EstadoServidor ultimo;
@@ -200,7 +206,14 @@ public final class TelaServidores extends Painel {
             add(detalhes, BorderLayout.CENTER);
 
             linhaDeAcoes.setLayout(new BoxLayout(linhaDeAcoes, BoxLayout.X_AXIS));
-            add(linhaDeAcoes, BorderLayout.SOUTH);
+            quadroDoAviso.setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 12, 8, 12));
+            quadroDoAviso.add(tituloDoAvisoDoAgente, BorderLayout.NORTH);
+            quadroDoAviso.add(avisoDoAgente, BorderLayout.CENTER);
+            quadroDoAviso.setVisible(false);
+            JPanel embaixo = new Painel(new BorderLayout(0, 10));
+            embaixo.add(quadroDoAviso, BorderLayout.NORTH);
+            embaixo.add(linhaDeAcoes, BorderLayout.CENTER);
+            add(embaixo, BorderLayout.SOUTH);
             inscricao = lab.observarEstado(this::mostrar);
         }
 
@@ -236,6 +249,8 @@ public final class TelaServidores extends Painel {
             estadoDaConexao.setHorizontalAlignment(SwingConstants.RIGHT);
             String detalhe = e.falha() != null ? e.falha().mensagem()
                 : e.semConexaoDesde() != null ? "sem conexão desde " + Formato.fmtHora(e.semConexaoDesde()).substring(0, 5)
+                : e.versao() != null && e.versao().perfilMonitor()
+                    ? "agente monitor" + (e.versao().agente() == null ? "" : " " + e.versao().agente())
                 : e.versao() != null && e.versao().painel() != null ? "agente " + e.versao().painel() : "";
             detalheDoEstado.setText(detalhe);
             detalheDoEstado.setToolTipText(detalhe);
@@ -267,9 +282,32 @@ public final class TelaServidores extends Painel {
                 impressao.corDoToken(Tokens.TEXTO2);
             }
             getAccessibleContext().setAccessibleName("Servidor " + e.nome() + ", " + a.texto());
+            mostrarOAvisoDoAgente(e);
             reconstruirAcoes(e);
             revalidate();
             repaint();
+        }
+
+        /** "Agente não instalado": um aviso fixo no cartão, com o que falta e o que continua funcionando. O botão é o Instalar agente das ações. */
+        private void mostrarOAvisoDoAgente(EstadoServidor e) {
+            boolean oferecer = e.conexao() == br.com.labdesktop.ssh.EstadoConexao.SSH_OK_SEM_AGENTE && e.situacaoDoAgente().oferecerInstalar();
+            quadroDoAviso.setVisible(oferecer);
+            if (!oferecer) {
+                return;
+            }
+            boolean semPermissao = e.situacaoDoAgente() == br.com.labdesktop.servidor.SituacaoDoAgente.SEM_PERMISSAO_NO_DOCKER;
+            tituloDoAvisoDoAgente.setText(semPermissao ? "Sem permissão no Docker deste servidor" : "Agente não instalado");
+            tituloDoAvisoDoAgente.setIcon(Icones.colorido(semPermissao ? "alerta" : "servidor", 16, Tokens.ATENCAO));
+            tituloDoAvisoDoAgente.setIconTextGap(8);
+            tituloDoAvisoDoAgente.corDoToken(Tokens.ATENCAO);
+            avisoDoAgente.setText(semPermissao
+                ? "O servidor responde por SSH, mas este usuário não pode usar o Docker, então o app não sabe se o agente está instalado. "
+                    + "Clique em Instalar agente para ver o que falta e o comando exato para quem administra o servidor."
+                : ConteudoDosAvisos.TEXTO_DO_AGENTE_NAO_INSTALADO);
+        }
+
+        public String textoDoAvisoDoAgente() {
+            return quadroDoAviso.isVisible() ? tituloDoAvisoDoAgente.getText() + ": " + avisoDoAgente.getText() : "";
         }
 
         private void reconstruirAcoes(EstadoServidor e) {
@@ -288,9 +326,10 @@ public final class TelaServidores extends Painel {
                     depoisDaMola = true;
                     primeiro = true;
                 }
-                Botao b = i == Item.CONFERIR_IMPRESSAO || i == Item.REGISTRAR_TOKEN || i == Item.DIGITAR_CODIGO
+                Botao b = i == Item.CONFERIR_IMPRESSAO || i == Item.REGISTRAR_TOKEN || i == Item.DIGITAR_CODIGO || i == Item.INSTALAR_AGENTE
                     ? Botoes.miniPrimario(i.rotulo(), i.icone())
-                    : i == Item.REMOVER ? Botoes.miniPerigo(i.rotulo(), i.icone()) : Botoes.mini(i.rotulo(), i.icone());
+                    : i == Item.REMOVER || i == Item.REMOVER_AGENTE ? Botoes.miniPerigo(i.rotulo(), i.icone())
+                        : Botoes.mini(i.rotulo(), i.icone());
                 b.setName("acao-" + i.name());
                 b.addActionListener(ev -> MenuDoServidor.executar(i, lab, acoes));
                 if (!primeiro) {

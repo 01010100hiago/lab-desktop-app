@@ -95,7 +95,7 @@ public final class TelaProjetos extends Painel {
     private final CardLayout cartoes = new br.com.labdesktop.ui.componentes.CartoesAjustaveis();
     private final JPanel corpo = new Painel(cartoes);
     private final JPanel linhasPanel = new Painel();
-    private JComponent cabecalhoDeColunas;
+    private CabecalhoDeColunas cabecalhoDeColunas;
     private final Rotulo mensagemDeErro = new Rotulo().corDoToken(Tokens.TEXTO2);
     private final Timer relogioDaTela;
     private JScrollPane rolagemDaLista;
@@ -109,6 +109,8 @@ public final class TelaProjetos extends Painel {
     private final Set<String> retomando = new HashSet<>();
     private DetalheRaiz raiz;
     private Filtro filtro = Filtro.TODOS;
+    /** O servidor tem Claude, segundo o agente (desconhecido vale sim): sem Claude somem a coluna, os filtros e as frases dele. */
+    private boolean comClaude = true;
     private String termo = "";
     private boolean temDados;
     private String cartaoAtual = CARTAO_ESQUELETO;
@@ -325,14 +327,18 @@ public final class TelaProjetos extends Painel {
             limites.put("lab", raiz.limite());
         }
         this.modelos = novos;
+        refazerOResumo();
+        redesenhar();
+    }
+
+    private void refazerOResumo() {
         resumo.removeAll();
-        for (String parte : ListagemDeProjetos.partesDoResumo(projetos)) {
+        for (String parte : ListagemDeProjetos.partesDoResumo(projetos, comClaude)) {
             resumo.add(new Rotulo(parte).corDoToken(Tokens.TEXTO2).tamanho(12.5f));
         }
-        resumoEmTexto = ListagemDeProjetos.resumo(projetos);
+        resumoEmTexto = String.join(", ", ListagemDeProjetos.partesDoResumo(projetos, comClaude));
         resumo.revalidate();
         resumo.repaint();
-        redesenhar();
     }
 
     private void aoFalharConsulta(ErroApi erro) {
@@ -346,8 +352,32 @@ public final class TelaProjetos extends Painel {
     /** Recebe o estado do servidor (na EDT): alimenta a faixa de aviso e a barra de crédito. */
     public void aoMudarEstado(EstadoServidor e) {
         this.ultimoEstado = e;
+        boolean temClaude = !Boolean.FALSE.equals(e.temClaude());
+        if (temClaude != comClaude) {
+            comClaude = temClaude;
+            aplicarOClaude();
+        }
         faixa.atualizar(e);
         credito.atualizar(e.limites(), Instant.now(), ZoneId.systemDefault());
+    }
+
+    /** Mostra ou esconde tudo do Claude na lista: a coluna, os filtros "Com Claude" e "Pausados", as frases do resumo. */
+    private void aplicarOClaude() {
+        cabecalhoDeColunas.mostrarClaude(comClaude);
+        botoesDeFiltro.get(Filtro.COM_CLAUDE).setVisible(comClaude);
+        botoesDeFiltro.get(Filtro.PAUSADOS).setVisible(comClaude);
+        if (!comClaude && (filtro == Filtro.COM_CLAUDE || filtro == Filtro.PAUSADOS)) {
+            filtro = Filtro.TODOS;
+            botoesDeFiltro.get(Filtro.TODOS).setSelected(true);
+        }
+        linhas.values().forEach(l -> l.mostrarClaude(comClaude));
+        refazerOResumo();
+        redesenhar();
+    }
+
+    /** A lista mostra a coluna do Claude? (os testes) */
+    public boolean mostraOClaude() {
+        return comClaude;
     }
 
     private void reavaliarComOTempo() {
@@ -421,6 +451,7 @@ public final class TelaProjetos extends Painel {
         for (LinhaDeProjeto m : visiveis) {
             LinhaProjetoVisual l = linhas.computeIfAbsent(m.nome(),
                 n -> new LinhaProjetoVisual(fluxos, navegador, fluxos::enviarCodigoDeLogin, this::abrirProjeto));
+            l.mostrarClaude(comClaude);
             l.atualizar(m, limiteDe(m.nome()));
             ordem.add(l);
         }
@@ -514,6 +545,16 @@ public final class TelaProjetos extends Painel {
     private static final class CabecalhoDeColunas extends Painel {
         private static final long serialVersionUID = 1L;
 
+        private Component celulaDoClaude;
+
+        void mostrarClaude(boolean sim) {
+            if (celulaDoClaude != null) {
+                celulaDoClaude.setVisible(sim);
+                revalidate();
+                repaint();
+            }
+        }
+
         CabecalhoDeColunas(boolean acoesLiberadas) {
             super(new GridBagLayout());
             fundo(Tokens.SUPERFICIE2);
@@ -534,7 +575,11 @@ public final class TelaProjetos extends Painel {
                     r.setToolTipText("US$ equivalente de API dos últimos 7 dias. Embaixo: a fatia estimada da semana do plano "
                         + "contra o limite do projeto.");
                 }
-                add(ColunasDaLista.celula(c, r), ColunasDaLista.restricoes(c));
+                Component celula = ColunasDaLista.celula(c, r);
+                if (c == Coluna.CLAUDE) {
+                    celulaDoClaude = celula;
+                }
+                add(celula, ColunasDaLista.restricoes(c));
             }
             getAccessibleContext().setAccessibleName("Colunas da lista de projetos");
         }

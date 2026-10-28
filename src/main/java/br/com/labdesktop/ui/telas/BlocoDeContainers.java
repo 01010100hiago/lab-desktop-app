@@ -26,6 +26,7 @@ final class BlocoDeContainers extends CaixaDoServidor {
     private String textoDoResumo = FormatosDoServidor.SEM_DADO;
     private final Rotulo espaco = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f).truncavel();
     private final Rotulo apoio = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f);
+    private final Rotulo tituloDasSessoes = new Rotulo("SESSÕES DO CLAUDE ABERTAS").corDoToken(Tokens.TEXTO3).negrito().tamanho(10.5f);
     private final TabelaDeLinhas sessoes = new TabelaDeLinhas(new Coluna("Projeto", 1.0, false, false),
         new Coluna("Container", 1.4, false, true), new Coluna("Aberta desde", 1.3, false, false),
         new Coluna("CPU", 0.4, true, false), new Coluna("Memória", 0.5, true, false));
@@ -35,12 +36,22 @@ final class BlocoDeContainers extends CaixaDoServidor {
         apoio(apoio);
         linha(ficha, 0);
         linha(espaco, 4);
-        linha(new Rotulo("SESSÕES DO CLAUDE ABERTAS").corDoToken(Tokens.TEXTO3).negrito().tamanho(10.5f), 14);
+        linha(tituloDasSessoes, 14);
         linha(sessoes, 6);
         atualizar(null, Instant.now(), ZoneId.systemDefault());
     }
 
     void atualizar(InfoServidor info, Instant agora, ZoneId fuso) {
+        atualizar(info, agora, fuso, true);
+    }
+
+    /**
+     * @param comClaude {@code false} num servidor sem Claude (o agente do perfil monitor): sem a tabela das sessões e sem a palavra "Claude" no título
+     */
+    void atualizar(InfoServidor info, Instant agora, ZoneId fuso, boolean comClaude) {
+        trocarTitulo(comClaude ? "Containers e sessões do Claude" : "Containers");
+        tituloDasSessoes.setVisible(comClaude);
+        sessoes.setVisible(comClaude);
         DockerInfo d = info == null ? null : info.docker();
         if (d == null || d.rodando() == null) {
             textoDoResumo = FormatosDoServidor.SEM_DADO;

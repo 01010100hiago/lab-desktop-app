@@ -70,15 +70,22 @@ public final class ListagemDeProjetos {
 
     /** O resumo como itens SEPARADOS: {@code 7 projetos}, {@code 4 no ar}, {@code 2 com Claude aberto} e, se houver, {@code 1 pausado}. */
     public static List<String> partesDoResumo(List<Projeto> projetos) {
+        return partesDoResumo(projetos, true);
+    }
+
+    /** Sem Claude no servidor ({@code comClaude} falso) o resumo não fala de sessões nem de pausas. */
+    public static List<String> partesDoResumo(List<Projeto> projetos, boolean comClaude) {
         int total = projetos.size();
         long rodando = projetos.stream().filter(p -> Boolean.TRUE.equals(p.rodando())).count();
-        long comClaude = projetos.stream().filter(Projeto::temSessaoClaude).count();
+        long comClaudeAberto = projetos.stream().filter(Projeto::temSessaoClaude).count();
         long pausados = projetos.stream().filter(Projeto::pausado).count();
         List<String> partes = new ArrayList<>();
         partes.add(total + (total == 1 ? " projeto" : " projetos"));
         partes.add(rodando + " no ar");
-        partes.add(comClaude + " com Claude aberto");
-        if (pausados > 0) {
+        if (comClaude) {
+            partes.add(comClaudeAberto + " com Claude aberto");
+        }
+        if (comClaude && pausados > 0) {
             partes.add(pausados + (pausados == 1 ? " pausado" : " pausados"));
         }
         return partes;

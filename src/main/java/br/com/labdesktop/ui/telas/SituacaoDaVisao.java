@@ -18,11 +18,18 @@ import java.time.ZoneId;
  * @param titulo    a frase de cima; vazia se não há aviso
  * @param texto     a explicação, em palavras simples
  * @param esmaecer  os dados na tela são antigos: mostrar apagados, com o aviso dizendo de quando são
+ * @param oferecerInstalar o aviso leva o botão "Instalar agente" (o servidor não tem o agente; nunca se instala sozinho)
  */
-public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, String titulo, String texto, boolean esmaecer) {
+public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, String titulo, String texto, boolean esmaecer,
+                              boolean oferecerInstalar) {
 
-    /** As situações. */
-    public enum Modo { CARREGANDO, NORMAL, SEM_CONEXAO_COM_DADOS, SEM_CONEXAO_SEM_DADOS, SEM_AGENTE_COM_DADOS, SEM_AGENTE_SEM_DADOS }
+    /** As situações. {@code AGENTE_NAO_INSTALADO}: o SSH conectou e a leitura por SSH disse que o agente não existe (uma pergunta, não um erro). */
+    public enum Modo { CARREGANDO, NORMAL, SEM_CONEXAO_COM_DADOS, SEM_CONEXAO_SEM_DADOS, SEM_AGENTE_COM_DADOS, SEM_AGENTE_SEM_DADOS,
+        AGENTE_NAO_INSTALADO }
+
+    public SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, String titulo, String texto, boolean esmaecer) {
+        this(modo, gravidade, icone, titulo, texto, esmaecer, false);
+    }
 
     private static final SituacaoDaVisao NORMAL = new SituacaoDaVisao(Modo.NORMAL, Gravidade.NEUTRO, null, "", "", false);
     private static final SituacaoDaVisao CARREGANDO = new SituacaoDaVisao(Modo.CARREGANDO, Gravidade.NEUTRO, null, "", "", false);
@@ -55,6 +62,17 @@ public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, Stri
         }
         if (c == EstadoConexao.CONECTANDO && !temDados) {
             return CARREGANDO;
+        }
+        if (c == EstadoConexao.SSH_OK_SEM_AGENTE && estado.situacaoDoAgente().oferecerInstalar()
+            && (estado.falha() == null || estado.falha().tipo() != Falha.Tipo.AGENTE_DESATUALIZADO)) {
+            boolean semPermissao = estado.situacaoDoAgente() == br.com.labdesktop.servidor.SituacaoDoAgente.SEM_PERMISSAO_NO_DOCKER;
+            return new SituacaoDaVisao(Modo.AGENTE_NAO_INSTALADO, Gravidade.ATENCAO, "servidor",
+                semPermissao ? "Sem permissão no Docker deste servidor" : "O agente ainda não está instalado neste servidor",
+                semPermissao
+                    ? "O servidor responde por SSH, mas este usuário não pode usar o Docker, então o app não sabe se o agente está "
+                        + "instalado. Clique em Instalar agente para ver o que falta e o comando exato para quem administra o servidor."
+                    : ConteudoDosAvisos.TEXTO_DO_AGENTE_NAO_INSTALADO,
+                temDados, true); // com dados antigos (o agente acabou de ser removido), eles aparecem esmaecidos
         }
         if (c == EstadoConexao.SSH_OK_SEM_AGENTE) {
             Falha.Tipo tipo = estado.falha() == null ? null : estado.falha().tipo();

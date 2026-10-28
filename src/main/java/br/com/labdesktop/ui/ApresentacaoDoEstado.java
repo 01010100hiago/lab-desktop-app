@@ -1,6 +1,7 @@
 package br.com.labdesktop.ui;
 
 import br.com.labdesktop.servidor.EstadoServidor;
+import br.com.labdesktop.servidor.SituacaoDoAgente;
 import br.com.labdesktop.ssh.Falha;
 
 /**
@@ -25,7 +26,11 @@ public final class ApresentacaoDoEstado {
                 : new Apresentacao("Conectado", "ok-circulo", Gravidade.OK);
             case SSH_OK_SEM_AGENTE -> falha == Falha.Tipo.AGENTE_DESATUALIZADO
                 ? new Apresentacao("Agente desatualizado", "alerta", Gravidade.ATENCAO)
-                : new Apresentacao("Agente não responde", "alerta", Gravidade.ATENCAO);
+                : e.situacaoDoAgente() == SituacaoDoAgente.NAO_INSTALADO
+                    ? new Apresentacao("Agente não instalado", "servidor", Gravidade.ATENCAO)
+                    : e.situacaoDoAgente() == SituacaoDoAgente.SEM_PERMISSAO_NO_DOCKER
+                        ? new Apresentacao("Sem permissão no Docker", "alerta", Gravidade.ATENCAO)
+                        : new Apresentacao("Agente não responde", "alerta", Gravidade.ATENCAO);
             case RECONECTANDO -> new Apresentacao(
                 e.tentativa() > 0 ? "Reconectando (" + e.tentativa() + ")" : "Reconectando", "atualizar", Gravidade.ATENCAO);
             case ERRO_AUTENTICACAO -> new Apresentacao("Chave recusada", "chave", Gravidade.PERIGO);

@@ -29,6 +29,12 @@ public final class MenuDoServidor {
         REGISTRAR_TOKEN("Registrar o token deste Mac…", "chave"),
         CONFIGURAR_2FA("Configurar 2FA…", "chave"),
         DESATIVAR_2FA("Desativar 2FA…", "chave"),
+        /** O servidor responde por SSH e não tem o agente: abre a confirmação (nada se instala sem o clique e a confirmação). */
+        INSTALAR_AGENTE("Instalar agente…", "servidor"),
+        /** Só com o agente do perfil monitor que o app instalou: instala a versão nova do pacote, mantendo dados e token. */
+        ATUALIZAR_AGENTE("Atualizar agente…", "atualizar"),
+        /** Só com o agente do perfil monitor que o app instalou: remove o que o app criou (o Docker fica). */
+        REMOVER_AGENTE("Remover agente…", "lixeira"),
         /** Nome, endereço, porta e usuário do servidor. Sempre disponível. */
         EDITAR("Editar…", "config"),
         /** Tira o servidor do app (com as opções de apagar a chave e revogar o acesso). Sempre disponível. */
@@ -74,6 +80,14 @@ public final class MenuDoServidor {
         if (c.permiteExec() || c == EstadoConexao.CONECTADO) {
             itens.add(e.estado2fa() == Estado2fa.ATIVO ? Item.DESATIVAR_2FA : Item.CONFIGURAR_2FA);
         }
+        if (c == EstadoConexao.SSH_OK_SEM_AGENTE && e.situacaoDoAgente().oferecerInstalar()) {
+            itens.add(Item.INSTALAR_AGENTE);
+        }
+        if (c == EstadoConexao.CONECTADO && e.agenteDoMonitor()) {
+            // Só o agente do PERFIL MONITOR (o que o app instala) se atualiza e se remove daqui: o agente do lab, de produção, nunca.
+            itens.add(Item.ATUALIZAR_AGENTE);
+            itens.add(Item.REMOVER_AGENTE);
+        }
         // Editar e remover valem em QUALQUER estado: é justamente quando a conexão está quebrada (endereço errado, host
         // trocado) que o usuário precisa deles.
         itens.add(Item.EDITAR);
@@ -90,6 +104,9 @@ public final class MenuDoServidor {
             case DIGITAR_CODIGO -> acoes.digitarCodigo(lab);
             case REGISTRAR_TOKEN -> acoes.registrarToken(lab);
             case CONFIGURAR_2FA, DESATIVAR_2FA -> acoes.configurar2fa(lab);
+            case INSTALAR_AGENTE -> acoes.instalarAgente(lab);
+            case ATUALIZAR_AGENTE -> acoes.atualizarAgente(lab);
+            case REMOVER_AGENTE -> acoes.removerAgente(lab);
             case EDITAR -> acoes.editar(lab);
             case REMOVER -> acoes.remover(lab);
         }
@@ -111,7 +128,7 @@ public final class MenuDoServidor {
         JMenuItem m = new JMenuItem(i.rotulo());
         m.putClientProperty("html.disable", Boolean.TRUE);
         m.setIcon(Icones.de(i.icone(), 14));
-        m.setForeground(Tokens.cor(i == Item.REMOVER ? Tokens.PERIGO : Tokens.TEXTO));
+        m.setForeground(Tokens.cor(i == Item.REMOVER || i == Item.REMOVER_AGENTE ? Tokens.PERIGO : Tokens.TEXTO));
         m.addActionListener(e -> acao.run());
         return m;
     }

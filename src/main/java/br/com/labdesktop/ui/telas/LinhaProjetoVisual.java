@@ -110,6 +110,9 @@ final class LinhaProjetoVisual extends Painel {
     private final JComponent celulaDoConsumo;
     private final JComponent celulaDaUrl;
     private final JComponent celulaDoClaude;
+    /** A célula inteira da coluna do Claude (some quando o servidor não tem Claude). */
+    private final JComponent celulaDaColunaDoClaude;
+    private boolean comClaude = true;
     private final JPanel grade = new Painel(new GridBagLayout());
 
     LinhaProjetoVisual(FluxosDeProjeto fluxos, Navegador navegador, BiConsumer<String, String> enviarCodigoDeLogin) {
@@ -147,7 +150,8 @@ final class LinhaProjetoVisual extends Painel {
         grade.add(ColunasDaLista.celula(Coluna.RECURSOS, colunaADireita(3, cpu, memoria)), ColunasDaLista.restricoes(Coluna.RECURSOS));
         grade.add(ColunasDaLista.celula(Coluna.CONSUMO, celulaDoConsumo), ColunasDaLista.restricoes(Coluna.CONSUMO));
         grade.add(ColunasDaLista.celula(Coluna.CODIGO, Caixa.coluna(3, git, gitSujo, celulaDaUrl)), ColunasDaLista.restricoes(Coluna.CODIGO));
-        grade.add(ColunasDaLista.celula(Coluna.CLAUDE, celulaDoClaude), ColunasDaLista.restricoes(Coluna.CLAUDE));
+        celulaDaColunaDoClaude = ColunasDaLista.celula(Coluna.CLAUDE, celulaDoClaude);
+        grade.add(celulaDaColunaDoClaude, ColunasDaLista.restricoes(Coluna.CLAUDE));
         grade.add(ColunasDaLista.celula(Coluna.ACOES, Caixa.linha(4, botaoCompose, botaoAbrirClaude, botaoMenu)),
             ColunasDaLista.restricoes(Coluna.ACOES));
         add(grade, BorderLayout.CENTER);
@@ -401,7 +405,7 @@ final class LinhaProjetoVisual extends Painel {
         botaoCompose.setIcon(Icones.de(parar ? "parar" : "play", 14));
         botaoCompose.setToolTipText((parar ? "Parar " : "Iniciar ") + m.nome());
         botaoCompose.getAccessibleContext().setAccessibleName((parar ? "Parar " : "Iniciar ") + m.nome());
-        botaoAbrirClaude.setVisible(acoes && m.oferecerAbrirClaude());
+        botaoAbrirClaude.setVisible(comClaude && acoes && m.oferecerAbrirClaude());
         botaoAbrirClaude.setToolTipText("Abrir Claude em " + m.nome());
         botaoAbrirClaude.getAccessibleContext().setAccessibleName("Abrir Claude em " + m.nome());
         botaoMenu.setVisible(acoes && m.temMenu());
@@ -411,6 +415,20 @@ final class LinhaProjetoVisual extends Painel {
         friso(m.temAlerta() ? 3 : 0, Tokens.ATENCAO);
         tituloDoLogin.setText("Login do Claude pendente — " + m.nome());
         getAccessibleContext().setAccessibleName("Projeto " + m.nome());
+        revalidate();
+        repaint();
+    }
+
+    /** O servidor tem Claude? Sem ele a coluna do Claude e o botão Abrir Claude somem da linha. */
+    void mostrarClaude(boolean sim) {
+        if (sim == comClaude) {
+            return;
+        }
+        comClaude = sim;
+        celulaDaColunaDoClaude.setVisible(sim);
+        if (!sim) {
+            botaoAbrirClaude.setVisible(false);
+        }
         revalidate();
         repaint();
     }

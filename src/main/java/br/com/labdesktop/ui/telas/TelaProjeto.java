@@ -419,6 +419,12 @@ public final class TelaProjeto extends Painel {
 
     private void redesenhar() {
         atualizarCabecalho();
+        // Servidor sem Claude: não há consumo nem limite do plano a mostrar, então a aba some (e, se estava aberta, a Visão geral a substitui).
+        boolean semClaude = (ctx.estado != null && Boolean.FALSE.equals(ctx.estado.temClaude())) || (ctx.detalhe != null && !ctx.temClaude());
+        abas.definirVisivel(Aba.CONSUMO.id, !semClaude);
+        if (semClaude && atual == Aba.CONSUMO) {
+            mostrarAba(Aba.VISAO_GERAL);
+        }
         paginas.values().forEach(PaginaDoProjeto::redesenhar);
         // o contador de backups mora no rótulo da aba, como na web
         abas.rotulo(Aba.BACKUPS.id, ctx.detalhe == null ? Aba.BACKUPS.rotulo

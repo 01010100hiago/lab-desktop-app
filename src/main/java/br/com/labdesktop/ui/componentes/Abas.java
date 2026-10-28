@@ -147,10 +147,28 @@ public final class Abas extends Painel {
     private void vizinha(String id, int passo) {
         java.util.List<String> ids = new java.util.ArrayList<>(botoes.keySet());
         int i = ids.indexOf(id) + passo;
+        while (i >= 0 && i < ids.size() && !botoes.get(ids.get(i)).isVisible()) {
+            i += passo; // pula as abas escondidas (o servidor não tem o recurso)
+        }
         if (i >= 0 && i < ids.size()) {
             selecionar(ids.get(i), true);
             botoes.get(ids.get(i)).requestFocusInWindow();
         }
+    }
+
+    /** Mostra ou esconde uma aba (o servidor não tem o recurso: sem projetos, sem aba Projetos). A escolha não muda aqui. */
+    public void definirVisivel(String id, boolean visivel) {
+        JToggleButton b = botoes.get(id);
+        if (b != null && b.isVisible() != visivel) {
+            b.setVisible(visivel);
+            revalidate();
+            repaint();
+        }
+    }
+
+    public boolean visivel(String id) {
+        JToggleButton b = botoes.get(id);
+        return b != null && b.isVisible();
     }
 
     /** Tira uma aba (o editor que fechou). Se era a escolhida, a escolha vai para {@code paraOnde} (e o ouvinte é avisado). */

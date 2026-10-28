@@ -17,15 +17,20 @@ import java.util.List;
  * quais botões fazem sentido agora e a linha de até cinco indicadores. Puro (sem Swing, sem relógio: "há 3 d" se calcula na
  * hora de mostrar), então cada regra tem teste. É o par, para o detalhe, do {@link LinhaDeProjeto} (que serve à lista).
  *
- * @param detalhe o detalhe do projeto como o agente mandou
+ * @param detalhe          o detalhe do projeto como o agente mandou
+ * @param claudeDoServidor {@code recursos.claude} de {@code /api/versao} ({@code null}: o agente não diz; vale a presença de {@code sessao})
  */
-public record ModeloDoProjeto(DetalheProjeto detalhe) {
+public record ModeloDoProjeto(DetalheProjeto detalhe, Boolean claudeDoServidor) {
 
     /** A linha de indicadores tem até cinco: estado, containers, CPU, memória e consumo da semana. */
     public static final int MAXIMO_DE_INDICADORES = 5;
 
     public static ModeloDoProjeto de(DetalheProjeto detalhe) {
-        return new ModeloDoProjeto(detalhe);
+        return new ModeloDoProjeto(detalhe, null);
+    }
+
+    public static ModeloDoProjeto de(DetalheProjeto detalhe, Boolean claudeDoServidor) {
+        return new ModeloDoProjeto(detalhe, claudeDoServidor);
     }
 
     public String nome() {
@@ -88,12 +93,12 @@ public record ModeloDoProjeto(DetalheProjeto detalhe) {
     }
 
     /**
-     * O servidor sabe de sessões do Claude: o detalhe traz o objeto {@code sessao} (aberta ou não). Sem ele (um servidor sem Claude)
-     * o app não mostra nada do Claude. Hoje o agente do lab sempre o traz; um agente sem Claude devolve {@code sessao: null}
-     * (ARQUITETURA 7.8).
+     * O servidor tem sessões do Claude. O agente diz em {@code recursos.claude} de {@code /api/versao}; sem isso (agente antigo) vale o
+     * detalhe: o objeto {@code sessao} (aberta ou não). Sem Claude o app não mostra nada dele. Hoje o agente do lab sempre traz
+     * {@code sessao}; um agente sem Claude devolve {@code sessao: null} (ARQUITETURA 7.8).
      */
     public boolean temClaude() {
-        return detalhe.sessao() != null;
+        return claudeDoServidor != null ? claudeDoServidor : detalhe.sessao() != null;
     }
 
     public boolean sessaoAberta() {
@@ -171,8 +176,11 @@ public record ModeloDoProjeto(DetalheProjeto detalhe) {
 
     /** Os cinco indicadores da Visão geral, nesta ordem: estado, containers, CPU, memória e consumo da semana. */
     public List<Kpi> indicadores() {
-        return List.of(indicadorDoEstado(), indicadorDeContainers(), indicadorDeCpu(), indicadorDeMemoria(),
-            indicadorDeConsumo());
+        List<Kpi> todos = new java.util.ArrayList<>(List.of(indicadorDoEstado(), indicadorDeContainers(), indicadorDeCpu(), indicadorDeMemoria()));
+        if (temClaude()) {
+            todos.add(indicadorDeConsumo()); // sem Claude não há consumo nem limite do plano
+        }
+        return List.copyOf(todos);
     }
 
     private Kpi indicadorDoEstado() {

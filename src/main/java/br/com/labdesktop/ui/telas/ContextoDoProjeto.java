@@ -63,15 +63,20 @@ final class ContextoDoProjeto {
 
     /** O detalhe já tratado, ou {@code null} antes da primeira leitura. */
     ModeloDoProjeto modelo() {
-        return detalhe == null ? null : ModeloDoProjeto.de(detalhe);
+        return detalhe == null ? null : ModeloDoProjeto.de(detalhe, estado == null ? null : estado.temClaude());
     }
 
     /**
-     * O servidor tem sessões do Claude. Desconhecido (sem detalhe e sem o que o agente diz de si) vale como NÃO: o app mostra só o
-     * shell, que é SSH puro e nunca depende de saber.
+     * O servidor tem sessões do Claude: o que o agente diz em {@code recursos.claude} de {@code /api/versao}; sem isso (agente antigo), a
+     * presença do objeto {@code sessao} no detalhe. Desconhecido (sem recursos e sem detalhe) vale como NÃO: o app mostra só o shell, que
+     * é SSH puro e nunca depende de saber.
      */
     boolean temClaude() {
-        return detalhe != null && detalhe.sessao() != null;
+        Boolean doAgente = estado == null ? null : estado.temClaude(); // recursos.claude de /api/versao, quando o agente diz
+        if (doAgente != null) {
+            return doAgente;
+        }
+        return detalhe != null && detalhe.sessao() != null; // agente antigo: como antes, pela presença da sessão no detalhe
     }
 
     Instant agora() {

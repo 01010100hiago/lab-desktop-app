@@ -40,7 +40,7 @@ public final class PaginaContainers extends PaginaDoServidor {
 
     @Override
     void atualizarConteudo() {
-        bloco.atualizar(info, agora(), fuso());
+        bloco.atualizar(info, agora(), fuso(), estado == null || !Boolean.FALSE.equals(estado.temClaude()));
     }
 
     BlocoDeContainers bloco() {

@@ -5,13 +5,16 @@ import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.EstadoServidor;
 import br.com.labdesktop.servidor.GerenciadorServidores;
 import br.com.labdesktop.servidor.ServidorLab;
+import br.com.labdesktop.instalador.PacoteDoAgente;
 import br.com.labdesktop.ssh.EstadoConexao;
 import br.com.labdesktop.ui.ConteudoDosAvisos.Acao;
+import br.com.labdesktop.ui.componentes.CopiadorDeTexto;
 import br.com.labdesktop.ui.componentes.Notificacoes;
 import br.com.labdesktop.ui.dialogos.Apresentador;
 import br.com.labdesktop.ui.dialogos.Configurar2fa;
 import br.com.labdesktop.ui.dialogos.DialogoAdicionarServidor;
 import br.com.labdesktop.ui.dialogos.DialogoConfiarHost;
+import br.com.labdesktop.ui.dialogos.DialogoDoAgente;
 import br.com.labdesktop.ui.dialogos.DialogoEditarServidor;
 import br.com.labdesktop.ui.dialogos.DialogoRegistrarToken;
 import br.com.labdesktop.ui.dialogos.DialogoRemoverServidor;
@@ -23,7 +26,8 @@ import java.util.function.Consumer;
  * servidores, o menu do app, a faixa de aviso e a tela de servidores chamam estes mesmos métodos. Cada um abre o
  * diálogo certo ou dispara a tarefa; o trabalho de rede e de SSH roda fora da EDT ({@link Tarefas}).
  *
- * <p>O "Configurar 2FA" vive no menu de contexto do servidor, no menu do app e na tela Servidor (ARQUITETURA 8.3).
+ * <p>Na fase 1 o "Configurar 2FA" vive no menu de contexto do servidor e no menu do app (ARQUITETURA 8.3): a tela
+ * Servidor, com o botão, é da fase 2.
  */
 public final class AcoesDaInterface {
 
@@ -45,10 +49,48 @@ public final class AcoesDaInterface {
         this.aoSelecionar = aoSelecionar;
     }
 
-    /** "Adicionar servidor": o assistente. Na primeira vez os campos vêm vazios, com a porta SSH 22. */
+    /** "Adicionar servidor": o assistente. O lab da casa já vem preenchido na primeira vez. */
     public void adicionarServidor() {
         boolean primeiro = gerenciador.servidores().isEmpty();
-        apresentador.mostrar(new DialogoAdicionarServidor(assistente, primeiro, avisos, aoSelecionar));
+        apresentador.mostrar(new DialogoAdicionarServidor(assistente, primeiro, avisos, aoSelecionar, null, null,
+            CopiadorDeTexto.doSistema(), this::instalarAgente));
+    }
+
+    /**
+     * "Instalar agente": abre a CONFIRMAÇÃO (com o nome do servidor no botão). Só o clique do usuário chega aqui: o app nunca instala,
+     * atualiza nem remove o agente sozinho, nem ao conectar, nem ao abrir, nem em segundo plano.
+     */
+    public void instalarAgente(ServidorLab lab) {
+        instalarAgente(lab, () -> { });
+    }
+
+    /** Como {@link #instalarAgente(ServidorLab)}, e {@code aoInstalar} roda (na EDT) se o agente ficou instalado (o assistente de adicionar servidor continua). */
+    public void instalarAgente(ServidorLab lab, Runnable aoInstalar) {
+        abrirDialogoDoAgente(lab, DialogoDoAgente.Acao.INSTALAR, aoInstalar);
+    }
+
+    /** "Atualizar agente": a confirmação; instala a versão nova do pacote do app por cima, mantendo os dados e o token. */
+    public void atualizarAgente(ServidorLab lab) {
+        abrirDialogoDoAgente(lab, DialogoDoAgente.Acao.ATUALIZAR, () -> { });
+    }
+
+    /** "Remover agente": a confirmação; tira do servidor o que o app instalou (o Docker fica). */
+    public void removerAgente(ServidorLab lab) {
+        abrirDialogoDoAgente(lab, DialogoDoAgente.Acao.REMOVER, () -> { });
+    }
+
+    private void abrirDialogoDoAgente(ServidorLab lab, DialogoDoAgente.Acao acao, Runnable aoMudar) {
+        EstadoServidor e = lab.estado();
+        // O pacote vem do jar (leitura de recurso): fora da EDT.
+        Tarefas.rodar(PacoteDoAgente::doClasspath, pacote -> {
+            DialogoDoAgente.Alvo alvo = new DialogoDoAgente.Alvo(e.nome(), lab.config().portaAgente(),
+                e.versao() == null ? null : e.versao().agente());
+            DialogoDoAgente dialogo = new DialogoDoAgente(acao, alvo, pacote, p -> lab.instaladorDoAgente(p, pacote), () -> {
+                lab.aoMudarOAgenteNoServidor();
+                aoMudar.run();
+            }, avisos, CopiadorDeTexto.doSistema());
+            apresentador.mostrar(dialogo);
+        }, falha -> avisos.erro(MensagensDeErro.de(falha)));
     }
 
     /**
@@ -142,6 +184,7 @@ public final class AcoesDaInterface {
             case CONFERIR_IMPRESSAO -> conferirImpressao(lab);
             case REGISTRAR_TOKEN -> registrarToken(lab);
             case REMOVER_SERVIDOR -> remover(lab);
+            case INSTALAR_AGENTE -> instalarAgente(lab);
         }
     }
 }
