@@ -200,8 +200,14 @@ class InstaladorDeAgenteTest {
 
         assertEquals(Desfecho.CONCLUIDA, r.desfecho(), r.erro());
         List<String> w = escritas();
-        assertTrue(w.contains(ComandosRemotos.removerContainer(DK, p)), "o agente anterior sai: " + w);
-        assertTrue(w.indexOf(ComandosRemotos.removerContainer(DK, p)) < w.indexOf(ComandosRemotos.subirContainer(DK, p, PACOTE)));
+        String antes = ComandosRemotos.renomearContainer(DK, p.container(), p.containerAnterior());
+        assertTrue(w.contains(antes), "o agente antigo é GUARDADO (renomeado), não apagado: " + w);
+        assertTrue(w.indexOf(antes) < w.indexOf(ComandosRemotos.pararContainer(DK, p.containerAnterior())));
+        assertTrue(w.indexOf(ComandosRemotos.pararContainer(DK, p.containerAnterior())) < w.indexOf(ComandosRemotos.subirContainer(DK, p, PACOTE)));
+        assertFalse(w.contains(ComandosRemotos.removerContainer(DK, p)), "o agente antigo só sai no FIM, e pelo nome de reserva: " + w);
+        String descarte = ComandosRemotos.removerContainerPeloNome(DK, p.containerAnterior());
+        assertTrue(w.indexOf(ComandosRemotos.subirContainer(DK, p, PACOTE)) < w.indexOf(descarte), "depois de o novo estar de pé: " + w);
+        assertNull(servidor.anteriorNome, "não sobra o agente antigo");
         assertFalse(w.contains(ComandosRemotos.removerVolume(DK, p)), "os dados (e o token) ficam");
         assertEquals("0.1.0-abc1234", servidor.rotuloDoContainer);
         assertTrue(servidor.volumeExiste);
@@ -277,7 +283,7 @@ class InstaladorDeAgenteTest {
     }
 
     @Test
-    void falhaAoSubirOContainerDesfazImagemEPastaMasNaoOContainerQueNemExiste() throws Exception {
+    void falhaAoSubirOContainerDesfazImagemEPastaEOContainerSoSeExistir() throws Exception {
         servidor.noGrupoDocker = true;
         servidor.falharEm(contem(" run -d "), 125, "docker: Error response from daemon: port is already allocated");
         verificar(ModoDaInstalacao.INSTALAR);
@@ -288,7 +294,8 @@ class InstaladorDeAgenteTest {
         assertEquals(PassoDeInstalacao.SUBIR_CONTAINER, r.passo());
         assertTrue(r.erro().contains("port is already allocated"), r.erro());
         assertEquals(List.of("Removi a imagem que o app construiu.", "Apaguei a pasta lab-agente do instalador."), r.desfeito());
-        assertFalse(escritas().contains(ComandosRemotos.removerContainer(DK, p)), "não havia container criado por esta execução");
+        // `docker run` que falha pode deixar um container "Created" (porta ocupada, por exemplo): o desfazer tenta removê-lo, e como aqui ele
+        // nem existe, nada é dito ao usuário (a lista acima não tem "Removi o container").
         assertFalse(servidor.imagemExiste);
         assertFalse(servidor.pastaExiste);
     }
@@ -328,6 +335,85 @@ class InstaladorDeAgenteTest {
         assertTrue(r.erro().contains("Já existe um token com esse nome"), r.erro());
         assertEquals(4, r.desfeito().size(), r.desfeito().toString());
         assertNull(servidor.containerNome);
+    }
+
+    @Test
+    void atualizacaoQueFalhaDevolveOAgenteAntigoAoNomeEAoAr() throws Exception {
+        servidor.noGrupoDocker = true;
+        servidor.containerNome = "painel-lab";
+        servidor.rotuloDoContainer = "0.0.9-velha";
+        servidor.estadoDoContainer = "running";
+        servidor.volumeExiste = true;
+        servidor.pastaExiste = true;
+        ganchos.sonda(Sonda.NAO_RESPONDE); // o novo sobe e não responde
+        verificar(ModoDaInstalacao.ATUALIZAR);
+        servidor.limparRegistro();
+
+        ResultadoDaInstalacao r = instalador.instalar(obs, Cancelamento.NUNCA);
+
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertEquals("painel-lab", servidor.containerNome, "o agente antigo voltou ao nome");
+        assertEquals("0.0.9-velha", servidor.rotuloDoContainer, "e é o ANTIGO, não o novo");
+        assertEquals("running", servidor.estadoDoContainer, "e voltou a rodar");
+        assertNull(servidor.anteriorNome);
+        assertTrue(r.desfeito().stream().anyMatch(l -> l.contains("Devolvi o agente anterior")), r.desfeito().toString());
+        assertTrue(servidor.volumeExiste);
+    }
+
+    @Test
+    void atualizacaoCujoNovoNaoSobeDevolveOAntigo() throws Exception {
+        servidor.noGrupoDocker = true;
+        servidor.containerNome = "painel-lab";
+        servidor.rotuloDoContainer = "0.0.9-velha";
+        servidor.estadoDoContainer = "running";
+        servidor.volumeExiste = true;
+        servidor.pastaExiste = true;
+        servidor.falharEm(contem(" run -d "), 125, "docker: port is already allocated");
+        verificar(ModoDaInstalacao.ATUALIZAR);
+        servidor.limparRegistro();
+
+        ResultadoDaInstalacao r = instalador.instalar(obs, Cancelamento.NUNCA);
+
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertEquals(PassoDeInstalacao.SUBIR_CONTAINER, r.passo());
+        assertEquals("0.0.9-velha", servidor.rotuloDoContainer);
+        assertEquals("running", servidor.estadoDoContainer);
+    }
+
+    @Test
+    void atualizacaoInterrompidaAntesQueDeixouOAntigoGuardadoEOutraTentativaOUsa() throws Exception {
+        servidor.noGrupoDocker = true;
+        servidor.anteriorNome = "painel-lab-anterior";
+        servidor.anteriorRotulo = "0.0.9-velha";
+        servidor.anteriorEstado = "exited";
+        servidor.volumeExiste = true;
+        servidor.pastaExiste = true;
+        verificar(ModoDaInstalacao.INSTALAR);
+        servidor.limparRegistro();
+
+        ResultadoDaInstalacao r = instalador.instalar(obs, Cancelamento.NUNCA);
+
+        assertEquals(Desfecho.CONCLUIDA, r.desfecho(), r.erro());
+        assertEquals("0.1.0-abc1234", servidor.rotuloDoContainer);
+        assertNull(servidor.anteriorNome);
+    }
+
+    @Test
+    void containerDeReservaQueNaoEDoAppNuncaESobrescrito() throws Exception {
+        servidor.noGrupoDocker = true;
+        servidor.containerNome = "painel-lab";
+        servidor.rotuloDoContainer = "0.0.9-velha";
+        servidor.anteriorNome = "painel-lab-anterior";
+        servidor.anteriorRotulo = ""; // sem o rótulo do app: é de outra pessoa
+        servidor.pastaExiste = true;
+        verificar(ModoDaInstalacao.ATUALIZAR);
+
+        ResultadoDaInstalacao r = instalador.instalar(obs, Cancelamento.NUNCA);
+
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertTrue(r.erro().contains("painel-lab-anterior"), r.erro());
+        assertEquals("painel-lab-anterior", servidor.anteriorNome);
+        assertEquals("0.0.9-velha", servidor.rotuloDoContainer);
     }
 
     @Test

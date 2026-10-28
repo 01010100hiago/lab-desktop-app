@@ -46,6 +46,11 @@ public record ParametrosDaInstalacao(String container, int porta, String pasta) 
         return container + "-dados";
     }
 
+    /** O nome que o agente antigo leva durante uma atualização (até o novo provar que responde): {@code <container>-anterior}. */
+    public String containerAnterior() {
+        return container + "-anterior";
+    }
+
     /** A imagem construída no servidor para esta versão do pacote. */
     public String imagem(String versao) {
         return "labdesktop-agente:" + versao;

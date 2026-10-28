@@ -54,6 +54,10 @@ public final class ServidorSimulado implements ExecutorDeComandos {
     public String containerNome;
     public String rotuloDoContainer = "";
     public String estadoDoContainer = "running";
+    /** O agente antigo guardado como {@code <container>-anterior} durante uma atualização (null = não há). */
+    public String anteriorNome;
+    public String anteriorRotulo = "";
+    public String anteriorEstado = "exited";
     public boolean volumeExiste;
     public byte[] pacoteRecebido;
     /** O que o {@code docker logs} do container responde. */
@@ -370,7 +374,53 @@ public final class ServidorSimulado implements ExecutorDeComandos {
         boolean permitido = dk.equals(ComandosRemotos.DOCKER_DIRETO) ? dockerDireto() : dockerPorSudo() || (root && dockerInstalado && !dockerParado);
         String imagem = parametros.imagem(pacote.versao());
         if (c.equals(ComandosRemotos.lerContainer(dk, parametros))) {
-            return docker(permitido, containerNome == null ? "" : containerNome + "|" + rotuloDoContainer + "|" + estadoDoContainer + "\n");
+            return docker(permitido, (containerNome == null ? "" : containerNome + "|" + rotuloDoContainer + "|" + estadoDoContainer + "\n")
+                + (anteriorNome == null ? "" : anteriorNome + "|" + anteriorRotulo + "|" + anteriorEstado + "\n"));
+        }
+        String ant = parametros.containerAnterior();
+        if (c.equals(ComandosRemotos.renomearContainer(dk, parametros.container(), ant))) {
+            if (!permitido || containerNome == null || anteriorNome != null) {
+                return status(1, "", "Error response from daemon: cannot rename");
+            }
+            anteriorNome = ant;
+            anteriorRotulo = rotuloDoContainer;
+            anteriorEstado = estadoDoContainer;
+            containerNome = null;
+            rotuloDoContainer = "";
+            return ok("");
+        }
+        if (c.equals(ComandosRemotos.renomearContainer(dk, ant, parametros.container()))) {
+            if (!permitido || anteriorNome == null || containerNome != null) {
+                return status(1, "", "Error response from daemon: cannot rename");
+            }
+            containerNome = parametros.container();
+            rotuloDoContainer = anteriorRotulo;
+            estadoDoContainer = anteriorEstado;
+            anteriorNome = null;
+            anteriorRotulo = "";
+            return ok("");
+        }
+        if (c.equals(ComandosRemotos.pararContainer(dk, ant))) {
+            if (!permitido || anteriorNome == null) {
+                return status(1, "", "Error: No such container");
+            }
+            anteriorEstado = "exited";
+            return ok(ant + "\n");
+        }
+        if (c.equals(ComandosRemotos.iniciarContainer(dk, parametros.container()))) {
+            if (!permitido || containerNome == null) {
+                return status(1, "", "Error: No such container");
+            }
+            estadoDoContainer = "running";
+            return ok(parametros.container() + "\n");
+        }
+        if (c.equals(ComandosRemotos.removerContainerPeloNome(dk, ant))) {
+            if (!permitido || anteriorNome == null) {
+                return status(1, "", "Error: No such container: " + ant);
+            }
+            anteriorNome = null;
+            anteriorRotulo = "";
+            return ok(ant + "\n");
         }
         if (c.equals(ComandosRemotos.lerVolume(dk, parametros))) {
             return docker(permitido, volumeExiste ? parametros.volume() + "\n" : "");

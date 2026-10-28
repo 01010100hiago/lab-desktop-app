@@ -223,6 +223,29 @@ public final class ComandosRemotos {
             + p.imagem(pacote.versao());
     }
 
+    /**
+     * Renomeia um container (a atualização guarda o agente antigo como {@code <nome>-anterior} até o novo responder). Os dois nomes passam
+     * pela regex de nome de container.
+     */
+    public static String renomearContainer(String docker, String de, String para) {
+        return exigirDocker(docker) + " rename " + exigirNomeDeContainer(de) + " " + exigirNomeDeContainer(para);
+    }
+
+    /** Para um container (sem removê-lo). */
+    public static String pararContainer(String docker, String nome) {
+        return exigirDocker(docker) + " stop " + exigirNomeDeContainer(nome);
+    }
+
+    /** Liga de novo um container parado. */
+    public static String iniciarContainer(String docker, String nome) {
+        return exigirDocker(docker) + " start " + exigirNomeDeContainer(nome);
+    }
+
+    /** Remove um container pelo nome (o instalador só chama para um que tem o rótulo dele ou que ele mesmo acabou de criar). */
+    public static String removerContainerPeloNome(String docker, String nome) {
+        return exigirDocker(docker) + " rm -f " + exigirNomeDeContainer(nome);
+    }
+
     public static String removerVolume(String docker, ParametrosDaInstalacao p) {
         return exigirDocker(docker) + " volume rm " + p.volume();
     }
@@ -277,6 +300,13 @@ public final class ComandosRemotos {
             throw new IllegalArgumentException("Comando do Docker inválido.");
         }
         return docker;
+    }
+
+    private static String exigirNomeDeContainer(String nome) {
+        if (nome == null || !nome.matches("^[a-z0-9][a-z0-9_.-]{0,60}$")) {
+            throw new IllegalArgumentException("Nome de container inválido.");
+        }
+        return nome;
     }
 
     private static String exigirImagem(String imagem) {

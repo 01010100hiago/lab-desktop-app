@@ -571,7 +571,9 @@ public final class DialogoDoAgente extends Dialogo {
         itens.add("3. Construir a imagem do agente no próprio servidor (leva alguns minutos; evita problema de arquitetura).");
         itens.add("4. " + (acao == Acao.ATUALIZAR ? "Trocar o container " : "Subir o container ") + parametros.container()
             + ": reinício automático, escutando só em 127.0.0.1:" + parametros.porta() + ", dados num volume do Docker ("
-            + parametros.volume() + ").");
+            + parametros.volume() + ")."
+            + (acao == Acao.ATUALIZAR ? " O agente atual é guardado (parado) como " + parametros.containerAnterior()
+                + " enquanto o novo sobe: se o novo não responder, o app o devolve ao ar; só no fim, com o novo funcionando, o antigo é removido." : ""));
         itens.add(acao == Acao.ATUALIZAR
             ? "5. Conferir que o agente responde. Os dados e o token deste Mac ficam como estão."
             : "5. Conferir que o agente responde e registrar o token deste Mac (o agente guarda só o hash).");
@@ -580,7 +582,8 @@ public final class DialogoDoAgente extends Dialogo {
             listaDoQueVaiAcontecer.add(Caixa.espacoVertical(3));
         }
         listaDoQueVaiAcontecer.add(dicaCorrida("Se algum passo falhar, o app mostra o erro e desfaz só o que ele criou (o container, os dados novos, a "
-            + "imagem e a pasta). O Docker, se foi instalado, não é desinstalado."));
+            + "imagem e a pasta)" + (acao == Acao.ATUALIZAR ? ", e devolve o agente que estava funcionando" : "")
+            + ". O Docker, se foi instalado, não é desinstalado."));
     }
 
     private void montarConfirmacaoDeRemocao() {

@@ -55,6 +55,9 @@ public final class InstaladorDeAgente {
     private String docker;
     private final Set<PassoDeInstalacao> concluidos = EnumSet.noneOf(PassoDeInstalacao.class);
     private boolean criouContainer;
+    /** Atualização: o agente antigo está guardado como {@code <nome>-anterior} (e se estava rodando antes). */
+    private boolean guardouOAnterior;
+    private boolean anteriorRodava;
     private boolean criouVolume;
     private boolean criouImagem;
     private boolean criouPasta;
@@ -126,6 +129,8 @@ public final class InstaladorDeAgente {
             return new ResultadoDaInstalacao(Desfecho.RECUSADA, null, "As verificações ainda têm problema: resolva antes de instalar.", List.of());
         }
         criouContainer = false;
+        guardouOAnterior = false;
+        anteriorRodava = false;
         criouVolume = false;
         criouImagem = false;
         criouPasta = false;
@@ -139,6 +144,7 @@ public final class InstaladorDeAgente {
                 concluidos.add(p);
                 obs.aoMudarPasso(p, fez ? EstadoDoPasso.FEITO : EstadoDoPasso.JA_ESTAVA_FEITO, "");
             }
+            descartarOAnterior();
             return new ResultadoDaInstalacao(Desfecho.CONCLUIDA, null, "", List.of());
         } catch (InterruptedException e) {
             Thread.interrupted(); // soltou o comando em andamento; o desfazer precisa rodar
@@ -249,27 +255,58 @@ public final class InstaladorDeAgente {
 
     // ---- container ----
 
-    private boolean passoSubirContainer() throws IOException, InterruptedException, FalhaDePasso {
-        String existenteDoApp = null;
-        boolean existeOutro = false;
-        boolean rodando = false;
-        ResultadoExec ps = rodar(ComandosRemotos.lerContainer(docker, parametros), LEITURA);
-        for (String linha : ps.stdout().split("\\R")) {
+    /** O que o Docker lista para um nome de container: o rótulo do app (vazio se não é dele) e o estado. */
+    private record DoDocker(String rotulo, String estado) {
+        boolean doApp() {
+            return !rotulo.isBlank();
+        }
+
+        boolean rodando() {
+            return "running".equals(estado);
+        }
+    }
+
+    private java.util.Map<String, DoDocker> containersComONome() throws IOException, InterruptedException {
+        java.util.Map<String, DoDocker> m = new java.util.HashMap<>();
+        for (String linha : rodar(ComandosRemotos.lerContainer(docker, parametros), LEITURA).stdout().split("\\R")) {
             String[] c = linha.strip().split("\\|", -1);
-            if (c.length >= 3 && c[0].equals(parametros.container())) {
-                if (c[1].isBlank()) {
-                    existeOutro = true;
-                } else {
-                    existenteDoApp = c[1].strip();
-                    rodando = "running".equals(c[2].strip());
-                }
+            if (c.length >= 3) {
+                m.put(c[0], new DoDocker(c[1].strip(), c[2].strip()));
             }
         }
-        if (existeOutro) {
+        return m;
+    }
+
+    /**
+     * Sobe o container do agente. Numa atualização o agente ANTIGO não é apagado: vira {@code <nome>-anterior} (parado, para liberar a
+     * porta) e só sai no fim, depois de o novo responder e do token. Se algo falhar ou o usuário cancelar, o desfazer remove o novo e
+     * devolve o antigo ao nome e ao ar ({@link #desfazer}).
+     */
+    private boolean passoSubirContainer() throws IOException, InterruptedException, FalhaDePasso {
+        java.util.Map<String, DoDocker> existentes = containersComONome();
+        DoDocker atual = existentes.get(parametros.container());
+        DoDocker anterior = existentes.get(parametros.containerAnterior());
+        if (atual != null && !atual.doApp()) {
             throw new FalhaDePasso("Já existe um container chamado " + parametros.container() + " que não foi criado por este app: não mexi nele.");
         }
-        if (existenteDoApp != null && existenteDoApp.equals(pacote.versao()) && rodando) {
+        if (atual != null && atual.rotulo().equals(pacote.versao()) && atual.rodando()) {
             return false;
+        }
+        if (anterior != null) {
+            if (!anterior.doApp()) {
+                throw new FalhaDePasso("Já existe um container chamado " + parametros.containerAnterior() + " que não foi criado por este app: "
+                    + "não mexi nele. Renomeie ou remova esse container e tente de novo.");
+            }
+            if (atual == null) {
+                // Uma atualização anterior parou no meio: o agente antigo continua guardado com o nome de reserva. Devolve-o ao nome certo
+                // antes de seguir (é ele quem serve de volta se esta tentativa falhar).
+                exigirSucesso(ComandosRemotos.renomearContainer(docker, parametros.containerAnterior(), parametros.container()),
+                    ESCRITA_CURTA, "Não consegui devolver o agente antigo ao nome dele");
+                atual = anterior;
+            } else {
+                exigirSucesso(ComandosRemotos.removerContainerPeloNome(docker, parametros.containerAnterior()), ESCRITA_CURTA,
+                    "Não consegui remover o agente antigo que sobrou de uma atualização anterior");
+            }
         }
         boolean volumeExistia = false;
         for (String v : rodar(ComandosRemotos.lerVolume(docker, parametros), LEITURA).stdout().split("\\R")) {
@@ -277,16 +314,37 @@ public final class InstaladorDeAgente {
                 volumeExistia = true;
             }
         }
-        if (existenteDoApp != null) {
-            exigirSucesso(ComandosRemotos.removerContainer(docker, parametros), ESCRITA_CURTA, "Não consegui remover o agente anterior");
+        if (atual != null) {
+            exigirSucesso(ComandosRemotos.renomearContainer(docker, parametros.container(), parametros.containerAnterior()), ESCRITA_CURTA,
+                "Não consegui guardar o agente anterior");
+            guardouOAnterior = true;
+            anteriorRodava = atual.rodando();
+            if (anteriorRodava) {
+                exigirSucesso(ComandosRemotos.pararContainer(docker, parametros.containerAnterior()), ESCRITA_CURTA,
+                    "Não consegui parar o agente anterior para liberar a porta");
+            }
         }
+        criouContainer = true; // mesmo que o `run` falhe no meio: o desfazer confere e remove só se existir
         ResultadoExec x = rodar(ComandosRemotos.subirContainer(docker, parametros, pacote), ESCRITA_CURTA);
         if (x.status() != 0) {
+            // `docker run` que falha pode deixar um container "Created": criouContainer segue verdadeiro e o desfazer o remove se existir.
             throw new FalhaDePasso("O Docker não conseguiu subir o container do agente: " + saidaDeErro(x));
         }
-        criouContainer = true;
         criouVolume = !volumeExistia;
         return true;
+    }
+
+    /** Fim de uma atualização que deu certo: o agente antigo guardado já não faz falta. Falhar aqui só avisa (o agente novo já responde). */
+    private void descartarOAnterior() {
+        if (!guardouOAnterior) {
+            return;
+        }
+        if (tentar(ComandosRemotos.removerContainerPeloNome(docker, parametros.containerAnterior()))) {
+            registrar("[o agente anterior foi removido]");
+        } else {
+            registrar("[não consegui remover o agente anterior (" + parametros.containerAnterior() + "); pode apagá-lo à mão]");
+        }
+        guardouOAnterior = false;
     }
 
     // ---- sonda e token ----
@@ -340,6 +398,16 @@ public final class InstaladorDeAgente {
             }
             criouContainer = false;
             desfeitos.addAll(List.of(PassoDeInstalacao.SUBIR_CONTAINER, PassoDeInstalacao.SONDAR, PassoDeInstalacao.REGISTRAR_TOKEN));
+        }
+        if (guardouOAnterior) {
+            // Atualização que não deu certo: o agente antigo volta ao nome e ao ar (o novo já saiu acima).
+            boolean voltou = tentar(ComandosRemotos.renomearContainer(docker, parametros.containerAnterior(), parametros.container()));
+            if (voltou && anteriorRodava) {
+                voltou = tentar(ComandosRemotos.iniciarContainer(docker, parametros.container()));
+            }
+            feito.add(voltou ? "Devolvi o agente anterior ao ar (" + parametros.container() + "), como estava."
+                : "Não consegui devolver o agente anterior: ele está guardado como " + parametros.containerAnterior() + " (docker rename e docker start).");
+            guardouOAnterior = false;
         }
         if (criouVolume) {
             if (tentar(ComandosRemotos.removerVolume(docker, parametros))) {
