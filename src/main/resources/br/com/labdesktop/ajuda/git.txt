@@ -6,12 +6,13 @@
 @onde: Instalar o Git ao importar | Novo projeto > Importar > Repositório Git > Instalar o Git…
 1. Abra Servidor, aba Máquina: o bloco Git diz se o git está instalado.
 2. Sem git, clique em "Instalar o Git…". A janela mostra o sistema, o gerenciador de pacotes e os comandos exatos.
-3. Se o seu usuário é root ou tem sudo sem senha, clique em "Instalar o Git": o app roda os comandos e confere o git no fim.
-4. Se não, a janela mostra o comando para você rodar no Terminal, com Copiar; depois clique em "Já instalei, conferir de novo".
+3. Se o seu usuário é root ou tem sudo sem senha para esse comando, clique em "Instalar o Git": o app roda e confere o git no fim.
+4. Se não, ou se as ações de escrita estão desligadas, a janela mostra o comando para rodar no Terminal, com Copiar; depois, "Já instalei, conferir de novo".
 5. Em Novo projeto, Repositório Git, o mesmo aviso e botão aparecem quando falta o git.
 [Ir para Máquina](ir:maquina)
 @veja: projetos adicionar-servidor
 ## Mais detalhes
 O app nunca digita senha de administrador e não mexe na configuração do git. Os gerenciadores que ele conhece são apt-get, dnf, yum, apk, pacman e zypper.
 Em Este computador, "Instalar o Git…" abre "Preparar este computador", que mostra o jeito de instalar no seu sistema (Homebrew, ferramentas da Apple ou winget).
-Instalar o git é a única coisa que roda no servidor sem depender das ações de escrita ligadas, porque a janela já mostra o que vai rodar e nada roda sem o seu clique.
+Conferir o git, ver e copiar o comando e "Já instalei, conferir de novo" valem sempre. Executar a instalação é uma ação de escrita no servidor: sem as ações de escrita ligadas, o botão "Instalar o Git" nem aparece e o app só mostra o comando para você rodar.
+O sudo é conferido com sudo -n -l para o comando exato (sudo -n true não prova isso). No apt, o passo update só atualiza a lista de pacotes: se falhar, o app avisa e tenta instalar mesmo assim. O apt-get espera até um minuto se outro instalador estiver rodando, e DEBIAN_FRONTEND=noninteractive faz ele não parar para perguntar.

@@ -13,9 +13,12 @@
 @acoes: sim
 @veja: servidor terminal
 ## Mais detalhes
-O app só encerra processos do usuário da sua conexão, sem sudo e sem pedir senha. Se o processo é de outro usuário, o botão diz "Sem permissão" e a janela mostra o comando exato para você rodar no Terminal.
-Estes nunca são oferecidos e aparecem como "Protegido": o processo 1, o servidor SSH (sshd), o agente do painel, o Docker (dockerd e containerd), o próprio app e os processos do sistema.
+O app só encerra processos do usuário da sua conexão, sem sudo e sem pedir senha. Se o processo é de outro usuário, o botão diz "Sem permissão" e a janela mostra, para você rodar no Terminal, uma linha que confere o processo (ps) e o comando que só envia o sinal se o nome do programa for o mesmo. Nome com caracteres estranhos não vira comando.
+Estes nunca são oferecidos e aparecem como "Protegido": o processo 1, o servidor SSH (sshd), o sftp-server, os shells (bash, zsh...), o agente do painel, o Docker (dockerd e containerd), o próprio app e os processos do sistema. Containers de túnel e proxy (cloudflared, traefik, caddy, qualquer nome com proxy) e serviços como docker.service e sshd.service também.
+Você pode proteger um container: na janela de Parar o container, clique em "Proteger este container". Ele fica na lista de Ajustes, Segurança, onde se libera.
+Se você entrou no servidor como root, a janela avisa em destaque e só liga os botões depois de você digitar o nome do programa (ou do container).
 Reiniciar só existe para containers (e para serviços do systemd do seu usuário). De um processo comum o app não sabe como religá-lo: ele só encerra.
 Antes de enviar o pedido o app confere de novo que o número ainda é do mesmo programa (nome, dono e hora de início), para não encerrar outro que ganhou o mesmo número.
-Em Este computador a lista vem do próprio computador (no Mac e no Windows o agente só enxerga a máquina virtual do Docker). No Windows o app usa o taskkill e só encerra programas .exe.
-Sem as ações de escrita ligadas os botões aparecem desligados, com a explicação na dica: eles não somem.
+Em Este computador a lista vem do próprio computador (no Mac e no Windows o agente só enxerga a máquina virtual do Docker). No Windows o app usa o taskkill (sem /T: os programas que o processo abriu continuam) e só encerra programas .exe.
+Sem as ações de escrita ligadas os botões que agem aparecem desligados, com a explicação na dica: eles não somem. "Sem permissão" só mostra um comando, então continua aberto.
+O "Forçar" só vale depois de o pedido educado ter saído: o app recusa forçar um processo que ainda não recebeu o pedido. Parar um container espera o tempo do próprio Docker (10 s ou mais, o app avisa) e o app espera até um minuto.
