@@ -19,11 +19,16 @@ public enum SituacaoDoAgente {
     /** "Este computador": o Docker está instalado e parado. */
     LOCAL_DOCKER_PARADO,
     /** "Este computador": o Docker roda, mas o laboratório local ainda não foi criado (não há o container do agente). */
-    LOCAL_NAO_CRIADO;
+    LOCAL_NAO_CRIADO,
+    /** "Este computador" (Linux): o Docker está instalado, mas este usuário não pode usá-lo (fora do grupo docker): não é "Docker parado". */
+    LOCAL_SEM_PERMISSAO,
+    /** "Este computador": o container do agente existe e está PARADO (saiu, foi parado): recriá-lo é o "Preparar este computador". */
+    LOCAL_CONTAINER_PARADO;
 
     /** Em "Este computador" falta preparar algo (Docker, laboratório): o botão é "Preparar este computador". */
     public boolean oferecerPreparar() {
-        return this == LOCAL_SEM_DOCKER || this == LOCAL_DOCKER_PARADO || this == LOCAL_NAO_CRIADO;
+        return this == LOCAL_SEM_DOCKER || this == LOCAL_DOCKER_PARADO || this == LOCAL_NAO_CRIADO || this == LOCAL_SEM_PERMISSAO
+            || this == LOCAL_CONTAINER_PARADO;
     }
 
     /** O app deve oferecer "Instalar agente" (o verbo é do usuário: nunca se instala sozinho). */

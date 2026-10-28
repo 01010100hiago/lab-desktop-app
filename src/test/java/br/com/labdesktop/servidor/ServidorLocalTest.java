@@ -131,6 +131,29 @@ class ServidorLocalTest {
     }
 
     @Test
+    void permissaoNegadaNoDockerNaoViraDockerParadoEContainerParadoEOutraCausa() {
+        lab.iniciar();
+        aguardar(EstadoConexao.SSH_OK_SEM_AGENTE);
+        pc.falharEm(ComputadorSimulado.contem("version --format"), 1,
+            "permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock");
+        lab.tentarAgora();
+        Espera.ate(PRAZO, () -> "situação=" + lab.estado().situacaoDoAgente(), () -> lab.estado().situacaoDoAgente() == SituacaoDoAgente.LOCAL_SEM_PERMISSAO);
+
+        pc.consertar();
+        ComputadorSimulado.Cont c = new ComputadorSimulado.Cont();
+        c.estado = "exited";
+        pc.containers.put("painel-lab", c);
+        lab.tentarAgora();
+        Espera.ate(PRAZO, () -> "situação=" + lab.estado().situacaoDoAgente(), () -> lab.estado().situacaoDoAgente() == SituacaoDoAgente.LOCAL_CONTAINER_PARADO);
+
+        pc.containers.clear();
+        pc.falharEm(ComputadorSimulado.contem("inspect -f"), 1, "Error response from daemon: algo inesperado");
+        lab.tentarAgora();
+        Espera.ate(PRAZO, () -> "situação=" + lab.estado().situacaoDoAgente(), () -> lab.estado().situacaoDoAgente() == SituacaoDoAgente.DESCONHECIDA);
+        assertTrue(pc.escritas().isEmpty(), "só leituras: " + pc.escritas());
+    }
+
+    @Test
     void criarOLaboratorioSobeORegistraOTokenEOServidorPassaAConectadoComOAgenteDoMonitor() throws Exception {
         lab.iniciar();
         aguardar(EstadoConexao.SSH_OK_SEM_AGENTE);

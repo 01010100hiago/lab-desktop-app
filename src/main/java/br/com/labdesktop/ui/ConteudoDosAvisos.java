@@ -95,6 +95,14 @@ public final class ConteudoDosAvisos {
     public static final String TEXTO_DO_LOCAL_SEM_DOCKER = "O laboratório local roda no Docker, e ele não está instalado neste computador. Clique em "
         + "Preparar este computador: o app mostra as opções de instalação e só instala o que você confirmar. O terminal e os arquivos já funcionam.";
 
+    /** "Este computador" no Linux: o usuário não está no grupo docker. O comando é o do Docker, com {@code $USER} (o shell dele o troca pelo usuário). */
+    public static final String TEXTO_DO_LOCAL_SEM_PERMISSAO = "O Docker está instalado, mas este usuário do computador não pode usá-lo (não está no grupo "
+        + "docker). O app não tenta elevar privilégio. Rode no Terminal: sudo usermod -aG docker $USER  e depois saia e entre de novo no sistema. "
+        + "Clique em Preparar este computador para ver isso com calma.";
+    /** "Este computador": o container do agente existe e está parado. */
+    public static final String TEXTO_DO_LOCAL_CONTAINER_PARADO = "O Docker está rodando, mas o agente do laboratório local está parado. Clique em Preparar "
+        + "este computador: o app recria o agente só depois da sua confirmação, e os dados e o token ficam.";
+
     /** No máximo 3 nomes de sessões pausadas na faixa. */
     public static final int MAX_PAUSADAS = 3;
 
@@ -195,9 +203,14 @@ public final class ConteudoDosAvisos {
                 TEXTO_DO_LOCAL_DOCKER_PARADO, List.of(Acao.PREPARAR_COMPUTADOR));
             case LOCAL_SEM_DOCKER -> new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O Docker não está instalado neste computador",
                 TEXTO_DO_LOCAL_SEM_DOCKER, List.of(Acao.PREPARAR_COMPUTADOR));
+            case LOCAL_SEM_PERMISSAO -> new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "Este usuário não pode usar o Docker",
+                TEXTO_DO_LOCAL_SEM_PERMISSAO, List.of(Acao.PREPARAR_COMPUTADOR, Acao.TENTAR_AGORA));
+            case LOCAL_CONTAINER_PARADO -> new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente do laboratório local está parado",
+                TEXTO_DO_LOCAL_CONTAINER_PARADO, List.of(Acao.PREPARAR_COMPUTADOR, Acao.TENTAR_AGORA));
             default -> new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente do laboratório local não responde",
-                "O Docker está rodando e o agente existe, mas não responde. O app insiste a cada poucos segundos (ele pode estar reiniciando)."
-                    + detalhe, List.of(Acao.TENTAR_AGORA));
+                "O Docker está rodando e o agente existe, mas não responde. O app insiste a cada poucos segundos (ele pode estar reiniciando); se não "
+                    + "voltar, clique em Preparar este computador: ele confere tudo e recria o agente se for preciso." + detalhe,
+                List.of(Acao.PREPARAR_COMPUTADOR, Acao.TENTAR_AGORA));
         };
     }
 

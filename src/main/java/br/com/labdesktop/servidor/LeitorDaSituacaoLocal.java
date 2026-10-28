@@ -24,14 +24,23 @@ final class LeitorDaSituacaoLocal {
         this.container = container;
     }
 
+    private static String texto(ResultadoExec x) {
+        return (x.stderr() + " " + x.stdout()).toLowerCase(java.util.Locale.ROOT);
+    }
+
     SituacaoDoAgente ler() throws InterruptedException {
         try {
             ResultadoExec docker = executor.executar(ComandosLocais.versaoDoDocker(), PRAZO);
             if (docker.status() != 0) {
-                return SituacaoDoAgente.LOCAL_DOCKER_PARADO;
+                // "permission denied" (Linux fora do grupo docker) NÃO é Docker parado: o remédio é outro (sudo usermod -aG docker)
+                return texto(docker).contains("permission denied") ? SituacaoDoAgente.LOCAL_SEM_PERMISSAO : SituacaoDoAgente.LOCAL_DOCKER_PARADO;
             }
             ResultadoExec estado = executor.executar(ComandosLocais.lerEstadoDoContainer(container), PRAZO);
-            return estado.status() == 0 ? SituacaoDoAgente.INSTALADO_SEM_RESPOSTA : SituacaoDoAgente.LOCAL_NAO_CRIADO;
+            if (estado.status() == 0) {
+                return "running".equals(estado.stdout().strip()) ? SituacaoDoAgente.INSTALADO_SEM_RESPOSTA : SituacaoDoAgente.LOCAL_CONTAINER_PARADO;
+            }
+            // só "não existe" quando o Docker diz que não existe; qualquer outro erro é estado desconhecido, nunca "não criado"
+            return texto(estado).contains("no such") ? SituacaoDoAgente.LOCAL_NAO_CRIADO : SituacaoDoAgente.DESCONHECIDA;
         } catch (ProgramaNaoEncontradoException e) {
             return SituacaoDoAgente.LOCAL_SEM_DOCKER;
         } catch (IOException e) {

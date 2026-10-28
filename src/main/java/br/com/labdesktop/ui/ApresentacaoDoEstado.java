@@ -20,6 +20,8 @@ public final class ApresentacaoDoEstado {
             case LOCAL_NAO_CRIADO -> new Apresentacao("Falta criar o laboratório", "sistema", Gravidade.ATENCAO);
             case LOCAL_DOCKER_PARADO -> new Apresentacao("Docker parado", "alerta", Gravidade.ATENCAO);
             case LOCAL_SEM_DOCKER -> new Apresentacao("Docker não instalado", "alerta", Gravidade.ATENCAO);
+            case LOCAL_SEM_PERMISSAO -> new Apresentacao("Sem permissão no Docker", "alerta", Gravidade.ATENCAO);
+            case LOCAL_CONTAINER_PARADO -> new Apresentacao("Agente local parado", "alerta", Gravidade.ATENCAO);
             default -> new Apresentacao("Agente local não responde", "alerta", Gravidade.ATENCAO);
         };
     }

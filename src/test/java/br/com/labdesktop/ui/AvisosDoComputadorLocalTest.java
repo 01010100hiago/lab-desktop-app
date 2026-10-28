@@ -56,12 +56,28 @@ class AvisosDoComputadorLocalTest {
     }
 
     @Test
-    void agenteCriadoMasMudoNaoOferecePrepararETentaDeNovo() {
+    void agenteCriadoMasMudoOfereceTentarAgoraEPrepararQueORecriaSeForPreciso() {
         EstadoServidor e = local(EstadoConexao.SSH_OK_SEM_AGENTE, SituacaoDoAgente.INSTALADO_SEM_RESPOSTA,
             new Falha(Falha.Tipo.LOCAL_AGENTE_FORA, "O agente do laboratório local não responde."), null);
         var aviso = ConteudoDosAvisos.deConexao(e, AGORA, FUSO);
-        assertEquals(List.of(Acao.TENTAR_AGORA), aviso.acoes());
+        assertEquals(List.of(Acao.PREPARAR_COMPUTADOR, Acao.TENTAR_AGORA), aviso.acoes(), "a faixa aponta para Preparar, não só para Tentar agora");
         assertFalse((aviso.titulo() + aviso.texto()).toLowerCase().contains("ssh"));
+    }
+
+    @Test
+    void containerParadoEUsuarioSemPermissaoNoDockerTemFraseAcaoPrepararEOComandoDoGrupo() {
+        var parado = ConteudoDosAvisos.deConexao(local(EstadoConexao.SSH_OK_SEM_AGENTE, SituacaoDoAgente.LOCAL_CONTAINER_PARADO, null, null), AGORA, FUSO);
+        assertEquals(List.of(Acao.PREPARAR_COMPUTADOR, Acao.TENTAR_AGORA), parado.acoes());
+        assertTrue(parado.titulo().contains("parado"), parado.titulo());
+        assertTrue(parado.texto().contains("recria o agente") && parado.texto().contains("confirmação"), parado.texto());
+
+        var semPermissao = ConteudoDosAvisos.deConexao(local(EstadoConexao.SSH_OK_SEM_AGENTE, SituacaoDoAgente.LOCAL_SEM_PERMISSAO, null, null), AGORA, FUSO);
+        assertEquals(List.of(Acao.PREPARAR_COMPUTADOR, Acao.TENTAR_AGORA), semPermissao.acoes());
+        assertTrue(semPermissao.texto().contains("sudo usermod -aG docker $USER"), semPermissao.texto());
+        assertFalse(semPermissao.titulo().contains("não está rodando"), "permissão não é Docker parado: " + semPermissao.titulo());
+        assertTrue(SituacaoDoAgente.LOCAL_SEM_PERMISSAO.oferecerPreparar() && SituacaoDoAgente.LOCAL_CONTAINER_PARADO.oferecerPreparar());
+        assertEquals("Sem permissão no Docker", ApresentacaoDoEstado.de(local(EstadoConexao.SSH_OK_SEM_AGENTE, SituacaoDoAgente.LOCAL_SEM_PERMISSAO, null, null)).texto());
+        assertEquals("Agente local parado", ApresentacaoDoEstado.de(local(EstadoConexao.SSH_OK_SEM_AGENTE, SituacaoDoAgente.LOCAL_CONTAINER_PARADO, null, null)).texto());
     }
 
     @Test
