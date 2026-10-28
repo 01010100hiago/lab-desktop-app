@@ -147,6 +147,14 @@ public final class ServidorSimulado implements ExecutorDeComandos {
         return this;
     }
 
+    /** O comando que passar por {@code quando} estoura o prazo (a conexão está de pé; o comando é que demora). */
+    public ServidorSimulado demorarEm(Predicate<String> quando) {
+        demoras.add(quando);
+        return this;
+    }
+
+    private final java.util.List<Predicate<String>> demoras = new java.util.concurrent.CopyOnWriteArrayList<>();
+
     /** Remove as falhas programadas (o usuário "consertou" o servidor). */
     public ServidorSimulado consertar() {
         falhas.clear();
@@ -176,6 +184,11 @@ public final class ServidorSimulado implements ExecutorDeComandos {
         for (Gancho g : ganchos) {
             if (g.quando().test(comando)) {
                 g.acao().run();
+            }
+        }
+        for (Predicate<String> d : demoras) {
+            if (d.test(comando)) {
+                throw new br.com.labdesktop.ssh.ComandoDemorouException(1200);
             }
         }
         for (Falha f : falhas) {

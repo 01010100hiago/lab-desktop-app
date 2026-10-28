@@ -137,7 +137,8 @@ public final class PreVerificacoes {
                     return ResultadoDaVerificacao.problema(Item.PERMISSAO, "O usuário " + quem + " não é administrador e não tem sudo sem "
                         + "senha, então o app não consegue instalar o Docker. Peça a quem administra o servidor para instalar o Docker "
                         + "(e depois clique em Já instalei, continuar), ou para liberar sudo sem senha a este usuário com o comando abaixo.",
-                        usuarioValido ? "echo \"" + usuario + " ALL=(ALL) NOPASSWD:ALL\" | sudo tee /etc/sudoers.d/90-lab-desktop" : null);
+                        usuarioValido ? "echo \"" + usuario + " ALL=(ALL) NOPASSWD:ALL\" | sudo tee /etc/sudoers.d/90-lab-desktop >/dev/null"
+                            + " && sudo chmod 0440 /etc/sudoers.d/90-lab-desktop && sudo visudo -cf /etc/sudoers.d/90-lab-desktop" : null);
                 }
                 return ResultadoDaVerificacao.ok(Item.PERMISSAO, adm == Administrador.ROOT
                     ? "Você entra como administrador (root): o app pode instalar o Docker."

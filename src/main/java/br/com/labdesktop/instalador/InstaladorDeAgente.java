@@ -160,7 +160,9 @@ public final class InstaladorDeAgente {
             List<String> desfeito = desfazer();
             return new ResultadoDaInstalacao(Desfecho.FALHOU, atual, e.getMessage(), desfeito);
         } catch (IOException e) {
-            String msg = "A conexão com o servidor caiu: " + Redator.redigir(e);
+            String msg = e instanceof br.com.labdesktop.ssh.ComandoDemorouException
+                ? "O comando demorou demais e foi interrompido (a conexão com o servidor continua de pé): " + Redator.redigir(e)
+                : "A conexão com o servidor caiu: " + Redator.redigir(e);
             obs.aoMudarPasso(atual, EstadoDoPasso.FALHOU, msg);
             List<String> desfeito = desfazer();
             return new ResultadoDaInstalacao(Desfecho.FALHOU, atual, msg, desfeito);

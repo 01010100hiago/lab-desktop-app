@@ -89,7 +89,7 @@ class PreVerificacoesTest {
         assertEquals(Estado.PROBLEMA, p.estado());
         assertTrue(p.frase().contains("não consegue instalar o Docker"), p.frase());
         assertTrue(p.frase().contains("não tenta elevar") || p.frase().contains("Peça a quem administra"), p.frase());
-        assertEquals("echo \"labuser ALL=(ALL) NOPASSWD:ALL\" | sudo tee /etc/sudoers.d/90-lab-desktop", p.comandoSugerido());
+        assertEquals("echo \"labuser ALL=(ALL) NOPASSWD:ALL\" | sudo tee /etc/sudoers.d/90-lab-desktop >/dev/null && sudo chmod 0440 /etc/sudoers.d/90-lab-desktop && sudo visudo -cf /etc/sudoers.d/90-lab-desktop", p.comandoSugerido());
         assertFalse(r.vaiInstalarODocker());
         assertEstado(r, Item.DOCKER, Estado.PROBLEMA);
     }

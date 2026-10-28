@@ -180,7 +180,7 @@ class DialogoDoAgenteTest {
 
         assertFalse(Visual.naEdt(() -> d.botaoConfirmar().isEnabled()), "com problema não se confirma");
         assertTrue(Visual.naEdt(d::textoDoBloqueio).contains("impedem de continuar"), Visual.naEdt(d::textoDoBloqueio));
-        assertTrue(Visual.naEdt(d::comandosSugeridos).contains("echo \"labuser ALL=(ALL) NOPASSWD:ALL\" | sudo tee /etc/sudoers.d/90-lab-desktop"),
+        assertTrue(Visual.naEdt(d::comandosSugeridos).contains("echo \"labuser ALL=(ALL) NOPASSWD:ALL\" | sudo tee /etc/sudoers.d/90-lab-desktop >/dev/null && sudo chmod 0440 /etc/sudoers.d/90-lab-desktop && sudo visudo -cf /etc/sudoers.d/90-lab-desktop"),
             Visual.naEdt(d::comandosSugeridos).toString());
         assertEquals("Já instalei, continuar", Visual.naEdt(() -> d.botaoConferirDeNovo().getText()),
             "sem Docker e sem administrador: quem administra instala o Docker, e o usuário volta");

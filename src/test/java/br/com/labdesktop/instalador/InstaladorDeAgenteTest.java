@@ -319,6 +319,21 @@ class InstaladorDeAgenteTest {
     }
 
     @Test
+    void comandoQueEstouraOPrazoNaoViraAConexaoCaiu() throws Exception {
+        servidor.noGrupoDocker = true;
+        servidor.demorarEm(contem(" build "));
+        verificar(ModoDaInstalacao.INSTALAR);
+        servidor.limparRegistro();
+
+        ResultadoDaInstalacao r = instalar();
+
+        assertEquals(Desfecho.FALHOU, r.desfecho());
+        assertEquals(PassoDeInstalacao.CONSTRUIR_IMAGEM, r.passo());
+        assertTrue(r.erro().contains("O comando demorou demais"), r.erro());
+        assertFalse(r.erro().contains("caiu"), r.erro());
+    }
+
+    @Test
     void agenteQueNaoRespondeDesfazTudoQueACriouEMostraOsLogsDoContainer() throws Exception {
         servidor.noGrupoDocker = true;
         servidor.logsDoContainer = "Error: listen EADDRINUSE: address already in use 127.0.0.1:7000";

@@ -153,8 +153,21 @@ public final class MontadorDoPacote {
         comando.add(pasta.toAbsolutePath().toString());
         comando.addAll(List.of(argumentos));
         Process p = new ProcessBuilder(comando).redirectErrorStream(false).start();
+        // o stderr é lido ao mesmo tempo: se ele enche o buffer do pipe enquanto só o stdout é lido, o git trava e nós com ele
+        java.util.concurrent.CompletableFuture<byte[]> lendoOErro = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                return p.getErrorStream().readAllBytes();
+            } catch (IOException e) {
+                return new byte[0];
+            }
+        });
         byte[] saida = p.getInputStream().readAllBytes();
-        byte[] erro = p.getErrorStream().readAllBytes();
+        byte[] erro;
+        try {
+            erro = lendoOErro.get();
+        } catch (java.util.concurrent.ExecutionException e) {
+            erro = new byte[0];
+        }
         if (p.waitFor() != 0) {
             throw new IOException("git " + String.join(" ", argumentos) + " falhou: " + new String(erro, StandardCharsets.UTF_8).strip());
         }

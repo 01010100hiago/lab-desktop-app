@@ -90,7 +90,7 @@ public final class ExecRemoto {
             canal.close(true);
             throw e;
         } catch (TimeoutException e) {
-            throw new IOException("O comando remoto não terminou em " + prazo.toSeconds() + " s.");
+            throw new ComandoDemorouException(prazo.toSeconds());
         } catch (ExecutionException e) {
             throw new IOException("O canal do comando remoto falhou.", e);
         }
