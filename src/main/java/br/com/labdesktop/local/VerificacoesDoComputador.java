@@ -301,7 +301,7 @@ public final class VerificacoesDoComputador {
         } catch (IOException e) {
             // não achou ou não rodou: aviso abaixo
         }
-        return ResultadoDoComputador.aviso(ItemDoComputador.GIT, "O git não está instalado. Só é preciso para importar projetos (um pacote futuro): o "
+        return ResultadoDoComputador.aviso(ItemDoComputador.GIT, "O git não está instalado. Só é preciso para importar projetos por Git: o "
             + "laboratório funciona sem ele.", null, PlanosDeInstalacao.git(so, temBrew, temWinget));
     }
 
