@@ -61,12 +61,24 @@ public final class TransporteLocal implements TransporteDeTerminal {
         return switch (comando) {
             case ComandoDeTerminal.ShellDoServidor s -> abrirShell(casa, "", tamanho);
             case ComandoDeTerminal.ShellDoProjeto s -> {
-                Path pasta = Path.of(s.pasta());
-                yield Files.isDirectory(pasta) ? abrirShell(pasta, "", tamanho) : abrirShell(casa, AVISO_SEM_PASTA, tamanho);
+                Path pasta = pastaDoSistema(windows, s.pasta());
+                yield pasta != null && Files.isDirectory(pasta) ? abrirShell(pasta, "", tamanho) : abrirShell(casa, AVISO_SEM_PASTA, tamanho);
             }
             case ComandoDeTerminal.SessaoDoClaude s -> throw new TerminalRecusadoException(
                 "As sessões do Claude locais estão desligadas (opção avançada). O terminal comum funciona normalmente.", null);
         };
+    }
+
+    /**
+     * A pasta do projeto, que o app guarda como caminho do app ({@code /Users/ana/x} ou {@code /C:/Users/João Silva/x}), como caminho do
+     * sistema ({@code C:\Users\João Silva\x} no Windows); {@code null} se não der. Visível para teste.
+     */
+    static Path pastaDoSistema(boolean windows, String pastaDoApp) {
+        try {
+            return new br.com.labdesktop.arquivos.CaminhosLocais(windows).path(pastaDoApp);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /** O programa do shell: o do usuário no Mac e no Linux, o PowerShell no Windows. Visível para teste. */

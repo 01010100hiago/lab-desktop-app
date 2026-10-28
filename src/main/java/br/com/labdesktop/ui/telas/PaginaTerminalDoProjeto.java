@@ -630,8 +630,11 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
         }
         avisouDoLimiteDoShell = false;
         String pasta = ctx.pastaDoProjeto.get();
-        boolean naPasta = ComandoDeTerminal.ShellDoProjeto.valida(pasta);
-        ComandoDeTerminal comando = naPasta ? new ComandoDeTerminal.ShellDoProjeto(pasta) : ComandoDeTerminal.ShellDoServidor.INSTANCIA;
+        // "Este computador": a pasta é só o diretório do processo, e a regra é a neutra de sistema (espaço, acento e /C:/Users/... valem);
+        // no servidor SSH ela vai para uma linha remota e a regra continua estrita
+        boolean local = ctx.servidor != null && ctx.servidor.ehLocal();
+        ComandoDeTerminal comando = comandoDoShell(pasta, local);
+        boolean naPasta = comando instanceof ComandoDeTerminal.ShellDoProjeto;
         legendaDoShell.setText(naPasta ? LEGENDA_DO_SHELL_NA_PASTA : LEGENDA_DO_SHELL_NA_PASTA_PESSOAL);
         painelDoShell = new PainelTerminal(ctx.terminal, comando, new PainelTerminal.Saida() {
             @Override
@@ -644,6 +647,12 @@ final class PaginaTerminalDoProjeto extends PaginaDoProjeto {
         cartaoDoShell.add(painelDoShell, BorderLayout.CENTER);
         cartaoDoShell.revalidate();
         cartaoDoShell.repaint();
+    }
+
+    /** O shell do projeto na pasta dele, se ela passa na regra (a do servidor SSH é estrita; a de "Este computador" é neutra de sistema); senão o do servidor. */
+    static ComandoDeTerminal comandoDoShell(String pasta, boolean local) {
+        return ComandoDeTerminal.ShellDoProjeto.valida(pasta, local) ? new ComandoDeTerminal.ShellDoProjeto(pasta, local)
+            : ComandoDeTerminal.ShellDoServidor.INSTANCIA;
     }
 
     private void encerrarOShell() {

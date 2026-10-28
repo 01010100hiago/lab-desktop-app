@@ -492,6 +492,18 @@ class TerminalDoProjetoTest {
     }
 
     @Test
+    void emEsteComputadorOShellDoProjetoAbreNaPastaMesmoComEspacoEAcentoEDiscoDoWindows() {
+        for (String pasta : new String[] {"/Users/ana/Meus Projetos/órbita", "/C:/Users/João Silva/LabLocal/projects/meu app"}) {
+            assertEquals(new br.com.labdesktop.terminal.ComandoDeTerminal.ShellDoProjeto(pasta, true), PaginaTerminalDoProjeto.comandoDoShell(pasta, true), pasta);
+            assertEquals(br.com.labdesktop.terminal.ComandoDeTerminal.ShellDoServidor.INSTANCIA, PaginaTerminalDoProjeto.comandoDoShell(pasta, false),
+                "o servidor SSH continua estrito: cai no shell do servidor");
+        }
+        assertEquals(new br.com.labdesktop.terminal.ComandoDeTerminal.ShellDoProjeto("/srv/lab/projects/orbita", false), PaginaTerminalDoProjeto.comandoDoShell("/srv/lab/projects/orbita", false));
+        assertEquals(br.com.labdesktop.terminal.ComandoDeTerminal.ShellDoServidor.INSTANCIA, PaginaTerminalDoProjeto.comandoDoShell("/Users/ana/../x", true));
+        assertEquals(br.com.labdesktop.terminal.ComandoDeTerminal.ShellDoServidor.INSTANCIA, PaginaTerminalDoProjeto.comandoDoShell(null, true));
+    }
+
+    @Test
     void voltarParaAAbaOuTrocarOSeletorDevolveOFocoAoTerminalQueJaExiste() {
         alimentar(TelaProjetoTest.detalheCom("\"aberta\": true", "\"aberta\": false"));
         mostrarAAba();

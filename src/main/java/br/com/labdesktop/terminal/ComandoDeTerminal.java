@@ -16,24 +16,50 @@ public sealed interface ComandoDeTerminal {
     }
 
     /**
-     * O shell de login do usuário, já dentro da pasta do projeto (se ela existir; senão na pasta pessoal, com um aviso). O caminho
-     * é validado na construção: só letras, números, ponto, hífen, sublinhado e barra, absoluto e sem {@code ..}.
+     * O shell de login do usuário, já dentro da pasta do projeto (se ela existir; senão na pasta pessoal, com um aviso).
+     *
+     * <p><b>No servidor SSH</b> ({@code local} falso) o caminho vai para uma linha de shell remoto, então a regra é estrita: só letras, números,
+     * ponto, hífen, sublinhado e barra, absoluto e sem {@code ..}. <b>Em "Este computador"</b> ({@code local} verdadeiro) a pasta é só o
+     * diretório de trabalho do processo (nunca parte de uma linha de comando), então a regra é neutra de sistema: caminho do app absoluto
+     * ({@code /Users/ana/x} ou {@code /C:/Users/João Silva/x}), sem {@code ..} e sem caractere de controle; espaço e acento valem.
      *
      * @throws IllegalArgumentException o caminho não passa na regra
      */
-    record ShellDoProjeto(String pasta) implements ComandoDeTerminal {
+    record ShellDoProjeto(String pasta, boolean local) implements ComandoDeTerminal {
         private static final java.util.regex.Pattern CAMINHO = java.util.regex.Pattern.compile("^/[A-Za-z0-9._/-]{1,512}$");
+        private static final java.util.regex.Pattern CONTROLE = java.util.regex.Pattern.compile("\\p{Cntrl}");
+
+        /** O shell do projeto num servidor SSH (regra estrita). */
+        public ShellDoProjeto(String pasta) {
+            this(pasta, false);
+        }
 
         public ShellDoProjeto {
-            if (pasta == null || !CAMINHO.matcher(pasta).matches() || java.util.Arrays.asList(pasta.split("/")).contains("..")) {
+            boolean ok = pasta != null && !java.util.Arrays.asList(pasta.split("/")).contains("..")
+                && (local ? pastaLocalValida(pasta) : CAMINHO.matcher(pasta).matches());
+            if (!ok) {
                 throw new IllegalArgumentException("Pasta de projeto inválida para o terminal.");
             }
         }
 
-        /** {@code true} se o caminho serve para {@link ShellDoProjeto} (senão o app abre o shell do servidor). */
+        private static boolean pastaLocalValida(String pasta) {
+            return pasta.startsWith("/") && pasta.length() <= 1024 && !CONTROLE.matcher(pasta).find();
+        }
+
+        /** O shell do projeto de "Este computador" (regra neutra de sistema: aceita espaço, acento e {@code /C:/Users/...}). */
+        public static ShellDoProjeto doComputador(String pastaDoApp) {
+            return new ShellDoProjeto(pastaDoApp, true);
+        }
+
+        /** {@code true} se o caminho serve para {@link ShellDoProjeto} num servidor SSH (senão o app abre o shell do servidor). */
         public static boolean valida(String pasta) {
+            return valida(pasta, false);
+        }
+
+        /** {@code true} se o caminho serve na regra do servidor SSH ({@code local} falso) ou na de "Este computador" ({@code local} verdadeiro). */
+        public static boolean valida(String pasta, boolean local) {
             try {
-                new ShellDoProjeto(pasta);
+                new ShellDoProjeto(pasta, local);
                 return true;
             } catch (IllegalArgumentException e) {
                 return false;

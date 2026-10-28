@@ -121,6 +121,23 @@ class TransporteLocalTest {
     }
 
     @Test
+    void projetoComEspacoEAcentoNoNomeAbreNaPastaDele() throws Exception {
+        Path projeto = Files.createDirectories(tmp.resolve("João Silva").resolve("meu projeto ç")).toRealPath();
+        CanalDeTerminal c = abrir(ComandoDeTerminal.ShellDoProjeto.doComputador(projeto.toString()), TamanhoDeTerminal.PADRAO);
+        digitar(c, "pwd -P");
+        lerAte(c, projeto.toString());
+    }
+
+    @Test
+    void aPastaDoAppViraPastaDoSistemaNosTresSistemas() {
+        assertEquals(Path.of("/Users/ana/Meus Projetos/x"), TransporteLocal.pastaDoSistema(false, "/Users/ana/Meus Projetos/x"));
+        assertEquals("C:\\Users\\João Silva\\LabLocal\\projects\\app novo", TransporteLocal.pastaDoSistema(true, "/C:/Users/João Silva/LabLocal/projects/app novo").toString()
+            .replace('/', '\\'), "no Windows o disco entra como o primeiro trecho (testado como texto, num Mac)");
+        assertEquals(null, TransporteLocal.pastaDoSistema(true, "/"), "a raiz do Windows é a lista de discos: sem pasta");
+        assertEquals(null, TransporteLocal.pastaDoSistema(true, "/Users/ana"), "no Windows o caminho começa pelo disco");
+    }
+
+    @Test
     void projetoSemPastaAbreNaPastaPessoalEDizIsso() throws Exception {
         CanalDeTerminal canal = abrir(new ComandoDeTerminal.ShellDoProjeto(tmp.resolve("nao-existe").toString()), TamanhoDeTerminal.PADRAO);
         String saida = lerAte(canal, "pasta pessoal");

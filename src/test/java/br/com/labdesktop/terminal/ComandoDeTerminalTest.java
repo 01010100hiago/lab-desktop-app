@@ -45,6 +45,22 @@ class ComandoDeTerminalTest {
     }
 
     @Test
+    void naPastaDeEsteComputadorEspacoAcentoEDiscoDoWindowsValemMasSeguemSemPontoPontoENuloOuControle() {
+        for (String boa : new String[] {"/C:/Users/João Silva/LabLocal/projects/meu app", "/Users/ana/Meus Projetos/ação", "/C:/Users/ana", "/x"}) {
+            assertTrue(ShellDoProjeto.valida(boa, true), boa);
+            assertEquals(boa, ShellDoProjeto.doComputador(boa).pasta());
+            assertTrue(ShellDoProjeto.doComputador(boa).local());
+            assertFalse(ShellDoProjeto.valida(boa, false) && boa.contains(" "), "o servidor SSH continua estrito: " + boa);
+        }
+        for (String ruim : new String[] {"", "relativa/x", "C:\\Users\\ana", "/a/../b", "/a\nb", "/a\u0000b", "/a\tb", "/" + "x".repeat(1100), null}) {
+            assertFalse(ShellDoProjeto.valida(ruim, true), "aceitou: " + ruim);
+            assertThrows(IllegalArgumentException.class, () -> ShellDoProjeto.doComputador(ruim));
+        }
+        assertFalse(ShellDoProjeto.valida("/C:/Users/João Silva/x"), "o servidor SSH não aceita acento, espaço nem dois-pontos");
+        assertFalse(new ShellDoProjeto("/srv/lab/x").local());
+    }
+
+    @Test
     void tamanhoNuncaSaiDaFaixa() {
         assertEquals(1, new TamanhoDeTerminal(0, -5).colunas());
         assertEquals(1, new TamanhoDeTerminal(0, -5).linhas());

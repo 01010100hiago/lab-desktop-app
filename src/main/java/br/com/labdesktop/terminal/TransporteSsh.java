@@ -41,7 +41,12 @@ public final class TransporteSsh implements TransporteDeTerminal {
         try {
             PtyCapableChannelSession canal = switch (comando) {
                 case ComandoDeTerminal.ShellDoServidor s -> conexao.abrirShellPty(tamanho.colunas(), tamanho.linhas());
-                case ComandoDeTerminal.ShellDoProjeto s -> conexao.abrirShellDoProjetoPty(s.pasta(), tamanho.colunas(), tamanho.linhas());
+                case ComandoDeTerminal.ShellDoProjeto s -> {
+                    if (s.local()) {
+                        throw new TerminalRecusadoException("Uma pasta de \"Este computador\" não vale num servidor SSH.", null);
+                    }
+                    yield conexao.abrirShellDoProjetoPty(s.pasta(), tamanho.colunas(), tamanho.linhas());
+                }
                 case ComandoDeTerminal.SessaoDoClaude s ->
                     conexao.abrirCanalPty(s.projeto(), donoExclusivo.getAsBoolean(), tamanho.colunas(), tamanho.linhas());
             };
