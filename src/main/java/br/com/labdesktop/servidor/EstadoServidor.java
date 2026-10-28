@@ -24,6 +24,7 @@ import java.time.Instant;
  * @param nomeDoDispositivo  nome do token deste Mac no agente; {@code null} sem token registrado
  * @param versao             última resposta de {@code /api/versao}; {@code null} antes da primeira
  * @param limites            último {@code /api/limites}; {@code null} antes da primeira leitura
+ * @param situacaoDoAgente   o que a leitura por SSH disse do agente quando ele não responde (instalado ou não)
  */
 public record EstadoServidor(
     String servidorId,
@@ -37,39 +38,59 @@ public record EstadoServidor(
     Estado2fa estado2fa,
     String nomeDoDispositivo,
     VersaoAgente versao,
-    LimitesConta limites) {
+    LimitesConta limites,
+    SituacaoDoAgente situacaoDoAgente) {
+
+    public EstadoServidor {
+        if (situacaoDoAgente == null) {
+            situacaoDoAgente = SituacaoDoAgente.DESCONHECIDA;
+        }
+    }
+
+    /** Sem a situação do agente (desconhecida): o que quase todo teste e a criação do servidor usam. */
+    public EstadoServidor(String servidorId, String nome, EstadoConexao conexao, Falha falha, int tentativa,
+                          Instant proximaTentativaEm, Instant semConexaoDesde, long geracao, Estado2fa estado2fa,
+                          String nomeDoDispositivo, VersaoAgente versao, LimitesConta limites) {
+        this(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde, geracao, estado2fa,
+            nomeDoDispositivo, versao, limites, SituacaoDoAgente.DESCONHECIDA);
+    }
 
     /** Copia com o retrato novo da conexão SSH. */
     EstadoServidor comConexao(br.com.labdesktop.ssh.InfoConexao info) {
         return new EstadoServidor(servidorId, nome, info.estado(), info.falha(), info.tentativa(),
             info.proximaTentativaEm(), info.semConexaoDesde(), info.geracao(), estado2fa, nomeDoDispositivo, versao,
-            limites);
+            limites, info.estado() == EstadoConexao.SSH_OK_SEM_AGENTE ? situacaoDoAgente : SituacaoDoAgente.DESCONHECIDA);
     }
 
     EstadoServidor comVersao(VersaoAgente nova, Estado2fa novoEstado2fa) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, novoEstado2fa, nomeDoDispositivo, nova, limites);
+            geracao, novoEstado2fa, nomeDoDispositivo, nova, limites, situacaoDoAgente);
     }
 
     EstadoServidor comLimites(LimitesConta novos) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, novos);
+            geracao, estado2fa, nomeDoDispositivo, versao, novos, situacaoDoAgente);
     }
 
     EstadoServidor comEstado2fa(Estado2fa novo) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, novo, nomeDoDispositivo, versao, limites);
+            geracao, novo, nomeDoDispositivo, versao, limites, situacaoDoAgente);
     }
 
     EstadoServidor comDispositivo(String nomeNovo) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeNovo, versao, limites);
+            geracao, estado2fa, nomeNovo, versao, limites, situacaoDoAgente);
     }
 
     /** Copia com o nome novo (o usuário editou o servidor). */
     EstadoServidor comNome(String nomeNovo) {
         return new EstadoServidor(servidorId, nomeNovo, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, limites);
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente);
+    }
+
+    EstadoServidor comSituacaoDoAgente(SituacaoDoAgente nova) {
+        return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, nova);
     }
 
     /** O % usado da semana, para a barra lateral e o ícone; {@code null} sem leitura que valha. */
@@ -85,6 +106,24 @@ public record EstadoServidor(
     /** O agente fala outra versão do contrato (a tela avisa "agente incompatível"). */
     public boolean agenteIncompativel() {
         return versao != null && !versao.compativel();
+    }
+
+    /**
+     * O servidor tem sessões do Claude, segundo o agente ({@code recursos.claude} de {@code /api/versao}); {@code null} quando o agente
+     * não disse (agente antigo, ou ainda não respondeu): quem pergunta decide o que assume.
+     */
+    public Boolean temClaude() {
+        return versao == null ? null : versao.temClaude();
+    }
+
+    /** O servidor tem projetos? Desconhecido vale como sim: a aba Projetos só some quando o agente diz que o servidor não os tem. */
+    public boolean temProjetos() {
+        return versao == null || versao.temProjetos();
+    }
+
+    /** O agente é do perfil monitor (o que o app instala): é o único que o app atualiza e remove. */
+    public boolean agenteDoMonitor() {
+        return versao != null && versao.perfilMonitor();
     }
 
     /** O token deste Mac ainda não foi registrado (ou o cofre não o tem). */
