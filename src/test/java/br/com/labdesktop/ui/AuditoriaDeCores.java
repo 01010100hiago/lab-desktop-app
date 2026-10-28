@@ -36,7 +36,7 @@ public final class AuditoriaDeCores {
     public static final double MINIMO_DE_ICONE = 3.0;
 
     /** Os estados medidos. */
-    public enum Estado { NORMAL, DESABILITADO, MOUSE_EM_CIMA, APERTADO, MARCADO }
+    public enum Estado { NORMAL, DESABILITADO, MOUSE_EM_CIMA, APERTADO, MARCADO, FOCADO }
 
     /** Uma medida: quem, em que estado, as cores vistas e o veredito. */
     public record Medida(String quem, Estado estado, Color fundo, Color tinta, double contraste, double minimo, String fundoPuro) {
@@ -52,7 +52,96 @@ public final class AuditoriaDeCores {
         }
     }
 
+    /** Mínimo de contraste do contorno de um botão ou campo contra o que o cerca (WCAG 1.4.11: o que se precisa ver para saber onde clicar) e do anel de foco. */
+    public static final double MINIMO_DE_CONTORNO = 3.0;
+
     private AuditoriaDeCores() { }
+
+    /** Um gerente de foco de mentira: o componente que o teste escolhe É quem tem o foco (o FlatLaf pinta o anel de foco só em quem tem o foco de verdade). */
+    private static final class GerenteDeFocoFalso extends java.awt.DefaultKeyboardFocusManager {
+        private volatile Component focado;
+
+        @Override
+        public Component getFocusOwner() {
+            return focado;
+        }
+
+        @Override
+        public Component getPermanentFocusOwner() {
+            return focado;
+        }
+    }
+
+    /**
+     * Mede UMA peça solta (uma dica de ferramenta, um menu, o texto de um campo vazio): a cor mais comum é o fundo e o pixel de maior contraste é a tinta. Para o que não é um
+     * controle (o {@code interativos} não o acha) ou que mostra texto que só existe pintado (a dica de um campo vazio).
+     */
+    public static Medida medirPeca(String nome, JComponent peca, int largura, int altura, double minimo) {
+        peca.setSize(largura, altura);
+        Visual.layoutar(peca);
+        BufferedImage img = pintar(peca, largura, altura);
+        Color[] ft = fundoETinta(img, new Rectangle(0, 0, largura, altura));
+        return new Medida(nome, Estado.NORMAL, ft[0], ft[1], contraste(ft[0], ft[1]), minimo, null);
+    }
+
+    private static boolean temContorno(JComponent c) {
+        if (c instanceof br.com.labdesktop.ui.componentes.Botao b) {
+            return b.variante() == br.com.labdesktop.ui.componentes.Botao.Variante.SECUNDARIO || b.variante() == br.com.labdesktop.ui.componentes.Botao.Variante.PERIGO;
+        }
+        return c instanceof javax.swing.JTextField || c instanceof JComboBox<?>;
+    }
+
+    /** O contorno de um controle contra o que está fora dele: o primeiro pixel diferente do de fora, descendo do meio da borda de cima. {@code null}: não tem contorno visível. */
+    private static Medida medirContorno(JComponent c, JComponent raiz, BufferedImage img) {
+        Rectangle r = ondeEsta(c, raiz).intersection(new Rectangle(0, 0, img.getWidth(), img.getHeight()));
+        if (r.isEmpty() || r.height < 10) {
+            return null;
+        }
+        if (r.y < 1) {
+            return null; // sem pixel acima do componente não há "fora" para comparar
+        }
+        int x = r.x + r.width / 2;
+        int fora = img.getRGB(x, r.y - 1) & 0xFFFFFF; // o que está logo ACIMA do componente (há controle sem margem de foco, com o contorno na primeira linha dele)
+        for (int y = r.y; y < r.y + Math.min(6, r.height / 2); y++) {
+            int p = img.getRGB(x, y) & 0xFFFFFF;
+            if (p != fora) {
+                Color forac = new Color(fora);
+                Color contorno = new Color(p);
+                return new Medida(nome(c, raiz) + " (contorno)", Estado.NORMAL, forac, contorno, contraste(forac, contorno), MINIMO_DE_CONTORNO, null);
+            }
+        }
+        return null;
+    }
+
+    /** O anel de foco: o que MUDA na área do componente quando ele passa a ter o foco (o FlatLaf o desenha na borda, ou em volta do quadradinho de uma caixa de marcar). Quanto o pixel que mais mudou contrasta com o que havia. */
+    private static Medida medirAnel(JComponent c, JComponent raiz, BufferedImage semFoco, BufferedImage comFoco) {
+        Rectangle r = ondeEsta(c, raiz).intersection(new Rectangle(0, 0, semFoco.getWidth(), semFoco.getHeight()));
+        if (r.isEmpty()) {
+            return null;
+        }
+        double melhor = 1;
+        Color antes = null;
+        Color depois = null;
+        for (int y = r.y; y < r.y + r.height; y++) {
+            for (int x = r.x; x < r.x + r.width; x++) {
+                int a = semFoco.getRGB(x, y) & 0xFFFFFF;
+                int d = comFoco.getRGB(x, y) & 0xFFFFFF;
+                if (a != d) {
+                    double k = contraste(new Color(a), new Color(d));
+                    if (antes == null || k > melhor) {
+                        melhor = k;
+                        antes = new Color(a);
+                        depois = new Color(d);
+                    }
+                }
+            }
+        }
+        if (antes == null) {
+            antes = new Color(semFoco.getRGB(r.x, r.y) & 0xFFFFFF);
+            depois = antes;
+        }
+        return new Medida(nome(c, raiz) + " (anel de foco)", Estado.FOCADO, antes, depois, contraste(antes, depois), MINIMO_DE_CONTORNO, null);
+    }
 
     public static String hex(Color c) {
         return String.format("#%02X%02X%02X", c.getRed(), c.getGreen(), c.getBlue());
@@ -135,7 +224,7 @@ public final class AuditoriaDeCores {
     }
 
     /** Pinta, sem suavizar o texto (o pixel da letra tem a cor exata da fonte), a árvore já dimensionada. */
-    static BufferedImage pintar(JComponent raiz, int largura, int altura) {
+    public static BufferedImage pintar(JComponent raiz, int largura, int altura) {
         BufferedImage img = new BufferedImage(largura, altura, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -308,6 +397,11 @@ public final class AuditoriaDeCores {
                 }
                 b.setSelected(true);
             }
+            case FOCADO -> {
+                // um parágrafo só de leitura (selecionável para copiar) não é um controle: não ganha anel de foco
+                boolean soLeitura = c instanceof javax.swing.text.JTextComponent t && !t.isEditable();
+                return c.isEnabled() && c.isFocusable() && !soLeitura;
+            }
         }
         return true;
     }
@@ -327,8 +421,13 @@ public final class AuditoriaDeCores {
         List<Guardado> antes = new ArrayList<>();
         alvos.forEach(c -> antes.add(guardar(c)));
         List<Medida> medidas = new ArrayList<>();
+        BufferedImage imagemNormal = null;
+        java.awt.KeyboardFocusManager gerenteDeAntes = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager();
         try {
             for (Estado e : Estado.values()) {
+                if (e == Estado.FOCADO) {
+                    continue; // um componente por vez, mais abaixo
+                }
                 List<JComponent> nesteEstado = new ArrayList<>();
                 for (JComponent c : alvos) {
                     if (e == Estado.MARCADO && !forcarMarcado) {
@@ -342,6 +441,9 @@ public final class AuditoriaDeCores {
                     continue;
                 }
                 BufferedImage img = pintar(raiz, largura, altura);
+                if (e == Estado.NORMAL) {
+                    imagemNormal = img;
+                }
                 for (JComponent c : nesteEstado) {
                     Rectangle r = ondeEsta(c, raiz);
                     if (r.intersection(new Rectangle(0, 0, largura, altura)).isEmpty()) {
@@ -354,6 +456,12 @@ public final class AuditoriaDeCores {
                     double minimo = soIcone ? MINIMO_DE_ICONE : MINIMO_DE_TEXTO;
                     Estado visto = e == Estado.NORMAL && c instanceof JToggleButton t && t.isSelected() ? Estado.MARCADO : e;
                     medidas.add(new Medida(nome(c, raiz), visto, ft[0], ft[1], contraste(ft[0], ft[1]), minimo, fundoPuro(ft[0])));
+                    if (e == Estado.NORMAL && c.isEnabled() && temContorno(c)) { // desabilitado é exceção do WCAG: nele o contorno apagado é de propósito
+                        Medida contorno = medirContorno(c, raiz, img);
+                        if (contorno != null) {
+                            medidas.add(contorno);
+                        }
+                    }
                     if (c instanceof AbstractButton b && b.getText() != null && !b.getText().isBlank()) {
                         Rectangle ri = partes[0];
                         if (ri != null && ri.width > 2 && !ri.intersection(new Rectangle(0, 0, largura, altura)).isEmpty()) {
@@ -366,7 +474,29 @@ public final class AuditoriaDeCores {
                     restaurar(g);
                 }
             }
+            // FOCADO: um componente de cada vez tem o foco, e o anel dele tem de aparecer contra o que havia
+            if (imagemNormal != null) {
+                GerenteDeFocoFalso falso = new GerenteDeFocoFalso();
+                java.awt.KeyboardFocusManager.setCurrentKeyboardFocusManager(falso);
+                for (JComponent c : alvos) {
+                    if (!aplicar(c, Estado.FOCADO)) {
+                        continue;
+                    }
+                    Rectangle r = ondeEsta(c, raiz);
+                    if (r.intersection(new Rectangle(0, 0, largura, altura)).isEmpty()) {
+                        continue;
+                    }
+                    falso.focado = c;
+                    BufferedImage comFoco = pintar(raiz, largura, altura);
+                    Medida anel = medirAnel(c, raiz, imagemNormal, comFoco);
+                    if (anel != null) {
+                        medidas.add(anel);
+                    }
+                    falso.focado = null;
+                }
+            }
         } finally {
+            java.awt.KeyboardFocusManager.setCurrentKeyboardFocusManager(gerenteDeAntes);
             antes.forEach(AuditoriaDeCores::restaurar);
         }
         return medidas;

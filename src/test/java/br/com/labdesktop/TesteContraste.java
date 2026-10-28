@@ -96,6 +96,10 @@ class TesteContraste {
         l.add(new Par(Tokens.FOCO, Tokens.SUPERFICIE, COMPONENTE)); // anel de foco: componente, não texto
         l.add(new Par(Tokens.FOCO, Tokens.BG, COMPONENTE));
         l.add(new Par(Tokens.DESTAQUE, Tokens.SUPERFICIE, COMPONENTE)); // preenchimento da ação primária contra a superfície
+        for (String s : superficies) {
+            l.add(new Par(Tokens.BORDA_DE_CONTROLE, s, COMPONENTE)); // contorno de botão secundário, campo e lista suspensa (antes era 1,7:1 no claro e 1,9:1 no escuro)
+            l.add(new Par(Tokens.FOCO, s, COMPONENTE)); // e o anel de foco em toda superfície
+        }
         return l;
     }
 

@@ -88,7 +88,7 @@ public final class TextoCorrido extends JTextArea {
 
     @Override
     public Color getDisabledTextColor() {
-        return Tokens.cor(Tokens.TEXTO3);
+        return Tokens.cor(Tokens.TEXTO2); // o apagado TEXTO3 dava 4,44:1 sobre o fundo suave do aviso de atenção no escuro (minimo 4,5)
     }
 
     /** A altura que o texto pede numa largura dada (os testes comparam com a que o layout deu: texto CORTADO é altura dada menor que esta). */

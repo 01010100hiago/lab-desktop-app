@@ -24,6 +24,8 @@ public final class Tokens {
     public static final String BORDA = "Lab.borda";
     public static final String BORDA_FORTE = "Lab.bordaForte";
     public static final String BORDA_SUTIL = "Lab.bordaSutil";
+    /** O contorno de um controle (botão secundário, campo, lista suspensa, caixa de marcar): contraste mínimo de 3:1 com a superfície (WCAG 1.4.11), ao contrário da {@link #BORDA} dos cartões e divisórias. */
+    public static final String BORDA_DE_CONTROLE = "Lab.bordaDeControle";
     public static final String TEXTO = "Lab.texto";
     public static final String TEXTO2 = "Lab.texto2";
     public static final String TEXTO3 = "Lab.texto3";
@@ -58,7 +60,7 @@ public final class Tokens {
 
     /** Todas as chaves: um teste confere que os dois temas definem cada uma. */
     public static final List<String> TODAS = List.of(
-        BG, BG2, SUPERFICIE, SUPERFICIE2, SUPERFICIE3, BORDA, BORDA_FORTE, BORDA_SUTIL,
+        BG, BG2, SUPERFICIE, SUPERFICIE2, SUPERFICIE3, BORDA, BORDA_FORTE, BORDA_SUTIL, BORDA_DE_CONTROLE,
         TEXTO, TEXTO2, TEXTO3, TEXTO_INVERSO,
         DESTAQUE, DESTAQUE_FORTE, DESTAQUE_TEXTO, DESTAQUE_SUAVE, DESTAQUE_BORDA,
         OK, OK_SUAVE, ATENCAO, ATENCAO_SUAVE, PERIGO, PERIGO_SUAVE, PERIGO_FORTE, FOCO, TRILHO,

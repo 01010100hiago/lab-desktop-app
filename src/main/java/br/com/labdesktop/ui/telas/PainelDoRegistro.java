@@ -535,7 +535,7 @@ public final class PainelDoRegistro extends Painel {
      * O menu de contexto da lista, montado NA HORA de abrir (nunca guardado): um menu criado uma vez e escondido não está em janela nenhuma, então a troca de tema
      * não o atualizava e ele voltava com as cores de antes.
      */
-    JPopupMenu menuDeContexto() {
+    public JPopupMenu menuDeContexto() {
         JPopupMenu menu = new JPopupMenu();
         JMenuItem copiarSel = new JMenuItem("Copiar as linhas selecionadas");
         copiarSel.addActionListener(e -> copiarSelecionadas());
