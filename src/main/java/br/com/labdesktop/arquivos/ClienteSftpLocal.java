@@ -20,6 +20,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -254,7 +255,8 @@ public final class ClienteSftpLocal implements ClienteSftp {
             if (pasta != null && !Files.isWritable(pasta)) {
                 throw ErroSftp.semPermissao("gravar nesta pasta");
             }
-            Files.write(tmp, conteudo, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            criarPrivado(tmp); // já nasce 0600: o conteúdo nunca fica legível por outros durante a gravação
+            Files.write(tmp, conteudo, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
             if (bits >= 0 && Files.getFileAttributeView(tmp, PosixFileAttributeView.class) != null) {
                 Files.setPosixFilePermissions(tmp, permissoesDe(bits));
             }
@@ -309,8 +311,9 @@ public final class ClienteSftpLocal implements ClienteSftp {
         try {
             long total = Files.size(origem);
             AtomicLong feitos = new AtomicLong();
-            try (InputStream in = Files.newInputStream(origem); OutputStream out = Files.newOutputStream(tmp, StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE)) {
+            criarPrivado(tmp);
+            try (InputStream in = Files.newInputStream(origem); OutputStream out = Files.newOutputStream(tmp, StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING)) {
                 byte[] b = new byte[BLOCO];
                 int n;
                 while ((n = in.read(b)) != -1) {
@@ -510,6 +513,18 @@ public final class ClienteSftpLocal implements ClienteSftp {
     }
 
     // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Cria o arquivo temporário JÁ com permissão 0600 (onde há POSIX), em vez de criá-lo com a permissão padrão e trocar depois: não há janela em
+     * que outro usuário do computador o leria. No Windows (sem POSIX) é um arquivo comum. Falha se já existe.
+     */
+    static void criarPrivado(Path tmp) throws IOException {
+        if (java.nio.file.FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            Files.createFile(tmp, java.nio.file.attribute.PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+        } else {
+            Files.createFile(tmp);
+        }
+    }
 
     private static Path temporarioAo(Path alvo, String marca) {
         byte[] b = new byte[5];

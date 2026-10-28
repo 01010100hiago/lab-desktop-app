@@ -299,4 +299,16 @@ class ClienteSftpLocalTest {
         assertFalse(Files.exists(raiz.resolve("p")));
         assertTrue(Files.exists(alvo.resolve("a.txt")), "o destino do link intacto");
     }
+
+    @Test
+    void oTemporarioDeGravarNasceComPermissao0600ENaoSoDepois() throws Exception {
+        Path t = raiz.resolve(".temporario.tmp");
+        ClienteSftpLocal.criarPrivado(t);
+        assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(t)), "nada de 0644 nem do umask: nasce 0600");
+        assertThrows(java.nio.file.FileAlreadyExistsException.class, () -> ClienteSftpLocal.criarPrivado(t), "como antes, nunca por cima de um existente");
+        // o resultado final continua com a permissão pedida
+        c.gravarAtomico(t("novo.txt"), "oi".getBytes(StandardCharsets.UTF_8), 0644);
+        assertEquals("rw-r--r--", PosixFilePermissions.toString(Files.getPosixFilePermissions(raiz.resolve("novo.txt"))));
+        assertEquals("oi", Files.readString(raiz.resolve("novo.txt")));
+    }
 }
