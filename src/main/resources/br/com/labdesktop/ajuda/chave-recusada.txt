@@ -3,15 +3,18 @@
 @busca: chave recusada autenticação ssh authorized_keys acesso negado senha errada conta bloqueada permissões
 @resumo: O servidor respondeu, mas não aceitou a chave deste app para o seu usuário.
 @onde: A frase do motivo | Faixa vermelha no alto da página do servidor
+@onde: Botão que conserta | Cartão do servidor, página do servidor ou Servidor > Instalar a chave com a senha… | servidores
 1. Abra o servidor na barra da esquerda e leia a faixa vermelha no alto: ela diz o motivo.
-2. A causa mais comum é a chave não estar no acesso do usuário. Peça a quem administra o servidor para pôr a linha da chave do app.
-3. Se o servidor ainda aceita senha, remova-o e adicione de novo: o app instala a chave. Sem senha, use o painel do provedor, outra chave ou o acesso físico.
-4. Quando a chave estiver lá, clique em "Tentar agora".
+2. A causa mais comum é a chave não estar no acesso do usuário no servidor.
+3. Se você ainda tem a senha do usuário, clique em "Instalar a chave com a senha…": o app usa a senha uma vez e prova que a chave entra.
+4. Sem a senha, peça a quem administra o servidor para pôr a linha da chave. Em "Editar", na parte Acesso, há o botão para copiá-la.
+5. Quando a chave estiver lá, clique em "Tentar agora".
 [Ir para Servidores](ir:servidores)
 @veja: conectar sem-conexao token-recusado
 ## Mais detalhes
-A linha da chave aparece, com botão de copiar, nas "Opções avançadas" do passo da chave do assistente de Adicionar servidor e de novo no passo da conexão quando o servidor recusa. Se precisar dela outra vez, remova o servidor e adicione-o de novo.
+"Instalar a chave com a senha…" serve para um servidor que já está no app e que o servidor recusa. Ele mostra a impressão digital do servidor que você confirmou antes e a da chave que será instalada, pede a senha do usuário uma vez e só a envia se o servidor for o mesmo de antes. Se a impressão digital mudou, o app para e não envia nada: se você reinstalou o servidor, use "Remover servidor" e adicione-o de novo. Depois de instalar, o app prova a chave numa conexão nova e reconecta; o estado volta a "Conectado". O botão não desliga o login por senha: isso se faz em Servidor, Segurança.
+A mesma chave pública, com o botão de copiar, está em "Editar", na parte Acesso, e nas "Opções avançadas" do assistente de Adicionar servidor. O botão fica desligado enquanto há mudança sem salvar no Editar: salve antes.
 Se o assistente diz "O servidor não aceitou a chave", confira se o servidor permite login por chave (PubkeyAuthentication) e se a pasta .ssh do usuário tem permissão 700 e o arquivo authorized_keys, 600. Nesse caso o app não mexe em mais nada.
 Se a senha foi recusada, o app diz, apaga o campo e conta quantas tentativas restam: são no máximo 4 em 10 minutos, porque o servidor pode bloquear o seu endereço depois de várias senhas erradas. Se o app diz que a conta pode estar bloqueada, espere uns minutos antes de tentar de novo.
 Outras causas: o servidor lê as chaves de outro lugar (AuthorizedKeysFile ou AuthorizedKeysCommand diferentes do padrão): o app grava em ~/.ssh/authorized_keys e, se o servidor não o lê, a prova falha e o app diz. Se o app avisa que a pasta pessoal aceita escrita por grupo ou outros, quem administra o servidor precisa tirar essa escrita (chmod go-w): o app nunca muda isso.
-Se a faixa diz que o app não conseguiu USAR a chave, o problema é no arquivo da chave no cofre, e não no servidor. Se diz que a chave do servidor MUDOU, não conecte antes de saber o porquê: pode ser outra máquina. Se você reinstalou o servidor, use "Remover servidor" e adicione-o de novo para conferir a impressão digital outra vez.
+Se a faixa diz que o app não conseguiu USAR a chave, o problema é no arquivo da chave no cofre, e não no servidor. Se diz que a chave do servidor MUDOU, não conecte antes de saber o porquê: pode ser outra máquina. Se você reinstalou o servidor, use "Remover servidor" e adicione-o de novo para conferir a impressão digital outra vez. O app nunca volta a confiar sozinho.

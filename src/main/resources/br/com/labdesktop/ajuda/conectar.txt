@@ -3,6 +3,7 @@
 @busca: conectar primeira conexão senha chave host impressão digital desligar senha token 2fa ssh autenticador
 @resumo: A senha vale uma vez: o app instala a chave, prova que entra e passa a usar só a chave.
 @onde: Botão Adicionar (servidor) | Barra da esquerda > Adicionar | servidores
+@onde: Servidor que recusou a chave | Servidor > Instalar a chave com a senha… | servidores
 @onde: Desligar o login por senha | Servidor > Segurança > SSH e bloqueio | seguranca
 @onde: Código do autenticador (2FA) | Menu Servidor > Configurar 2FA…
 1. Clique em Adicionar, no alto da barra da esquerda, escolha "Outro servidor (SSH)" e preencha os dados.
@@ -15,6 +16,7 @@
 ## Mais detalhes
 Primeira conexão com senha: o app só usa a senha neste passo. Ele guarda a chave cifrada no cofre e nunca a senha. O app tenta no máximo 4 senhas em 10 minutos (com pausas entre as primeiras) e diz quantas restam, porque o servidor pode bloquear o seu endereço depois de várias senhas erradas. O app avisa, em palavras simples, quando a senha está errada, a conta está bloqueada, a senha venceu ou o endereço mudou.
 Digite a senha direto no campo. Evite colar de gerenciadores de senha que guardam histórico: no Windows, o histórico da área de transferência e o arquivo de paginação do sistema podem reter uma senha que passou pela tela, e o app não controla isso.
+Servidor que já está no app e recusa a chave: use "Instalar a chave com a senha…" (menu Servidor, cartão ou aviso). É o mesmo caminho, sem refazer o cadastro, e vale o mesmo freio de 4 senhas em 10 minutos.
 Se o servidor não aceita senha (só chave, ou só o teclado interativo), ou não aceita a chave depois de instalada, o app abre as "Opções avançadas" com a chave pública e o comando para quem administra o servidor instalar. Se você prefere não digitar a senha, esse caminho também serve.
 Desligar a senha: o app nunca faz isso sozinho. Use "Desligar a senha…" no último passo ou em Servidor, Segurança, SSH e bloqueio. Ele mostra o que vai fazer e os riscos em destaque, pede para você marcar que tem outro jeito de entrar (outra chave, painel do provedor ou acesso físico) e digitar o nome do servidor exatamente como está escrito, faz uma cópia datada do arquivo do SSH, confere a configuração, recarrega o SSH sem reiniciar e prova que a chave ainda entra. Antes de gravar, ele arma um desfazer no próprio servidor (2 minutos): se o app fechar ou a conexão cair no meio, o servidor volta sozinho, e o app diz "talvez aplicado" em vez de afirmar o que não conferiu. Se a chave não entrar, desfaz sozinho e conta o que aconteceu.
 Para desligar a senha o usuário precisa ser administrador ou ter sudo sem senha; senão o app mostra o comando para você rodar no servidor. O app não liga a senha de novo: o comando para voltar atrás aparece na própria tela. Servidores gerenciados por outra ferramenta (cloud-init, painel do provedor) podem desfazer a mudança.
