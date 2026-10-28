@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * O relatório de um período: para cada métrica, mínimo, média, máximo, percentil 95 e a hora do pico; frases de resumo em português simples ("Disco chegou a 83% na quinta às
- * 14:10"); a estimativa do disco (só com 24 h de dados, e dita como estimativa) e o aviso de quanto do período tem dado de verdade. PURO: o relógio e o fuso entram por
+ * 14:10"); a estimativa do disco (só com 3 dias ou mais de dados, e dita como estimativa) e o aviso de quanto do período tem dado de verdade. PURO: o relógio e o fuso entram por
  * parâmetro, nada é lido do sistema.
  */
 public final class RelatorioDeTendencias {
@@ -40,7 +40,7 @@ public final class RelatorioDeTendencias {
         for (Metrica m : Metrica.values()) {
             linhas.add(new Linha(m, EstatisticaDeSerie.de(dados.amostras(m), m.temMaximo() ? dados.amostrasDeMaximo(m) : null)));
         }
-        this.estimativa = dados.janela().cobreUmDiaOuMais()
+        this.estimativa = dados.janela().cobreTresDiasOuMais()
             ? EstimativaDeDisco.de(dados.amostras(Metrica.DISCO), dados.passo())
             : new EstimativaDeDisco.Resultado(EstimativaDeDisco.Tipo.POUCO_DADO, null, null, Duration.ZERO, null);
         double melhor = 0;
@@ -134,15 +134,15 @@ public final class RelatorioDeTendencias {
 
     /** A frase da estimativa do disco (sempre dita como estimativa). */
     public String fraseDaEstimativa() {
-        if (!dados.janela().cobreUmDiaOuMais()) {
-            return "Estimativa do disco: precisa de pelo menos 24 horas de dados. Escolha 1 dia ou mais.";
+        if (!dados.janela().cobreTresDiasOuMais()) {
+            return "Estimativa do disco: precisa de pelo menos 3 dias de dados. Escolha 1 semana ou mais.";
         }
         if (dados.amostras(Metrica.DISCO).stream().noneMatch(Amostra::valida)) {
             return "Estimativa do disco: sem dado do disco neste período.";
         }
         EstimativaDeDisco.Resultado r = estimativa;
         return switch (r.tipo()) {
-            case POUCO_DADO -> "Estimativa do disco: ainda não há 24 horas de dados do disco, então não dá para estimar.";
+            case POUCO_DADO -> "Estimativa do disco: ainda não há 3 dias de dados do disco, então não dá para estimar.";
             case ESTAVEL -> "Estimativa do disco: o uso está estável (muda menos de 0,05 ponto percentual por dia). É uma estimativa pela tendência do período.";
             case DIMINUINDO -> "Estimativa do disco: o uso está diminuindo (cerca de " + Formato.fmtNum(Math.abs(r.porDia()) * 100, 1) + " ponto percentual por dia). É uma estimativa pela tendência do período.";
             case ENCHENDO -> "Estimativa do disco: no ritmo atual, enche " + emDias(r.diasParaEncher()) + ". É uma estimativa pela tendência do período; muda se o uso mudar.";

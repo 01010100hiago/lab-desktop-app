@@ -142,13 +142,50 @@ class EstatisticaEEstimativaTest {
     }
 
     @Test
-    void menosDeVinteEQuatroHorasOuMenosDeDozePontosNaoEstima() {
-        EstimativaDeDisco.Resultado vinteETresHoras = EstimativaDeDisco.de(serie(Duration.ofMinutes(10), rampa(138, 0.5, 0.01, 1 / 144d)), Duration.ofMinutes(10));
-        assertEquals(Tipo.POUCO_DADO, vinteETresHoras.tipo(), "138 x 10 min = 23 h");
-        assertNull(vinteETresHoras.diasParaEncher());
+    void menosDeTresDiasOuMenosDeDozePontosNaoEstima() {
+        EstimativaDeDisco.Resultado setentaEUmaHoras = EstimativaDeDisco.de(serie(Duration.ofMinutes(10), rampa(426, 0.5, 0.01, 1 / 144d)), Duration.ofMinutes(10));
+        assertEquals(Tipo.POUCO_DADO, setentaEUmaHoras.tipo(), "426 x 10 min = 71 h");
+        assertNull(setentaEUmaHoras.diasParaEncher());
+        EstimativaDeDisco.Resultado umDia = EstimativaDeDisco.de(serie(Duration.ofMinutes(10), rampa(144, 0.5, 0.01, 1 / 144d)), Duration.ofMinutes(10));
+        assertEquals(Tipo.POUCO_DADO, umDia.tipo(), "24 h exatas já não bastam: o ciclo do dia viraria tendência");
         assertEquals(Tipo.POUCO_DADO, EstimativaDeDisco.de(serie(Duration.ofDays(1), 0.5, 0.6, 0.7), Duration.ofDays(1)).tipo(), "3 pontos: poucos para uma reta");
-        EstimativaDeDisco.Resultado exato = EstimativaDeDisco.de(serie(Duration.ofMinutes(10), rampa(144, 0.5, 0.01, 1 / 144d)), Duration.ofMinutes(10));
-        assertEquals(Tipo.ENCHENDO, exato.tipo(), "144 x 10 min = 24 h cheias já estima (a cobertura conta até o fim da última célula)");
+        EstimativaDeDisco.Resultado exato = EstimativaDeDisco.de(serie(Duration.ofMinutes(10), rampa(432, 0.5, 0.01, 1 / 144d)), Duration.ofMinutes(10));
+        assertEquals(Tipo.ENCHENDO, exato.tipo(), "432 x 10 min = 3 dias cheios já estimam (a cobertura conta até o fim da última célula)");
+    }
+
+    @Test
+    void oBackupDaNoiteNaoViraTendenciaComDiasInteiros() {
+        // o disco é de 60% fixo, mas o backup da madrugada sobe 8 pontos por 6 horas e a limpeza o desce: um ciclo de 24 h sem tendência nenhuma. 3,5 dias de pontos de hora em hora.
+        Double[] v = new Double[84];
+        for (int i = 0; i < v.length; i++) {
+            int hora = i % 24;
+            v[i] = 0.60 + (hora >= 2 && hora < 8 ? 0.08 : 0.0);
+        }
+        List<Amostra> uso = serie(Duration.ofHours(1), v);
+        EstimativaDeDisco.Resultado r = EstimativaDeDisco.de(uso, Duration.ofHours(1));
+        assertEquals(Tipo.ESTAVEL, r.tipo(), "dias inteiros: o ciclo do dia se cancela (porDia=" + r.porDia() + ")");
+        // e a mesma reta sobre só 1 dia e meio, que é o que a regra antiga de 24 h deixava passar, daria uma tendência falsa
+        Double[] umEMeio = new Double[36];
+        System.arraycopy(v, 0, umEMeio, 0, 36);
+        double inclinacaoFalsa = inclinacaoBruta(serie(Duration.ofHours(1), umEMeio));
+        assertTrue(Math.abs(inclinacaoFalsa) > 10 * EstimativaDeDisco.LIMITE_DO_ESTAVEL, "sem dias inteiros a reta lê o backup como " + inclinacaoFalsa + " por dia");
+        assertEquals(Tipo.POUCO_DADO, EstimativaDeDisco.de(serie(Duration.ofHours(1), umEMeio), Duration.ofHours(1)).tipo());
+    }
+
+    private static double inclinacaoBruta(List<Amostra> v) {
+        double n = v.size();
+        double sx = 0;
+        double sy = 0;
+        double sxx = 0;
+        double sxy = 0;
+        for (Amostra a : v) {
+            double x = Duration.between(v.get(0).quando(), a.quando()).toMillis() / 86_400_000d;
+            sx += x;
+            sy += a.valor();
+            sxx += x * x;
+            sxy += x * a.valor();
+        }
+        return (n * sxy - sx * sy) / (n * sxx - sx * sx);
     }
 
     @Test
@@ -157,7 +194,7 @@ class EstatisticaEEstimativaTest {
         assertEquals(Tipo.POUCO_DADO, EstimativaDeDisco.de(null, Duration.ofMinutes(5)).tipo());
         assertEquals(Tipo.POUCO_DADO, EstimativaDeDisco.de(serie(Duration.ofMinutes(5), 0.7), Duration.ofMinutes(5)).tipo());
         assertEquals(Tipo.POUCO_DADO, EstimativaDeDisco.de(serie(Duration.ofMinutes(5), new Double[300]), Duration.ofMinutes(5)).tipo());
-        assertEquals(Tipo.ESTAVEL, EstimativaDeDisco.de(serie(Duration.ofHours(1), rampa(48, 0.5, 0.0, 1)), null).tipo(), "passo nulo conta como zero, sem quebrar");
+        assertEquals(Tipo.ESTAVEL, EstimativaDeDisco.de(serie(Duration.ofHours(1), rampa(73, 0.5, 0.0, 1)), null).tipo(), "passo nulo conta como zero, sem quebrar");
     }
 
     @Test

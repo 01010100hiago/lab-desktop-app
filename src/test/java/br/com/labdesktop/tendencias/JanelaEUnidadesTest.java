@@ -43,10 +43,11 @@ class JanelaEUnidadesTest {
     }
 
     @Test
-    void soAPartirDeUmDiaAEstimativaDoDiscoFazSentido() {
-        assertFalse(JanelaDeTempo.UMA_HORA.cobreUmDiaOuMais());
-        assertTrue(JanelaDeTempo.UM_DIA.cobreUmDiaOuMais());
-        assertTrue(JanelaDeTempo.UM_MES.cobreUmDiaOuMais());
+    void soAPartirDeTresDiasAEstimativaDoDiscoFazSentido() {
+        assertFalse(JanelaDeTempo.UMA_HORA.cobreTresDiasOuMais());
+        assertFalse(JanelaDeTempo.UM_DIA.cobreTresDiasOuMais());
+        assertTrue(JanelaDeTempo.UMA_SEMANA.cobreTresDiasOuMais());
+        assertTrue(JanelaDeTempo.UM_MES.cobreTresDiasOuMais());
     }
 
     @Test

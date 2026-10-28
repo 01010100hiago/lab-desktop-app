@@ -85,8 +85,8 @@ public enum JanelaDeTempo {
         return Optional.empty();
     }
 
-    /** O que é maior que um dia (a estimativa do disco só vale com pelo menos 24 h de dados). */
-    public boolean cobreUmDiaOuMais() {
-        return duracao.compareTo(Duration.ofDays(1)) >= 0;
+    /** O período cabe 3 dias ou mais (a estimativa do disco só vale com pelo menos 3 dias de dados: 1 semana e 1 mês). */
+    public boolean cobreTresDiasOuMais() {
+        return duracao.compareTo(EstimativaDeDisco.COBERTURA_MINIMA) >= 0;
     }
 }

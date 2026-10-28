@@ -124,7 +124,7 @@ class DialogoRelatorioTest {
     @Test
     void periodoDeDezMinutosNaoEstimaODiscoEDizPorqueEOsBotoesDaoOPeriodo() {
         DialogoRelatorio d = abrir(JanelaDeTempo.DEZ_MINUTOS, true, dados(JanelaDeTempo.DEZ_MINUTOS));
-        assertTrue(Visual.naEdt(d::textoDoResumo).contains("Estimativa do disco: precisa de pelo menos 24 horas de dados. Escolha 1 dia ou mais."), Visual.naEdt(d::textoDoResumo));
+        assertTrue(Visual.naEdt(d::textoDoResumo).contains("Estimativa do disco: precisa de pelo menos 3 dias de dados. Escolha 1 semana ou mais."), Visual.naEdt(d::textoDoResumo));
         for (JanelaDeTempo j : JanelaDeTempo.values()) {
             assertTrue(Visual.naEdt(() -> d.botaoDaJanela(j).isEnabled()), j.name());
         }

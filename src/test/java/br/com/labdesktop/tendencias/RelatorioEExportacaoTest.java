@@ -113,7 +113,7 @@ class RelatorioEExportacaoTest {
     }
 
     @Test
-    void estimativaDoDiscoSoComVinteEQuatroHorasEDitaComoEstimativa() {
+    void estimativaDoDiscoSoComTresDiasEDitaComoEstimativa() {
         RelatorioDeTendencias semana = RelatorioDeTendencias.de(DadosDeTendencia.deHistorico(JanelaDeTempo.UMA_SEMANA, umaSemana(), AGORA), SP, AGORA);
         String f = semana.fraseDaEstimativa();
         assertTrue(f.startsWith("Estimativa do disco: no ritmo atual, enche em cerca de 2"), f);
@@ -122,7 +122,7 @@ class RelatorioEExportacaoTest {
 
         HistoricoDoAgente dezMin = new HistoricoDoAgente("10m", 10, AGORA.minusSeconds(600), AGORA, AGORA, lista(60, i -> 0.1), null, lista(60, i -> 0.5), lista(60, i -> 0.7), null, null, null, null);
         RelatorioDeTendencias curto = RelatorioDeTendencias.de(DadosDeTendencia.deHistorico(JanelaDeTempo.DEZ_MINUTOS, dezMin, AGORA), SP, AGORA);
-        assertEquals("Estimativa do disco: precisa de pelo menos 24 horas de dados. Escolha 1 dia ou mais.", curto.fraseDaEstimativa());
+        assertEquals("Estimativa do disco: precisa de pelo menos 3 dias de dados. Escolha 1 semana ou mais.", curto.fraseDaEstimativa());
         assertFalse(curto.estimativaDoDisco().temEstimativa());
 
         HistoricoDoAgente semDisco = new HistoricoDoAgente("7d", 2400, AGORA.minus(Duration.ofMinutes(40).multipliedBy(252)), AGORA, AGORA, lista(252, i -> 0.1), null, null, null, null, null, null, null);
