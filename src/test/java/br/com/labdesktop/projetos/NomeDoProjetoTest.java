@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.labdesktop.projetos.NomeDoProjeto.Resultado;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** A regra do nome do projeto, que é a do agente ({@code nomeValido} do agente) mais "sem hífen no fim". */
@@ -97,5 +98,25 @@ class NomeDoProjetoTest {
         String comHifenNoCorte = NomeDoProjeto.sugerirDe("a".repeat(48) + "-bbbb");
         assertTrue(NomeDoProjeto.valido(comHifenNoCorte), comHifenNoCorte);
         assertEquals("api-v2", NomeDoProjeto.sugerirDe("API.v2"));
+    }
+
+    @Test
+    void nomesReservadosDoWindowsSaoRecusadosEmTodoLugar() {
+        for (String n : List.of("con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9")) {
+            assertFalse(NomeDoProjeto.valido(n), n);
+            assertTrue(NomeDoProjeto.conferir(n).mensagem().contains("reservado pelo Windows"), n);
+        }
+        for (String n : List.of("com0", "com10", "lpt0", "console", "aux1", "nul-2", "meu-con")) {
+            assertTrue(NomeDoProjeto.valido(n), n + " parece mas não é reservado");
+        }
+    }
+
+    @Test
+    void nomesSoDeDigitosOuParecidosComBooleanoSaoValidosEOComposeOsGuardaEntreAspas() {
+        for (String n : List.of("123", "1e3", "0x1f", "true", "null", "yes", "007")) {
+            assertTrue(NomeDoProjeto.valido(n), n);
+            assertTrue(GabaritoDoProjeto.composeVazio(n).startsWith("name: \"" + n + "\"\n"), n);
+            assertEquals(ComposeDoProjeto.Situacao.ESQUELETO, ComposeDoProjeto.situacaoDe(GabaritoDoProjeto.composeVazio(n)), n);
+        }
     }
 }

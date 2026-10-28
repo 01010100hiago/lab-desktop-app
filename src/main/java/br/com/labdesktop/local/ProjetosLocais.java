@@ -174,7 +174,7 @@ public final class ProjetosLocais {
         private static final java.util.Set<String> RESERVADOS = java.util.Set.of("infra", "painel", "lab");
 
         static boolean recusa(String nomeDoCompose, String projeto, Path raiz) {
-            if (RESERVADOS.contains(nomeDoCompose)) {
+            if (RESERVADOS.contains(nomeDoCompose) || nomeDoCompose.length() > 63) { // acima de 63 o Docker não aceita o nome do projeto do compose
                 return true;
             }
             return !nomeDoCompose.equals(projeto) && raiz != null && Files.exists(raiz.resolve(nomeDoCompose));

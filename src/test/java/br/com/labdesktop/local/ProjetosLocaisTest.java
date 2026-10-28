@@ -130,6 +130,15 @@ class ProjetosLocaisTest {
     }
 
     @Test
+    void composeComNomeDeMaisDe63CaracteresEIgnoradoPoisOcomposeDoDockerNaoOAceita() throws Exception {
+        escrever("grande/docker-compose.yml", "name: " + "a".repeat(64) + "\nservices: {}\n");
+        escrever("limite/docker-compose.yml", "name: " + "b".repeat(63) + "\nservices: {}\n");
+        List<Projeto> l = projetos().lista().projetos();
+        assertEquals(List.of(), l.stream().filter(p -> p.nome().equals("grande")).findFirst().orElseThrow().composes(), "64 caracteres: o Docker recusaria o -p");
+        assertEquals(1, l.stream().filter(p -> p.nome().equals("limite")).findFirst().orElseThrow().composes().size(), "63 ainda vale");
+    }
+
+    @Test
     void osArquivosComposeSeguemARegraDoAgente() throws Exception {
         escrever("p/docker-compose.yml", "services: {}\n");
         escrever("p/docker-compose.lab.yaml", "services: {}\n");

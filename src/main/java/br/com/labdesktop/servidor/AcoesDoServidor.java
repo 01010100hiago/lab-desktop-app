@@ -57,6 +57,10 @@ public final class AcoesDoServidor {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ErroApi.ServidorErro(500, null, "A ação foi interrompida.");
+        } catch (IllegalArgumentException e) {
+            // por exemplo um name: do docker-compose.yml que o Docker não aceita (mais de 63 caracteres): o usuário precisa corrigir o arquivo
+            throw new ErroApi.ServidorErro(400, null, "O docker-compose.yml deste projeto tem um nome (name:) ou um arquivo que o app não passa ao Docker: "
+                + "o nome usa letras minúsculas, números, hífen e sublinhado, até 63 caracteres. Corrija o arquivo e tente de novo.");
         } finally {
             sondador.atualizarAgora(Topico.PROJETOS, Topico.detalhe(projeto), Topico.LIMITES);
         }

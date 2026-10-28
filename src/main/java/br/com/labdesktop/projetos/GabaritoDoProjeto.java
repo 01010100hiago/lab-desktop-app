@@ -49,7 +49,8 @@ public final class GabaritoDoProjeto {
 
     /** O compose esqueleto (também o que a importação escreve num projeto que veio sem compose). */
     public static String composeVazio(String nome) {
-        return "name: " + nome + "\n"
+        // entre aspas: um nome só de dígitos ou parecido com número/booleano (123, 1e3, 0x1f, true, null) virava inteiro ou booleano no YAML e quebrava o compose
+        return "name: \"" + nome + "\"\n"
             + "# Esqueleto: acrescente os serviços abaixo (o botão \"Adicionar container\" do Lab Desktop escreve aqui).\n"
             + "# Convenções: banco, cache e filas só na rede default; segredos só no .env (nunca neste arquivo);\n"
             + "# portas no host só se precisar, e sempre em 127.0.0.1 (ex.: \"127.0.0.1:5440:5432\").\n"

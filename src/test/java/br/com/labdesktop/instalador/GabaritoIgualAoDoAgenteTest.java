@@ -87,7 +87,7 @@ class GabaritoIgualAoDoAgenteTest {
         assertTrue(ignore.find(), "a constante do .gitignore está no código do agente");
         String script = ignore.group() + "\n" + trecho(painel, "function arquivosSemGuiaIa(") + "\n"
             + "console.log(JSON.stringify(arquivosSemGuiaIa(process.argv[1], process.argv[2])));\n";
-        for (String nome : List.of("demo", "meu-app-2", "a")) {
+        for (String nome : List.of("demo", "meu-app-2", "a", "123", "1e3", "0x1f", "true", "null")) { // os que parecem número ou booleano no YAML vão entre aspas
             Process p = new ProcessBuilder(node.toString(), "-e", script, nome, "2026-10-28").redirectErrorStream(true).start();
             String saida = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(p.waitFor(30, TimeUnit.SECONDS));

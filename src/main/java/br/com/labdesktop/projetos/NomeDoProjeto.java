@@ -24,7 +24,15 @@ public final class NomeDoProjeto {
      */
     public static final Set<String> RESERVADOS = Set.of("infra", "painel", "lab");
 
+    /** Nomes que o Windows não deixa usar como nome de pasta (com ou sem extensão); o app os recusa em todo lugar, para o projeto poder morar no computador de qualquer sistema. */
+    private static final java.util.regex.Pattern RESERVADO_DO_WINDOWS = java.util.regex.Pattern.compile("^(con|prn|aux|nul|com[1-9]|lpt[1-9])$");
+
     private NomeDoProjeto() { }
+
+    /** É um nome que o Windows reserva ({@code con}, {@code prn}, {@code aux}, {@code nul}, {@code com1} a {@code com9}, {@code lpt1} a {@code lpt9})? */
+    public static boolean reservadoDoWindows(String nome) {
+        return nome != null && RESERVADO_DO_WINDOWS.matcher(nome).matches();
+    }
 
     /** O resultado de conferir um nome: vale, ou a frase do que está errado ({@code ""} para o campo ainda vazio). */
     public record Resultado(boolean valido, String mensagem) {
@@ -33,7 +41,7 @@ public final class NomeDoProjeto {
 
     /** O nome vale para o agente e para o app? */
     public static boolean valido(String nome) {
-        return nome != null && ValidadorDeNomes.projetoValido(nome) && !nome.endsWith("-");
+        return nome != null && ValidadorDeNomes.projetoValido(nome) && !nome.endsWith("-") && !reservadoDoWindows(nome);
     }
 
     /** É um dos nomes que o agente reserva? */
@@ -57,6 +65,9 @@ public final class NomeDoProjeto {
         }
         if (valido(texto)) {
             return Resultado.OK;
+        }
+        if (reservadoDoWindows(texto)) {
+            return new Resultado(false, "Esse nome é reservado pelo Windows (con, prn, aux, nul, com1 a com9, lpt1 a lpt9): escolha outro.");
         }
         if (texto.length() > MAXIMO) {
             return new Resultado(false, "No máximo " + MAXIMO + " caracteres (este tem " + texto.length() + ").");

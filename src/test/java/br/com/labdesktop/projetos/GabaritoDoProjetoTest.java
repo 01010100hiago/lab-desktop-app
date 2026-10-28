@@ -27,7 +27,7 @@ class GabaritoDoProjetoTest {
 
     @Test
     void composeEsqueleto() {
-        assertEquals("name: meu-app\n"
+        assertEquals("name: \"meu-app\"\n"
             + "# Esqueleto: acrescente os serviços abaixo (o botão \"Adicionar container\" do Lab Desktop escreve aqui).\n"
             + "# Convenções: banco, cache e filas só na rede default; segredos só no .env (nunca neste arquivo);\n"
             + "# portas no host só se precisar, e sempre em 127.0.0.1 (ex.: \"127.0.0.1:5440:5432\").\n"
