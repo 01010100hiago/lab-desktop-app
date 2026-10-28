@@ -72,6 +72,11 @@ public class Rotulo extends JLabel {
         return this;
     }
 
+    /** Este rótulo foi declarado como podendo ser cortado com reticências (os testes de texto cortado só aceitam isso onde foi decidido). */
+    public boolean ehTruncavel() {
+        return truncavel;
+    }
+
     @Override
     public Dimension getMinimumSize() {
         Dimension d = super.getMinimumSize();

@@ -91,10 +91,22 @@ public final class TextoCorrido extends JTextArea {
         return Tokens.cor(Tokens.TEXTO3);
     }
 
+    /** A altura que o texto pede numa largura dada (os testes comparam com a que o layout deu: texto CORTADO é altura dada menor que esta). */
+    public int alturaParaLargura(int largura) {
+        return alturaPara(largura);
+    }
+
+    /**
+     * Quanto a conta de altura tira da largura: o texto que cabe EXATAMENTE (281 px de texto em 281 px de caixa) cabe na conta e QUEBRA na pintura (a conta é de antes de
+     * pintar, a quebra é de quando se pinta), e a última palavra caía fora da caixa e sumia ("Editar… ou Remover…" da lista "Onde fica" da Ajuda). Medindo com 2 px a menos o
+     * texto no limite ganha uma linha de folga; o que não está no limite não muda.
+     */
+    private static final int FOLGA_DA_QUEBRA = 2;
+
     private int alturaPara(int largura) {
         Insets i = getInsets();
         View raiz = getUI().getRootView(this);
-        raiz.setSize(Math.max(1, largura - i.left - i.right), 0);
+        raiz.setSize(Math.max(1, largura - i.left - i.right - FOLGA_DA_QUEBRA), 0);
         return (int) Math.ceil(raiz.getPreferredSpan(View.Y_AXIS)) + i.top + i.bottom;
     }
 
