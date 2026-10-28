@@ -83,14 +83,14 @@ class InstaladorDeAgenteTest {
         // Texto literal: se alguém "simplificar" isto (porta publicada em 0.0.0.0, sem reinício, sem volume), o teste acusa.
         assertEquals("docker run -d --name painel-lab --restart unless-stopped --network host --pid host"
             + " --label br.com.labdesktop.agente=0.1.0-abc1234 --log-opt max-size=10m --log-opt max-file=3"
-            + " -e PORT=7000 -e PAINEL_PERFIL=monitor -v /var/run/docker.sock:/var/run/docker.sock -v /:/host:ro"
+            + " -e PORT=7000 -e PAINEL_PERFIL=monitor -e PAINEL_EXIGE_TOKEN=1 -v /var/run/docker.sock:/var/run/docker.sock -v /:/host:ro"
             + " -v painel-lab-dados:" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + " labdesktop-agente:0.1.0-abc1234",
             ComandosRemotos.subirContainer(DK, p, PACOTE));
         assertFalse(ComandosRemotos.subirContainer(DK, p, PACOTE).contains("0.0.0.0"));
         assertFalse(ComandosRemotos.subirContainer(DK, p, PACOTE).contains(" -p "), "nenhuma porta publicada: o agente escuta no loopback do servidor");
         assertEquals("sudo -n docker run -d --name painel-teste --restart unless-stopped --network host --pid host"
             + " --label br.com.labdesktop.agente=0.1.0-abc1234 --log-opt max-size=10m --log-opt max-file=3"
-            + " -e PORT=7100 -e PAINEL_PERFIL=monitor -v /var/run/docker.sock:/var/run/docker.sock -v /:/host:ro"
+            + " -e PORT=7100 -e PAINEL_PERFIL=monitor -e PAINEL_EXIGE_TOKEN=1 -v /var/run/docker.sock:/var/run/docker.sock -v /:/host:ro"
             + " -v painel-teste-dados:" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + " labdesktop-agente:0.1.0-abc1234",
             ComandosRemotos.subirContainer("sudo -n docker", new ParametrosDaInstalacao("painel-teste", 7100, "lab-agente"), PACOTE));
     }

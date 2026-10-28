@@ -210,14 +210,15 @@ public final class ComandosRemotos {
 
     /**
      * Sobe o container do agente: reinício automático, SÓ no loopback (o agente escuta em 127.0.0.1 e a rede é a do servidor, então
-     * nada entra por fora; o app chega pelo túnel SSH), pasta de dados num volume nomeado e logs com teto.
+     * nada entra por fora; o app chega pelo túnel SSH), pasta de dados num volume nomeado e logs com teto. O
+     * agente já nasce exigindo a credencial do app; o app a registra logo depois de subir e tolera o 401 até lá.
      */
     public static String subirContainer(String docker, ParametrosDaInstalacao p, PacoteDoAgente pacote) {
         return exigirDocker(docker) + " run -d --name " + p.container()
             + " --restart unless-stopped --network host --pid host"
             + " --label " + ROTULO_DO_AGENTE + "=" + pacote.versao()
             + " --log-opt max-size=10m --log-opt max-file=3"
-            + " -e PORT=" + p.porta() + " -e PAINEL_PERFIL=monitor"
+            + " -e PORT=" + p.porta() + " -e PAINEL_PERFIL=monitor -e PAINEL_EXIGE_TOKEN=1"
             + " -v /var/run/docker.sock:/var/run/docker.sock -v /:/host:ro -v " + p.volume() + ":" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + " "
             + p.imagem(pacote.versao());
     }
