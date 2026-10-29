@@ -228,7 +228,8 @@ public final class Aplicacao {
         }
         // os túneis externos (aws, cloudflared) de todos os servidores acabam junto com o cofre aberto: cada conexão já fecha o dela, e isto garante que nenhum fica de pé se um
         // fechamento em segundo plano não chegar ao fim antes de o app sair (o gancho de desligamento da JVM é só a última rede)
-        br.com.labdesktop.transporte.RegistroDeTuneis.doProcesso().encerrarTodos();
+        // em segundo plano: matar um processo espera um instante e a EDT não espera processo; se o app sair antes de acabar, o gancho de desligamento da JVM termina o serviço
+        Fundo.emFundo(br.com.labdesktop.transporte.RegistroDeTuneis.doProcesso()::encerrarTodos);
     }
 
     /** Cmd+Q e "Sair": pergunta se houver transferência andando ou edição não salva; sem janela (cofre bloqueado) sai direto. */

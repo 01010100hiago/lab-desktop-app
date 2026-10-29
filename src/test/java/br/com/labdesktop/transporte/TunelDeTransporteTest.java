@@ -363,6 +363,30 @@ class TunelDeTransporteTest {
         assertEquals(FalhaDoTunel.Tipo.SAIU, e.falha().tipo());
     }
 
+    @Test
+    void oProgramaMorreNoInstanteEmQueAPortaApareceEscutandoEstaNaoValeComoPronto() {
+        // o programa estava de pé na última conferência e morre antes de a porta ser dada como pronta, enquanto outro programa passa a escutar nela
+        LancadorFalso lancador = new LancadorFalso(portas, l -> { });
+        PortasLocais aPortaMuda = new PortasLocais() {
+            @Override
+            public int reservar() throws IOException {
+                return portas.reservar();
+            }
+
+            @Override
+            public boolean alguemEscuta(int porta) {
+                lancador.lancamentos.get(0).processo.escrever("ERR morri de repente");
+                lancador.lancamentos.get(0).cair(4);
+                return true; // alguém escuta (o estranho que tomou a porta), mas o NOSSO programa já não está de pé
+            }
+        };
+        FalhaDoTunelException e = assertThrows(FalhaDoTunelException.class, () -> TunelDeTransporte.abrir(CLOUD,
+            new TunelDeTransporte.Dependencias(lancador, tudoInstalado(), aPortaMuda, registro, ConfigDoTunel.rapida(), SistemaOperacional.MAC, "", ":"), f -> { }));
+        assertEquals(FalhaDoTunel.Tipo.SAIU, e.falha().tipo());
+        assertTrue(e.falha().mensagem().contains("morri de repente"), e.falha().mensagem());
+        assertEquals(0, registro.quantos());
+    }
+
     // ----- o registro e o gancho -----
 
     @Test
