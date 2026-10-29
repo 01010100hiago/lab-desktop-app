@@ -17,6 +17,19 @@ public interface DestinoSsh extends AutoCloseable {
         return Optional.empty();
     }
 
+    /** O fim do que o programa do túnel escreveu até agora (texto sem confiança, para quem passa pelo {@code Redator}); vazio no direto. */
+    default String saidaRecente() {
+        return "";
+    }
+
+    /**
+     * A causa que a saída do programa, ainda de pé, já deixa ver (por exemplo a URL de login da Cloudflare, que o {@code cloudflared} só pede na primeira conexão). Vazio no direto
+     * e quando a saída não diz nada de específico.
+     */
+    default Optional<FalhaDoTunel> causaPelaSaida() {
+        return Optional.empty();
+    }
+
     /** Encerra o túnel, se houver. Idempotente e sem exceção. */
     @Override
     void close();

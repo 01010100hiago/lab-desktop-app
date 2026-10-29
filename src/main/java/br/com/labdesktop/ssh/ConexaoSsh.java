@@ -620,7 +620,8 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             }
             Autopsia autopsia = Autopsia.de(s); // antes de fechar: o que esta sessão aprendeu
             // a causa do túnel (o programa saiu: login da AWS expirado, instância sem SSM...) vale mais que o erro de rede que veio dela
-            FalhaDoTunel doTunel = e instanceof FalhaDoTunelException x ? x.falha() : destino == null ? null : destino.falhaDoTunel().orElse(null);
+            FalhaDoTunel doTunel = e instanceof FalhaDoTunelException x ? x.falha()
+                : destino == null ? null : destino.falhaDoTunel().or(destino::causaPelaSaida).orElse(null); // túnel de pé e SSH falhando: a saída pode trazer o login que falta
             boolean tunelDeTransporte = servidor.transporte().ehTunel();
             fecharQuieto(s, t, destino);
             Fase onde = fase;

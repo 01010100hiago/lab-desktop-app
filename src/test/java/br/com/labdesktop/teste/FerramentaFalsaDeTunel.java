@@ -32,7 +32,19 @@ public final class FerramentaFalsaDeTunel {
         }
         if (args.length > 1 && args[0].equals("--neto")) {
             Files.writeString(Path.of(args[1]), Long.toString(ProcessHandle.current().pid()), StandardCharsets.UTF_8);
+            if (args.length > 2) { // um neto que também gera um filho (o bisneto do túnel)
+                String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+                new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), FerramentaFalsaDeTunel.class.getName(), "--neto", args[2]).inheritIO().start();
+            }
             Thread.sleep(Long.MAX_VALUE);
+            return;
+        }
+        if (System.getenv("LABTEST_LER_ENTRADA") != null) {
+            // lê a entrada até o fim: só termina se quem a lançou FECHOU a entrada (senão fica esperando o teclado para sempre)
+            while (System.in.read() >= 0) {
+                // descarta
+            }
+            System.out.println("ENTRADA-FECHADA");
             return;
         }
         String saidaLogo = System.getenv("LABTEST_SAIR_LOGO_TEXTO");
@@ -52,7 +64,11 @@ public final class FerramentaFalsaDeTunel {
         String neto = System.getenv("LABTEST_NETO_ARQUIVO");
         if (neto != null) {
             String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
-            new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), FerramentaFalsaDeTunel.class.getName(), "--neto", neto).inheritIO().start();
+            String bisneto = System.getenv("LABTEST_BISNETO_ARQUIVO");
+            ProcessBuilder pb = bisneto == null
+                ? new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), FerramentaFalsaDeTunel.class.getName(), "--neto", neto)
+                : new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), FerramentaFalsaDeTunel.class.getName(), "--neto", neto, bisneto);
+            pb.inheritIO().start();
         }
         ServerSocket escuta = new ServerSocket(local, 50, InetAddress.getByAddress(new byte[] {127, 0, 0, 1}));
         System.out.println("Port " + local + " opened for sessionId teste.\nWaiting for connections...");
@@ -72,8 +88,19 @@ public final class FerramentaFalsaDeTunel {
             t.setDaemon(true);
             t.start();
         }
+        String textoNaPrimeiraConexao = System.getenv("LABTEST_TEXTO_NA_PRIMEIRA_CONEXAO");
+        boolean segurar = System.getenv("LABTEST_SEGURAR_CONEXOES") != null;
         while (true) {
             Socket cliente = escuta.accept();
+            if (textoNaPrimeiraConexao != null) {
+                // como o cloudflared de verdade: a porta abre de imediato e o pedido de login só vem na PRIMEIRA CONEXÃO; o programa continua de pé
+                System.out.println(textoNaPrimeiraConexao);
+                System.out.flush();
+                textoNaPrimeiraConexao = null;
+            }
+            if (segurar) {
+                continue; // aceita e fica calado (nunca repassa): o SSH que conectou espera e estoura o prazo
+            }
             Thread t = new Thread(() -> repassar(cliente, alvo));
             t.setDaemon(true);
             t.start();

@@ -387,6 +387,43 @@ class TunelDeTransporteTest {
         assertEquals(0, registro.quantos());
     }
 
+    @Test
+    void oCodigoDeSaidaQueChegaUmInstanteDepoisNaoViraMenosUm() {
+        // o processo já não está de pé, mas o código de saída só chega 300 ms depois (o leitor da saída ainda esvazia o cano): a frase leva o código de verdade
+        java.util.concurrent.CompletableFuture<Integer> saida = new java.util.concurrent.CompletableFuture<>();
+        ProcessoExterno quaseMorto = new ProcessoExterno() {
+            @Override
+            public boolean vivo() {
+                return false;
+            }
+
+            @Override
+            public java.util.concurrent.CompletableFuture<Integer> aoSair() {
+                return saida;
+            }
+
+            @Override
+            public String saida() {
+                return "ERR algo deu errado";
+            }
+
+            @Override
+            public void encerrar() { }
+        };
+        new Thread(() -> {
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                return;
+            }
+            saida.complete(9);
+        }).start();
+        FalhaDoTunelException e = assertThrows(FalhaDoTunelException.class, () -> TunelDeTransporte.abrir(CLOUD,
+            new TunelDeTransporte.Dependencias((argumentos, ambienteExtra) -> quaseMorto, tudoInstalado(), portas, registro, ConfigDoTunel.rapida(), SistemaOperacional.MAC, "", ":"), f -> { }));
+        assertEquals(FalhaDoTunel.Tipo.SAIU, e.falha().tipo());
+        assertTrue(e.falha().mensagem().contains("(código 9)"), e.falha().mensagem());
+    }
+
     // ----- o registro e o gancho -----
 
     @Test

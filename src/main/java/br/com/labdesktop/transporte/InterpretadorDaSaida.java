@@ -74,6 +74,19 @@ public final class InterpretadorDaSaida {
             "O túnel não ficou pronto em " + segundosDePrazo + " s." + (trecho.isEmpty() ? "" : " O que o programa disse: " + trecho));
     }
 
+    /**
+     * A causa ESPECÍFICA que a saída de um programa que continua de pé já deixa ver (login da AWS expirado, instância sem SSM, programa ausente, Cloudflare pedindo login), ou vazio.
+     * É o que se lê quando o SSH falha com o túnel ainda aberto: o {@code cloudflared} abre a porta de imediato e só pede o login na PRIMEIRA CONEXÃO, então o app dá o túnel por pronto
+     * e a URL de login só aparece na saída depois.
+     */
+    public static java.util.Optional<FalhaDoTunel> causaEspecifica(Transporte transporte, String saida, SistemaOperacional sistema) {
+        FalhaDoTunel f = interpretar(transporte, saida, null, sistema, 0);
+        return switch (f.tipo()) {
+            case FERRAMENTA_AUSENTE, LOGIN_AWS_EXPIRADO, INSTANCIA_SEM_SSM, CLOUDFLARE_PEDE_LOGIN -> java.util.Optional.of(f);
+            case PRAZO_ESTOURADO, SAIU, NAO_INICIOU, PORTA_OCUPADA -> java.util.Optional.empty();
+        };
+    }
+
     private static FalhaDoTunel loginDaAws(Transporte t, String inicio) {
         String comando = t.perfilAws() == null ? "aws sso login" : "aws sso login --profile " + t.perfilAws();
         return new FalhaDoTunel(FalhaDoTunel.Tipo.LOGIN_AWS_EXPIRADO, inicio + " No terminal rode: " + comando + " e tente de novo.", comando);

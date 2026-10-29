@@ -133,8 +133,18 @@ public final class TunelDeTransporte implements DestinoSsh {
         }
     }
 
+    /** Quanto esperar o código de saída de um programa que já não está de pé (o código chega um instante depois de o processo morrer). */
+    private static final long ESPERA_DO_CODIGO_EM_MILISSEGUNDOS = 1_000;
+
     private FalhaDoTunel interpretarQueda() {
-        Integer codigo = processo.aoSair().isDone() ? processo.aoSair().getNow(-1) : Integer.valueOf(-1);
+        Integer codigo = -1;
+        try {
+            codigo = processo.aoSair().get(ESPERA_DO_CODIGO_EM_MILISSEGUNDOS, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+            LOG.debug("O código de saída do túnel não chegou: {}", e.toString());
+        }
         return InterpretadorDaSaida.interpretar(transporte, processo.saida(), codigo, dependencias.sistema(), 0);
     }
 
@@ -162,6 +172,16 @@ public final class TunelDeTransporte implements DestinoSsh {
     @Override
     public int porta() {
         return porta;
+    }
+
+    @Override
+    public String saidaRecente() {
+        return processo.saida();
+    }
+
+    @Override
+    public Optional<FalhaDoTunel> causaPelaSaida() {
+        return InterpretadorDaSaida.causaEspecifica(transporte, processo.saida(), dependencias.sistema());
     }
 
     @Override

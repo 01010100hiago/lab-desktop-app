@@ -245,6 +245,62 @@ class ConexaoPeloTunelTest {
     }
 
     @Test
+    void cloudflaredQueAbrePortaEPedeLoginNaPrimeiraConexaoMostraAUrlEmVezDoErroGenerico() throws Exception {
+        // como o cloudflared de verdade: escuta de imediato (o app dá o túnel por pronto), só escreve o pedido de login quando alguém conecta, e CONTINUA vivo
+        AtomicInteger portaDoSsh = new AtomicInteger(1);
+        LancadorDeFerramentaFalsaAdiado lancador = new LancadorDeFerramentaFalsaAdiado(portaDoSsh, Map.of("LABTEST_SEGURAR_CONEXOES", "1",
+            "LABTEST_TEXTO_NA_PRIMEIRA_CONEXAO", "Please open the following URL and log in with your Cloudflare account:\nhttps://dash.cloudflare.com/argotunnel?aud=x&callback=y\n"));
+        try (CenarioDeConexao c = CenarioDeConexao.pelaTunel(CLOUD, abridor(lancador, tudoInstalado()), ConfigSsh.rapida(), null)) {
+            c.conexao.iniciar();
+            Espera.ate(PRAZO, () -> "estado=" + c.info() + " falha=" + c.info().falha(),
+                () -> c.estado() == EstadoConexao.RECONECTANDO && c.info().falha() != null && c.info().falha().tipo() == Falha.Tipo.TRANSPORTE_LOGIN_CLOUDFLARE);
+            Falha f = c.info().falha();
+            assertEquals("https://dash.cloudflare.com/argotunnel?aud=x&callback=y", f.textoCopiavel());
+            assertFalse(f.mensagem().contains("https://"), "o endereço só vai como texto copiável");
+            assertTrue(f.mensagem().contains("navegador"), f.mensagem());
+            assertTrue(lancador.real().lancados.size() >= 1);
+            assertEquals(0, c.ssh.pedidosDeAutenticacao.get(), "o servidor nunca chegou a ser falado");
+        }
+    }
+
+    @Test
+    void bloquearOCofreFechaOTunelExternoENaoReconecta() throws Exception {
+        AtomicInteger portaDoSsh = new AtomicInteger();
+        LancadorDeFerramentaFalsaAdiado lancador = new LancadorDeFerramentaFalsaAdiado(portaDoSsh, Map.of());
+        try (CenarioDeConexao c = CenarioDeConexao.pelaTunel(CLOUD, abridor(lancador, tudoInstalado()), ConfigSsh.rapida(), null)) {
+            portaDoSsh.set(c.ssh.porta());
+            c.conexao.iniciar();
+            Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.CONECTADO);
+            long pid = lancador.real().lancados.get(0).processo().pid();
+            c.conexao.bloquear();
+            Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.BLOQUEADO_COFRE);
+            esperarMorrer(pid);
+            assertFalse(vivo(pid), "bloquear o cofre encerra o programa do túnel");
+            assertEquals(0, registro.quantos());
+            Espera.naoAcontece(Duration.ofMillis(600), "reconectar com o cofre bloqueado", () -> lancador.real().lancados.size() > 1);
+        }
+    }
+
+    @Test
+    void oRepousoDoComputadorFechaOTunelEAoAcordarSobeUmNovo() throws Exception {
+        AtomicInteger portaDoSsh = new AtomicInteger();
+        LancadorDeFerramentaFalsaAdiado lancador = new LancadorDeFerramentaFalsaAdiado(portaDoSsh, Map.of());
+        try (CenarioDeConexao c = CenarioDeConexao.pelaTunel(SSM, abridor(lancador, tudoInstalado()), ConfigSsh.rapida(), null)) {
+            portaDoSsh.set(c.ssh.porta());
+            c.conexao.iniciar();
+            Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.CONECTADO);
+            long pid = lancador.real().lancados.get(0).processo().pid();
+            c.conexao.aoDormir();
+            Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.SUSPENSO);
+            esperarMorrer(pid);
+            assertFalse(vivo(pid), "o túnel do computador que dormiu é encerrado: a sessão dele já morreu");
+            assertEquals(0, registro.quantos());
+            c.conexao.aoAcordar();
+            Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.CONECTADO && lancador.real().lancados.size() == 2);
+        }
+    }
+
+    @Test
     void seOProgramaDoTunelMorrerComAConexaoDePeAConexaoCaiComAMensagemClaraEVoltaPeloBackoff() throws Exception {
         AtomicInteger portaDoSsh = new AtomicInteger();
         LancadorDeFerramentaFalsaAdiado lancador = new LancadorDeFerramentaFalsaAdiado(portaDoSsh, Map.of("LABTEST_MORRER_APOS_MS", "1500"));
