@@ -103,10 +103,11 @@ public final class MenuDoServidor {
             itens.add(Item.REMOVER);
             return itens;
         }
-        if (c == EstadoConexao.SSH_OK_SEM_AGENTE && e.situacaoDoAgente().oferecerInstalar()) {
+        // Servidor protegido: nenhum dos três aparece; a pergunta é uma só, no estado (EstadoServidor.ofereceInstalarAgente e irmã).
+        if (e.ofereceInstalarAgente()) {
             itens.add(Item.INSTALAR_AGENTE);
         }
-        if (c == EstadoConexao.CONECTADO && e.agenteDoMonitor()) {
+        if (e.ofereceAtualizarERemoverAgente()) {
             // Só o agente do PERFIL MONITOR (o que o app instala) se atualiza e se remove daqui: o agente do lab, de produção, nunca.
             itens.add(Item.ATUALIZAR_AGENTE);
             itens.add(Item.REMOVER_AGENTE);

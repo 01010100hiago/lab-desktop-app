@@ -6,6 +6,7 @@ import br.com.labdesktop.cofre.Pin;
 import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Conclusao;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Dados;
+import br.com.labdesktop.servidor.ProtecaoDoServidor;
 import br.com.labdesktop.servidor.AssistenteDeServidor.ErroDoAssistente;
 import br.com.labdesktop.servidor.AssistenteDeServidor.EtapaDoPrimeiroAcesso;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Etapa;
@@ -164,6 +165,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private final JTextField porta = Campos.mono(5, "22");
     private final JTextField usuario = Campos.mono(14, "usuario");
     private final JTextField portaDoAgente = Campos.mono(5, "7000");
+    /** "Servidor protegido": para quem conecta um servidor que já trabalha; desmarcada por padrão. Vai no cadastro, antes de qualquer conexão. */
+    private final javax.swing.JCheckBox protegido = new javax.swing.JCheckBox(ProtecaoDoServidor.ROTULO_DA_CAIXA);
     private final TextoCorrido erroDosDados = erroCorrido();
     private final Botao continuar = Botoes.primario("Continuar", "avancar");
     private final Botao cancelar = Botoes.secundario("Cancelar", null);
@@ -328,7 +331,9 @@ public final class DialogoAdicionarServidor extends Dialogo {
             linhaDeCampos("Nome", nome, "Usuário", usuario),
             linhaDeCampos("Endereço", host, "Porta do SSH", porta),
             linhaDeCampos("Porta do painel no servidor", portaDoAgente, null, null),
-            dicaCorrida(DICA_DA_PORTA_DO_PAINEL));
+            dicaCorrida(DICA_DA_PORTA_DO_PAINEL),
+            Caixa.coluna(2, protegido, dicaCorrida(ProtecaoDoServidor.FRASE_DA_CAIXA)));
+        protegido.setName("caixa-protegido");
         return Caixa.coluna(12,
             cabecalho("servidor", "Adicionar servidor"),
             passo("Passo 1 de 3 · Dados do servidor"),
@@ -524,6 +529,11 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     public JTextField campoDaPortaDoAgente() {
         return portaDoAgente;
+    }
+
+    /** A caixa "Servidor protegido" do primeiro passo. */
+    public javax.swing.JCheckBox caixaProtegido() {
+        return protegido;
     }
 
     public JRadioButton opcaoGerar() {
@@ -744,7 +754,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("A porta do painel precisa ser um número.");
         }
-        Dados d = new Dados(nome.getText().strip(), host.getText().strip(), p, usuario.getText().strip(), a);
+        Dados d = new Dados(nome.getText().strip(), host.getText().strip(), p, usuario.getText().strip(), a, protegido.isSelected());
         d.validar();
         return d;
     }
@@ -1184,7 +1194,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     private void ocupar(boolean sim, Botao quem) {
         ocupado = sim;
-        for (JComponent c : new JComponent[] {nome, host, porta, usuario, portaDoAgente, continuar}) {
+        for (JComponent c : new JComponent[] {nome, host, porta, usuario, portaDoAgente, protegido, continuar}) {
             c.setEnabled(!sim);
         }
         if (sim) {
@@ -1284,6 +1294,11 @@ public final class DialogoAdicionarServidor extends Dialogo {
      * depois que o agente existir.
      */
     private void perguntarSobreOAgente() {
+        if (lab != null && lab.protegido()) {
+            // Servidor protegido: o app não instala nada aqui, então não pergunta; conclui como Só SSH.
+            concluirSoPorSsh();
+            return;
+        }
         perguntandoDoAgente = true;
         marcarEtapa(Etapa.CONECTANDO);
         for (Map.Entry<Etapa, Rotulo> par : linhasDasEtapas.entrySet()) {
@@ -1310,7 +1325,9 @@ public final class DialogoAdicionarServidor extends Dialogo {
         }
         concluido = true;
         perguntandoDoAgente = false; // a pergunta foi respondida: não volta
-        avisos.ok("Servidor " + lab.estado().nome() + " adicionado, só por SSH. Instale o agente quando quiser: o botão está no cartão do servidor.");
+        avisos.ok(lab.protegido()
+            ? "Servidor " + lab.estado().nome() + " adicionado, só por SSH e protegido: o app não instala nada nele. Para mudar, abra Editar servidor."
+            : "Servidor " + lab.estado().nome() + " adicionado, só por SSH. Instale o agente quando quiser: o botão está no cartão do servidor.");
         terminarOuPerguntarDaSenha();
     }
 

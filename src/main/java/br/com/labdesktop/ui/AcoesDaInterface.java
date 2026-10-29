@@ -29,6 +29,7 @@ import br.com.labdesktop.projetos.ImportadorDeProjeto;
 import br.com.labdesktop.projetos.UrlDeGit;
 import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.EstadoServidor;
+import br.com.labdesktop.servidor.ProtecaoDoServidor;
 import br.com.labdesktop.servidor.GerenciadorServidores;
 import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.instalador.PacoteDoAgente;
@@ -98,6 +99,10 @@ public final class AcoesDaInterface {
         this.aoSelecionar = aoSelecionar;
         this.navegador = navegador;
         this.servicosDeArquivos = servicosDeArquivos;
+        if (gerenciador != null && avisos != null) {
+            // O app viu o agente do lab instalado fora dele e marcou o servidor como protegido: o usuário é avisado UMA vez (o gerenciador só avisa quando a marca mudou).
+            gerenciador.observarProtecaoAutomatica(lab -> avisos.info(ProtecaoDoServidor.AVISO_DA_MARCA_AUTOMATICA));
+        }
     }
 
     /**
@@ -699,6 +704,9 @@ public final class AcoesDaInterface {
             prepararEsteComputador(lab);
             return;
         }
+        if (recusarSeProtegido(lab)) {
+            return;
+        }
         if (!lab.estado().conexao().permiteExec()) {
             avisos.atencao("O app precisa da conexão por chave com o servidor para instalar o git. Conecte primeiro.");
             return;
@@ -829,6 +837,11 @@ public final class AcoesDaInterface {
         public boolean instalarGit(Runnable depois) {
             AcoesDaInterface.this.instalarGit(lab, depois);
             return true;
+        }
+
+        @Override
+        public boolean servidorProtegido() {
+            return lab.protegido();
         }
     }
 
@@ -1001,18 +1014,41 @@ public final class AcoesDaInterface {
         abrirDialogoDoAgente(lab, DialogoDoAgente.Acao.REMOVER, () -> { }, () -> { });
     }
 
+    /**
+     * O ponto único por onde instalar, atualizar e remover o agente chegam à confirmação (as três ações públicas acima, o menu, os botões do cartão e da página, os
+     * avisos e o último passo do assistente). Servidor protegido: recusa aqui, antes de abrir qualquer diálogo, e {@code ServidorLab.instaladorDoAgente}
+     * recusa de novo, caso alguma tela chegue por outro caminho.
+     */
     private void abrirDialogoDoAgente(ServidorLab lab, DialogoDoAgente.Acao acao, Runnable aoMudar, Runnable aoSoSsh) {
+        if (recusarSeProtegido(lab)) {
+            return;
+        }
         EstadoServidor e = lab.estado();
         // O pacote vem do jar (leitura de recurso): fora da EDT.
         Tarefas.rodar(PacoteDoAgente::doClasspath, pacote -> {
             DialogoDoAgente.Alvo alvo = new DialogoDoAgente.Alvo(e.nome(), lab.config().portaAgente(),
                 e.versao() == null ? null : e.versao().agente());
-            DialogoDoAgente dialogo = new DialogoDoAgente(acao, alvo, pacote, p -> lab.instaladorDoAgente(p, pacote), () -> {
-                lab.aoMudarOAgenteNoServidor();
-                aoMudar.run();
-            }, aoSoSsh, avisos, CopiadorDeTexto.doSistema());
+            DialogoDoAgente dialogo;
+            try {
+                dialogo = new DialogoDoAgente(acao, alvo, pacote, p -> lab.instaladorDoAgente(p, pacote), () -> {
+                    lab.aoMudarOAgenteNoServidor();
+                    aoMudar.run();
+                }, aoSoSsh, avisos, CopiadorDeTexto.doSistema());
+            } catch (ProtecaoDoServidor.ServidorProtegidoException protegido) {
+                avisos.atencao(protegido.getMessage()); // o servidor foi protegido entre o clique e a abertura
+                return;
+            }
             apresentador.mostrar(dialogo);
         }, this::falhaDoPacoteDoAgente);
+    }
+
+    /** Servidor protegido: diz a recusa (em português simples, sem a palavra erro) e devolve {@code true}; nada é aberto nem escrito. */
+    private boolean recusarSeProtegido(ServidorLab lab) {
+        if (!lab.protegido()) {
+            return false;
+        }
+        avisos.atencao(ProtecaoDoServidor.RECUSA);
+        return true;
     }
 
     /**

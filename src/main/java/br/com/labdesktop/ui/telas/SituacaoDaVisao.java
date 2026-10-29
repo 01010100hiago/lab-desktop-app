@@ -1,6 +1,7 @@
 package br.com.labdesktop.ui.telas;
 
 import br.com.labdesktop.servidor.EstadoServidor;
+import br.com.labdesktop.servidor.ProtecaoDoServidor;
 import br.com.labdesktop.ssh.EstadoConexao;
 import br.com.labdesktop.ssh.Falha;
 import br.com.labdesktop.ui.ConteudoDosAvisos;
@@ -83,6 +84,15 @@ public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, Stri
         if (c == EstadoConexao.SSH_OK_SEM_AGENTE && estado.situacaoDoAgente().oferecerInstalar()
             && (estado.falha() == null || estado.falha().tipo() != Falha.Tipo.AGENTE_DESATUALIZADO)) {
             boolean semPermissao = estado.situacaoDoAgente() == br.com.labdesktop.servidor.SituacaoDoAgente.SEM_PERMISSAO_NO_DOCKER;
+            if (estado.protegido()) {
+                // Servidor protegido: o mesmo aviso, sem o botão Instalar agente e com a explicação e o caminho para mudar.
+                // O título é a LINHA que ocupa o lugar do botão Instalar agente: diz que é protegido e como mudar (a explicação inteira vai na dica).
+                return new SituacaoDaVisao(Modo.AGENTE_NAO_INSTALADO, Gravidade.NEUTRO, "cadeado",
+                    semPermissao ? "Servidor protegido, sem permissão no Docker: o app não instala nada aqui. Para mudar, abra Editar servidor."
+                        : "Servidor protegido, sem agente: o app não instala nada aqui. Para mudar, abra Editar servidor.",
+                    semPermissao ? ProtecaoDoServidor.TEXTO_DO_AVISO_SEM_PERMISSAO : ProtecaoDoServidor.TEXTO_DO_AVISO_SEM_AGENTE,
+                    temDados, false);
+            }
             return new SituacaoDaVisao(Modo.AGENTE_NAO_INSTALADO, Gravidade.ATENCAO, "servidor",
                 semPermissao ? "Sem permissão no Docker deste servidor" : "O agente ainda não está instalado neste servidor",
                 semPermissao

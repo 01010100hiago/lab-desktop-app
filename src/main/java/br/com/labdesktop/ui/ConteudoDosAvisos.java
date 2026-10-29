@@ -3,6 +3,7 @@ package br.com.labdesktop.ui;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.Pausado;
 import br.com.labdesktop.servidor.EstadoServidor;
+import br.com.labdesktop.servidor.ProtecaoDoServidor;
 import br.com.labdesktop.servidor.SituacaoDoAgente;
 import br.com.labdesktop.ssh.Falha;
 import br.com.labdesktop.util.Formato;
@@ -170,6 +171,12 @@ public final class ConteudoDosAvisos {
             case SSH_OK_SEM_AGENTE -> e.local() ? deConexaoLocal(e, nome, detalhe) : tipo == Falha.Tipo.AGENTE_DESATUALIZADO
                 ? new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente de " + nome + " é de antes do app nativo",
                     "Falta publicar o painel com o acesso.js: a rota /api/versao não existe lá (404).", List.of(Acao.TENTAR_AGORA))
+                : e.protegido() && e.situacaoDoAgente() == SituacaoDoAgente.NAO_INSTALADO
+                ? new AvisoDeConexao(Gravidade.NEUTRO, "servidor", "O agente não está instalado em " + nome + ", e o servidor é protegido",
+                    ProtecaoDoServidor.TEXTO_DO_AVISO_SEM_AGENTE, List.of())
+                : e.protegido() && e.situacaoDoAgente() == SituacaoDoAgente.SEM_PERMISSAO_NO_DOCKER
+                ? new AvisoDeConexao(Gravidade.NEUTRO, "alerta", "Sem permissão no Docker de " + nome + ", e o servidor é protegido",
+                    ProtecaoDoServidor.TEXTO_DO_AVISO_SEM_PERMISSAO, List.of())
                 : e.situacaoDoAgente() == SituacaoDoAgente.NAO_INSTALADO
                 ? new AvisoDeConexao(Gravidade.ATENCAO, "servidor", "O agente ainda não está instalado em " + nome,
                     TEXTO_DO_AGENTE_NAO_INSTALADO, List.of(Acao.INSTALAR_AGENTE))

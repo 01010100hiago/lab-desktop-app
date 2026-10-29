@@ -102,6 +102,7 @@ final class BlocoDoGit extends CaixaDoServidor {
     private void redesenhar() {
         limpar();
         boolean local = servidor != null && servidor.ehLocal();
+        boolean protegido = servidor != null && !local && servidor.protegido();
         String onde = local ? "este computador" : "este servidor";
         switch (modo) {
             case LENDO -> {
@@ -115,7 +116,8 @@ final class BlocoDoGit extends CaixaDoServidor {
             case AUSENTE -> {
                 selo.atualizar("NÃO INSTALADO", Gravidade.ATENCAO, null);
                 texto.setText("O git não está instalado em " + onde + ", e sem ele o app não clona repositórios (Novo projeto, Repositório Git). "
-                    + (local ? "\"Instalar o Git…\" abre \"Preparar este computador\", que mostra o jeito de instalar neste sistema." : "\"Instalar o Git…\" mostra os comandos exatos antes de rodar qualquer coisa."));
+                    + (protegido ? "O servidor é protegido: o app não instala nada aqui. Instale o git você mesmo (por exemplo no Terminal) ou abra Editar servidor para mudar."
+                    : local ? "\"Instalar o Git…\" abre \"Preparar este computador\", que mostra o jeito de instalar neste sistema." : "\"Instalar o Git…\" mostra os comandos exatos antes de rodar qualquer coisa."));
             }
             case SEM_CONEXAO -> {
                 selo.atualizar("SEM CONEXÃO", Gravidade.NEUTRO, null);
@@ -125,7 +127,7 @@ final class BlocoDoGit extends CaixaDoServidor {
         }
         linha(Caixa.linha(8, selo, Caixa.mola()), 0);
         linha(texto, 6);
-        instalar.setVisible(modo == Modo.AUSENTE && acoes != null);
+        instalar.setVisible(modo == Modo.AUSENTE && acoes != null && !protegido);
         linha(Caixa.linha(8, instalar, conferirDeNovo, Caixa.mola()), 8);
         terminar();
     }

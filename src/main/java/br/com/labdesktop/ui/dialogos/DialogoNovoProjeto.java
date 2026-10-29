@@ -109,6 +109,11 @@ public final class DialogoNovoProjeto extends Dialogo {
         default boolean instalarGit(Runnable depois) {
             return false;
         }
+
+        /** O servidor é protegido: o app não instala nada nele, nem o Git; o aviso diz isso e não oferece o botão. */
+        default boolean servidorProtegido() {
+            return false;
+        }
     }
 
     /**
@@ -324,10 +329,13 @@ public final class DialogoNovoProjeto extends Dialogo {
     }
 
     private void mostrarAvisoDoGit(boolean falta) {
-        avisoDoGit.setText(falta ? "O git não está instalado " + (motor.local() ? "neste computador" : "neste servidor") + ", e sem ele o app não consegue clonar o repositório. "
+        boolean protegido = falta && motor.servidorProtegido();
+        avisoDoGit.setText(protegido ? "O git não está instalado neste servidor, e sem ele o app não consegue clonar o repositório. O servidor é protegido: o app não "
+            + "instala nada aqui. Instale o git você mesmo (por exemplo no Terminal) ou abra Editar servidor para mudar."
+            : falta ? "O git não está instalado " + (motor.local() ? "neste computador" : "neste servidor") + ", e sem ele o app não consegue clonar o repositório. "
             + "O app mostra os comandos antes de instalar e só roda depois do seu clique." : "");
         avisoDoGit.setVisible(falta);
-        instalarGit.setVisible(falta);
+        instalarGit.setVisible(falta && !protegido);
         reajustar();
     }
 

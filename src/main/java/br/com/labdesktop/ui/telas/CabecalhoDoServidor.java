@@ -2,6 +2,7 @@ package br.com.labdesktop.ui.telas;
 
 import br.com.labdesktop.api.modelo.InfoServidor;
 import br.com.labdesktop.servidor.EstadoServidor;
+import br.com.labdesktop.servidor.ProtecaoDoServidor;
 import br.com.labdesktop.ui.ApresentacaoDoEstado;
 import br.com.labdesktop.ui.ApresentacaoDoEstado.Apresentacao;
 import br.com.labdesktop.ui.componentes.Botao;
@@ -31,6 +32,9 @@ final class CabecalhoDoServidor extends Painel {
 
     private final Rotulo nome = Rotulo.titulo("Servidor");
     private final Selo estado = new Selo("", br.com.labdesktop.ui.Gravidade.NEUTRO, "info");
+    /** "Protegido": só aparece com o servidor protegido; a linha de baixo explica e diz como mudar. */
+    private final Selo protegido = new Selo("Protegido", br.com.labdesktop.ui.Gravidade.NEUTRO, "cadeado");
+    private final Rotulo linhaDaProtecao = new Rotulo(ProtecaoDoServidor.EXPLICACAO_DO_SELO).corDoToken(Tokens.TEXTO3).tamanho(12f).truncavel();
     /** Só a frase de "esperando a primeira leitura"; com a leitura, quem fala é a ficha. */
     private final Rotulo linhaDeBaixo = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12.5f).truncavel();
     private final FichaRotulada ficha = new FichaRotulada(4, 24);
@@ -41,8 +45,13 @@ final class CabecalhoDoServidor extends Painel {
         super(new BorderLayout(0, 6));
         nome.setIcon(Icones.colorido("servidor", 22, Tokens.DESTAQUE));
         nome.setIconTextGap(10);
-        add(Caixa.linha(12, nome, new AEsquerda(estado), Caixa.mola(), leitura, atualizar), BorderLayout.NORTH);
-        add(Caixa.coluna(0, linhaDeBaixo, ficha), BorderLayout.CENTER);
+        protegido.setName("selo-protegido");
+        protegido.setToolTipText(ProtecaoDoServidor.EXPLICACAO_DO_SELO);
+        protegido.setVisible(false);
+        linhaDaProtecao.setName("linha-da-protecao");
+        linhaDaProtecao.setVisible(false);
+        add(Caixa.linha(12, nome, new AEsquerda(estado), new AEsquerda(protegido), Caixa.mola(), leitura, atualizar), BorderLayout.NORTH);
+        add(Caixa.coluna(0, linhaDaProtecao, linhaDeBaixo, ficha), BorderLayout.CENTER);
         atualizar.addActionListener(e -> aoAtualizar.run());
         atualizar.setToolTipText("Consulta o servidor agora");
         getAccessibleContext().setAccessibleName("Cabeçalho do servidor");
@@ -55,7 +64,12 @@ final class CabecalhoDoServidor extends Painel {
             nome.setText(e.nome());
             Apresentacao a = ApresentacaoDoEstado.de(e);
             estado.atualizar(a.texto(), a.gravidade(), a.icone());
+            protegido.setVisible(e.protegido());
+            // Sem o agente o aviso da página já é essa linha (no lugar do botão Instalar agente): não a repete, para o Resumo caber em 1100 x 700.
+            linhaDaProtecao.setVisible(e.protegido() && !e.agenteFaltaMasServidorProtegido());
         } else {
+            protegido.setVisible(false);
+            linhaDaProtecao.setVisible(false);
             estado.atualizar("Lendo…", br.com.labdesktop.ui.Gravidade.NEUTRO, "atualizar");
         }
         if (info == null) {
@@ -92,6 +106,20 @@ final class CabecalhoDoServidor extends Painel {
 
     String textoDoEstado() {
         return estado.texto();
+    }
+
+    /** O selo "Protegido" está à vista? */
+    boolean mostraOSeloProtegido() {
+        return protegido.isVisible();
+    }
+
+    /** A linha que explica a proteção (e como mudar), ou vazio se não aparece. */
+    String textoDaLinhaDaProtecao() {
+        return linhaDaProtecao.isVisible() ? linhaDaProtecao.getText() : "";
+    }
+
+    Selo seloProtegido() {
+        return protegido;
     }
 
     String textoDaLinhaDeBaixo() {

@@ -3,6 +3,7 @@ package br.com.labdesktop.ui.dialogos;
 import br.com.labdesktop.cofre.ConfigServidor;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Dados;
 import br.com.labdesktop.servidor.GerenciadorServidores.ResultadoDaEdicao;
+import br.com.labdesktop.servidor.ProtecaoDoServidor;
 import br.com.labdesktop.ui.MensagensDeErro;
 import br.com.labdesktop.ui.Tarefas;
 import br.com.labdesktop.ui.componentes.Botao;
@@ -17,6 +18,7 @@ import br.com.labdesktop.ui.componentes.Rotulo;
 import br.com.labdesktop.ui.componentes.TextoCorrido;
 import br.com.labdesktop.ui.tema.Tokens;
 import java.util.List;
+import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JTextField;
 
@@ -67,6 +69,8 @@ public final class DialogoEditarServidor extends Dialogo {
     private final JTextField porta = Campos.mono(5, "22");
     private final JTextField usuario = Campos.mono(14, "usuario");
     private final JTextField portaDoAgente = Campos.mono(5, "7000");
+    /** "Servidor protegido": o app nunca instala, atualiza nem remove nada neste servidor. */
+    private final JCheckBox protegido = new JCheckBox(ProtecaoDoServidor.ROTULO_DA_CAIXA);
     private final TextoCorrido avisoDoEndereco = new TextoCorrido(AVISO_DA_IMPRESSAO, LARGURA_DO_TEXTO)
         .corDoToken(Tokens.ATENCAO).tamanho(12.5f);
     private final TextoCorrido erro = erroCorrido();
@@ -98,6 +102,8 @@ public final class DialogoEditarServidor extends Dialogo {
         porta.setText(String.valueOf(atual.porta()));
         usuario.setText(atual.usuario());
         portaDoAgente.setText(String.valueOf(atual.portaAgente()));
+        protegido.setSelected(atual.protegido());
+        protegido.setName("caixa-protegido");
         avisoDoEndereco.setVisible(false);
         salvar.setEnabled(false);
         salvar.setToolTipText(DICA_DO_SALVAR);
@@ -112,7 +118,8 @@ public final class DialogoEditarServidor extends Dialogo {
                 linhaDeCampos("Endereço", host, "Porta do SSH", porta),
                 linhaDeCampos("Porta do painel no servidor", portaDoAgente, null, null),
                 dicaCorrida(DialogoAdicionarServidor.DICA_DA_PORTA_DO_PAINEL)),
-            avisoDoEndereco));
+            avisoDoEndereco,
+            Caixa.coluna(2, protegido, dicaCorrida(ProtecaoDoServidor.FRASE_DA_CAIXA))));
         if (secaoDoAcesso != null) {
             corpo.add(secaoDoAcesso);
         }
@@ -124,6 +131,7 @@ public final class DialogoEditarServidor extends Dialogo {
         for (JTextField c : new JTextField[] {nome, host, porta, usuario, portaDoAgente}) {
             c.getDocument().addDocumentListener(aoDigitar);
         }
+        protegido.addActionListener(e -> atualizarTela());
         salvar.addActionListener(e -> salvar());
         cancelar.addActionListener(e -> aoCancelar());
         instalarChave.addActionListener(e -> instalarAChave());
@@ -188,6 +196,10 @@ public final class DialogoEditarServidor extends Dialogo {
         return portaDoAgente;
     }
 
+    public JCheckBox caixaProtegido() {
+        return protegido;
+    }
+
     public Botao botaoSalvar() {
         return salvar;
     }
@@ -240,6 +252,7 @@ public final class DialogoEditarServidor extends Dialogo {
     private void atualizarTela() {
         dizerErro(erro, "");
         avisoDoEndereco.setVisible(enderecoMudou());
+        salvar.setText(soAProtecaoMudou() ? "Salvar" : "Salvar e reconectar"); // mudar só a proteção não reconecta nada
         salvar.setEnabled(!ocupado && algoMudou());
         atualizarDicas();
         reajustar();
@@ -254,8 +267,20 @@ public final class DialogoEditarServidor extends Dialogo {
     }
 
     private boolean algoMudou() {
+        return algoMudouAlemDaProtecao() || protecaoMudou();
+    }
+
+    private boolean algoMudouAlemDaProtecao() {
         return !nome.getText().strip().equals(original.nome()) || !usuario.getText().strip().equals(original.usuario())
             || portaDoPainelMudou() || enderecoMudou();
+    }
+
+    private boolean protecaoMudou() {
+        return protegido.isSelected() != original.protegido();
+    }
+
+    private boolean soAProtecaoMudou() {
+        return protecaoMudou() && !algoMudouAlemDaProtecao();
     }
 
     private boolean portaDoPainelMudou() {
@@ -291,12 +316,19 @@ public final class DialogoEditarServidor extends Dialogo {
             return;
         }
         dizerErro(erro, "");
+        boolean soAProtecao = soAProtecaoMudou();
         ocupar(true);
         Tarefas.rodar(() -> gravacao.gravar(dados), resultado -> {
             ocupar(false);
             fechar();
             if (!resultado.mudouAlgo()) {
                 avisos.info("Nada mudou.");
+                return;
+            }
+            if (soAProtecao) {
+                avisos.ok(resultado.config().protegido()
+                    ? "Servidor " + resultado.config().nome() + " protegido: o app não instala, atualiza nem remove nada nele."
+                    : "Servidor " + resultado.config().nome() + " sem proteção: o app volta a oferecer instalar, atualizar e remover, sempre com a sua confirmação.");
                 return;
             }
             avisos.ok("Servidor " + resultado.config().nome() + " salvo. Reconectando…");
@@ -324,14 +356,14 @@ public final class DialogoEditarServidor extends Dialogo {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("A porta do painel precisa ser um número.");
         }
-        Dados d = new Dados(nome.getText().strip(), host.getText().strip(), p, usuario.getText().strip(), a);
+        Dados d = new Dados(nome.getText().strip(), host.getText().strip(), p, usuario.getText().strip(), a, protegido.isSelected());
         d.validar();
         return d;
     }
 
     private void ocupar(boolean sim) {
         ocupado = sim;
-        for (JComponent c : new JComponent[] {nome, host, porta, usuario, portaDoAgente, cancelar}) {
+        for (JComponent c : new JComponent[] {nome, host, porta, usuario, portaDoAgente, protegido, cancelar}) {
             c.setEnabled(!sim);
         }
         instalarChave.setEnabled(!sim && !algoMudou());

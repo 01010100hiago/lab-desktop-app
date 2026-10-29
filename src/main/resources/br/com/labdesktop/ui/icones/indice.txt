@@ -56,3 +56,4 @@ link
 mover
 desfazer
 salvar
+cadeado

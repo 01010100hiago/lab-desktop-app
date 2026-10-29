@@ -5,6 +5,7 @@ import br.com.labdesktop.cofre.Pin;
 import br.com.labdesktop.servidor.EstadoServidor;
 import br.com.labdesktop.servidor.GerenciadorServidores;
 import br.com.labdesktop.servidor.Inscricao;
+import br.com.labdesktop.servidor.ProtecaoDoServidor;
 import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.ui.AcoesDaInterface;
 import br.com.labdesktop.ui.ApresentacaoDoEstado;
@@ -167,6 +168,8 @@ public final class TelaServidores extends Painel {
         private final AcoesDaInterface acoes;
         private final Rotulo nome = Rotulo.titulo("").tamanho(15f);
         private final Rotulo endereco = new Rotulo().mono(12f).corDoToken(Tokens.TEXTO2);
+        /** "Protegido": só com o servidor protegido; o app não instala, atualiza nem remove nada nele. */
+        private final Selo seloProtegido = new Selo("Protegido", Gravidade.NEUTRO, "cadeado");
         private final Rotulo estadoDaConexao = new Rotulo().negrito().tamanho(13f);
         private final Rotulo detalheDoEstado = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f).truncavel();
         private final Rotulo token = new Rotulo().tamanho(12.5f);
@@ -189,7 +192,10 @@ public final class TelaServidores extends Painel {
             setBorder(javax.swing.BorderFactory.createEmptyBorder(14, 18, 14, 18));
 
             JPanel cabecalho = new Painel(new BorderLayout(12, 0));
-            cabecalho.add(Caixa.coluna(2, nome, endereco), BorderLayout.CENTER);
+            seloProtegido.setName("selo-protegido");
+            seloProtegido.setToolTipText(ProtecaoDoServidor.EXPLICACAO_DO_SELO);
+            seloProtegido.setVisible(false);
+            cabecalho.add(Caixa.coluna(2, Caixa.linha(10, nome, new AEsquerda(seloProtegido), Caixa.mola()), endereco), BorderLayout.CENTER);
             cabecalho.add(Caixa.coluna(2, estadoDaConexao, detalheDoEstado), BorderLayout.EAST);
             ((JComponent) cabecalho.getComponent(1)).setAlignmentX(RIGHT_ALIGNMENT);
             add(cabecalho, BorderLayout.NORTH);
@@ -241,6 +247,7 @@ public final class TelaServidores extends Painel {
             ConfigServidor cfg = lab.config();
             Apresentacao a = ApresentacaoDoEstado.de(e);
             nome.setText(e.nome());
+            seloProtegido.setVisible(e.protegido());
             endereco.setText(cfg.ehLocal() ? "Este computador (sem SSH), agente em 127.0.0.1:" + cfg.portaAgente()
                 : cfg.usuario() + "@" + cfg.host() + ":" + cfg.porta() + ", painel na porta " + cfg.portaAgente());
             estadoDaConexao.setIcon(Icones.colorido(a.icone(), 16, a.gravidade().tokenDoTexto()));
@@ -311,6 +318,15 @@ public final class TelaServidores extends Painel {
                 return;
             }
             boolean semPermissao = e.situacaoDoAgente() == br.com.labdesktop.servidor.SituacaoDoAgente.SEM_PERMISSAO_NO_DOCKER;
+            if (e.protegido()) {
+                // servidor protegido: o mesmo aviso fixo, sem botão (o menu não traz Instalar agente) e dizendo por quê
+                tituloDoAvisoDoAgente.setText(semPermissao ? "Sem permissão no Docker deste servidor protegido" : "Agente não instalado, servidor protegido");
+                tituloDoAvisoDoAgente.setIcon(Icones.colorido("cadeado", 16, Tokens.TEXTO2));
+                tituloDoAvisoDoAgente.setIconTextGap(8);
+                tituloDoAvisoDoAgente.corDoToken(Tokens.TEXTO);
+                avisoDoAgente.setText(semPermissao ? ProtecaoDoServidor.TEXTO_DO_AVISO_SEM_PERMISSAO : ProtecaoDoServidor.TEXTO_DO_AVISO_SEM_AGENTE);
+                return;
+            }
             tituloDoAvisoDoAgente.setText(semPermissao ? "Sem permissão no Docker deste servidor" : "Agente não instalado");
             tituloDoAvisoDoAgente.setIcon(Icones.colorido(semPermissao ? "alerta" : "servidor", 16, Tokens.ATENCAO));
             tituloDoAvisoDoAgente.setIconTextGap(8);
@@ -366,6 +382,15 @@ public final class TelaServidores extends Painel {
 
         public String textoDoEstado() {
             return estadoDaConexao.getText();
+        }
+
+        /** O selo "Protegido" está à vista no cartão? */
+        public boolean mostraOSeloProtegido() {
+            return seloProtegido.isVisible();
+        }
+
+        public Selo seloProtegido() {
+            return seloProtegido;
         }
 
         public String textoDoToken() {
