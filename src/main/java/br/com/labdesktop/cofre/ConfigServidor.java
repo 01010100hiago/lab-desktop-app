@@ -26,7 +26,7 @@ import java.util.Optional;
  * @param chaveId           id da {@link ChaveSsh} deste servidor (uma chave por servidor); {@code null} no servidor local
  * @param portaAgente       porta do agente no loopback DO SERVIDOR (destino do túnel; 7000); no local, a porta que o Docker publica em 127.0.0.1
  * @param pins              impressões da chave do host já confirmadas pelousuário, por algoritmo; vazio = host ainda não confiado
- * @param transporte direto (LAN) ou cloudflared
+ * @param transporte        direto (LAN), sem porta aberta (SSM ou Cloudflare) ou "Este computador" (local); nos modos sem porta aberta {@code host} e {@code porta} não existem (ficam fixos)
  * @param nomeDoDispositivo {@code nome_do_dispositivo} do token deste Mac no agente; {@code null} até o token ser registrado
  * @param estado2fa         última leitura do campo {@code totp} de {@code /api/versao} (dica; a fonte é o agente)
  * @param protegido         "Servidor protegido": o app nunca instala, atualiza nem remove nada neste servidor (agente, Docker, Git);
@@ -56,6 +56,8 @@ public record ConfigServidor(
     public static final int PORTA_AGENTE_LOCAL_PADRAO = 7070;
     /** Valores fixos dos campos do SSH num servidor local (não são usados; só mantêm o registro válido e legível). */
     public static final String HOST_LOCAL = "localhost";
+    /** O endereço "de enfeite" de um servidor sem porta aberta (SSM ou Cloudflare): um nome que nunca resolve. */
+    public static final String HOST_DO_TRANSPORTE = "transporte.invalid";
 
     private static final SecureRandom ALEATORIO = new SecureRandom();
 
@@ -74,6 +76,18 @@ public record ConfigServidor(
             usuario = "";
             chaveId = null;
             pins = List.of();
+        } else if (transporte.ehTunel()) {
+            // Sem porta aberta: o endereço e a porta do servidor não existem. O destino mora no transporte, e o SSH conecta numa porta local que o app
+            // abre a cada tentativa. O host guardado é um nome que NUNCA resolve (TLD .invalid, RFC 2606): se um código esquecer de usar o túnel, falha em vez de
+            // conectar noutro lugar.
+            host = HOST_DO_TRANSPORTE;
+            porta = 0;
+            if (!ValidadorDeNomes.usuarioSshValido(usuario)) {
+                throw new IllegalArgumentException("Usuário do SSH inválido.");
+            }
+            if (!ValidadorDeNomes.idLocalValido(chaveId)) {
+                throw new IllegalArgumentException("Id de chave inválido.");
+            }
         } else {
             if (!ValidadorDeNomes.hostValido(host)) {
                 throw new IllegalArgumentException("Endereço do servidor inválido.");
@@ -206,20 +220,53 @@ public record ConfigServidor(
     }
 
     /**
-     * O que o usuário muda na tela "Editar servidor". A regra do pin mora aqui, junto do dado: mudar o ENDEREÇO ou a PORTA do
-     * SSH apaga as impressões digitais guardadas, porque elas eram as daquela máquina naquela porta; outra máquina (ou
-     * outro serviço na outra porta) precisa ser conferida de novo, senão o app passaria a confiar às cegas num servidor que
-     * o usuário nunca conferiu. Mudar só o nome, o usuário ou a porta do agente mantém os pins (a máquina é a mesma). O
-     * endereço é comparado sem diferença de maiúsculas, como o DNS faz.
+     * O que o usuário muda na tela "Editar servidor" (o transporte continua o que é). Veja {@link #editar(String, Transporte, String, int, String, int)}.
      *
      * @throws IllegalArgumentException se algum campo não vale (as mesmas regras do construtor)
      */
     public ConfigServidor editar(String novoNome, String novoHost, int novaPorta, String novoUsuario, int novaPortaAgente) {
+        return editar(novoNome, null, novoHost, novaPorta, novoUsuario, novaPortaAgente);
+    }
+
+    /**
+     * O que o usuário muda na tela "Editar servidor". A regra do pin mora aqui, junto do dado: as impressões digitais guardadas eram as da máquina que o app alcançava
+     * ANTES; mudar o DESTINO dentro do mesmo modo (o endereço ou a porta de um servidor direto; a instância, a região ou a porta SSH do SSM; o hostname da Cloudflare) apaga
+     * os pins, porque outra máquina precisa ser conferida de novo, senão o app passaria a confiar às cegas num servidor que o usuário nunca conferiu. TROCAR O MODO
+     * (direto, SSM, Cloudflare) NÃO apaga: o servidor é o mesmo, só o caminho até ele mudou, e os pins ficam presos à identidade do servidor (o id), não ao endereço e à porta.
+     * Se na verdade o usuário apontou para outra máquina, a chave dela não bate com o pin e a conexão é RECUSADA (nunca confia sozinha). Mudar só o nome, o usuário, o perfil da
+     * AWS ou a porta do agente mantém os pins. O endereço é comparado sem diferença de maiúsculas, como o DNS faz.
+     *
+     * @param novoTransporte o modo e os dados dele; {@code null} mantém o de agora. Num servidor sem porta aberta, {@code novoHost} e {@code novaPorta} não valem
+     * @throws IllegalArgumentException se algum campo não vale (as mesmas regras do construtor)
+     */
+    public ConfigServidor editar(String novoNome, Transporte novoTransporte, String novoHost, int novaPorta, String novoUsuario, int novaPortaAgente) {
+        Transporte alvo = novoTransporte == null ? transporte : novoTransporte;
         String hostLimpo = novoHost == null ? null : novoHost.strip();
         String usuarioLimpo = novoUsuario == null ? null : novoUsuario.strip();
-        boolean mudouOEndereco = hostLimpo == null || !host.equalsIgnoreCase(hostLimpo) || porta != novaPorta;
+        boolean mudouODestino;
+        if (alvo.tipo() != transporte.tipo()) {
+            mudouODestino = false; // trocar o modo mantém os pins: a identidade é o servidor, não o caminho
+        } else if (alvo.ehTunel()) {
+            mudouODestino = !alvo.mesmoDestinoQue(transporte);
+        } else {
+            mudouODestino = hostLimpo == null || !host.equalsIgnoreCase(hostLimpo) || porta != novaPorta;
+        }
         return new ConfigServidor(id, novoNome, hostLimpo, novaPorta, usuarioLimpo, chaveId, novaPortaAgente,
-            mudouOEndereco ? List.of() : pins, transporte, nomeDoDispositivo, estado2fa, protegido, protecaoAutomaticaRecusada);
+            mudouODestino ? List.of() : pins, alvo, nomeDoDispositivo, estado2fa, protegido, protecaoAutomaticaRecusada);
+    }
+
+    /** O mesmo servidor com outro modo de conectar (tudo o mais fica, inclusive os pins). */
+    public ConfigServidor comTransporte(Transporte novo) {
+        return new ConfigServidor(id, nome, host, porta, usuario, chaveId, portaAgente, pins, novo, nomeDoDispositivo, estado2fa, protegido, protecaoAutomaticaRecusada);
+    }
+
+    /** Onde o servidor está, para mostrar ao usuário: {@code host:porta} no direto; a instância e a região no SSM; o hostname na Cloudflare. */
+    public String enderecoParaMostrar() {
+        return switch (transporte.tipo()) {
+            case DIRETO -> host + ":" + porta;
+            case LOCAL -> "Este computador";
+            case SSM, CLOUDFLARED -> transporte.destinoEmTexto();
+        };
     }
 
     /** O que o usuário muda de "Este computador": o nome e a porta do agente (o resto não existe nele). */
@@ -231,10 +278,19 @@ public record ConfigServidor(
             protegido, protecaoAutomaticaRecusada);
     }
 
-    /** {@code true} se {@code outra} aponta para o mesmo endereço e a mesma porta do SSH (o que decide se os pins ainda valem). */
+    /**
+     * {@code true} se {@code outra} aponta para o mesmo destino (o que decide se os pins ainda valem): o mesmo endereço e a mesma porta do SSH num servidor direto, ou a
+     * mesma instância, região e porta (SSM) ou o mesmo hostname (Cloudflare). Modos diferentes são destinos diferentes aqui; a troca de modo, que MANTÉM os pins, é decidida em {@link #editar}.
+     */
     public boolean mesmoEnderecoQue(ConfigServidor outra) {
         if (ehLocal() || outra.ehLocal()) {
             return ehLocal() && outra.ehLocal();
+        }
+        if (transporte.tipo() != outra.transporte.tipo()) {
+            return false;
+        }
+        if (transporte.ehTunel()) {
+            return transporte.mesmoDestinoQue(outra.transporte);
         }
         return host.equalsIgnoreCase(outra.host) && porta == outra.porta;
     }

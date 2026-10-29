@@ -177,10 +177,10 @@ class ServidorProtegidoNoCofreTest {
         assertFalse(java.util.Set.of(ConteudoCofre.VERSAO, ConteudoCofre.VERSAO_COM_SERVIDOR_LOCAL).contains(ConteudoCofre.VERSAO_COM_PROTECAO));
         assertEquals(3, ConteudoCofre.VERSAO_COM_PROTECAO);
         // e o app novo lê as três (e recusa o que não conhece)
-        for (int v : new int[] {1, 2, 3}) {
+        for (int v : new int[] {1, 2, 3, 4}) {
             assertEquals("lab", lerConfig(jsonDoServidor("").replace("\"versao\":1", "\"versao\":" + v)).nome(), "versão " + v);
         }
-        assertThrows(CofreCorrompidoException.class, () -> lerConfig(jsonDoServidor("").replace("\"versao\":1", "\"versao\":4")));
+        assertThrows(CofreCorrompidoException.class, () -> lerConfig(jsonDoServidor("").replace("\"versao\":1", "\"versao\":5")));
     }
 
     @Test

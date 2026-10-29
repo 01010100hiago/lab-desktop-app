@@ -2,6 +2,7 @@ package br.com.labdesktop.cofre;
 
 import br.com.labdesktop.cofre.ConteudoEmMemoria.ServidorGuardado;
 import br.com.labdesktop.seguranca.ValidadorDeNomes;
+import br.com.labdesktop.seguranca.ValidadorDeTransporte;
 import br.com.labdesktop.seguranca.Zeragem;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -19,7 +20,7 @@ import java.util.Set;
  *
  * <p>{@code privadaOpenssh} e {@code tokenAgente} são {@code byte[]}: o Jackson os grava como base64 e os
  * devolve como {@code byte[]} direto, sem eu criar uma {@code String} com a chave. Campos desconhecidos
- * (versões futuras) são ignorados. Os campos {@code protegido} e {@code protecaoAutomaticaRecusada} são opcionais, como os outros. Os campos {@code nomeDoDispositivo} e {@code estado2fa} do servidor foram
+ * (versões futuras) são ignorados. Os campos {@code protegido} e {@code protecaoAutomaticaRecusada} são opcionais, como os outros; os do transporte SSM também. Os campos {@code nomeDoDispositivo} e {@code estado2fa} do servidor foram
  * acrescentados à especificação de 5.3 (opcionais; ausentes valem {@code null} e {@code desligado}), por isso
  * a {@code versao} continua 1.
  *
@@ -45,6 +46,13 @@ final class ConteudoCofre {
      * versões 1 e 2 de sempre, o mesmo arquivo de hoje.
      */
     static final int VERSAO_COM_PROTECAO = 3;
+    /**
+     * O conteúdo em que algum servidor conecta SEM PORTA ABERTA (AWS Session Manager ou Cloudflare). Um app sem os modos sem porta aberta leria o servidor como direto
+     * (ignora os campos que não conhece) e, ao regravar, APAGARIA o transporte em silêncio; com a versão 4 ele recusa abrir. Sobe só quando algum servidor usa transporte
+     * diferente de direto: cofre só com servidores diretos continua nas versões 1, 2 e 3 de sempre, o mesmo arquivo de hoje. A 4 vem depois da 3 (proteção) e vale também para
+     * quem tem as duas coisas.
+     */
+    static final int VERSAO_COM_TRANSPORTE = 4;
 
     @JsonProperty("versao")
     int versao = VERSAO;
@@ -185,6 +193,15 @@ final class ConteudoCofre {
         String tipo;
         @JsonProperty("hostname")
         String hostname;
+        /** Só no SSM: a instância, a região, o perfil da AWS (opcional) e a porta do SSH nela. Ausentes nos outros transportes. */
+        @JsonProperty("instanciaId")
+        String instanciaId;
+        @JsonProperty("regiao")
+        String regiao;
+        @JsonProperty("perfilAws")
+        String perfilAws;
+        @JsonProperty("portaSshNaInstancia")
+        Integer portaSshNaInstancia;
     }
 
     /**
@@ -198,6 +215,9 @@ final class ConteudoCofre {
         }
         if (memoria.servidores.stream().anyMatch(s -> s.config.protegido() || s.config.protecaoAutomaticaRecusada())) {
             json.versao = VERSAO_COM_PROTECAO;
+        }
+        if (memoria.servidores.stream().anyMatch(s -> s.config.transporte().ehTunel())) {
+            json.versao = VERSAO_COM_TRANSPORTE;
         }
         for (ChaveSsh c : memoria.chaves) {
             ChaveJson j = new ChaveJson();
@@ -216,7 +236,7 @@ final class ConteudoCofre {
             ServidorJson j = new ServidorJson();
             j.id = cfg.id();
             j.nome = cfg.nome();
-            j.host = cfg.ehLocal() ? null : cfg.host(); // o servidor local não tem endereço, porta nem usuário de SSH
+            j.host = cfg.ehLocal() || cfg.transporte().ehTunel() ? null : cfg.host(); // o local não tem endereço, porta nem usuário de SSH; o sem porta aberta, nem endereço nem porta
             j.porta = cfg.porta();
             j.usuario = cfg.ehLocal() ? null : cfg.usuario();
             j.chaveId = cfg.chaveId();
@@ -232,9 +252,16 @@ final class ConteudoCofre {
             tj.tipo = switch (cfg.transporte().tipo()) {
                 case DIRETO -> "direto";
                 case CLOUDFLARED -> "cloudflared";
+                case SSM -> "ssm";
                 case LOCAL -> "local";
             };
             tj.hostname = cfg.transporte().hostname();
+            if (cfg.transporte().tipo() == Transporte.Tipo.SSM) {
+                tj.instanciaId = cfg.transporte().instanciaId();
+                tj.regiao = cfg.transporte().regiao();
+                tj.perfilAws = cfg.transporte().perfilAws();
+                tj.portaSshNaInstancia = cfg.transporte().portaSshNaInstancia();
+            }
             j.transporte = tj;
             j.nomeDoDispositivo = cfg.nomeDoDispositivo();
             j.estado2fa = cfg.estado2fa().rotulo();
@@ -271,7 +298,7 @@ final class ConteudoCofre {
      * o que já tinha criado, para não deixar chave solta na memória.
      */
     ConteudoEmMemoria paraMemoria() throws CofreCorrompidoException {
-        if (versao != VERSAO && versao != VERSAO_COM_SERVIDOR_LOCAL && versao != VERSAO_COM_PROTECAO) {
+        if (versao != VERSAO && versao != VERSAO_COM_SERVIDOR_LOCAL && versao != VERSAO_COM_PROTECAO && versao != VERSAO_COM_TRANSPORTE) {
             throw new CofreCorrompidoException("Versão do conteúdo do cofre não suportada: " + versao + ".");
         }
         List<ChaveSsh> chavesProntas = new ArrayList<>();
@@ -384,6 +411,8 @@ final class ConteudoCofre {
             transporte = switch (j.transporte.tipo) {
                 case "direto" -> Transporte.DIRETO;
                 case "cloudflared" -> Transporte.cloudflared(j.transporte.hostname);
+                case "ssm" -> Transporte.ssm(j.transporte.instanciaId, j.transporte.regiao, j.transporte.perfilAws,
+                    j.transporte.portaSshNaInstancia == null ? ValidadorDeTransporte.PORTA_SSH_PADRAO : j.transporte.portaSshNaInstancia);
                 case "local" -> Transporte.LOCAL;
                 default -> throw new IllegalArgumentException("transporte desconhecido");
             };
