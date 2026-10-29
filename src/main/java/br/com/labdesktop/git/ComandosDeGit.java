@@ -195,7 +195,7 @@ public final class ComandosDeGit {
         if (areaOuNula != null) {
             m.fixo("--git-dir=" + areaOuNula).fixo("--work-tree=.");
         }
-        m.fixo("-c").fixo("core.quotepath=off").fixo("check-ignore").fixo("-z").fixo("--stdin");
+        m.fixo("-c").fixo("core.quotepath=off").fixo("-c").fixo("core.fsmonitor=false").fixo("check-ignore").fixo("-z").fixo("--stdin");
         return m.comEntrada(caminhos).pronto();
     }
 

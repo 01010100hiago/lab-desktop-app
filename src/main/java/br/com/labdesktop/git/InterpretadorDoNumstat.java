@@ -35,7 +35,7 @@ public final class InterpretadorDoNumstat {
             String caminho = m.group(3);
             String antigo = null;
             if (caminho.isEmpty()) {
-                if (i + 2 >= t.length) {
+                if (i + 2 >= t.length || t[i + 1].isEmpty() || t[i + 2].isEmpty()) {
                     break; // renomeado cortado no meio: ignora
                 }
                 antigo = t[i + 1];

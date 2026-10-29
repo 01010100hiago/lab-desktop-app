@@ -35,6 +35,14 @@ public final class ShellDeTeste implements ProvisionadorRemoto.Executor {
     /** Fica avisado quando a instalação da chave chegou ao servidor (antes de ser liberada). */
     public final java.util.concurrent.CountDownLatch instalacaoChegou = new java.util.concurrent.CountDownLatch(1);
 
+    private final java.util.Map<String, String> ambienteExtra = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Uma variável de ambiente a mais para o shell (por exemplo, o teto de pastas que o git pode subir procurando um repositório). */
+    public ShellDeTeste comAmbiente(String nome, String valor) {
+        ambienteExtra.put(nome, valor);
+        return this;
+    }
+
     /** Sem servidor SSH: só o shell (para testar o comando sozinho). */
     public ShellDeTeste(Path home) {
         this.home = home;
@@ -78,6 +86,7 @@ public final class ShellDeTeste implements ProvisionadorRemoto.Executor {
         recebidos.add(comando);
         ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", comando);
         pb.environment().put("HOME", home.toString());
+        pb.environment().putAll(ambienteExtra);
         Process p = pb.start();
         try (OutputStream entrada = p.getOutputStream()) {
             entrada.write(stdin);
