@@ -21,6 +21,15 @@ public interface GanchosDaInstalacao {
     Sonda sondar() throws InterruptedException;
 
     /**
+     * Pode este servidor receber uma instalação, atualização ou remoção? Se NÃO, devolve a frase (em português simples) e o instalador não escreve nada: o
+     * servidor é protegido, ou um agente de perfil {@code lab}, instalado fora do app, está respondendo pelo túnel. Só LÊ. Vazio: pode seguir.
+     * O padrão (sem proteção) deixa passar: é o que os testes e "Este computador" usam.
+     */
+    default java.util.Optional<String> recusaDeEscrita() throws InterruptedException {
+        return java.util.Optional.empty();
+    }
+
+    /**
      * Registra o token deste Mac no agente que acabou de subir (ou o substitui, se o agente não o reconhece). Não faz nada se o token
      * já vale.
      *

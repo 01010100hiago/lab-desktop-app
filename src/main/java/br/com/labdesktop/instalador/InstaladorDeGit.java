@@ -100,8 +100,20 @@ public final class InstaladorDeGit {
 
     private final ProvisionadorRemoto.Executor executor;
 
+    /** Sem proteção: o instalador comum. */
+    private java.util.function.Supplier<java.util.Optional<String>> recusa = java.util.Optional::empty;
+
     public InstaladorDeGit(ProvisionadorRemoto.Executor executor) {
         this.executor = executor;
+    }
+
+    /**
+     * Liga a proteção do servidor: {@code recusa} devolve a frase quando o servidor é protegido (então {@link #instalar} não escreve nada e conta o
+     * porquê) e vazio quando pode seguir. Só {@link #instalar} escreve; conferir o git é leitura e continua valendo num servidor protegido.
+     */
+    public InstaladorDeGit comProtecao(java.util.function.Supplier<java.util.Optional<String>> recusa) {
+        this.recusa = recusa == null ? java.util.Optional::empty : recusa;
+        return this;
     }
 
     // =====================================================================================================
@@ -229,6 +241,10 @@ public final class InstaladorDeGit {
      * frase simples (nunca o texto cru do servidor).
      */
     public Resultado instalar(Previa previa, Observador obs, Cancelamento cancelamento) throws InterruptedException {
+        java.util.Optional<String> negada = recusa.get();
+        if (negada.isPresent()) {
+            return new Resultado(false, previa.estado(), negada.get(), "");
+        }
         if (!previa.podeExecutar()) {
             return new Resultado(false, previa.estado(), "O app não pode instalar sozinho neste servidor (sem root nem sudo sem senha). Rode o comando que a tela mostra no Terminal.", "");
         }

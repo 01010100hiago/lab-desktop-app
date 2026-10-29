@@ -26,6 +26,8 @@ import java.time.Instant;
  * @param limites            último {@code /api/limites}; {@code null} antes da primeira leitura
  * @param situacaoDoAgente   o que a leitura por SSH disse do agente quando ele não responde (instalado ou não)
  * @param local              é o servidor "Este computador" (sem SSH): a tela fala de Docker e do laboratório local, não de SSH
+ * @param protegido          "Servidor protegido", JÁ valendo agora: a marca do cofre, ou o agente do lab visto por fora nesta sessão (ver
+ *                           {@link ProtecaoDoServidor}). Com ela o app não oferece nem faz instalar, atualizar nem remover nada neste servidor
  */
 public record EstadoServidor(
     String servidorId,
@@ -41,12 +43,21 @@ public record EstadoServidor(
     VersaoAgente versao,
     LimitesConta limites,
     SituacaoDoAgente situacaoDoAgente,
-    boolean local) {
+    boolean local,
+    boolean protegido) {
 
     public EstadoServidor {
         if (situacaoDoAgente == null) {
             situacaoDoAgente = SituacaoDoAgente.DESCONHECIDA;
         }
+    }
+
+    /** Sem a marca de protegido (falsa): o que a maioria dos testes e das telas que não tratam de proteção usa. */
+    public EstadoServidor(String servidorId, String nome, EstadoConexao conexao, Falha falha, int tentativa,
+                          Instant proximaTentativaEm, Instant semConexaoDesde, long geracao, Estado2fa estado2fa,
+                          String nomeDoDispositivo, VersaoAgente versao, LimitesConta limites, SituacaoDoAgente situacaoDoAgente, boolean local) {
+        this(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde, geracao, estado2fa, nomeDoDispositivo, versao,
+            limites, situacaoDoAgente, local, false);
     }
 
     /** Servidor remoto (por SSH): o que sempre foi. */
@@ -69,38 +80,62 @@ public record EstadoServidor(
     EstadoServidor comConexao(br.com.labdesktop.ssh.InfoConexao info) {
         return new EstadoServidor(servidorId, nome, info.estado(), info.falha(), info.tentativa(),
             info.proximaTentativaEm(), info.semConexaoDesde(), info.geracao(), estado2fa, nomeDoDispositivo, versao,
-            limites, info.estado() == EstadoConexao.SSH_OK_SEM_AGENTE ? situacaoDoAgente : SituacaoDoAgente.DESCONHECIDA, local);
+            limites, info.estado() == EstadoConexao.SSH_OK_SEM_AGENTE ? situacaoDoAgente : SituacaoDoAgente.DESCONHECIDA, local, protegido);
     }
 
     EstadoServidor comVersao(VersaoAgente nova, Estado2fa novoEstado2fa) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, novoEstado2fa, nomeDoDispositivo, nova, limites, situacaoDoAgente, local);
+            geracao, novoEstado2fa, nomeDoDispositivo, nova, limites, situacaoDoAgente, local, protegido);
     }
 
     EstadoServidor comLimites(LimitesConta novos) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, novos, situacaoDoAgente, local);
+            geracao, estado2fa, nomeDoDispositivo, versao, novos, situacaoDoAgente, local, protegido);
     }
 
     EstadoServidor comEstado2fa(Estado2fa novo) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, novo, nomeDoDispositivo, versao, limites, situacaoDoAgente, local);
+            geracao, novo, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido);
     }
 
     EstadoServidor comDispositivo(String nomeNovo) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeNovo, versao, limites, situacaoDoAgente, local);
+            geracao, estado2fa, nomeNovo, versao, limites, situacaoDoAgente, local, protegido);
     }
 
     /** Copia com o nome novo (o usuário editou o servidor). */
     EstadoServidor comNome(String nomeNovo) {
         return new EstadoServidor(servidorId, nomeNovo, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local);
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido);
     }
 
     EstadoServidor comSituacaoDoAgente(SituacaoDoAgente nova) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, limites, nova, local);
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, nova, local, protegido);
+    }
+
+    /** Copia com a marca de protegido nova (o usuário mudou a caixa, ou o app viu o agente do lab de fora). */
+    EstadoServidor comProtegido(boolean novo) {
+        return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, novo);
+    }
+
+    /**
+     * O app deve OFERECER "Instalar agente" (menu, cartão, página, aviso)? O SSH está de pé sem o agente, a leitura disse que dá para instalar e o servidor NÃO é
+     * protegido. É a única conta: toda tela pergunta aqui, e nenhuma olha {@link SituacaoDoAgente#oferecerInstalar} sozinha para decidir se mostra o botão.
+     */
+    public boolean ofereceInstalarAgente() {
+        return !protegido && conexao == EstadoConexao.SSH_OK_SEM_AGENTE && situacaoDoAgente.oferecerInstalar();
+    }
+
+    /** O app deve oferecer "Atualizar agente" e "Remover agente"? Só com o agente do perfil monitor que o app instalou, respondendo, e o servidor NÃO protegido. */
+    public boolean ofereceAtualizarERemoverAgente() {
+        return !protegido && conexao == EstadoConexao.CONECTADO && agenteDoMonitor();
+    }
+
+    /** Faltaria o agente e o app o ofereceria, não fosse a proteção: o texto do aviso troca "Instalar agente" pela explicação de que o servidor é protegido. */
+    public boolean agenteFaltaMasServidorProtegido() {
+        return protegido && conexao == EstadoConexao.SSH_OK_SEM_AGENTE && situacaoDoAgente.oferecerInstalar();
     }
 
     /** O % usado da semana, para a barra lateral e o ícone; {@code null} sem leitura que valha. */

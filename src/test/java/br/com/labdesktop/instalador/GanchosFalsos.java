@@ -13,6 +13,9 @@ public final class GanchosFalsos implements GanchosDaInstalacao {
     public Exception falhaAoRegistrar;
     public String dockerVisto;
     public ParametrosDaInstalacao parametrosVistos;
+    /** A frase que o servidor dá para recusar qualquer escrita (protegido, ou agente do lab de fora); vazio: pode seguir. */
+    public volatile java.util.Optional<String> recusa = java.util.Optional.empty();
+    public int consultasDeRecusa;
 
     public GanchosFalsos sonda(Sonda... r) {
         respostas.clear();
@@ -27,6 +30,12 @@ public final class GanchosFalsos implements GanchosDaInstalacao {
         Sonda s = respostas.get(Math.min(proxima, respostas.size() - 1));
         proxima++;
         return s;
+    }
+
+    @Override
+    public java.util.Optional<String> recusaDeEscrita() {
+        consultasDeRecusa++;
+        return recusa;
     }
 
     @Override

@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,7 +119,12 @@ public final class InstaladorDeAgente {
      */
     public RelatorioDeVerificacao verificar(ModoDaInstalacao como) throws IOException, InterruptedException {
         this.modo = como;
-        this.relatorioCompleto = verificacoes.executar(como);
+        RelatorioDeVerificacao lido = verificacoes.executar(como);
+        // Um servidor protegido, ou com o agente do lab (de fora) respondendo, nunca chega a "Instalar em": o problema fica na conferência, sem comando sugerido.
+        Optional<String> recusa = ganchos.recusaDeEscrita();
+        this.relatorioCompleto = recusa.isPresent()
+            ? lido.substituindo(ResultadoDaVerificacao.problema(ResultadoDaVerificacao.Item.CONTAINER, recusa.get(), null))
+            : lido;
         this.relatorio = verificacoesDaEscolha == null ? relatorioCompleto : relatorioCompleto.somenteDe(verificacoesDaEscolha);
         this.docker = relatorio.docker();
         return relatorioCompleto;
@@ -183,6 +189,16 @@ public final class InstaladorDeAgente {
         this.cancelamento = cancelamento == null ? Cancelamento.NUNCA : cancelamento;
         if (relatorio == null || relatorio.bloqueado()) {
             return new ResultadoDaInstalacao(Desfecho.RECUSADA, null, "As verificações ainda têm problema: resolva antes de instalar.", List.of());
+        }
+        // A última porta antes de qualquer escrita: lê de novo, porque o agente do lab pode ter respondido (ou o usuário ter protegido) depois da conferência.
+        try {
+            Optional<String> recusa = ganchos.recusaDeEscrita();
+            if (recusa.isPresent()) {
+                return new ResultadoDaInstalacao(Desfecho.RECUSADA, null, recusa.get(), List.of());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new ResultadoDaInstalacao(Desfecho.CANCELADA, null, "Cancelado por você.", List.of());
         }
         criouContainer = false;
         guardouOAnterior = false;
@@ -552,6 +568,11 @@ public final class InstaladorDeAgente {
         this.cancelamento = cancelamento == null ? Cancelamento.NUNCA : cancelamento;
         List<String> feito = new ArrayList<>();
         List<String> avisos = new ArrayList<>();
+        Optional<String> recusa = ganchos.recusaDeEscrita();
+        if (recusa.isPresent()) {
+            avisos.add(recusa.get());
+            return new ResultadoDaRemocao(false, feito, avisos, true);
+        }
         String dk = descobrirODocker();
         if (dk == null) {
             avisos.add("Não consegui usar o Docker deste servidor (sem permissão ou parado): nada foi removido.");

@@ -45,6 +45,7 @@ public final class GerenciadorServidores implements AutoCloseable {
     private final Map<String, ServidorLab> servidores = new LinkedHashMap<>();
     private final List<Consumer<List<ServidorLab>>> observadoresDaLista = new CopyOnWriteArrayList<>();
     private final List<Consumer<ServidorLab>> ligadoresDeSono = new ArrayList<>();
+    private final List<Consumer<ServidorLab>> observadoresDaProtecaoAutomatica = new CopyOnWriteArrayList<>();
     private boolean fechado;
 
     public GerenciadorServidores(AcessoAoCofre cofre, PedidoDeCodigo2fa pedidoDeCodigo) {
@@ -69,7 +70,26 @@ public final class GerenciadorServidores implements AutoCloseable {
     }
 
     private ServidorLab novoServidor(String id) {
-        return new ServidorLab(id, cofre, pedidoDeCodigo, cfgSsh, Agendador.doFundo(), Fundo::naEdt, Fundo.ioVirtual(), locais);
+        ServidorLab lab = new ServidorLab(id, cofre, pedidoDeCodigo, cfgSsh, Agendador.doFundo(), Fundo::naEdt, Fundo.ioVirtual(), locais);
+        lab.aoProtegerSozinho(this::avisarProtecaoAutomatica);
+        return lab;
+    }
+
+    /**
+     * Passa a receber, UMA vez por servidor, o aviso de que o app marcou um servidor como protegido sozinho (viu o agente do lab instalado fora do app). Chega pela
+     * EDT ({@code Fundo.naEdt}); a lista de servidores também é avisada, para as telas desenharem o selo.
+     */
+    public Inscricao observarProtecaoAutomatica(Consumer<ServidorLab> ouvinte) {
+        observadoresDaProtecaoAutomatica.add(ouvinte);
+        return () -> observadoresDaProtecaoAutomatica.remove(ouvinte);
+    }
+
+    private void avisarProtecaoAutomatica(ServidorLab lab) {
+        lab.aoMudarAProtecao();
+        avisarLista();
+        for (Consumer<ServidorLab> o : observadoresDaProtecaoAutomatica) {
+            Fundo.naEdt(() -> o.accept(lab));
+        }
     }
 
     /** Os servidores, na ordem do cofre. */
@@ -175,6 +195,9 @@ public final class GerenciadorServidores implements AutoCloseable {
         AtomicReference<ConfigServidor> depois = new AtomicReference<>();
         cofre.alterarServidor(servidorId, atual -> {
             ConfigServidor nova = atual.editar(dados.nome(), dados.host(), dados.porta(), dados.usuario(), dados.portaDoAgente());
+            if (dados.protegido() != null) {
+                nova = nova.comProtegido(dados.protegido());
+            }
             antes.set(atual);
             depois.set(nova);
             return nova;
@@ -182,9 +205,42 @@ public final class GerenciadorServidores implements AutoCloseable {
         boolean mudou = !antes.get().equals(depois.get());
         boolean impressaoApagada = !antes.get().pins().isEmpty() && depois.get().pins().isEmpty();
         if (mudou) {
-            lab.aoEditarNoCofre();
+            if (antes.get().mesmaConexaoQue(depois.get())) {
+                lab.aoMudarAProtecao(); // só a marca mudou: nada a reconectar
+            } else {
+                lab.aoEditarNoCofre();
+            }
+            if (antes.get().protegido() != depois.get().protegido()) {
+                avisarLista();
+            }
         }
         return new ResultadoDaEdicao(depois.get(), mudou, impressaoApagada);
+    }
+
+    /**
+     * Liga ou desliga "Servidor protegido": grava no cofre, faz as telas do servidor passarem a oferecer (ou esconder) o instalar, atualizar e remover
+     * SEM reconectar, e avisa quem observa a lista. Desligar uma proteção que estava ligada também anota que a marca automática foi recusada (ela não volta
+     * sozinha). Em "Este computador" não existe a marca. Bloqueia (disco): fora da EDT.
+     *
+     * @return {@code true} se mudou alguma coisa
+     * @throws IllegalArgumentException o servidor não existe ou é "Este computador"
+     */
+    public boolean definirProtegido(String servidorId, boolean protegido) throws CofreException {
+        ServidorLab lab = servidor(servidorId).orElseThrow(() -> new IllegalArgumentException("Esse servidor não está mais na lista."));
+        if (lab.ehLocal()) {
+            throw new IllegalArgumentException("Este computador não tem a marca de servidor protegido.");
+        }
+        java.util.concurrent.atomic.AtomicBoolean mudou = new java.util.concurrent.atomic.AtomicBoolean();
+        cofre.alterarServidor(servidorId, atual -> {
+            ConfigServidor nova = atual.comProtegido(protegido);
+            mudou.set(!nova.equals(atual));
+            return nova;
+        });
+        lab.aoMudarAProtecao();
+        if (mudou.get()) {
+            avisarLista();
+        }
+        return mudou.get();
     }
 
     /**

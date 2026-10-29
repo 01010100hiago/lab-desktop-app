@@ -140,6 +140,15 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     /** A última configuração lida do cofre: o que as telas ainda desenham depois de o servidor sair dele (ver {@link #config()}). */
     private volatile ConfigServidor ultimaConfig;
     private volatile Duration prazoDoTesteDoToken = PRAZO_PADRAO_DO_TESTE_DO_TOKEN;
+    /**
+     * O agente que respondeu nesta sessão NÃO é o monitor que o app instala (é o do lab, instalado por fora). Vale como "protegido" na hora, antes mesmo de a marca chegar
+     * ao cofre, a menos que o usuário já tenha recusado a marca automática. Só na memória: a marca que fica é a do cofre.
+     */
+    private volatile boolean viuAgenteDeFora;
+    /** A marca automática já foi tentada nesta sessão (uma vez só: se o cofre falhar, o próximo app tenta). */
+    private final AtomicBoolean tentouProtegerSozinho = new AtomicBoolean();
+    /** Quem avisa o usuário, uma única vez, que o app marcou o servidor como protegido ao ver o agente do lab. */
+    private volatile Consumer<ServidorLab> aoProtegerSozinho = lab -> { };
     /** A fachada da Cloudflare, criada na primeira vez que alguém a pede (sob "this"). */
     private br.com.labdesktop.cloudflare.ServicoCloudflare cloudflare;
     /** Encerrar e reiniciar processos, montado na primeira vez que alguém o pede (sob "this"). */
@@ -180,7 +189,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         this.ultimaConfig = config;
         this.estado = new EstadoServidor(config.id(), config.nome(),
             br.com.labdesktop.ssh.EstadoConexao.DESCONECTADO, null, 0, null, null, 0,
-            config.estado2fa(), config.nomeDoDispositivo(), null, null, SituacaoDoAgente.DESCONHECIDA, config.ehLocal());
+            config.estado2fa(), config.nomeDoDispositivo(), null, null, SituacaoDoAgente.DESCONHECIDA, config.ehLocal(), config.protegido());
 
         this.sondador = new Sondador(agendador, trabalho, entrega, this::aoErroDeConsulta);
         this.local = config.ehLocal();
@@ -240,6 +249,32 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             return ultimaConfig;
         }
         throw new IllegalStateException("Servidor removido do cofre: " + id);
+    }
+
+    /**
+     * O servidor é PROTEGIDO agora? Sim se o usuário marcou (cofre), ou se o agente do lab, instalado por fora do app, respondeu nesta sessão e o usuário não
+     * recusou a marca automática. "Este computador" nunca é. É o que toda recusa e toda oferta de instalar, atualizar ou remover consulta.
+     */
+    public boolean protegido() {
+        return protegidoAgora(config());
+    }
+
+    private boolean protegidoAgora(ConfigServidor c) {
+        return !c.ehLocal() && (c.protegido() || (viuAgenteDeFora && !c.protecaoAutomaticaRecusada()));
+    }
+
+    /**
+     * A guarda das ações de escrita que instalam, atualizam ou removem algo (agente, Docker, Git).
+     *
+     * @throws ProtecaoDoServidor.ServidorProtegidoException se o servidor é protegido
+     */
+    public void exigirNaoProtegido() {
+        ProtecaoDoServidor.exigirLivre(protegido());
+    }
+
+    /** Quem é avisado (na thread de fundo; quem recebe leva à EDT) quando o app marca este servidor como protegido sozinho. */
+    public void aoProtegerSozinho(Consumer<ServidorLab> ouvinte) {
+        this.aoProtegerSozinho = ouvinte == null ? lab -> { } : ouvinte;
     }
 
     /**
@@ -431,8 +466,18 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      */
     void aoEditarNoCofre() {
         ConfigServidor nova = config();
-        atualizarEstado(e -> e.comNome(nova.nome()));
+        boolean protegida = protegidoAgora(nova);
+        atualizarEstado(e -> e.comNome(nova.nome()).comProtegido(protegida));
         conexao.reconectar();
+    }
+
+    /**
+     * O usuário ligou ou desligou "Servidor protegido" (e só isso mudou): as telas passam a ofertar o que vale agora, SEM reconectar (a conexão é a mesma). Também vale
+     * como resposta do usuário à marca automática: o que ele decidiu manda sobre o que o app viu nesta sessão.
+     */
+    void aoMudarAProtecao() {
+        boolean protegida = protegidoAgora(config());
+        atualizarEstado(e -> e.comProtegido(protegida));
     }
 
     /** O cofre foi bloqueado: fecha sessão e túnel e para de consultar. Depois, {@link #fechar()}. */
@@ -545,6 +590,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private void aoReceberVersao(VersaoAgente v) {
         Estado2fa lido = Estado2fa.deRotulo(v.totp());
         atualizarEstado(e -> e.comVersao(v, lido));
+        if (!local && !v.perfilMonitor()) {
+            aoVerAgenteDeFora();
+        }
         ajustarLimites(v);
         try {
             if (cofre.servidor(id).map(ConfigServidor::estado2fa).orElse(lido) != lido) {
@@ -555,6 +603,46 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         } catch (CofreBloqueadoException e) {
             // cofre fechado no meio: sem problema, é só uma dica
         }
+    }
+
+    /**
+     * Um agente que NÃO é o monitor que o app instala respondeu (o do lab, instalado por fora, ou um mais antigo, de antes de o agente ter perfil: só o lab existia):
+     * o servidor passa a valer como protegido NA HORA (memória) e, uma vez só, a marca vai para o cofre e o usuário é avisado. Se o usuário já recusou a marca automática,
+     * nada muda. Se o cofre falhar, a proteção da sessão continua valendo e o app não insiste até a próxima sessão.
+     */
+    private void aoVerAgenteDeFora() {
+        viuAgenteDeFora = true;
+        ConfigServidor c;
+        try {
+            c = cofre.servidor(id).orElse(null);
+        } catch (CofreBloqueadoException e) {
+            return;
+        }
+        if (c == null) {
+            return;
+        }
+        boolean protegida = protegidoAgora(c);
+        atualizarEstado(e -> e.comProtegido(protegida));
+        if (!c.podeProtegerSozinho() || !tentouProtegerSozinho.compareAndSet(false, true)) {
+            return;
+        }
+        trabalho.execute(() -> {
+            AtomicBoolean mudou = new AtomicBoolean();
+            try {
+                cofre.alterarServidor(id, atual -> {
+                    ConfigServidor nova = atual.comProtecaoAutomatica();
+                    mudou.set(!nova.equals(atual));
+                    return nova;
+                });
+            } catch (CofreException | RuntimeException e) {
+                LOG.warn("Não consegui gravar a marca de servidor protegido de {}: {}", id, Redator.redigir(e));
+                return;
+            }
+            if (mudou.get()) {
+                LOG.info("O agente do lab responde em {} (instalado fora do app): servidor marcado como protegido.", id);
+                aoProtegerSozinho.accept(this);
+            }
+        });
     }
 
     /** Roda no Sondador (thread virtual): decide o que o erro de uma consulta significa para a conexão. */
@@ -674,6 +762,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * Os ganchos ligam o instalador ao túnel (sondar o agente) e ao cofre (registrar o token deste Mac).
      */
     public InstaladorDeAgente instaladorDoAgente(ParametrosDaInstalacao parametros, PacoteDoAgente pacote) {
+        exigirNaoProtegido();
         if (local) {
             throw new IllegalStateException("Em Este computador o agente se cria por \"Preparar este computador\".");
         }
@@ -763,6 +852,25 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         return ProvisionadorRemoto.para(conexao::executar, como.container(), como.docker());
     }
 
+    /**
+     * Há, AGORA, um agente de fora (que não é o monitor do app) respondendo pelo túnel? Pergunta de novo ({@code GET /api/versao}), em vez de confiar no que se
+     * sabia, porque a conferência do instalador pode ter ficado para trás. Se o túnel não existe, ou o agente não responde (ou recusa o token e por isso não diz o
+     * perfil), vale o que o app já viu nesta sessão. Bloqueia (rede): fora da EDT.
+     */
+    private boolean agenteDeForaRespondeAgora() {
+        PontaDoAgente tunel = conexao.pontaDoAgente().orElse(null);
+        if (tunel != null) {
+            try {
+                VersaoAgente v = apiParaTunel(tunel).versao();
+                aoReceberVersao(v);
+                return !v.perfilMonitor();
+            } catch (ErroApi | CofreBloqueadoException e) {
+                // sem resposta que diga o perfil: vale o que já se viu
+            }
+        }
+        return viuAgenteDeFora;
+    }
+
     private GanchosDaInstalacao ganchosDeInstalacao() {
         return new GanchosDaInstalacao() {
             @Override
@@ -782,6 +890,17 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
                 } catch (CofreBloqueadoException e) {
                     return Sonda.NAO_RESPONDE;
                 }
+            }
+
+            @Override
+            public java.util.Optional<String> recusaDeEscrita() throws InterruptedException {
+                if (protegido()) {
+                    return java.util.Optional.of(ProtecaoDoServidor.RECUSA);
+                }
+                if (agenteDeForaRespondeAgora()) {
+                    return java.util.Optional.of(ProtecaoDoServidor.RECUSA_DO_AGENTE_DE_FORA);
+                }
+                return java.util.Optional.empty();
             }
 
             @Override
@@ -1192,7 +1311,9 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         if (local) {
             throw new IllegalStateException("Em Este computador o git se confere e se instala em \"Preparar este computador\".");
         }
-        return new br.com.labdesktop.instalador.InstaladorDeGit(conexao::executar);
+        // Conferir o git é leitura e vale em servidor protegido; só o instalar recusa (pela proteção, lida a cada tentativa).
+        return new br.com.labdesktop.instalador.InstaladorDeGit(conexao::executar)
+            .comProtecao(() -> protegido() ? java.util.Optional.of(ProtecaoDoServidor.RECUSA) : java.util.Optional.empty());
     }
 
     private java.util.Set<String> protegidos(java.util.Set<String> doDono) {

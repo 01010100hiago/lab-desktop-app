@@ -48,6 +48,24 @@ public record RelatorioDeVerificacao(List<ResultadoDaVerificacao> resultados, Mo
             distribuicao, dockerPresente, dockerAusente);
     }
 
+    /** O mesmo relatório com o resultado desse item trocado pelo dado (ou acrescentado, se o item não estava). */
+    public RelatorioDeVerificacao substituindo(ResultadoDaVerificacao novo) {
+        List<ResultadoDaVerificacao> lista = new java.util.ArrayList<>();
+        boolean achou = false;
+        for (ResultadoDaVerificacao r : resultados) {
+            if (r.item() == novo.item()) {
+                lista.add(novo);
+                achou = true;
+            } else {
+                lista.add(r);
+            }
+        }
+        if (!achou) {
+            lista.add(novo);
+        }
+        return new RelatorioDeVerificacao(lista, modo, docker, administrador, distribuicao, dockerPresente, dockerAusente);
+    }
+
     public ResultadoDaVerificacao de(ResultadoDaVerificacao.Item item) {
         return resultados.stream().filter(r -> r.item() == item).findFirst().orElse(null);
     }

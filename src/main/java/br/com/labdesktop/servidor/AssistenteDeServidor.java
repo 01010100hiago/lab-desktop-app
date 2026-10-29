@@ -62,8 +62,18 @@ public final class AssistenteDeServidor {
     public static final Duration PRAZO_DO_DIAGNOSTICO = Duration.ofSeconds(15);
     private static final long PASSO_DA_ESPERA_MS = 100;
 
-    /** Os dados do formulário "Adicionar servidor". Validados pelas mesmas regras do cofre. */
-    public record Dados(String nome, String host, int porta, String usuario, int portaDoAgente) {
+    /**
+     * Os dados do formulário "Adicionar servidor" e "Editar servidor". Validados pelas mesmas regras do cofre.
+     *
+     * @param protegido a caixa "Servidor protegido": {@code true} liga, {@code false} desliga e {@code null} NÃO MEXE na marca (quem monta os dados sem
+     *                  perguntar aousuário, como os testes mais antigos, nunca desliga a proteção por esquecimento)
+     */
+    public record Dados(String nome, String host, int porta, String usuario, int portaDoAgente, Boolean protegido) {
+
+        /** Sem falar da proteção: ao cadastrar vale "não protegido"; ao editar, a marca fica como está. */
+        public Dados(String nome, String host, int porta, String usuario, int portaDoAgente) {
+            this(nome, host, porta, usuario, portaDoAgente, null);
+        }
 
         /** O que o usuário vê na primeira vez (ARQUITETURA 8.3): campos vazios, com a porta SSH padrão (22) e a porta padrão do agente. */
         public static Dados padraoDoPrimeiro() {
@@ -255,7 +265,7 @@ public final class AssistenteDeServidor {
         dados.validar();
         ConfigServidor config = new ConfigServidor(ConfigServidor.novoId(), dados.nome(), dados.host().strip(),
             dados.porta(), dados.usuario().strip(), chaveId, dados.portaDoAgente(), List.of(pin), Transporte.DIRETO,
-            null, Estado2fa.DESLIGADO);
+            null, Estado2fa.DESLIGADO, Boolean.TRUE.equals(dados.protegido()), false);
         cofre.adicionarServidor(config, null);
         return gerenciador.adicionar(config.id());
     }
