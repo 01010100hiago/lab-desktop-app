@@ -140,6 +140,38 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
     }
 
     @Test
+    void umGitignoreQueLiberaOEnvImpedeMesmoSemOArquivoPorqueOGitNaoConfirmaAProtecao() throws Exception {
+        Path p = g.projeto("loja-web");
+        g.escrever(p, "src/app.js", "x");
+        g.escrever(p, ".gitignore", "!.env\n!*.pem\n");
+        ConferenciaDoRepositorio c = criador(p).conferirCriacao();
+        assertEquals(Situacao.PODE_CRIAR, c.situacao());
+        assertTrue(c.segredosQueEntrariam().isEmpty(), "não há arquivo de segredo na pasta");
+        assertFalse(c.protecaoConfirmada(), "mas o git diz que um .env novo entraria: o app não confirma a proteção");
+        assertFalse(c.liberaACriacao());
+        assertFalse(Files.exists(p.resolve(".git")));
+    }
+
+    @Test
+    void mesmoComUmaConferenciaAdulteradaOAppConfereOSegredoDeNovoAntesDoAdd() throws Exception {
+        Path p = g.projeto("loja-web");
+        g.escrever(p, "src/app.js", "x");
+        g.escrever(p, "sub/.gitignore", "!.env\n");
+        g.escrever(p, "sub/.env", "SENHA=1\n");
+        CriadorDeRepositorio criador = criador(p);
+        ConferenciaDoRepositorio real = criador.conferirCriacao();
+        assertFalse(real.liberaACriacao(), "a conferência de verdade já barra");
+        // alguém adultera uma conferência que libera e lista o segredo como arquivo comum
+        ConferenciaDoRepositorio adulterada = new ConferenciaDoRepositorio(Situacao.PODE_CRIAR, null, real.versaoDoGit(), "Ana", "ana@example.com", List.of("src/app.js", "sub/.env", "sub/.gitignore"), List.of(),
+            List.of(), null, List.of(), true, false, 0);
+        ResultadoDaCriacao r = criador.criarRepositorio(new PedidoDeCriacao(adulterada, null, null, false), OperacoesDeGit.Observador.NENHUM, new Cancelamento());
+        assertFalse(r.criou());
+        assertTrue(r.mensagem().contains("sub/.env"), r.mensagem());
+        assertEquals(List.of(), rastreados(p), "nada foi adicionado");
+        assertTrue(g.comandos.stream().noneMatch(cmd -> cmd.contains("add")), "o git add nem rodou: " + g.comandos);
+    }
+
+    @Test
     void projetoSemNenhumArquivoGanhaSoOGitignoreNoPrimeiroCommit() throws Exception {
         Path p = g.projeto("loja-web");
         ConferenciaDoRepositorio c = criador(p).conferirCriacao();
