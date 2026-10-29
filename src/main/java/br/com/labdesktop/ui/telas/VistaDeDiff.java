@@ -40,7 +40,6 @@ final class VistaDeDiff extends Painel {
 
     private final Rotulo arquivo = new Rotulo().mono(12f).truncavel();
     private final Rotulo contagem = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f);
-    private final Rotulo legenda = new Rotulo("+ acrescentada   - tirada").mono(11f).corDoToken(Tokens.TEXTO3);
     private final Rotulo aviso = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f).truncavel();
     private final Rotulo mensagem = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(13f).aoCentro();
     private final DefaultListModel<LinhaDeDiff> linhas = new DefaultListModel<>();
@@ -76,7 +75,7 @@ final class VistaDeDiff extends Painel {
 
         JPanel cima = new Painel(new BorderLayout(10, 0));
         cima.add(Caixa.linha(10, arquivo, contagem), BorderLayout.CENTER);
-        cima.add(Caixa.linha(10, legenda, copiar), BorderLayout.EAST);
+        cima.add(copiar, BorderLayout.EAST);
         JPanel topo = new Painel();
         topo.setLayout(new javax.swing.BoxLayout(topo, javax.swing.BoxLayout.Y_AXIS));
         cima.setAlignmentX(LEFT_ALIGNMENT);

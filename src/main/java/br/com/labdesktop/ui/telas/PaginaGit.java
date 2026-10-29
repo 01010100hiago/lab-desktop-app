@@ -151,11 +151,11 @@ final class PaginaGit extends PaginaDoProjeto {
         this.diffDoCommit = new VistaDeDiff(ctx.copiador, ctx.avisos);
         this.diffPendente = new VistaDeDiff(ctx.copiador, ctx.avisos);
         this.tabelaDeCommits = new TabelaDeDados<>("Commits do projeto", List.of(
-            new TabelaDeDados.Coluna<Commit>("Commit", 0.7, false, Commit::curto, c -> c.hash()),
+            new TabelaDeDados.Coluna<Commit>("Commit", 1.0, false, Commit::curto, c -> c.hash()),
             new TabelaDeDados.Coluna<Commit>("Mensagem", 4.0, false, c -> (c.ehMerge() ? "(merge) " : "") + (c.assunto().isEmpty() ? "(sem mensagem)" : c.assunto()), c -> c.assunto()),
             new TabelaDeDados.Coluna<Commit>("Autor", 1.4, false, Commit::autor, c -> c.autor() + (c.email().isEmpty() ? "" : " <" + c.email() + ">")),
             new TabelaDeDados.Coluna<Commit>("Quando", 1.1, false, c -> FormatosDoProjeto.haQuanto(c.quando(), ctx.agora()), c -> dataCompleta(c)),
-            new TabelaDeDados.Coluna<Commit>("Arquivos", 0.8, true, c -> c.arquivos() < 0 ? "—" : String.valueOf(c.arquivos()))),
+            new TabelaDeDados.Coluna<Commit>("Arquivos", 1.0, true, c -> c.arquivos() < 0 ? "—" : String.valueOf(c.arquivos()))),
             this::aoEscolherOCommit);
         this.tabelaDeArquivos = new TabelaDeDados<>("Arquivos do commit", List.of(
             new TabelaDeDados.Coluna<ArquivoDoCommit>("Arquivo", 4.0, false, a -> (a.renomeado() ? a.antigo() + " → " : "") + a.caminho(), a -> a.caminho()),
@@ -269,7 +269,7 @@ final class PaginaGit extends PaginaDoProjeto {
         mensagem.add(Caixa.espacoVertical(8));
         mensagem.add(linhaDoComando);
         mensagem.add(Caixa.espacoVertical(12));
-        JPanel botoes = Caixa.linha(8, criar, instalar, tentarDeNovo);
+        JPanel botoes = new AEsquerda(Caixa.linha(8, criar, instalar, tentarDeNovo));
         botoes.setAlignmentX(LEFT_ALIGNMENT);
         mensagem.add(botoes);
         criar.setVisible(false);
@@ -279,9 +279,8 @@ final class PaginaGit extends PaginaDoProjeto {
         mensagemAEsquerda.add(mensagem, BorderLayout.NORTH);
 
         // commits: a lista em cima, o detalhe embaixo
-        JScrollPane rolagemDeCommits = new JScrollPane(tabelaDeCommits);
+        JScrollPane rolagemDeCommits = tabelaDeCommits.emRolagem();
         rolagemDeCommits.setPreferredSize(new Dimension(300, 170)); // a página nunca rola: o que passa da janela rola POR DENTRO de cada tabela
-        rolagemDeCommits.setBorder(br.com.labdesktop.ui.componentes.Bordas.contorno(Tokens.BORDA));
         JPanel rodapeDaLista = new Painel(new BorderLayout(10, 0));
         rodapeDaLista.add(Caixa.linha(10, carregarMais, contagemDeCommits), BorderLayout.WEST);
         JPanel lista = new Painel(new BorderLayout(0, 6));
@@ -291,8 +290,7 @@ final class PaginaGit extends PaginaDoProjeto {
         semCommits.setVisible(false);
         lista.add(semCommits, BorderLayout.NORTH);
 
-        JScrollPane rolagemDeArquivos = new JScrollPane(tabelaDeArquivos);
-        rolagemDeArquivos.setBorder(br.com.labdesktop.ui.componentes.Bordas.contorno(Tokens.BORDA));
+        JScrollPane rolagemDeArquivos = tabelaDeArquivos.emRolagem();
         rolagemDeArquivos.setMinimumSize(new Dimension(160, 80));
         rolagemDeArquivos.setPreferredSize(new Dimension(220, 120));
         JPanel arquivos = new Painel(new BorderLayout(0, 4));
@@ -328,9 +326,8 @@ final class PaginaGit extends PaginaDoProjeto {
         limparODetalhe("Escolha um commit na lista para ver o que ele mudou.");
 
         // alterações
-        JScrollPane rolagemDePendencias = new JScrollPane(tabelaDePendencias);
+        JScrollPane rolagemDePendencias = tabelaDePendencias.emRolagem();
         rolagemDePendencias.setPreferredSize(new Dimension(300, 150));
-        rolagemDePendencias.setBorder(br.com.labdesktop.ui.componentes.Bordas.contorno(Tokens.BORDA));
         JPanel vistas = Caixa.linha(6, verArvore, verIndice, Caixa.mola());
         JPanel baixoDasPendencias = new Painel(new BorderLayout(0, 6));
         baixoDasPendencias.add(vistas, BorderLayout.NORTH);
@@ -345,9 +342,8 @@ final class PaginaGit extends PaginaDoProjeto {
         diffPendente.vazio("Escolha uma alteração para ver o que mudou.");
 
         // branches
-        JScrollPane rolagemDeBranches = new JScrollPane(tabelaDeBranches);
+        JScrollPane rolagemDeBranches = tabelaDeBranches.emRolagem();
         rolagemDeBranches.setPreferredSize(new Dimension(300, 200));
-        rolagemDeBranches.setBorder(br.com.labdesktop.ui.componentes.Bordas.contorno(Tokens.BORDA));
         Rotulo dicaDosBranches = new Rotulo("Clique num branch para ver os commits dele na aba Commits.").corDoToken(Tokens.TEXTO3).tamanho(12f);
         JPanel branches = new Painel(new BorderLayout(0, 6));
         branches.add(rolagemDeBranches, BorderLayout.CENTER);

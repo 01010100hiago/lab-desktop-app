@@ -29,7 +29,7 @@ public record ComandoGit(Natureza natureza, List<String> argumentos, Set<Integer
     public ComandoGit {
         argumentos = List.copyOf(argumentos);
         livres = Set.copyOf(livres);
-        ambiente = Map.copyOf(ambiente);
+        ambiente = java.util.Collections.unmodifiableMap(new java.util.TreeMap<>(ambiente)); // em ordem de nome: a linha que vai ao servidor é sempre a mesma
         entrada = entrada == null ? new byte[0] : entrada.clone();
     }
 

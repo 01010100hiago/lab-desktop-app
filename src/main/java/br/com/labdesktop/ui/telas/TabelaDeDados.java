@@ -97,6 +97,15 @@ final class TabelaDeDados<T> extends JTable {
         ajustarLarguras();
     }
 
+    /** A tabela numa área de rolagem com o cabeçalho das colunas (sem esperar o addNotify, para o cabeçalho aparecer também fora de janela) e a moldura do tema. */
+    javax.swing.JScrollPane emRolagem() {
+        javax.swing.JScrollPane r = new javax.swing.JScrollPane(this);
+        r.setColumnHeaderView(getTableHeader());
+        r.setBorder(Bordas.contorno(Tokens.BORDA));
+        r.getViewport().setOpaque(true);
+        return r;
+    }
+
     /** Troca as linhas mantendo a seleção no mesmo dado, se ele continua na lista (a comparação é por {@code equals}). Não dispara o ouvinte de seleção. */
     void definir(List<T> novas) {
         T selecionado = selecionado();
