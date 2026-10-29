@@ -37,10 +37,10 @@ class TesteNeutroDeSistema {
         Map.entry("\"~/Library|Library/Application Support|Library/Logs", Set.of("plataforma/PastasDoApp.java")),
         Map.entry("PosixFilePermission|PosixFileAttribute", Set.of("util/ProtecaoPosix.java", "util/SenhaDeTeste.java", "arquivos/ClienteSftpLocal.java", "arquivos/ClienteSftpMina.java")),
         Map.entry("getProperty\\(\"os\\.name\"", Set.of("plataforma/SistemaOperacional.java", "plataforma/DescricaoDoSistema.java", "AutoTeste.java", "local/SondaReal.java")),
-        Map.entry("\"/usr/bin", Set.of("local/LocalizadorDeProgramas.java", "local/PlataformaLocal.java")),
+        Map.entry("\"/usr/bin", Set.of("local/LocalizadorDeProgramas.java", "local/PlataformaLocal.java", "transporte/DescobertaDeFerramentas.java")),
         Map.entry("\"/bin/(sh|bash)\"", Set.of("AutoTeste.java", "terminal/TransporteLocal.java")),
         Map.entry("\"cmd(\\.exe)?\"|\"powershell(\\.exe)?\"", Set.of("local/ComandosLocais.java", "terminal/TransporteLocal.java", "AutoTeste.java")),
-        Map.entry("new ProcessBuilder\\(", Set.of("plataforma/ConsultaPorProcesso.java", "local/ProcessosLocais.java", "instalador/MontadorDoPacote.java")),
+        Map.entry("new ProcessBuilder\\(", Set.of("plataforma/ConsultaPorProcesso.java", "local/ProcessosLocais.java", "instalador/MontadorDoPacote.java", "transporte/LancadorReal.java")),
         Map.entry("Runtime\\.getRuntime\\(\\)\\.exec", Set.of()));
 
     private static List<String> codigoDe(Path arquivo) throws IOException {
