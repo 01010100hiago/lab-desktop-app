@@ -592,7 +592,9 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             try {
                 destino = abridor.abrir(servidor.transporte(), servidor.host(), servidor.porta(), falha -> post(() -> aoCairOTunel(id, falha)));
             } finally {
-                threadAbrindoOTunel = null;
+                if (threadAbrindoOTunel == Thread.currentThread()) {
+                    threadAbrindoOTunel = null; // só limpa o que é seu: uma tentativa nova pode já ter posto a thread dela
+                }
             }
             SshClient c = clienteParaConectar(servidor);
             s = c.connect(servidor.usuario(), destino.host(), destino.porta()).verify(cfg.conectar()).getSession();

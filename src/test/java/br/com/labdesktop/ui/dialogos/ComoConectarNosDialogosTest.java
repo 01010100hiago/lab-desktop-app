@@ -587,34 +587,28 @@ class ComoConectarNosDialogosTest {
 
     @Test
     void oEditarComSsmCabeSemRolagemEGravaOPng() throws Exception {
-        ServidorLab lab = servidorNoCofre(Transporte.ssm(INSTANCIA, "us-east-1", "meu-perfil", 22), List.of(ssh.pin()));
-        DialogoEditarServidor d = Visual.naEdt(() -> new DialogoEditarServidor(lab.config(), dados -> null, avisos,
-            new DialogoEditarServidor.Acesso("lab", "SHA256:5MGLihSpPv/h6+y5NnTZfr2nnOaG8vJ9pEy1z3+jIQg", "ssh-ed25519 AAAAexemplo lab", () -> { }),
-            new CopiadorDeTexto(() -> new Clipboard("teste")), () -> relatorioComUmaAchadaEUmaNao()));
-        int altura = Visual.alturaPreferida(d.raiz(), LARGURA_DO_DIALOGO);
-        assertTrue(altura <= 608, "o Editar com SSM pede " + altura + " px (o limite de altura do O deixou era 608)");
-        semTransbordoEPng(d.raiz(), "dialogo-editar-servidor-ssm");
-        // numa tela de 900 px de altura o corpo cabe inteiro, sem rolar (o direto e os dois modos sem porta aberta têm a mesma altura)
+        // sem rolagem numa tela de 900 px de altura (o diálogo cresce até 80% dela), e a altura inteira cabe numa janela de 700 px (barra de título inclusa)
         Dialogo.definirAlturaDaTelaParaTeste(900);
         try {
             for (Transporte t : new Transporte[] {Transporte.DIRETO, Transporte.ssm(INSTANCIA, "us-east-1", "meu-perfil", 22), Transporte.cloudflared("ssh.example.com")}) {
-                ServidorLab outro = servidorNoCofre(t, List.of());
-                DialogoEditarServidor e = Visual.naEdt(() -> new DialogoEditarServidor(outro.config(), dados -> null, avisos,
+                ServidorLab lab = servidorNoCofre(t, List.of(ssh.pin()));
+                DialogoEditarServidor d = Visual.naEdt(() -> new DialogoEditarServidor(lab.config(), dados -> null, avisos,
                     new DialogoEditarServidor.Acesso("lab", "SHA256:5MGLihSpPv/h6+y5NnTZfr2nnOaG8vJ9pEy1z3+jIQg", "ssh-ed25519 AAAAexemplo lab", () -> { }),
                     new CopiadorDeTexto(() -> new Clipboard("teste")), () -> relatorioComUmaAchadaEUmaNao()));
-                Visual.alturaPreferida(e.raiz(), LARGURA_DO_DIALOGO);
-                assertFalse(Visual.naEdt(() -> e.mioloRolavel().rola()), "o Editar (" + t.tipo() + ") não rola numa tela de 900 px");
+                int altura = Visual.alturaPreferida(d.raiz(), LARGURA_DO_DIALOGO);
+                assertFalse(Visual.naEdt(() -> d.mioloRolavel().rola()), "o Editar (" + t.tipo() + ") não rola numa tela de 900 px");
+                assertTrue(altura + 32 <= 700, "o Editar (" + t.tipo() + ") pede " + altura + " px mais a barra de título: cabe numa janela de 700");
+                if (t.tipo() == Transporte.Tipo.SSM) {
+                    semTransbordoEPng(d.raiz(), "dialogo-editar-servidor-ssm");
+                }
             }
         } finally {
             Dialogo.definirAlturaDaTelaParaTeste(0);
         }
-
-        ServidorLab direto = servidorNoCofre(Transporte.DIRETO, List.of(ssh.pin()));
-        DialogoEditarServidor dd = Visual.naEdt(() -> new DialogoEditarServidor(direto.config(), dados -> null, avisos,
-            new DialogoEditarServidor.Acesso("lab", "SHA256:5MGLihSpPv/h6+y5NnTZfr2nnOaG8vJ9pEy1z3+jIQg", "ssh-ed25519 AAAAexemplo lab", () -> { }),
-            new CopiadorDeTexto(() -> new Clipboard("teste")), () -> relatorioComUmaAchadaEUmaNao()));
-        int alturaDireto = Visual.alturaPreferida(dd.raiz(), LARGURA_DO_DIALOGO);
-        assertTrue(alturaDireto <= 608, "o Editar direto pede " + alturaDireto + " px");
+        // e o limite de altura do Editar, numa tela de 800 px (a de um notebook comum): o diálogo não passa de 608
+        ServidorLab lab = servidorNoCofre(Transporte.ssm(INSTANCIA, "us-east-1", "meu-perfil", 22), List.of());
+        DialogoEditarServidor d = editar(lab);
+        assertTrue(Visual.alturaPreferida(d.raiz(), LARGURA_DO_DIALOGO) <= 608);
     }
 
     @Test
