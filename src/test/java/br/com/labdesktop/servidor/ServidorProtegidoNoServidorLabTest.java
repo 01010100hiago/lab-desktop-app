@@ -469,6 +469,7 @@ class ServidorProtegidoNoServidorLabTest {
         assertTrue(r.existia());
         assertFalse(r.tokenRevogado(), "protegido: o token do app continua no agente");
         assertFalse(r.chaveTiradaDoServidor(), "e a chave continua no authorized_keys");
+        assertTrue(r.avisos().isEmpty(), "o gerenciador nem tentou revogar (a defesa do ServidorLab não precisou recusar): " + r.avisos());
         assertEquals(1, agente.tokens.size(), "o agente ainda conhece o token");
         assertTrue(ssh.comandos.subList(comandosAntes, ssh.comandos.size()).stream().noneMatch(c -> c.contains("authorized_keys") || c.contains("token-revogar")),
             "nenhum comando de revogar foi ao servidor: " + ssh.comandos);
