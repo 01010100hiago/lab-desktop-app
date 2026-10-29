@@ -227,10 +227,10 @@ class ServidorProtegidoNaJanelaTest {
         TelaServidores.CartaoDeServidor cartao = cartaoDe(lab);
         Espera.ate(PRAZO, () -> "botão (estado=" + lab.estado() + ")", () -> Visual.naEdt(cartao::acoesMostradas).contains(Item.INSTALAR_AGENTE));
 
-        gerenciador.definirProtegido(lab.id(), true);
+        br.com.labdesktop.teste.EdicaoDaProtecao.definir(gerenciador, lab.id(), true);
         Espera.ate(PRAZO, "o botão saiu e o selo entrou", () -> !Visual.naEdt(cartao::acoesMostradas).contains(Item.INSTALAR_AGENTE) && Visual.naEdt(cartao::mostraOSeloProtegido));
 
-        gerenciador.definirProtegido(lab.id(), false);
+        br.com.labdesktop.teste.EdicaoDaProtecao.definir(gerenciador, lab.id(), false);
         Espera.ate(PRAZO, "o botão voltou e o selo saiu", () -> Visual.naEdt(cartao::acoesMostradas).contains(Item.INSTALAR_AGENTE) && !Visual.naEdt(cartao::mostraOSeloProtegido));
     }
 
@@ -315,9 +315,20 @@ class ServidorProtegidoNaJanelaTest {
             () -> MenuDoServidor.executar(Item.INSTALAR_AGENTE, lab, acoes),
             () -> MenuDoServidor.executar(Item.ATUALIZAR_AGENTE, lab, acoes),
             () -> MenuDoServidor.executar(Item.REMOVER_AGENTE, lab, acoes),
-            () -> acoes.instalarGit(lab, () -> { }));
+            () -> acoes.instalarGit(lab, () -> { }),
+            () -> acoes.instalarChaveComSenha(lab),
+            () -> MenuDoServidor.executar(Item.INSTALAR_CHAVE, lab, acoes),
+            () -> acoes.executar(lab, ConteudoDosAvisos.Acao.INSTALAR_CHAVE),
+            () -> acoes.desligarSenha(lab),
+            () -> acoes.desligarSenha(lab, () -> { }));
         for (Runnable chamada : chamadas) {
-            Visual.naEdt(chamada);
+            // a recusa tem de sair DENTRO da própria chamada (na mesma passada da EDT): é a primeira guarda, que não espera o pacote do agente carregar em segundo plano
+            Visual.naEdt(() -> {
+                long antes = avisos.todos.stream().filter(a -> a.texto().equals(ProtecaoDoServidor.RECUSA)).count();
+                chamada.run();
+                long depois = avisos.todos.stream().filter(a -> a.texto().equals(ProtecaoDoServidor.RECUSA)).count();
+                assertEquals(antes + 1, depois, "a recusa não saiu na hora");
+            });
         }
         Thread.sleep(500);
         assertTrue(dialogos.mostrados.isEmpty(), "nenhum diálogo de instalar abriu: " + dialogos.mostrados);
@@ -326,6 +337,32 @@ class ServidorProtegidoNaJanelaTest {
         for (String c : ssh.comandos) {
             assertTrue(ComandosRemotos.ehLeitura(c), "só leituras: " + c);
         }
+    }
+
+    @Test
+    void seOServidorForProtegidoDepoisDoCliqueEAntesDeAConfirmacaoAbrirNadaAbreEODonoLeAFrase() throws Exception {
+        ServidorLab lab = servidor("vps-1", false);
+        abrirAJanela();
+        Espera.ate(PRAZO, () -> "estado=" + lab.estado(), () -> lab.estado().situacaoDoAgente() == SituacaoDoAgente.NAO_INSTALADO);
+        java.util.concurrent.CountDownLatch edtParada = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch soltar = new java.util.concurrent.CountDownLatch(1);
+        // a EDT roda o clique (a primeira guarda passa: ainda não é protegido), carrega o pacote em segundo plano e para; o resto fica na fila atrás do bloqueio
+        javax.swing.SwingUtilities.invokeLater(() -> painel.acoes().instalarAgente(lab));
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            edtParada.countDown();
+            try {
+                soltar.await(30, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        assertTrue(edtParada.await(PRAZO.toSeconds(), java.util.concurrent.TimeUnit.SECONDS));
+        Thread.sleep(800); // o pacote carrega e a abertura da confirmação entra na fila, atrás do bloqueio
+        cofre.alterarServidor(lab.id(), c -> c.comProtegido(true)); // o usuário protegeu entre o clique e a abertura
+        soltar.countDown();
+
+        Espera.ate(PRAZO, () -> "recusa (avisos=" + avisos.todos + ")", () -> avisos.disse("atencao", ProtecaoDoServidor.RECUSA));
+        assertTrue(dialogos.mostrados.isEmpty(), "a confirmação não abriu");
     }
 
     @Test
@@ -349,7 +386,7 @@ class ServidorProtegidoNaJanelaTest {
         ServidorLab lab = servidor("lab", false);
         abrirAJanela();
         Espera.ate(PRAZO, () -> "aviso (avisos=" + avisos.todos + ")", () -> avisos.disse("info", "instalado fora do app"));
-        assertEquals("Este servidor já tem o agente do lab, instalado fora do app. Marquei como protegido: o app não vai instalar nada aqui. "
+        assertEquals("lab: Este servidor já tem o agente do lab, instalado fora do app. Marquei como protegido: o app não vai instalar nada aqui. "
             + "Para desfazer, abra Editar servidor.", avisos.ultimo().texto());
         TelaServidores.CartaoDeServidor cartao = cartaoDe(lab);
         Espera.ate(PRAZO, "selo no cartão", () -> Visual.naEdt(cartao::mostraOSeloProtegido));
@@ -374,6 +411,10 @@ class ServidorProtegidoNaJanelaTest {
             new CopiadorDeTexto(() -> new Clipboard("teste"))));
         assertTrue(Visual.naEdt(() -> editar.caixaProtegido().isSelected()));
         renderizarNosDoisTemas(editar::raiz, 560, Visual.alturaPreferida(editar.raiz(), 560), "dialogo-editar-servidor-protegido");
+
+        var remover = Visual.naEdt(() -> new br.com.labdesktop.ui.dialogos.DialogoRemoverServidor("vps-1", "labuser", true, List.of(),
+            br.com.labdesktop.cofre.InfoChave.Origem.GERADA_PELO_APP, opcoes -> null, avisos, true));
+        renderizarNosDoisTemas(remover::raiz, 560, Visual.alturaPreferida(remover.raiz(), 560), "dialogo-remover-servidor-protegido");
 
         AssistenteDeServidor assistente = new AssistenteDeServidor(cofre, gerenciador, ConfigSsh.rapida());
         DialogoAdicionarServidor adicionar = Visual.naEdt(() -> new DialogoAdicionarServidor(assistente, false, avisos, l -> { }, null, null,

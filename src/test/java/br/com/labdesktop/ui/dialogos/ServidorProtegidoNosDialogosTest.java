@@ -13,11 +13,14 @@ import br.com.labdesktop.cofre.ConfigServidor;
 import br.com.labdesktop.cofre.Estado2fa;
 import br.com.labdesktop.cofre.GeradorDeChaves;
 import br.com.labdesktop.cofre.InfoChave;
+import br.com.labdesktop.teste.EdicaoDaProtecao;
 import br.com.labdesktop.cofre.ParametrosKdf;
 import br.com.labdesktop.cofre.Transporte;
 import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Dados;
 import br.com.labdesktop.servidor.GerenciadorServidores;
+import br.com.labdesktop.servidor.GerenciadorServidores.OpcoesDeRemocao;
+import br.com.labdesktop.servidor.GerenciadorServidores.ResultadoDaRemocao;
 import br.com.labdesktop.servidor.ProtecaoDoServidor;
 import br.com.labdesktop.servidor.ServidorLab;
 import br.com.labdesktop.ssh.ConfigSsh;
@@ -172,6 +175,136 @@ class ServidorProtegidoNosDialogosTest {
         assertTrue(gravados.isEmpty());
     }
 
+
+    @Test
+    void salvarSoONomeNaoDesligaAMarcaQueOAppLigouComATelaAberta() throws Exception {
+        ServidorLab lab = servidorNoCofre(false);
+        List<Dados> gravados = new ArrayList<>();
+        DialogoEditarServidor d = editar(lab, gravados); // aberto ANTES de o app marcar sozinho
+        cofre.alterarServidor(lab.id(), ConfigServidor::comProtecaoAutomatica); // o app viu o agente do lab e marcou
+        assertTrue(cofre.servidor(lab.id()).orElseThrow().protegido());
+
+        Visual.naEdt(() -> d.campoDoNome().setText("vps-renomeado")); // o usuário só muda o nome, não toca na caixa
+        Visual.naEdt(() -> d.botaoSalvar().doClick());
+        Espera.ate(PRAZO, "gravou o nome", () -> cofre.servidor(lab.id()).orElseThrow().nome().equals("vps-renomeado"));
+
+        ConfigServidor c = cofre.servidor(lab.id()).orElseThrow();
+        assertTrue(c.protegido(), "a proteção do app não pode sumir porque o usuário renomeou");
+        assertFalse(c.protecaoAutomaticaRecusada(), "e o usuário não recusou nada");
+        assertEquals(null, gravados.get(0).protegido(), "a tela só manda a caixa se o usuário mexeu nela");
+    }
+
+    @Test
+    void mexerNaCaixaMandaOValorEOQueATelaViuAoAbrir() throws Exception {
+        ServidorLab lab = servidorNoCofre(true);
+        List<Dados> gravados = new ArrayList<>();
+        DialogoEditarServidor d = editar(lab, gravados);
+        Visual.naEdt(() -> d.caixaProtegido().doClick()); // desmarcou
+        Visual.naEdt(() -> d.botaoSalvar().doClick());
+        Espera.ate(PRAZO, "gravou", () -> !cofre.servidor(lab.id()).orElseThrow().protegido());
+        assertEquals(Boolean.FALSE, gravados.get(0).protegido());
+        assertEquals(Boolean.TRUE, gravados.get(0).protegidoVisto(), "a tela viu protegido ao abrir");
+    }
+
+    @Test
+    void aDicaDoSalvarDizOQueDeFatoReconecta() {
+        assertTrue(DialogoEditarServidor.DICA_DO_SALVAR.contains("Salvar reconecta o app, menos quando só a caixa Servidor protegido mudou"), DialogoEditarServidor.DICA_DO_SALVAR);
+        assertFalse(DialogoEditarServidor.DICA_DO_SALVAR.contains("Salvar e reconectar"), "o botão só se chama assim quando reconecta");
+    }
+
+    private DialogoEditarServidor editarComAcesso(ServidorLab lab, Runnable aoInstalarChave) {
+        return Visual.naEdt(() -> new DialogoEditarServidor(lab.config(), dados -> null, avisos,
+            new DialogoEditarServidor.Acesso("lab", "SHA256:5MGLihSpPv/h6+y5NnTZfr2nnOaG8vJ9pEy1z3+jIQg", "ssh-ed25519 AAAAexemplo lab", aoInstalarChave),
+            new CopiadorDeTexto(() -> new Clipboard("teste"))));
+    }
+
+    @Test
+    void emServidorProtegidoOEditarNaoOfereceInstalarAChaveMasContinuaCopiando() throws Exception {
+        ServidorLab lab = servidorNoCofre(true);
+        DialogoEditarServidor d = editarComAcesso(lab, null);
+        assertTrue(Visual.naEdt(d::mostraAAcesso));
+        assertFalse(Visual.naEdt(() -> d.botaoInstalarChave().isVisible()), "o app não muda chaves num servidor protegido");
+        assertTrue(Visual.naEdt(() -> d.botaoCopiarChave().isVisible()));
+        String tudo = Visual.naEdt(() -> textos(d.raiz()));
+        assertFalse(tudo.contains("Instalar a chave com a senha"), tudo);
+        assertFalse(tudo.contains("antes de instalar a chave"), "nem a dica do botão que não existe");
+        Visual.naEdt(() -> d.campoDoNome().setText("outro"));
+        assertFalse(Visual.naEdt(d::mostraADicaDeSalvarAntes));
+
+        ServidorLab comum = servidorNoCofre(false);
+        DialogoEditarServidor c = editarComAcesso(comum, () -> { });
+        assertTrue(Visual.naEdt(() -> c.botaoInstalarChave().isVisible()), "sem a marca o botão de sempre");
+    }
+
+    @Test
+    void oEditarCabeSemRolagemEmUmaTelaDe700ComOSalvarSempreAVista() throws Exception {
+        ServidorLab lab = servidorNoCofre(false);
+        DialogoEditarServidor d = editarComAcesso(lab, () -> { });
+        int largura = 560;
+        int altura = Visual.alturaPreferida(d.raiz(), largura);
+        assertTrue(altura <= 620, "o Editar pede " + altura + " px (eram 669 antes de comprimir)");
+        // numa tela baixa (600 px úteis) o miolo rola e o rodapé com o Salvar continua fora da rolagem
+        Dialogo.definirAlturaDaTelaParaTeste(600);
+        try {
+            DialogoEditarServidor baixo = editarComAcesso(lab, () -> { });
+            assertNotNull(baixo.mioloRolavel(), "o corpo rola dentro de um miolo");
+            int alturaBaixa = Visual.alturaPreferida(baixo.raiz(), largura);
+            assertTrue(alturaBaixa <= 600, "numa tela de 600 px o diálogo não passa dela: " + alturaBaixa);
+            Visual.naEdt(() -> { baixo.raiz().setSize(largura, alturaBaixa); Visual.layoutar(baixo.raiz()); });
+            assertTrue(Visual.naEdt(() -> baixo.botaoSalvar().isShowing() || baixo.botaoSalvar().getParent() != null));
+            java.awt.Rectangle r = Visual.naEdt(() -> javax.swing.SwingUtilities.convertRectangle(baixo.botaoSalvar().getParent(), baixo.botaoSalvar().getBounds(), baixo.raiz()));
+            assertTrue(r.y + r.height <= alturaBaixa, "o Salvar (y=" + r.y + ", h=" + r.height + ") fica dentro dos " + alturaBaixa + " px");
+        } finally {
+            Dialogo.definirAlturaDaTelaParaTeste(0);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Remover servidor
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void removerUmServidorProtegidoDizQueSoEsqueceENaoOfereceRevogar() throws Exception {
+        List<OpcoesDeRemocao> pedidas = new ArrayList<>();
+        DialogoRemoverServidor d = Visual.naEdt(() -> new DialogoRemoverServidor("vps-1", "labuser", true, List.of(), InfoChave.Origem.GERADA_PELO_APP,
+            opcoes -> {
+                pedidas.add(opcoes);
+                return new ResultadoDaRemocao(true, true, false, false, List.of());
+            }, avisos, true));
+        assertFalse(Visual.naEdt(() -> d.caixaDeRevogar().isVisible()), "a revogação nem existe");
+        assertFalse(Visual.naEdt(() -> d.caixaDeRevogar().isSelected()));
+        assertEquals("O app esquece este servidor. Nada é removido nele: a chave e o token do app continuam lá.", Visual.naEdt(d::explicacaoDaRevogacao));
+        assertTrue(Visual.naEdt(() -> textos(d.raiz())).contains("O app esquece este servidor. Nada é removido nele: a chave e o token do app continuam lá."));
+
+        Visual.naEdt(() -> d.botaoRemover().doClick());
+        Espera.ate(PRAZO, "pediu a remoção", () -> !pedidas.isEmpty());
+        assertFalse(pedidas.get(0).revogarNoServidor(), "o pedido sai sem revogar");
+
+        // sem a marca: a caixa e a frase de sempre
+        DialogoRemoverServidor comum = Visual.naEdt(() -> new DialogoRemoverServidor("vps-1", "labuser", true, List.of(), InfoChave.Origem.GERADA_PELO_APP,
+            opcoes -> null, avisos, false));
+        assertTrue(Visual.naEdt(() -> comum.caixaDeRevogar().isVisible()));
+        assertTrue(Visual.naEdt(() -> comum.caixaDeRevogar().isSelected()));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // O assistente com a pergunta do agente na tela
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void protegerDepoisDeAPerguntaAparecerFazOInstalarAgenteConcluirComoSoSsh() throws Exception {
+        DialogoAdicionarServidor d = abrir(true);
+        ateOFim(d, () -> Visual.naEdt(d::perguntandoDoAgente), "pergunta");
+        ServidorLab lab = Visual.naEdt(d::servidorCadastrado);
+        EdicaoDaProtecao.definir(gerenciador, lab.id(), true); // o usuário protegeu o servidor com a pergunta na tela
+
+        Visual.naEdt(() -> d.botaoInstalarAgente().doClick());
+
+        assertTrue(pedidosDeInstalacao.isEmpty(), "ninguém abriu a confirmação de instalar");
+        assertEquals(List.of(lab), concluidos, "conclui como Só SSH");
+        assertTrue(avisos.disse("ok", "só por SSH e protegido"), avisos.todos.toString());
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Adicionar servidor
     // ---------------------------------------------------------------------------------------------
@@ -217,6 +350,7 @@ class ServidorProtegidoNosDialogosTest {
             assertTrue(Visual.naEdt(() -> d.caixaProtegido().isShowing() || d.caixaProtegido().isVisible()));
             String tudo = Visual.naEdt(() -> textos(d.raiz()));
             assertTrue(tudo.contains("O app nunca instala, atualiza nem remove nada neste servidor. Use para servidores que já estão em produção."), tudo);
+            assertTrue(Visual.alturaPreferida(d.raiz(), 560) <= 560, "o passo 1 com a caixa continua cabendo sem rolagem: " + Visual.alturaPreferida(d.raiz(), 560) + " px");
         }
     }
 

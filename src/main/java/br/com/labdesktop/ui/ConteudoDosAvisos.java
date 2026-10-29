@@ -190,6 +190,9 @@ public final class ConteudoDosAvisos {
                     List.of(Acao.TENTAR_AGORA));
             case ERRO_AUTENTICACAO -> tipo == Falha.Tipo.CHAVE_NAO_USADA
                 ? new AvisoDeConexao(Gravidade.PERIGO, "chave", "O app não conseguiu usar a chave em " + nome, falha.mensagem() + " Depois, tente de novo.", List.of(Acao.TENTAR_AGORA))
+                : tipo == Falha.Tipo.CHAVE_RECUSADA && e.protegido()
+                ? new AvisoDeConexao(Gravidade.PERIGO, "chave", nome + " recusou a chave deste app", falha.mensagem() + " " + ProtecaoDoServidor.CHAVE_RECUSADA_PROTEGIDO,
+                    List.of(Acao.TENTAR_AGORA))
                 : tipo == Falha.Tipo.CHAVE_RECUSADA
                 ? new AvisoDeConexao(Gravidade.PERIGO, "chave", nome + " recusou a chave deste app", falha.mensagem() + " " + TEXTO_DA_CHAVE_RECUSADA,
                     List.of(Acao.INSTALAR_CHAVE, Acao.TENTAR_AGORA))

@@ -1070,7 +1070,16 @@ public final class DialogoDoAgente extends Dialogo {
                 reajustar();
                 return;
             }
-            instalador = fabrica.apply(parametros);
+            try {
+                instalador = fabrica.apply(parametros);
+            } catch (br.com.labdesktop.servidor.ProtecaoDoServidor.ServidorProtegidoException protegido) {
+                // o usuário protegeu o servidor com esta tela aberta: o app não instala; mostra a frase onde o usuário está olhando (a seção avançada abre) e desliga o botão
+                opcoesAvancadas.definirAberta(true);
+                dizerErro(erroDoContainer, protegido.getMessage());
+                confirmar.setEnabled(false);
+                reajustar();
+                return;
+            }
         }
         dizerErro(erroDoContainer, "");
         conferir();

@@ -45,6 +45,16 @@ public record VersaoAgente(
     }
 
     /**
+     * O agente NÃO é o monitor que o app instala: é o do lab (perfil {@code lab}, instalado por fora, por exemplo por um script de publicação) ou um agente de antes de
+     * existir o campo {@code perfil}, quando só o lab existia ({@code perfil} nulo). A razão de contar o nulo como "de fora": o app nunca instalou um agente sem
+     * perfil (o monitor sempre diz {@code "monitor"}), então um agente que não diz é o do lab de produção, de antes. O limite: um agente QUALQUER que não diga o
+     * perfil (um painel antigo de outro uso) também conta, e o servidor dele vira protegido; o usuário desmarca em Editar servidor e a marca não volta sozinha.
+     */
+    public boolean ehAgenteDeFora() {
+        return !perfilMonitor();
+    }
+
+    /**
      * O servidor tem sessões do Claude? {@code null} quando o agente não diz (agente antigo): quem decide assume o comportamento de
      * antes (a presença de {@code sessao} no detalhe do projeto).
      */

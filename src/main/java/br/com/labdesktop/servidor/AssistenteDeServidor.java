@@ -65,14 +65,21 @@ public final class AssistenteDeServidor {
     /**
      * Os dados do formulário "Adicionar servidor" e "Editar servidor". Validados pelas mesmas regras do cofre.
      *
-     * @param protegido a caixa "Servidor protegido": {@code true} liga, {@code false} desliga e {@code null} NÃO MEXE na marca (quem monta os dados sem
-     *                  perguntar aousuário, como os testes mais antigos, nunca desliga a proteção por esquecimento)
+     * @param protegido      a caixa "Servidor protegido": {@code true} liga, {@code false} desliga e {@code null} NÃO MEXE na marca (quem monta os dados sem
+     *                       perguntar aousuário, como os testes mais antigos, nunca desliga a proteção por esquecimento; o Editar servidor só manda o valor se o usuário mexeu na caixa)
+     * @param protegidoVisto o valor da marca que a tela mostrava quando abriu ({@code null}: não se sabe, aplica sempre). Se a marca do cofre já é outra (o app marcou
+     *                       sozinho com a tela aberta), o valor que o usuário mandou NÃO sobrescreve a configuração atual
      */
-    public record Dados(String nome, String host, int porta, String usuario, int portaDoAgente, Boolean protegido) {
+    public record Dados(String nome, String host, int porta, String usuario, int portaDoAgente, Boolean protegido, Boolean protegidoVisto) {
 
         /** Sem falar da proteção: ao cadastrar vale "não protegido"; ao editar, a marca fica como está. */
         public Dados(String nome, String host, int porta, String usuario, int portaDoAgente) {
-            this(nome, host, porta, usuario, portaDoAgente, null);
+            this(nome, host, porta, usuario, portaDoAgente, null, null);
+        }
+
+        /** Com a caixa, sem dizer o que a tela viu ao abrir (aplica sempre). */
+        public Dados(String nome, String host, int porta, String usuario, int portaDoAgente, Boolean protegido) {
+            this(nome, host, porta, usuario, portaDoAgente, protegido, null);
         }
 
         /** O que o usuário vê na primeira vez (ARQUITETURA 8.3): campos vazios, com a porta SSH padrão (22) e a porta padrão do agente. */
@@ -404,6 +411,9 @@ public final class AssistenteDeServidor {
     public InstaladorDeChave.Resultado repararAChaveComSenha(ServidorLab lab, char[] senha, Consumer<EtapaDoPrimeiroAcesso> progresso)
         throws FalhaDeEntradaPorSenha, CofreException, InterruptedException {
         try {
+            // servidor protegido: o app não muda chaves nele (a instalação grava no authorized_keys). Dentro do try, para a senha ser zerada mesmo assim.
+            // O primeiro cadastro (o passo 2 do assistente, antes de o servidor existir) não passa por aqui: instalar a chave é como o app entra.
+            lab.exigirNaoProtegido();
             ConfigServidor cfg = cofre.servidor(lab.id()).orElseThrow(() -> new IllegalArgumentException("Esse servidor não está mais na lista."));
             if (cfg.ehLocal()) {
                 throw new IllegalArgumentException("Este computador não usa SSH nem chave.");

@@ -482,7 +482,13 @@ public final class DialogoAdicionarServidor extends Dialogo {
         substituirToken.addActionListener(e -> substituirOToken());
         concluir.addActionListener(e -> concluirDeVez());
         fecharConexao.addActionListener(e -> aoCancelar());
-        instalarOAgente.addActionListener(e -> instalarAgente.pedir(lab, this::executarConclusao, this::concluirSoPorSsh));
+        instalarOAgente.addActionListener(e -> {
+            if (lab != null && lab.protegido()) {
+                concluirSoPorSsh(); // o usuário protegeu o servidor com a pergunta na tela: não há o que instalar, conclui como Só SSH
+                return;
+            }
+            instalarAgente.pedir(lab, this::executarConclusao, this::concluirSoPorSsh);
+        });
         agoraNao.addActionListener(e -> concluirSoPorSsh());
     }
 
@@ -1370,7 +1376,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     /** Se o usuário entrou com a senha, o último passo PERGUNTA se desliga o login por senha (nunca sozinho); senão, entrega o servidor e fecha. */
     private void terminarOuPerguntarDaSenha() {
-        if (senhaUsada) {
+        // servidor protegido: o app não muda a senha de acesso dele, então nem pergunta
+        if (senhaUsada && !(lab != null && lab.protegido())) {
             mostrarPagina(PAGINA_SENHA);
             return;
         }

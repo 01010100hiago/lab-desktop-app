@@ -257,6 +257,27 @@ class DialogoDoAgenteTest {
         assertEquals(2, fabricados.size());
     }
 
+    @Test
+    void seOServidorFoiProtegidoComATelaAbertaMudarOContainerMostraAFraseEDesligaOBotao() {
+        AtomicInteger montados = new AtomicInteger();
+        DialogoDoAgente d = Visual.naEdt(() -> new DialogoDoAgente(DialogoDoAgente.Acao.INSTALAR, new DialogoDoAgente.Alvo(NOME, 7000, null), PACOTE, p -> {
+            if (montados.incrementAndGet() > 1) {
+                throw new br.com.labdesktop.servidor.ProtecaoDoServidor.ServidorProtegidoException(); // o usuário protegeu o servidor depois de abrir
+            }
+            return new InstaladorDeAgente(servidor, p, PACOTE, ganchos).comSonda(Duration.ofMillis(300), Duration.ofMillis(10));
+        }, mudancasNoServidor::incrementAndGet, avisos, new CopiadorDeTexto(() -> new Clipboard("teste"))));
+        Visual.naEdt(d::iniciarConferencia);
+        seguirComCompleto(d);
+
+        Visual.naEdt(() -> d.campoDoContainer().setText("painel-teste"));
+        Visual.naEdt(() -> d.botaoConferirDeNovo().doClick()); // a EDT não leva a exceção para a rua
+
+        assertTrue(textosDaRaiz(d).contains("Este servidor é protegido: o app não instala, atualiza nem remove nada aqui. Para mudar, abra Editar servidor."), textosDaRaiz(d));
+        assertTrue(Visual.naEdt(() -> d.opcoesAvancadas().aberta()), "a seção onde a frase mora abre");
+        assertFalse(Visual.naEdt(() -> d.botaoConfirmar().isEnabled()), "e o Instalar em fica desligado");
+        assertTrue(servidor.escritas().isEmpty());
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Andamento, sucesso, erro
     // ---------------------------------------------------------------------------------------------

@@ -590,7 +590,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private void aoReceberVersao(VersaoAgente v) {
         Estado2fa lido = Estado2fa.deRotulo(v.totp());
         atualizarEstado(e -> e.comVersao(v, lido));
-        if (!local && !v.perfilMonitor()) {
+        if (!local && v.ehAgenteDeFora()) {
             aoVerAgenteDeFora();
         }
         ajustarLimites(v);
@@ -775,6 +775,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * com a chave do cofre, com os pins confirmados deste servidor.
      */
     public DesligadorDeSenha desligadorDeSenha() {
+        exigirNaoProtegido(); // servidor protegido: o app não muda a senha de acesso (editaria o sshd_config e recarregaria o sshd)
         if (local) {
             throw new IllegalStateException("Este computador não tem login por senha por SSH.");
         }
@@ -863,7 +864,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
             try {
                 VersaoAgente v = apiParaTunel(tunel).versao();
                 aoReceberVersao(v);
-                return !v.perfilMonitor();
+                return v.ehAgenteDeFora();
             } catch (ErroApi | CofreBloqueadoException e) {
                 // sem resposta que diga o perfil: vale o que já se viu
             }
@@ -1192,6 +1193,10 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      */
     public ResultadoDaRevogacao revogarAcessoDoApp(AcessoDoApp acesso, boolean tirarAChaveDoServidor) {
         List<String> avisos = new ArrayList<>();
+        if (protegido()) {
+            // Servidor protegido: nada de apagar o token no agente nem a chave do authorized_keys. Quem chama já não pede (GerenciadorServidores); isto é a defesa.
+            return new ResultadoDaRevogacao(false, false, List.of("Este servidor é protegido: o acesso do app nele não foi tocado. A chave e o token do app continuam lá."));
+        }
         if (acesso == null) {
             return new ResultadoDaRevogacao(false, false, List.of("Não consegui ler os dados do servidor no cofre."));
         }

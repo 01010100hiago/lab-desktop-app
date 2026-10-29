@@ -101,7 +101,7 @@ public final class AcoesDaInterface {
         this.servicosDeArquivos = servicosDeArquivos;
         if (gerenciador != null && avisos != null) {
             // O app viu o agente do lab instalado fora dele e marcou o servidor como protegido: o usuário é avisado UMA vez (o gerenciador só avisa quando a marca mudou).
-            gerenciador.observarProtecaoAutomatica(lab -> avisos.info(ProtecaoDoServidor.AVISO_DA_MARCA_AUTOMATICA));
+            gerenciador.observarProtecaoAutomatica(lab -> avisos.info(ProtecaoDoServidor.avisoDaMarcaAutomatica(lab.estado().nome())));
         }
     }
 
@@ -135,6 +135,9 @@ public final class AcoesDaInterface {
         if (lab.ehLocal()) {
             avisos.info("Este computador não entra por SSH, então não há login por senha para desligar.");
             return;
+        }
+        if (recusarSeProtegido(lab)) {
+            return; // servidor protegido: o app não muda a senha de acesso (nem a pergunta do assistente leva até aqui)
         }
         if (!lab.estado().conexao().permiteExec()) {
             avisos.atencao("O app precisa da conexão por chave com o servidor para desligar a senha com segurança. Conecte primeiro.");
@@ -1063,7 +1066,7 @@ public final class AcoesDaInterface {
         }
         // a seção "Acesso" mostra a chave que o app usa neste servidor; sem a chave no cofre ela some (o resto da edição segue igual)
         DialogoEditarServidor.Acesso acesso = (assistente == null ? java.util.Optional.<AssistenteDeServidor.AcessoDoServidor>empty() : assistente.acessoDo(lab)).map(a -> new DialogoEditarServidor.Acesso(a.chave().nome(), a.chave().impressao(), a.chave().publica(),
-            () -> instalarChaveComSenha(lab))).orElse(null);
+            lab.protegido() ? null : () -> instalarChaveComSenha(lab))).orElse(null); // protegido: o botão da chave nem aparece
         apresentador.mostrar(new DialogoEditarServidor(lab.config(), dados -> gerenciador.atualizar(lab.id(), dados), avisos, acesso, CopiadorDeTexto.doSistema()));
     }
 
@@ -1077,6 +1080,9 @@ public final class AcoesDaInterface {
         if (lab.ehLocal()) {
             avisos.info("Este computador não usa SSH nem chave: não há o que instalar.");
             return;
+        }
+        if (recusarSeProtegido(lab)) {
+            return; // servidor protegido: o app não grava chave nenhuma no authorized_keys dele
         }
         var acesso = assistente == null ? java.util.Optional.<AssistenteDeServidor.AcessoDoServidor>empty() : assistente.acessoDo(lab);
         if (acesso.isEmpty()) {
@@ -1110,7 +1116,7 @@ public final class AcoesDaInterface {
         List<String> outrosQueUsamAChave = gerenciador.outrosQueUsamAChaveDe(lab.id());
         apresentador.mostrar(new DialogoRemoverServidor(e.nome(), lab.config().usuario(), e.conexao().permiteExec(),
             outrosQueUsamAChave, gerenciador.origemDaChaveDe(lab.id()), opcoes -> gerenciador.removerServidor(lab.id(), opcoes),
-            avisos));
+            avisos, lab.protegido()));
     }
 
     /** "Configurar 2FA" (ou "Desativar", conforme o estado que o agente informa). */

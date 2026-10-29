@@ -95,6 +95,8 @@ public final class PaginaSeguranca extends PaginaDoServidor {
 
     /** Quem abre a confirmação "Desligar a senha" do servidor desta aba ({@code null}: o botão não aparece). */
     private final Runnable aoDesligarASenha;
+    /** Servidor protegido: o botão "Desligar o login por senha…" não aparece (o app não muda a senha de acesso dele). */
+    private final java.util.function.BooleanSupplier servidorProtegido;
 
     public PaginaSeguranca(ServidorLab servidor, Runnable aoAtualizar) {
         this(servidor, aoAtualizar, null);
@@ -107,6 +109,7 @@ public final class PaginaSeguranca extends PaginaDoServidor {
     public PaginaSeguranca(ServidorLab servidor, Runnable aoAtualizar, Runnable aoDesligarASenha) {
         super(servidor, aoAtualizar);
         this.aoDesligarASenha = aoDesligarASenha;
+        this.servidorProtegido = () -> servidor != null && !servidor.ehLocal() && servidor.protegido();
         iniciar();
     }
 
@@ -283,7 +286,7 @@ public final class PaginaSeguranca extends PaginaDoServidor {
         }
         preencher(firewallEPortas, PecasDeSeguranca.secao("Firewall", PecasDeSeguranca.firewall(r.firewall())),
             PecasDeSeguranca.secao("Portas abertas para fora da máquina", PecasDeSeguranca.portas(r.portas())));
-        preencher(sshEBloqueio, PecasDeSeguranca.secao("Configuração do SSH", PecasDeSeguranca.ssh(r.ssh(), aoDesligarASenha)),
+        preencher(sshEBloqueio, PecasDeSeguranca.secao("Configuração do SSH", PecasDeSeguranca.ssh(r.ssh(), servidorProtegido.getAsBoolean() ? null : aoDesligarASenha)),
             PecasDeSeguranca.secao("Bloqueio automático de IPs (fail2ban)", PecasDeSeguranca.fail2ban(r.fail2ban())));
     }
 

@@ -135,4 +135,50 @@ class ServidorProtegidoNoMenuEAvisosTest {
         assertTrue(MenuDoServidor.itensPara(local).contains(Item.PREPARAR_COMPUTADOR));
         assertTrue(SituacaoDaVisao.de(local, false, null, AGORA, SP).oferecerInstalar());
     }
+
+    private static EstadoServidor comFalha(EstadoConexao c, br.com.labdesktop.ssh.Falha falha, boolean protegido) {
+        return new EstadoServidor("s1", "vps-1", c, falha, 0, null, null, 1, Estado2fa.DESLIGADO, "mac", null, null, SituacaoDoAgente.DESCONHECIDA, false, protegido);
+    }
+
+    @Test
+    void protegidoNuncaOfereceInstalarAChaveComSenhaEmEstadoNenhum() {
+        for (EstadoConexao c : EstadoConexao.values()) {
+            for (br.com.labdesktop.ssh.Falha falha : new br.com.labdesktop.ssh.Falha[] {null,
+                new br.com.labdesktop.ssh.Falha(br.com.labdesktop.ssh.Falha.Tipo.CHAVE_RECUSADA, "O servidor recusou a chave.")}) {
+                EstadoServidor e = comFalha(c, falha, true);
+                assertFalse(MenuDoServidor.itensPara(e).contains(Item.INSTALAR_CHAVE), "o menu ofereceu a chave em " + c);
+                ConteudoDosAvisos.AvisoDeConexao aviso = ConteudoDosAvisos.deConexao(e, AGORA, SP);
+                if (aviso != null) {
+                    assertFalse(aviso.acoes().contains(Acao.INSTALAR_CHAVE), "o aviso ofereceu a chave em " + c);
+                }
+                assertFalse(SituacaoDaVisao.de(e, false, null, AGORA, SP).oferecerInstalarChave(), "a Visão geral ofereceu a chave em " + c);
+            }
+        }
+    }
+
+    @Test
+    void protegidoComChaveRecusadaDizPorqueNaoHaBotaoEOCaminho() {
+        var recusada = new br.com.labdesktop.ssh.Falha(br.com.labdesktop.ssh.Falha.Tipo.CHAVE_RECUSADA, "O servidor recusou a chave.");
+        ConteudoDosAvisos.AvisoDeConexao aviso = ConteudoDosAvisos.deConexao(comFalha(EstadoConexao.ERRO_AUTENTICACAO, recusada, true), AGORA, SP);
+        assertEquals(List.of(Acao.TENTAR_AGORA), aviso.acoes());
+        assertTrue(aviso.texto().contains(ProtecaoDoServidor.CHAVE_RECUSADA_PROTEGIDO), aviso.texto());
+        assertFalse(aviso.texto().contains("Instalar a chave com a senha"), "não manda clicar num botão que não existe: " + aviso.texto());
+        assertTrue(SituacaoDaVisao.de(comFalha(EstadoConexao.ERRO_AUTENTICACAO, recusada, true), false, null, AGORA, SP).texto().contains("protegido"));
+    }
+
+    @Test
+    void semAMarcaAChaveRecusadaContinuaComOBotaoEOMenuComoAntes() {
+        var recusada = new br.com.labdesktop.ssh.Falha(br.com.labdesktop.ssh.Falha.Tipo.CHAVE_RECUSADA, "O servidor recusou a chave.");
+        EstadoServidor e = comFalha(EstadoConexao.ERRO_AUTENTICACAO, recusada, false);
+        assertTrue(MenuDoServidor.itensPara(e).contains(Item.INSTALAR_CHAVE));
+        assertEquals(List.of(Acao.INSTALAR_CHAVE, Acao.TENTAR_AGORA), ConteudoDosAvisos.deConexao(e, AGORA, SP).acoes());
+        assertTrue(SituacaoDaVisao.de(e, false, null, AGORA, SP).oferecerInstalarChave());
+        assertTrue(MenuDoServidor.itensPara(comFalha(EstadoConexao.CONECTADO, null, false)).contains(Item.INSTALAR_CHAVE), "e em qualquer estado, ao lado de Editar");
+    }
+
+    @Test
+    void oSeloEOTextoDeAjudaDizemOQueDeFatoEBloqueado() {
+        assertTrue(ProtecaoDoServidor.EXPLICACAO_DO_SELO.contains("O app não instala, atualiza nem remove o agente, o Docker ou o Git, e não muda chaves nem a senha de acesso neste servidor."),
+            ProtecaoDoServidor.EXPLICACAO_DO_SELO);
+    }
 }

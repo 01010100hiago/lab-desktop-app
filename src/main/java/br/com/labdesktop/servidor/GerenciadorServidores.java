@@ -195,7 +195,9 @@ public final class GerenciadorServidores implements AutoCloseable {
         AtomicReference<ConfigServidor> depois = new AtomicReference<>();
         cofre.alterarServidor(servidorId, atual -> {
             ConfigServidor nova = atual.editar(dados.nome(), dados.host(), dados.porta(), dados.usuario(), dados.portaDoAgente());
-            if (dados.protegido() != null) {
+            // A caixa "Servidor protegido" só vale se o usuário mexeu nela (o diálogo manda nulo se não mexeu) e se a marca do cofre ainda é a que a tela viu ao abrir:
+            // se o app marcou sozinho com a tela aberta, o que o usuário mandou não sobrescreve a configuração atual.
+            if (dados.protegido() != null && (dados.protegidoVisto() == null || dados.protegidoVisto() == atual.protegido())) {
                 nova = nova.comProtegido(dados.protegido());
             }
             antes.set(atual);
@@ -215,32 +217,6 @@ public final class GerenciadorServidores implements AutoCloseable {
             }
         }
         return new ResultadoDaEdicao(depois.get(), mudou, impressaoApagada);
-    }
-
-    /**
-     * Liga ou desliga "Servidor protegido": grava no cofre, faz as telas do servidor passarem a oferecer (ou esconder) o instalar, atualizar e remover
-     * SEM reconectar, e avisa quem observa a lista. Desligar uma proteção que estava ligada também anota que a marca automática foi recusada (ela não volta
-     * sozinha). Em "Este computador" não existe a marca. Bloqueia (disco): fora da EDT.
-     *
-     * @return {@code true} se mudou alguma coisa
-     * @throws IllegalArgumentException o servidor não existe ou é "Este computador"
-     */
-    public boolean definirProtegido(String servidorId, boolean protegido) throws CofreException {
-        ServidorLab lab = servidor(servidorId).orElseThrow(() -> new IllegalArgumentException("Esse servidor não está mais na lista."));
-        if (lab.ehLocal()) {
-            throw new IllegalArgumentException("Este computador não tem a marca de servidor protegido.");
-        }
-        java.util.concurrent.atomic.AtomicBoolean mudou = new java.util.concurrent.atomic.AtomicBoolean();
-        cofre.alterarServidor(servidorId, atual -> {
-            ConfigServidor nova = atual.comProtegido(protegido);
-            mudou.set(!nova.equals(atual));
-            return nova;
-        });
-        lab.aoMudarAProtecao();
-        if (mudou.get()) {
-            avisarLista();
-        }
-        return mudou.get();
     }
 
     /**
@@ -369,7 +345,9 @@ public final class GerenciadorServidores implements AutoCloseable {
         List<String> avisos = new ArrayList<>();
         ServidorLab.AcessoDoApp acesso = null;
         boolean outroUsaAChave = false;
-        if (lab != null && config != null && opcoes.revogarNoServidor()) {
+        // Servidor protegido: remover só esquece o servidor NO APP. Revogar apagaria o token no agente e a chave no authorized_keys do servidor.
+        boolean revogar = opcoes.revogarNoServidor() && !(lab != null && config != null && !lab.ehLocal() && lab.protegido());
+        if (lab != null && config != null && revogar) {
             acesso = lab.lerAcessoDoApp().orElse(null);
             outroUsaAChave = !outrosQueUsamAChaveDe(servidorId).isEmpty();
         }
@@ -398,7 +376,7 @@ public final class GerenciadorServidores implements AutoCloseable {
 
         boolean tokenRevogado = false;
         boolean chaveTirada = false;
-        if (lab != null && opcoes.revogarNoServidor()) {
+        if (lab != null && revogar) {
             ServidorLab.ResultadoDaRevogacao r = lab.revogarAcessoDoApp(acesso, !outroUsaAChave);
             tokenRevogado = r.tokenRevogado();
             chaveTirada = r.chaveTiradaDoServidor();

@@ -43,12 +43,12 @@ public final class DialogoEditarServidor extends Dialogo {
     /**
      * A chave do app neste servidor, para a seção "Acesso" (sem segredo).
      *
-     * @param aoInstalarChave abre "Instalar a chave com a senha…" (o diálogo de edição fecha antes)
+     * @param aoInstalarChave abre "Instalar a chave com a senha…" (o diálogo de edição fecha antes); {@code null} num servidor protegido: o botão (e a dica dele) nem aparecem
      */
     public record Acesso(String nomeDaChave, String impressaoDaChave, String chavePublica, Runnable aoInstalarChave) { }
 
     /** A dica do botão Salvar, em texto simples: ele só liga depois de uma mudança, para ninguém salvar (e reconectar) sem querer. */
-    public static final String DICA_DO_SALVAR = "O botão Salvar e reconectar só fica ativo depois que você muda algum campo.";
+    public static final String DICA_DO_SALVAR = "O botão Salvar só fica ativo depois que você muda algum campo. Salvar reconecta o app, menos quando só a caixa Servidor protegido mudou.";
 
     /** O que a seção Acesso diz do botão de instalar a chave. */
     public static final String DICA_DO_ACESSO = "O app entra neste servidor com esta chave. Se o servidor a recusar (\"Chave recusada\"), instale-a com a senha do usuário: "
@@ -123,8 +123,9 @@ public final class DialogoEditarServidor extends Dialogo {
         if (secaoDoAcesso != null) {
             corpo.add(secaoDoAcesso);
         }
-        corpo.addAll(List.of(dicaDoSalvar, erro, rodape(null, cancelar, salvar)));
-        conteudo(Caixa.coluna(12, corpo.toArray(new java.awt.Component[0])));
+        corpo.addAll(List.of(dicaDoSalvar, erro));
+        // os botões ficam fixos embaixo e só o miolo rola, se a tela for baixa: o Salvar nunca fica escondido
+        conteudoComRodape(Caixa.coluna(10, corpo.toArray(new java.awt.Component[0])), rodape(null, cancelar, salvar));
         botaoPadrao(salvar);
 
         SimplesOuvinteDeDocumento aoDigitar = new SimplesOuvinteDeDocumento(this::atualizarTela);
@@ -147,7 +148,13 @@ public final class DialogoEditarServidor extends Dialogo {
         }
         fichaDoAcesso.definir(List.of(FichaRotulada.Item.de("Impressão digital da chave deste app", acesso.nomeDaChave() + "  " + acesso.impressaoDaChave())));
         copiarChave = BotaoCopiar.criar("Copiar a chave pública", acesso::chavePublica, copiador, avisos);
-        return Caixa.coluna(8,
+        if (acesso.aoInstalarChave() == null) {
+            // servidor protegido: o app não muda chaves nele, então não oferece instalar a chave (copiar a chave pública continua valendo)
+            instalarChave.setVisible(false);
+            dicaDoAcesso.setVisible(false);
+            return Caixa.coluna(6, new Rotulo("Acesso").negrito(), fichaDoAcesso, Caixa.linha(8, copiarChave, Caixa.mola()));
+        }
+        return Caixa.coluna(6,
             new Rotulo("Acesso").negrito(),
             fichaDoAcesso,
             Caixa.linha(8, copiarChave, instalarChave, Caixa.mola()),
@@ -157,7 +164,7 @@ public final class DialogoEditarServidor extends Dialogo {
 
     /** Fecha a edição e abre o conserto: ele usa o servidor como está salvo, então nada de mudança pendente. */
     private void instalarAChave() {
-        if (ocupado || acesso == null || algoMudou()) {
+        if (ocupado || acesso == null || acesso.aoInstalarChave() == null || algoMudou()) {
             return;
         }
         fechar();
@@ -263,7 +270,7 @@ public final class DialogoEditarServidor extends Dialogo {
         boolean mudou = algoMudou();
         dicaDoSalvar.setVisible(!mudou);
         instalarChave.setEnabled(!ocupado && !mudou);
-        dicaDeSalvarAntes.setVisible(acesso != null && mudou);
+        dicaDeSalvarAntes.setVisible(acesso != null && acesso.aoInstalarChave() != null && mudou);
     }
 
     private boolean algoMudou() {
@@ -356,7 +363,9 @@ public final class DialogoEditarServidor extends Dialogo {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("A porta do painel precisa ser um número.");
         }
-        Dados d = new Dados(nome.getText().strip(), host.getText().strip(), p, usuario.getText().strip(), a, protegido.isSelected());
+        // A caixa só vai se o usuário mexeu nela (nulo = não mexe): salvar só o nome nunca regrava a marca, mesmo que o app a tenha ligado com esta tela aberta.
+        Dados d = new Dados(nome.getText().strip(), host.getText().strip(), p, usuario.getText().strip(), a,
+            protecaoMudou() ? Boolean.valueOf(protegido.isSelected()) : null, original.protegido());
         d.validar();
         return d;
     }

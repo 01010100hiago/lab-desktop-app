@@ -114,13 +114,14 @@ public final class MenuDoServidor {
         }
         // Chave recusada: o botão que resolve vem junto das ações do dia a dia (na tela de servidores é o destaque do cartão); nos outros estados fica ao lado de Editar.
         boolean chaveRecusada = c == EstadoConexao.ERRO_AUTENTICACAO && e.falha() != null && e.falha().tipo() == Falha.Tipo.CHAVE_RECUSADA;
-        if (chaveRecusada) {
+        // Servidor protegido: o app não muda chaves nele, então "Instalar a chave com a senha…" não aparece (o conserto fica com quem administra o servidor).
+        if (chaveRecusada && !e.protegido()) {
             itens.add(Item.INSTALAR_CHAVE);
         }
         // Editar e remover valem em QUALQUER estado: é justamente quando a conexão está quebrada (endereço errado, host
         // trocado) que o usuário precisa deles.
         itens.add(Item.EDITAR);
-        if (!chaveRecusada && c != EstadoConexao.BLOQUEADO_COFRE) {
+        if (!chaveRecusada && c != EstadoConexao.BLOQUEADO_COFRE && !e.protegido()) {
             itens.add(Item.INSTALAR_CHAVE);
         }
         itens.add(Item.REMOVER);

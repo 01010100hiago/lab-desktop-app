@@ -9,6 +9,9 @@ import java.util.Set;
  * A lista do que o app NUNCA oferece para encerrar ou reiniciar, e por quê. Vale mesmo que o usuário seja o dono (o {@code root} é dono de tudo) e
  * mesmo que o usuário insista: a tela mostra o motivo e não deixa nem abrir a confirmação. Documentada em ARQUITETURA.
  *
+ * <p>Não confundir com "Servidor protegido" ({@code servidor.ProtecaoDoServidor}): aquela é a marca do servidor inteiro contra instalar e mudar acesso; esta é por
+ * processo e container, só contra encerrar e reiniciar.
+ *
  * <p>O que está nela, e a razão:
  * <ol>
  *   <li><b>PID 1</b> (e 0) e número inválido: o primeiro processo do sistema.</li>

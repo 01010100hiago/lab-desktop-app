@@ -113,6 +113,11 @@ class ServidorProtegidoNoServidorLabTest {
         return lab;
     }
 
+    /** Outro servidor no mesmo SSH e agente falsos, para comparar com um que não é protegido. */
+    private ServidorLab servidorOutro(boolean protegido) throws Exception {
+        return servidor(protegido);
+    }
+
     private ConfigServidor noCofre(ServidorLab lab) {
         return cofre.servidor(lab.id()).orElseThrow();
     }
@@ -122,22 +127,22 @@ class ServidorProtegidoNoServidorLabTest {
     // ---------------------------------------------------------------------------------------------
 
     @Test
-    void definirProtegidoPersisteAtualizaOEstadoEAvisaQuemObservaALista() throws Exception {
+    void editarAProtecaoPersisteAtualizaOEstadoEAvisaQuemObservaALista() throws Exception {
         ServidorLab lab = servidor(false);
         assertFalse(lab.estado().protegido());
         assertFalse(lab.protegido());
         int antes = listas.size();
 
-        assertTrue(gerenciador.definirProtegido(lab.id(), true));
+        assertTrue(br.com.labdesktop.teste.EdicaoDaProtecao.definir(gerenciador, lab.id(), true));
 
         assertTrue(noCofre(lab).protegido(), "gravado no cofre");
         Espera.ate(PRAZO, "o estado passou a protegido", () -> lab.estado().protegido());
         assertTrue(lab.protegido());
         Espera.ate(PRAZO, "a lista foi avisada", () -> listas.size() > antes);
-        assertFalse(gerenciador.definirProtegido(lab.id(), true), "ligar de novo não muda nada");
+        assertFalse(br.com.labdesktop.teste.EdicaoDaProtecao.definir(gerenciador, lab.id(), true), "ligar de novo não muda nada");
 
         int meio = listas.size();
-        assertTrue(gerenciador.definirProtegido(lab.id(), false));
+        assertTrue(br.com.labdesktop.teste.EdicaoDaProtecao.definir(gerenciador, lab.id(), false));
         assertFalse(noCofre(lab).protegido());
         assertTrue(noCofre(lab).protecaoAutomaticaRecusada(), "o usuário desligou uma proteção ligada");
         Espera.ate(PRAZO, "o estado voltou a desprotegido", () -> !lab.estado().protegido());
@@ -145,14 +150,14 @@ class ServidorProtegidoNoServidorLabTest {
     }
 
     @Test
-    void definirProtegidoNaoReconecta() throws Exception {
+    void editarSoAProtecaoNaoReconecta() throws Exception {
         agente.fora = false;
         agente.perfil = "monitor";
         ServidorLab lab = servidor(false);
         Espera.ate(PRAZO, () -> "estado=" + lab.estado(), () -> lab.estado().conexao() == EstadoConexao.CONECTADO);
         long geracao = lab.estado().geracao();
 
-        gerenciador.definirProtegido(lab.id(), true);
+        br.com.labdesktop.teste.EdicaoDaProtecao.definir(gerenciador, lab.id(), true);
 
         Espera.ate(PRAZO, "marcou", () -> lab.estado().protegido());
         assertEquals(EstadoConexao.CONECTADO, lab.estado().conexao(), "a conexão seguiu de pé");
@@ -216,7 +221,6 @@ class ServidorProtegidoNoServidorLabTest {
     void esteComputadorNaoTemAMarca() throws Exception {
         AssistenteDeServidor assistente = new AssistenteDeServidor(cofre, gerenciador, ConfigSsh.rapida());
         ServidorLab local = assistente.cadastrarLocal("Este computador", 7070);
-        assertThrows(IllegalArgumentException.class, () -> gerenciador.definirProtegido(local.id(), true));
         assertFalse(local.protegido());
         assertFalse(noCofre(local).protegido());
     }
@@ -240,9 +244,9 @@ class ServidorProtegidoNoServidorLabTest {
         assertNotNull(inst);
         lab.exigirNaoProtegido();
         // desligar e ligar de novo muda a resposta na hora
-        gerenciador.definirProtegido(lab.id(), true);
+        br.com.labdesktop.teste.EdicaoDaProtecao.definir(gerenciador, lab.id(), true);
         assertThrows(ServidorProtegidoException.class, () -> lab.instaladorDoAgente(ParametrosDaInstalacao.padrao(7000), PACOTE));
-        gerenciador.definirProtegido(lab.id(), false);
+        br.com.labdesktop.teste.EdicaoDaProtecao.definir(gerenciador, lab.id(), false);
         assertNotNull(lab.instaladorDoAgente(ParametrosDaInstalacao.padrao(7000), PACOTE));
     }
 
@@ -317,7 +321,7 @@ class ServidorProtegidoNoServidorLabTest {
         Espera.ate(PRAZO, "marca automática", () -> noCofre(lab).protegido());
         Espera.ate(PRAZO, "aviso", () -> avisosDaMarcaAutomatica.size() == 1);
 
-        gerenciador.definirProtegido(lab.id(), false); // o usuário desmarcou em Editar servidor
+        br.com.labdesktop.teste.EdicaoDaProtecao.definir(gerenciador, lab.id(), false); // o usuário desmarcou em Editar servidor
         lab.consultarVersao(); // o agente do lab responde de novo
         Thread.sleep(300);
         assertFalse(noCofre(lab).protegido(), "não religou");
@@ -369,6 +373,133 @@ class ServidorProtegidoNoServidorLabTest {
         assertThrows(ServidorProtegidoException.class, lab::exigirNaoProtegido);
     }
 
+
+    // ---------------------------------------------------------------------------------------------
+    // O monitor do app não é "de fora" (prova com o ServidorLab de verdade)
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void oAgenteMonitorDoAppRespondendoNaoViraProtegidoEAtualizarERemoverSeguemFuncionando() throws Exception {
+        agente.fora = false;
+        agente.perfil = "monitor";
+        ServidorLab lab = servidor(false);
+        Espera.ate(PRAZO, () -> "estado=" + lab.estado(), () -> lab.estado().conexao() == EstadoConexao.CONECTADO);
+        lab.consultarVersao();
+        Thread.sleep(300);
+        assertFalse(lab.protegido());
+        assertFalse(noCofre(lab).protegido());
+        assertTrue(lab.estado().ofereceAtualizarERemoverAgente());
+        assertTrue(avisosDaMarcaAutomatica.isEmpty());
+
+        // o instalador de verdade, contra o servidor simulado, sem nenhuma recusa: a atualização e a remoção do agente do app valem
+        simulado.containerNome = ParametrosDaInstalacao.padrao(7000).container();
+        simulado.rotuloDoContainer = "0.0.9-velha";
+        InstaladorDeAgente inst = lab.instaladorDoAgente(ParametrosDaInstalacao.padrao(7000), PACOTE).comSonda(Duration.ofSeconds(5), Duration.ofMillis(50));
+        var r = inst.verificar(ModoDaInstalacao.ATUALIZAR);
+        assertFalse(r.de(ResultadoDaVerificacao.Item.CONTAINER).frase().contains("protegido"), r.de(ResultadoDaVerificacao.Item.CONTAINER).frase());
+        assertFalse(r.de(ResultadoDaVerificacao.Item.CONTAINER).frase().contains("agente do lab"), r.de(ResultadoDaVerificacao.Item.CONTAINER).frase());
+        simulado.rotuloDoContainer = PACOTE.versao();
+        var rem = inst.remover(ObservadorDaInstalacao.NENHUM, Cancelamento.NUNCA);
+        assertFalse(rem.recusada(), rem.toString());
+        assertTrue(rem.removido(), rem.avisos().toString());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // A caixa do Editar com a tela velha
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void oValorDaCaixaComATelaVelhaNaoSobrescreveAConfiguracaoAtualDoCofre() throws Exception {
+        ServidorLab lab = servidor(false);
+        // a tela abriu vendo "não protegido"; depois o app marcou sozinho (protegido no cofre)
+        cofre.alterarServidor(lab.id(), ConfigServidor::comProtecaoAutomatica);
+        ConfigServidor c = noCofre(lab);
+        assertTrue(c.protegido());
+
+        // o usuário mexeu em outra coisa e a tela mandou "false" por ter a foto velha: a marca atual não pode cair
+        gerenciador.atualizar(lab.id(), new Dados("outro", c.host(), c.porta(), c.usuario(), c.portaAgente(), false, false));
+        ConfigServidor depois = noCofre(lab);
+        assertEquals("outro", depois.nome());
+        assertTrue(depois.protegido(), "a configuração atual do cofre manda: a tela velha não a sobrescreve");
+        assertFalse(depois.protecaoAutomaticaRecusada(), "e o usuário não recusou nada");
+
+        // com a foto em dia (a tela viu "protegido") o usuário desmarca de verdade
+        gerenciador.atualizar(lab.id(), new Dados("outro", c.host(), c.porta(), c.usuario(), c.portaAgente(), false, true));
+        assertFalse(noCofre(lab).protegido());
+        assertTrue(noCofre(lab).protecaoAutomaticaRecusada());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Num servidor protegido o app também não muda chaves nem a senha de acesso, e Remover só esquece
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void protegidoRecusaODesligadorDaSenhaMasOComumMonta() throws Exception {
+        ServidorLab lab = servidor(true);
+        ServidorProtegidoException e = assertThrows(ServidorProtegidoException.class, lab::desligadorDeSenha);
+        assertEquals(ProtecaoDoServidor.RECUSA, e.getMessage());
+        ServidorLab comum = servidorOutro(false);
+        assertNotNull(comum.desligadorDeSenha());
+    }
+
+    @Test
+    void protegidoRecusaInstalarAChaveComSenhaEZeraASenhaMesmoAssim() throws Exception {
+        ServidorLab lab = servidor(true);
+        AssistenteDeServidor assistente = new AssistenteDeServidor(cofre, gerenciador, ConfigSsh.rapida());
+        char[] senha = "uma-senha-qualquer".toCharArray();
+        ServidorProtegidoException e = assertThrows(ServidorProtegidoException.class, () -> assistente.repararAChaveComSenha(lab, senha, etapa -> { }));
+        assertEquals(ProtecaoDoServidor.RECUSA, e.getMessage());
+        for (char ch : senha) {
+            assertEquals('\0', ch, "a senha foi zerada mesmo com a recusa");
+        }
+        assertTrue(ssh.comandos.stream().noneMatch(c -> c.contains("authorized_keys")), "nada foi escrito no servidor: " + ssh.comandos);
+    }
+
+    @Test
+    void removerUmServidorProtegidoSoEsqueceNoAppENadaVaiAoServidor() throws Exception {
+        agente.fora = false;
+        agente.perfil = "monitor";
+        ServidorLab lab = servidor(true);
+        Espera.ate(PRAZO, () -> "estado=" + lab.estado(), () -> lab.estado().conexao() == EstadoConexao.CONECTADO);
+        assertEquals(1, agente.tokens.size());
+        int comandosAntes = ssh.comandos.size();
+
+        GerenciadorServidores.ResultadoDaRemocao r = gerenciador.removerServidor(lab.id(), new GerenciadorServidores.OpcoesDeRemocao(true, true));
+
+        assertTrue(r.existia());
+        assertFalse(r.tokenRevogado(), "protegido: o token do app continua no agente");
+        assertFalse(r.chaveTiradaDoServidor(), "e a chave continua no authorized_keys");
+        assertEquals(1, agente.tokens.size(), "o agente ainda conhece o token");
+        assertTrue(ssh.comandos.subList(comandosAntes, ssh.comandos.size()).stream().noneMatch(c -> c.contains("authorized_keys") || c.contains("token-revogar")),
+            "nenhum comando de revogar foi ao servidor: " + ssh.comandos);
+        assertTrue(cofre.servidores().isEmpty(), "mas o app esqueceu o servidor");
+    }
+
+    @Test
+    void semAMarcaRemoverRevogaComoSempreOControleDoTesteAnterior() throws Exception {
+        agente.fora = false;
+        agente.perfil = "monitor";
+        ServidorLab lab = servidor(false);
+        Espera.ate(PRAZO, () -> "estado=" + lab.estado(), () -> lab.estado().conexao() == EstadoConexao.CONECTADO);
+        GerenciadorServidores.ResultadoDaRemocao r = gerenciador.removerServidor(lab.id(), new GerenciadorServidores.OpcoesDeRemocao(true, true));
+        assertTrue(r.tokenRevogado(), "sem a marca o token sai do agente, como antes");
+        assertTrue(agente.tokens.isEmpty());
+    }
+
+    @Test
+    void aDefesaDaRevogacaoNaoMexeNoServidorProtegidoMesmoSeAlguemAChamar() throws Exception {
+        agente.fora = false;
+        agente.perfil = "monitor";
+        ServidorLab lab = servidor(true);
+        Espera.ate(PRAZO, () -> "estado=" + lab.estado(), () -> lab.estado().conexao() == EstadoConexao.CONECTADO);
+        ServidorLab.AcessoDoApp acesso = lab.lerAcessoDoApp().orElseThrow();
+        ServidorLab.ResultadoDaRevogacao r = lab.revogarAcessoDoApp(acesso, true);
+        assertFalse(r.tokenRevogado());
+        assertFalse(r.chaveTiradaDoServidor());
+        assertTrue(r.avisos().get(0).contains("protegido"), r.avisos().toString());
+        assertEquals(1, agente.tokens.size());
+    }
+
     // ---------------------------------------------------------------------------------------------
     // O instalador recusa se um agente do lab responde, mesmo sem a marca
     // ---------------------------------------------------------------------------------------------
@@ -379,7 +510,7 @@ class ServidorProtegidoNoServidorLabTest {
         agente.perfil = "lab";
         ServidorLab lab = servidor(false);
         Espera.ate(PRAZO, "marca automática", () -> noCofre(lab).protegido());
-        gerenciador.definirProtegido(lab.id(), false); // o usuário desmarcou; o agente do lab continua lá, respondendo
+        br.com.labdesktop.teste.EdicaoDaProtecao.definir(gerenciador, lab.id(), false); // o usuário desmarcou; o agente do lab continua lá, respondendo
         assertFalse(lab.protegido());
         simulado.limparRegistro();
 

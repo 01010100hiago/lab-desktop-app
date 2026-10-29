@@ -179,7 +179,7 @@ public final class TelaServidores extends Painel {
         /** O aviso FIXO de "agente não instalado" (nunca uma janela que aparece sozinha): o botão Instalar agente está na linha de ações. */
         private final TextoCorrido avisoDoAgente = new TextoCorrido("", 640).corDoToken(Tokens.TEXTO).tamanho(12.5f);
         private final Rotulo tituloDoAvisoDoAgente = new Rotulo().negrito().tamanho(13f);
-        private final JPanel quadroDoAviso = new Painel(new BorderLayout(0, 4)).fundo(Tokens.ATENCAO_SUAVE).borda(Tokens.ATENCAO).raio(10);
+        private final Painel quadroDoAviso = new Painel(new BorderLayout(0, 4)).fundo(Tokens.ATENCAO_SUAVE).borda(Tokens.ATENCAO).raio(10);
         private final Inscricao inscricao;
         private List<Item> itensAtuais = List.of();
         private EstadoServidor ultimo;
@@ -318,6 +318,8 @@ public final class TelaServidores extends Painel {
                 return;
             }
             boolean semPermissao = e.situacaoDoAgente() == br.com.labdesktop.servidor.SituacaoDoAgente.SEM_PERMISSAO_NO_DOCKER;
+            // âmbar só para o que pede atenção; o aviso do servidor protegido é neutro (grafite): a regra da paleta do app
+            quadroDoAviso.fundo(e.protegido() ? Tokens.SUPERFICIE3 : Tokens.ATENCAO_SUAVE).borda(e.protegido() ? Tokens.BORDA : Tokens.ATENCAO);
             if (e.protegido()) {
                 // servidor protegido: o mesmo aviso fixo, sem botão (o menu não traz Instalar agente) e dizendo por quê
                 tituloDoAvisoDoAgente.setText(semPermissao ? "Sem permissão no Docker deste servidor protegido" : "Agente não instalado, servidor protegido");

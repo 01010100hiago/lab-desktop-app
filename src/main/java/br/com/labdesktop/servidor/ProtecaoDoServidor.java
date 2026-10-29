@@ -1,7 +1,10 @@
 package br.com.labdesktop.servidor;
 
 /**
- * "Servidor protegido": os textos e a guarda única da regra "o app nunca instala, atualiza nem remove nada neste servidor".
+ * <b>Não confundir:</b> "protegido" aqui é do SERVIDOR INTEIRO (o app não instala nem muda nada de acesso nele); os containers e processos "protegidos" de
+ * {@code processos.ListaDeProtecao} e {@code ui.ProtecaoDeContainers} são outra coisa (o que o usuário não quer encerrar ou reiniciar), sem relação com esta marca.
+ *
+ * <p>"Servidor protegido": os textos e a guarda única da regra "o app nunca instala, atualiza nem remove nada neste servidor".
  *
  * <p>A regra tem DUAS camadas, de propósito. A primeira é o que a tela OFERECE: nenhum botão nem item de menu de instalar, atualizar ou remover
  * (o agente, o Docker e o Git) aparece num servidor protegido; quem decide é {@link EstadoServidor#ofereceInstalarAgente} e
@@ -16,9 +19,15 @@ public final class ProtecaoDoServidor {
     /** A recusa, igual em toda camada. Em português simples, sem a palavra "erro". */
     public static final String RECUSA = "Este servidor é protegido: o app não instala, atualiza nem remove nada aqui. Para mudar, abra Editar servidor.";
 
-    /** O aviso, uma única vez, quando o app marca sozinho ao ver o agente do lab instalado fora dele. */
-    public static final String AVISO_DA_MARCA_AUTOMATICA = "Este servidor já tem o agente do lab, instalado fora do app. Marquei como protegido: o app não vai "
-        + "instalar nada aqui. Para desfazer, abra Editar servidor.";
+    /** O aviso, uma única vez, quando o app marca sozinho ao ver o agente do lab instalado fora dele; o nome do servidor vai na frente (vários servidores podem ser marcados juntos). */
+    public static String avisoDaMarcaAutomatica(String nomeDoServidor) {
+        return nomeDoServidor + ": Este servidor já tem o agente do lab, instalado fora do app. Marquei como protegido: o app não vai instalar nada aqui. "
+            + "Para desfazer, abra Editar servidor.";
+    }
+
+    /** A recusa quando um agente do lab, instalado fora do app, está respondendo neste servidor (mesmo sem a marca de protegido). */
+    public static final String RECUSA_DO_AGENTE_DE_FORA = "Este servidor já tem o agente do lab, instalado fora do app: o app não instala, atualiza nem remove "
+        + "nada aqui.";
 
     /** O texto da caixa de marcar (Adicionar e Editar servidor). */
     public static final String ROTULO_DA_CAIXA = "Servidor protegido";
@@ -26,13 +35,16 @@ public final class ProtecaoDoServidor {
     /** A frase embaixo da caixa. */
     public static final String FRASE_DA_CAIXA = "O app nunca instala, atualiza nem remove nada neste servidor. Use para servidores que já estão em produção.";
 
-    /** A explicação curta do selo "Protegido" (dica ao pousar o mouse e linha da página do servidor). */
-    public static final String EXPLICACAO_DO_SELO = "Servidor protegido: o app não instala, atualiza nem remove nada aqui (agente, Docker ou Git). "
-        + "Para mudar, abra Editar servidor.";
+    /** A explicação curta do selo "Protegido" (dica ao pousar o mouse e linha da página do servidor): o que de fato fica bloqueado. */
+    public static final String EXPLICACAO_DO_SELO = "Servidor protegido. O app não instala, atualiza nem remove o agente, o Docker ou o Git, e não muda chaves nem a senha "
+        + "de acesso neste servidor. Para mudar, abra Editar servidor.";
 
-    /** A recusa quando um agente do lab, instalado fora do app, está respondendo neste servidor (mesmo sem a marca de protegido). */
-    public static final String RECUSA_DO_AGENTE_DE_FORA = "Este servidor já tem o agente do lab, instalado fora do app: o app não instala, atualiza nem remove "
-        + "nada aqui.";
+    /** A frase da confirmação de Remover num servidor protegido: só se esquece o servidor no app. */
+    public static final String REMOVER_SO_ESQUECE = "O app esquece este servidor. Nada é removido nele: a chave e o token do app continuam lá.";
+
+    /** O que o aviso de chave recusada diz, num servidor protegido, no lugar do botão "Instalar a chave com a senha…". */
+    public static final String CHAVE_RECUSADA_PROTEGIDO = "Este servidor é protegido: o app não muda chaves nele. Peça a quem administra o servidor para adicionar a chave "
+        + "do app, ou abra Editar servidor para mudar.";
 
     /** O que o aviso "agente não instalado" diz no lugar do botão Instalar agente. */
     public static final String TEXTO_DO_AVISO_SEM_AGENTE = "O servidor responde por SSH e não tem o agente. Ele é protegido: o app não instala nada aqui. "

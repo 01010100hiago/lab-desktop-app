@@ -3,6 +3,7 @@ package br.com.labdesktop.ui.dialogos;
 import br.com.labdesktop.cofre.InfoChave.Origem;
 import br.com.labdesktop.servidor.GerenciadorServidores.OpcoesDeRemocao;
 import br.com.labdesktop.servidor.GerenciadorServidores.ResultadoDaRemocao;
+import br.com.labdesktop.servidor.ProtecaoDoServidor;
 import br.com.labdesktop.ui.MensagensDeErro;
 import br.com.labdesktop.ui.Tarefas;
 import br.com.labdesktop.ui.componentes.Botao;
@@ -61,7 +62,16 @@ public final class DialogoRemoverServidor extends Dialogo {
      */
     public DialogoRemoverServidor(String nome, String usuario, boolean conectado, List<String> outrosQueUsamAChave,
                                   Origem origemDaChave, Remocao remocao, Notificacoes avisos) {
-        this(nome, usuario, conectado, outrosQueUsamAChave, origemDaChave, remocao, avisos, false);
+        this(nome, usuario, conectado, outrosQueUsamAChave, origemDaChave, remocao, avisos, false, false);
+    }
+
+    /**
+     * Com a marca "Servidor protegido": remover só esquece o servidor NO APP. A caixa de revogar não existe e a frase diz com todas as letras que nada é
+     * removido no servidor (a chave e o token do app continuam lá).
+     */
+    public DialogoRemoverServidor(String nome, String usuario, boolean conectado, List<String> outrosQueUsamAChave,
+                                  Origem origemDaChave, Remocao remocao, Notificacoes avisos, boolean protegido) {
+        this(nome, usuario, conectado, outrosQueUsamAChave, origemDaChave, remocao, avisos, false, protegido);
     }
 
     /**
@@ -69,11 +79,11 @@ public final class DialogoRemoverServidor extends Dialogo {
      * (o agente no Docker) continua rodando; para tirá-lo, "Remover laboratório local".
      */
     public static DialogoRemoverServidor paraEsteComputador(String nome, boolean conectado, Remocao remocao, Notificacoes avisos) {
-        return new DialogoRemoverServidor(nome, "", conectado, List.of(), Origem.DESCONHECIDA, remocao, avisos, true);
+        return new DialogoRemoverServidor(nome, "", conectado, List.of(), Origem.DESCONHECIDA, remocao, avisos, true, false);
     }
 
     private DialogoRemoverServidor(String nome, String usuario, boolean conectado, List<String> outrosQueUsamAChave,
-                                   Origem origemDaChave, Remocao remocao, Notificacoes avisos, boolean local) {
+                                   Origem origemDaChave, Remocao remocao, Notificacoes avisos, boolean local, boolean protegido) {
         super("Remover servidor");
         this.nome = nome;
         this.remocao = remocao;
@@ -82,7 +92,7 @@ public final class DialogoRemoverServidor extends Dialogo {
 
         boolean chaveCompartilhada = !outrosQueUsamAChave.isEmpty();
         this.podeApagarAChave = !chaveCompartilhada;
-        this.podeRevogar = conectado;
+        this.podeRevogar = conectado && !protegido;
         apagarChave.setOpaque(false);
         revogar.setOpaque(false);
         if (chaveCompartilhada) {
@@ -95,7 +105,13 @@ public final class DialogoRemoverServidor extends Dialogo {
                 + "do cofre." + (origemDaChave == Origem.GERADA_PELO_APP ? ""
                     : " Só a cópia que está no cofre: o arquivo original no seu computador não é mexido."));
         }
-        if (conectado) {
+        if (protegido) {
+            // servidor protegido: não há revogação (nem pergunta); a frase diz o que acontece de verdade
+            revogar.setSelected(false);
+            revogar.setEnabled(false);
+            revogar.setVisible(false);
+            explicacaoDaRevogacao = dicaCorrida(ProtecaoDoServidor.REMOVER_SO_ESQUECE);
+        } else if (conectado) {
             explicacaoDaRevogacao = dicaCorrida(textoDaRevogacao(usuario, origemDaChave, chaveCompartilhada));
         } else {
             revogar.setSelected(false);
@@ -120,6 +136,7 @@ public final class DialogoRemoverServidor extends Dialogo {
             paragrafo(local
                 ? "O app vai parar de falar com " + nome + " e tirá-lo da lista. O laboratório (o agente no Docker) NÃO é removido e continua rodando: "
                     + "para tirá-lo, use \"Remover laboratório local\" antes. Seus projetos não são tocados."
+                : protegido ? "O app vai parar de se conectar a " + nome + " e tirá-lo da lista. O servidor é protegido: ele não é mexido de jeito nenhum."
                 : "O app vai parar de se conectar a " + nome + " e tirá-lo da lista. O servidor em si não é mexido, "
                 + "a não ser pela revogação abaixo."),
             Caixa.coluna(4, apagarChave, explicacaoDaChave),

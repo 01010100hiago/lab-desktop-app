@@ -44,7 +44,7 @@ class DialogoEditarServidorAcessoTest {
     @Test
     void aDicaDoSalvarFalaEmTextoSimplesEDesapareceQuandoHaMudanca() {
         DialogoEditarServidor d = comAcesso(() -> { });
-        assertEquals("O botão Salvar e reconectar só fica ativo depois que você muda algum campo.", Visual.naEdt(d::textoDaDicaDoSalvar));
+        assertEquals(DialogoEditarServidor.DICA_DO_SALVAR, Visual.naEdt(d::textoDaDicaDoSalvar));
         assertFalse(Visual.naEdt(() -> d.botaoSalvar().isEnabled()));
         Visual.naEdt(() -> d.campoDoNome().setText("lab 2"));
         assertTrue(Visual.naEdt(() -> d.botaoSalvar().isEnabled()));
