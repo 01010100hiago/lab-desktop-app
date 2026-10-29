@@ -1,16 +1,14 @@
 # Como conecto a um servidor sem abrir porta de SSH?
-@rotulo: Conexão sem porta aberta
+@rotulo: Sem porta aberta
 @busca: sem porta aberta ssm session manager aws cloudflare cloudflared túnel acesso remoto segurança porta 22 login sso ferramentas aws cli plugin access tcp
 @resumo: O servidor só faz conexão de saída e o app entra por um túnel do AWS Session Manager ou da Cloudflare, sem porta de SSH aberta na internet.
 @onde: Escolher o modo | Barra da esquerda > Adicionar > Outro servidor (SSH), parte Como conectar | servidores
-@onde: Conferir os programas | Botão "Conferir as ferramentas neste computador", na parte Como conectar
 @onde: Qual modo cada servidor usa | Cartão do servidor > selo Sem porta aberta | servidores
-1. Em Adicionar servidor (ou Editar servidor), na parte "Como conectar", escolha AWS Session Manager (SSM) ou Cloudflare. Direto (SSH) é o padrão.
-2. Preencha só o que o modo pede: o ID da instância e a região (SSM) ou o endereço do túnel (Cloudflare). Endereço e porta de SSH não são pedidos.
-3. Clique em "Conferir as ferramentas neste computador": o app diz onde cada programa está e mostra, em texto, o passo de instalar o que faltar.
-4. Instale o que faltar você mesmo, no terminal deste computador. O app nunca instala esses programas.
-5. Siga o assistente: o app confere a impressão digital do servidor pelo túnel, como num servidor comum, e só então grava.
-6. Se aparecer "Seu login da AWS expirou", rode no terminal o comando que o app mostra e clique em "Tentar agora".
+1. Em Adicionar servidor (ou Editar servidor), na parte "Como conectar", escolha AWS Session Manager (SSM) ou Cloudflare.
+2. Preencha só o que o modo pede: ID da instância e região (SSM), ou o endereço do túnel (Cloudflare).
+3. Clique em "Conferir as ferramentas neste computador". O que faltar, você instala no terminal: o app só mostra o passo.
+4. Siga o assistente: o app confere a impressão digital do servidor pelo túnel e só então grava.
+5. Se aparecer "Seu login da AWS expirou", rode no terminal o comando mostrado e clique em "Tentar agora".
 [Ir para Servidores](ir:servidores)
 @veja: adicionar-servidor sem-conexao chave-recusada
 ## Mais detalhes

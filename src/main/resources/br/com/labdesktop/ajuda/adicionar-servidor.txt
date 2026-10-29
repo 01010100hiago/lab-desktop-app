@@ -5,7 +5,7 @@
 @onde: Servidores cadastrados | Barra da esquerda > Gerenciar servidores | servidores
 @onde: Editar ou remover um servidor | Menu Servidor > Editar… ou Remover…
 1. Clique em Adicionar, no alto da barra da esquerda. O app pergunta "Onde vão rodar os seus projetos?".
-2. "Outro servidor (SSH)": um servidor na rede ou na internet. Siga o tópico "Como conecto o app a um servidor?". Sem porta aberta: veja o tópico de conexão sem porta aberta.
+2. "Outro servidor (SSH)": um servidor na rede ou na internet. Siga o tópico "Como conecto o app a um servidor?".
 3. "Este computador": o laboratório roda aqui, no Docker, sem servidor, sem SSH e sem chave. Só pode haver um.
 4. Em "Este computador", clique em "Preparar este computador": o app só confere o que falta (Docker, disco, memória, porta, git).
 5. O que faltar só é instalado depois que você confirmar. Nada é instalado sozinho.

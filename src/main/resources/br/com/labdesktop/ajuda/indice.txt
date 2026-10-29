@@ -3,7 +3,6 @@
 [Comece aqui]
 conectar
 adicionar-servidor
-sem-porta-aberta
 agente
 [Projetos]
 projetos
@@ -17,6 +16,7 @@ servidor
 processos
 terminal
 logs-e-consumo
+sem-porta-aberta
 [Ajustes e aparência]
 aparencia-e-abas
 atalhos
