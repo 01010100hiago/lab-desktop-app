@@ -61,6 +61,15 @@ final class ContextoDoProjeto {
     /** O que Encerrar e Reiniciar dos processos do projeto fazem ({@code null}: a lista sem botões). */
     AcoesDeProcessos acoesDeProcessos;
 
+    /** O leitor do git deste projeto (lê pelo mesmo SSH, túnel ou processo local da página); {@code null} onde não há servidor vivo (testes de tela passam um leitor de mentira). */
+    Supplier<br.com.labdesktop.git.LeitorDeGit> leitorDeGit = () -> null;
+    /** O que "Criar repositório Git" faz (abre a janela de conferência; só escreve depois do clique de criar, e só com a trava das ações); o primeiro argumento roda quando o repositório foi criado, o segundo leva à aba Git. */
+    java.util.function.BiConsumer<Runnable, Runnable> criarRepositorio = (depois, verCommits) -> { };
+    /** O que "Instalar o Git…" faz: o fluxo que já existe (o mesmo da aba Máquina); o argumento roda quando o git passou a estar lá. */
+    Consumer<Runnable> instalarGit = depois -> { };
+    /** Refaz a linha "Código" da Visão geral e a aba Git (depois de criar o repositório, ou no Atualizar da página). */
+    Runnable recarregarGit = () -> { };
+
     EstadoServidor estado;
     DetalheProjeto detalhe;
     /** O erro da primeira leitura (que não é de rede), enquanto ainda não há detalhe nenhum para mostrar. */

@@ -400,6 +400,31 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     }
 
     /**
+     * O leitor do Git de UM projeto: lê pelo MESMO caminho do resto do app, o SSH do servidor (que já passa pelo túnel do Session Manager ou da Cloudflare, ver 7.14) ou o processo
+     * local, sem nenhum caminho novo de rede. SÓ lê; o objeto que escreve é {@link #operacoesDeGit}. Só MONTA (nada roda ao montar).
+     *
+     * @param pastaDoProjetoNoApp a pasta do projeto como o app a escreve (sempre com barra): {@code /srv/lab/projects/loja-web}
+     * @throws IllegalArgumentException se a pasta não vale ({@link br.com.labdesktop.git.ValidadorDeGit#pastaValida})
+     */
+    public br.com.labdesktop.git.LeitorDeGit leitorDeGit(String pastaDoProjetoNoApp) {
+        AmbienteDeProjetos a = ambienteDeProjetos(pastaDoPai(pastaDoProjetoNoApp));
+        return br.com.labdesktop.git.LeitorDeGitPorExecutor.de(a.executor(), a.paraOSistema(), pastaDoProjetoNoApp);
+    }
+
+    /**
+     * O que ESCREVE no Git de um projeto. Só MONTA: conferir lê, criar só roda depois do clique de confirmar na janela, e a trava das ações
+     * ({@code labdesktop.acoes}) é conferida por quem abre a janela.
+     */
+    public br.com.labdesktop.git.OperacoesDeGit operacoesDeGit(String pastaDoProjetoNoApp) {
+        return new br.com.labdesktop.git.CriadorDeRepositorio(ambienteDeProjetos(pastaDoPai(pastaDoProjetoNoApp)), pastaDoProjetoNoApp);
+    }
+
+    private static String pastaDoPai(String pasta) {
+        int i = pasta == null ? -1 : pasta.lastIndexOf('/');
+        return i > 0 ? pasta.substring(0, i) : "/";
+    }
+
+    /**
      * A Cloudflare deste servidor: o token e a escolha no cofre, a API, publicar e remover endereços. Só MONTA a fachada (nada roda, nada é lido ao montar);
      * quem a usa para escrever são os diálogos, depois do clique de confirmação.
      */

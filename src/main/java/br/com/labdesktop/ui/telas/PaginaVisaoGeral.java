@@ -66,6 +66,10 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
     private final TabelaPaginada<Container> tabela;
     private transient Inscricao ocupacao;
     private List<String> urlsMostradas;
+    /** A linha "Código": o que o Git do projeto diz (sem Git, com Git, Git ausente, dono diferente), lido quando a página aparece e quando o git muda. */
+    private final LinhaDoCodigo linhaDoCodigo;
+    /** O que o agente sabia do git na última leitura (branch, commit, data, sujo): quando muda, o app lê o git de novo. */
+    private String assinaturaDoGit;
 
     PaginaVisaoGeral(ContextoDoProjeto ctx) {
         super(ctx);
@@ -78,6 +82,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
             new Coluna<>("Imagem", 1.4, false, true, Container::imagem, null),
             new Coluna<>("Criado", 0.6, false, false, c -> FormatosDoProjeto.criado(c.criado(), ctx.agora()), null));
         this.tabela = new TabelaPaginada<>(CONTAINERS_POR_PAGINA, colunas);
+        this.linhaDoCodigo = new LinhaDoCodigo(ctx);
         iniciar();
     }
 
@@ -160,6 +165,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
 
     @Override
     void aoAparecer() {
+        linhaDoCodigo.atualizar();
         if (ctx.fluxos != null) {
             ocupacao = ctx.fluxos.observar(projeto -> {
                 if (projeto.equals(ctx.projeto)) {
@@ -172,6 +178,12 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
     @Override
     void aoSumir() {
         ocupacao = soltar(ocupacao);
+        linhaDoCodigo.soltar();
+    }
+
+    /** Lê o Git do projeto de novo (depois de criar o repositório, ou no Atualizar da página). */
+    void recarregarGit() {
+        linhaDoCodigo.atualizar();
     }
 
     /** Reaplica o "ocupado" dos botões a partir do {@link FluxosDeProjeto} (e refaz a coluna de Reiniciar por container). */
@@ -205,7 +217,13 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
         if (!d.urls().isEmpty()) {
             dados.add(new FichaRotulada.Item("Endereços", urls));
         }
-        dados.add(FichaRotulada.Item.de("Código", m.textoDoCodigo()));
+        linhaDoCodigo.textoDoAgente(m.textoDoCodigo());
+        dados.add(new FichaRotulada.Item("Código", linhaDoCodigo, true));
+        String assinatura = d.git() == null ? "sem-git" : d.git().branch() + "|" + d.git().commit() + "|" + d.git().quando() + "|" + d.git().sujo();
+        if (assinaturaDoGit != null && !assinaturaDoGit.equals(assinatura) && assinada()) {
+            linhaDoCodigo.atualizar(); // o git mudou desde a última leitura: lê de novo, uma vez (nunca de tempos em tempos)
+        }
+        assinaturaDoGit = assinatura;
         if (d.tamanho() != null) {
             dados.add(FichaRotulada.Item.de("Tamanho", Formato.fmtBytes(d.tamanho())));
         }
@@ -358,6 +376,10 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
 
     String textoDaDescricao() {
         return descricao.getText();
+    }
+
+    LinhaDoCodigo linhaDoCodigo() {
+        return linhaDoCodigo;
     }
 
     boolean mostraAvisoDeSomenteLeitura() {

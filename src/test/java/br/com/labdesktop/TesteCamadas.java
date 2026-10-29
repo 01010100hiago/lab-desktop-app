@@ -27,7 +27,7 @@ class TesteCamadas {
      * verificações, passos e pacote, atrás de uma interface de execução) e local (o servidor "Este computador": processos, verificações, laboratório local), projetos (criar, importar e completar projeto: modelos puros e operações sobre um ambiente), cloudflare (a API da Cloudflare, o túnel e o endereço público) tendencias (modelos puros das Tendências: períodos, estatística, estimativa, unidades, relatório e exportação), registro (o registro geral do servidor: parser, leitores e modelo), acesso (a primeira conexão com senha e o desligar a senha: comandos fixos, instalador da chave, análise e passos) transporte (os túneis externos do SSM e da Cloudflare: ferramentas, argumentos, processo e saída) e terminal (o domínio do
      * terminal: transporte, ciclo de vida, classificador e portão de entrada; o JediTerm e o Swing ficam em {@code ui.terminal}).
      */
-    private static final Set<String> DOMINIO = Set.of("plataforma", "util", "seguranca", "cofre", "ssh", "api", "servidor", "arquivos", "terminal", "instalador", "local", "projetos", "cloudflare", "tendencias", "registro", "acesso", "processos", "transporte");
+    private static final Set<String> DOMINIO = Set.of("plataforma", "util", "seguranca", "cofre", "ssh", "api", "servidor", "arquivos", "terminal", "instalador", "local", "projetos", "cloudflare", "tendencias", "registro", "acesso", "processos", "transporte", "git");
 
     private static final Pattern GRAFICOS = Pattern.compile(
         "\\b(javax\\.swing|java\\.awt|com\\.formdev|com\\.jediterm)\\b");

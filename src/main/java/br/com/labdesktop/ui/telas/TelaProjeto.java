@@ -51,7 +51,7 @@ import javax.swing.text.JTextComponent;
 
 /**
  * A página de UM projeto (ARQUITETURA 8.1, tradução de {@code projeto.html}): o cabeçalho com "‹ Projetos" (volta à lista; Esc
- * também), o nome e o estado, e as abas por assunto: Visão geral, Logs, Terminal (o shell do projeto e, se o servidor tem Claude, a sessão dele), Arquivos, Backups,
+ * também), o nome e o estado, e as abas por assunto: Visão geral, Logs, Terminal (o shell do projeto e, se o servidor tem Claude, a sessão dele), Arquivos, Git (os commits, só leitura), Backups,
  * Consumo e limite, Internet e Processos.
  * Abre no lugar da página do servidor (quem a abre e fecha é a {@link TelaServidor}); a aba escolhida fica lembrada por projeto
  * enquanto o app estiver aberto ({@link Saida#abaMudou}).
@@ -70,6 +70,7 @@ public final class TelaProjeto extends Painel {
         LOGS("logs", "Logs"),
         TERMINAL("terminal", "Terminal"),
         ARQUIVOS("arquivos", "Arquivos"),
+        GIT("git", "Git"),
         BACKUPS("backups", "Backups"),
         CONSUMO("consumo", "Consumo e limite"),
         INTERNET("internet", "Internet"),
@@ -124,6 +125,17 @@ public final class TelaProjeto extends Painel {
 
         /** O usuário pediu "Adicionar domínio" (a janela abre o assistente; o app só escreve no último passo, depois do clique de confirmar). {@code depois} roda quando termina. */
         default void adicionarDominio(Runnable depois) { }
+
+        /** O usuário pediu "Criar repositório Git" (a janela abre a conferência, que só lê; o app só escreve depois do clique de criar, e só com a trava das ações). {@code depois} roda quando o repositório foi criado; {@code verCommits} leva à aba Git. */
+        default void criarRepositorio(Runnable depois, Runnable verCommits) { }
+
+        /** O usuário pediu "Instalar o Git…" (o fluxo que já existe, o mesmo da aba Máquina). {@code depois} roda quando o git passou a estar lá. */
+        default void instalarGit(Runnable depois) { }
+
+        /** O leitor do git deste projeto (lê pelo mesmo SSH ou processo da página), ou {@code null} onde não há como (testes de tela). */
+        default br.com.labdesktop.git.LeitorDeGit leitorDeGit(String pastaDoProjetoNoApp) {
+            return null;
+        }
 
         /** O usuário pediu para remover um endereço publicado (abre o diálogo de confirmação). */
         default void removerEndereco(String hostname, Runnable depois) { }
@@ -218,6 +230,13 @@ public final class TelaProjeto extends Painel {
         this.ctx.publicarNaInternet = saida::publicarNaInternet;
         this.ctx.adicionarDominio = saida::adicionarDominio;
         this.ctx.conectarCloudflare = saida::conectarCloudflare;
+        this.ctx.criarRepositorio = saida::criarRepositorio;
+        this.ctx.instalarGit = saida::instalarGit;
+        this.ctx.leitorDeGit = () -> {
+            String pasta = ctx.pastaDoProjeto.get();
+            return pasta == null ? null : saida.leitorDeGit(pasta);
+        };
+        this.ctx.recarregarGit = this::recarregarGit;
         this.ctx.removerEndereco = saida::removerEndereco;
         this.ctx.abrirEndereco = saida::abrirEndereco;
         this.ctx.acoesDeProcessos = new AcoesDeProcessos() {
@@ -248,6 +267,7 @@ public final class TelaProjeto extends Painel {
         this.baixador = new BaixadorDeBackups(contextoDeArquivos, ctx.pastaDoProjeto);
         this.ctx.baixarBackups = baixador::baixar;
         this.ctx.baixadorDeBackups = baixador;
+        paginas.put(Aba.GIT, new PaginaGit(ctx));
         paginas.put(Aba.BACKUPS, new PaginaBackups(ctx));
         paginas.put(Aba.CONSUMO, new PaginaConsumo(ctx));
         paginas.put(Aba.INTERNET, new PaginaInternet(ctx));
@@ -258,7 +278,10 @@ public final class TelaProjeto extends Painel {
         br.com.labdesktop.ui.tema.Fontes.aplicar(voltar, br.com.labdesktop.ui.tema.Fontes.TEXTO, java.awt.Font.PLAIN, 13f);
         voltar.addActionListener(e -> saida.voltar());
         atualizar.setToolTipText("Consulta o servidor agora");
-        atualizar.addActionListener(e -> ctx.aoAtualizar.run());
+        atualizar.addActionListener(e -> {
+            ctx.aoAtualizar.run();
+            recarregarGit();
+        });
         nome.setToolTipText(projeto);
         adicionarDominio.setName("adicionar-dominio");
         adicionarDominio.getAccessibleContext().setAccessibleName("Adicionar domínio a este projeto");
@@ -528,6 +551,14 @@ public final class TelaProjeto extends Painel {
         internet().recarregar();
     }
 
+    /** Lê o Git de novo onde ele aparece: a linha "Código" da Visão geral e a aba Git (só a que está à vista lê; a outra lê quando aparecer). */
+    void recarregarGit() {
+        visaoGeral().recarregarGit();
+        if (atual == Aba.GIT) {
+            git().recarregar();
+        }
+    }
+
     private void redesenhar() {
         atualizarBotaoDoDominio();
         atualizarCabecalho();
@@ -572,6 +603,10 @@ public final class TelaProjeto extends Painel {
 
     PaginaLogs logs() {
         return (PaginaLogs) paginas.get(Aba.LOGS);
+    }
+
+    PaginaGit git() {
+        return (PaginaGit) paginas.get(Aba.GIT);
     }
 
     PaginaTerminalDoProjeto terminal() {

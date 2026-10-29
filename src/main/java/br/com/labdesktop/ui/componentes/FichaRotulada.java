@@ -19,8 +19,16 @@ public final class FichaRotulada extends Painel {
 
     private static final long serialVersionUID = 1L;
 
-    /** Um dado da ficha: o rótulo e o componente do valor (um {@link Rotulo}, ou links, ou uma pequena lista). */
-    public record Item(String rotulo, JComponent valor) {
+    /**
+     * Um dado da ficha: o rótulo e o componente do valor (um {@link Rotulo}, ou links, ou uma pequena lista).
+     *
+     * @param linhaInteira o dado ocupa uma linha só dele, na largura toda (o "Código", que leva o último commit e botões)
+     */
+    public record Item(String rotulo, JComponent valor, boolean linhaInteira) {
+
+        public Item(String rotulo, JComponent valor) {
+            this(rotulo, valor, false);
+        }
 
         /** Um valor em texto. */
         public static Item de(String rotulo, String valor) {
@@ -51,6 +59,9 @@ public final class FichaRotulada extends Painel {
         removeAll();
         int i = 0;
         for (Item item : itens) {
+            if (item.linhaInteira() && i % colunas != 0) {
+                i += colunas - i % colunas; // começa uma linha nova
+            }
             Rotulo rotulo = new Rotulo(item.rotulo()).tamanho(12f).corDoToken(Tokens.TEXTO3).truncavel();
             Painel celula = new Painel(new GridBagLayout());
             GridBagConstraints c = new GridBagConstraints();
@@ -69,9 +80,12 @@ public final class FichaRotulada extends Painel {
             g.weightx = 1;
             g.fill = GridBagConstraints.HORIZONTAL;
             g.anchor = GridBagConstraints.NORTHWEST;
-            g.insets = new Insets(i / colunas == 0 ? 0 : 6, 0, 0, i % colunas == colunas - 1 ? 0 : espaco);
+            g.insets = new Insets(i / colunas == 0 ? 0 : 6, 0, 0, item.linhaInteira() || i % colunas == colunas - 1 ? 0 : espaco);
+            if (item.linhaInteira()) {
+                g.gridwidth = colunas;
+            }
             add(celula, g);
-            i++;
+            i += item.linhaInteira() ? colunas : 1;
         }
         setVisible(!itens.isEmpty());
         revalidate();

@@ -357,6 +357,34 @@ public final class TelaProjetos extends Painel {
         acoesUi.adicionarDominio(servidor, projeto, depois);
     }
 
+    /** "Criar repositório Git" na página de um projeto: abre a janela de conferência (só lê). Só com as ações liberadas; criar escreve e fica atrás da trava. */
+    void criarRepositorioDe(String projeto, Runnable depois, Runnable verCommits) {
+        if (acoesUi == null || servidor == null || !fluxos.liberadas()) {
+            return;
+        }
+        acoesUi.criarRepositorioGit(servidor, projeto, depois, verCommits);
+    }
+
+    /** "Instalar o Git…" a partir da página de um projeto: o fluxo que já existe (confirmação com os comandos exatos). */
+    void instalarGitDe(Runnable depois) {
+        if (acoesUi == null || servidor == null) {
+            return;
+        }
+        acoesUi.instalarGit(servidor, depois);
+    }
+
+    /** O leitor do Git de um projeto (só leitura, pelo mesmo caminho da página), ou {@code null} se não há servidor ou a pasta não vale. */
+    br.com.labdesktop.git.LeitorDeGit leitorDeGitDe(String pastaDoProjetoNoApp) {
+        if (servidor == null) {
+            return null;
+        }
+        try {
+            return servidor.leitorDeGit(pastaDoProjetoNoApp);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     /** "Adicionar domínio" a partir do servidor (aba Cloudflare): pergunta o projeto e segue para o assistente. Só com as ações liberadas. */
     void adicionarDominioEscolhendoOProjeto(Runnable depois) {
         if (acoesUi == null || servidor == null || !fluxos.liberadas()) {

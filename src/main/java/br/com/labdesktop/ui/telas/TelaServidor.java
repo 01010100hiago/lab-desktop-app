@@ -377,6 +377,21 @@ public final class TelaServidor extends Painel {
             }
 
             @Override
+            public void criarRepositorio(Runnable depois, Runnable verCommits) {
+                projetos.criarRepositorioDe(nome, depois, verCommits);
+            }
+
+            @Override
+            public void instalarGit(Runnable depois) {
+                projetos.instalarGitDe(depois);
+            }
+
+            @Override
+            public br.com.labdesktop.git.LeitorDeGit leitorDeGit(String pastaDoProjetoNoApp) {
+                return projetos.leitorDeGitDe(pastaDoProjetoNoApp);
+            }
+
+            @Override
             public void removerEndereco(String hostname, Runnable depois) {
                 projetos.removerEnderecoDe(hostname, depois);
             }

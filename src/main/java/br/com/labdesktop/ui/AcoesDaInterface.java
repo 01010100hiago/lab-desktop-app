@@ -308,6 +308,55 @@ public final class AcoesDaInterface {
     }
 
     // =====================================================================================================
+    // Git do projeto
+    // =====================================================================================================
+
+    /**
+     * "Criar repositório Git" na página de um projeto: abre a janela de CONFERÊNCIA (só lê o projeto e mostra tudo antes de qualquer escrita). Só o clique do usuário chega aqui, e nada é criado
+     * antes do clique em "Criar repositório em &lt;projeto&gt; (&lt;servidor&gt;)" lá dentro. Criar escreve no projeto e fica atrás da trava das ações ({@code labdesktop.acoes}): conferida AQUI
+     * também (defesa em profundidade; a janela já mostra o botão desligado com a razão). Vale também em servidor protegido, como Novo projeto: criar a pasta .git de um projeto não instala nada.
+     *
+     * @param depois      roda (na EDT) quando o repositório foi criado, inteiro ou pela metade: a página lê o Git de novo
+     * @param verCommits  leva à aba Git (o botão do fim)
+     */
+    public void criarRepositorioGit(ServidorLab lab, String projeto, Runnable depois, Runnable verCommits) {
+        if (!lab.ehLocal() && !lab.estado().conexao().permiteExec()) {
+            avisos.atencao("O app precisa da conexão com o servidor para conferir e criar o repositório. Conecte primeiro.");
+            return;
+        }
+        String pasta = raizDosProjetosNoApp(lab) + "/" + projeto;
+        br.com.labdesktop.git.OperacoesDeGit operacoes;
+        try {
+            operacoes = lab.operacoesDeGit(pasta);
+        } catch (IllegalArgumentException e) {
+            avisos.atencao("Não consegui montar o caminho do projeto " + projeto + " para o Git.");
+            return;
+        }
+        boolean liberada = trava.getAsBoolean();
+        boolean protegido = !lab.ehLocal() && lab.protegido();
+        br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio.Motor motor = new br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio.Motor() {
+            @Override
+            public br.com.labdesktop.git.ConferenciaDoRepositorio conferir() throws Exception {
+                return operacoes.conferirCriacao();
+            }
+
+            @Override
+            public br.com.labdesktop.git.ResultadoDaCriacao criar(br.com.labdesktop.git.PedidoDeCriacao pedido, br.com.labdesktop.git.OperacoesDeGit.Observador observador,
+                                                                       br.com.labdesktop.arquivos.Cancelamento cancelamento) throws Exception {
+                if (!trava.getAsBoolean()) {
+                    return new br.com.labdesktop.git.ResultadoDaCriacao(false, false,
+                        br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio.RAZAO_DA_TRAVA + " Nada foi criado.", List.of(), List.of(), null, 0, "", null);
+                }
+                return operacoes.criarRepositorio(pedido, observador, cancelamento);
+            }
+        };
+        br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio[] janela = new br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio[1];
+        janela[0] = new br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio(lab.estado().nome(), projeto, motor, liberada, protegido,
+            () -> instalarGit(lab, () -> janela[0].conferir()), verCommits, depois, avisos, CopiadorDeTexto.doSistema());
+        apresentador.mostrar(janela[0]);
+    }
+
+    // =====================================================================================================
     // Cloudflare
     // =====================================================================================================
 
