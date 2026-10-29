@@ -389,7 +389,7 @@ class DialogoCriarRepositorioTest {
         assertTrue(ed(d::fechado), "a janela nunca fica presa");
         assertTrue(m.cancelamento.get().cancelado(), "o motor foi avisado para parar depois do passo em curso");
         m.segurar.countDown();
-        Espera.ate(Duration.ofSeconds(10), "aviso final", () -> !avisos.textos().isEmpty());
+        Espera.ate(Duration.ofSeconds(10), "aviso final", () -> avisos.textos().stream().anyMatch(a -> a.contains("Repositório criado")));
         assertTrue(avisos.textos().stream().anyMatch(a -> a.contains("Repositório criado")), avisos.textos().toString());
     }
 

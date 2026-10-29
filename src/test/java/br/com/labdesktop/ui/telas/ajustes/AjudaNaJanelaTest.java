@@ -441,7 +441,7 @@ class AjudaNaJanelaTest {
         assertEquals("Onde fica...? (lista rápida)", String.valueOf(Visual.naEdt(() -> a.seletorDeCategoria().getItemAt(0))));
         Visual.naEdt(() -> a.seletorDeCategoria().setSelectedIndex(2)); // Projetos
         assertEquals("projetos", Visual.naEdt(a::topicoAberto), "escolher a categoria abre o primeiro tópico dela");
-        assertEquals(3, Visual.naEdt(() -> a.seletorDeTopico().getItemCount()), "projetos, publicar e git");
+        assertEquals(4, Visual.naEdt(() -> a.seletorDeTopico().getItemCount()), "projetos, publicar, git e git-do-projeto");
         Visual.naEdt(() -> a.seletorDeTopico().setSelectedIndex(1));
         assertEquals("publicar", Visual.naEdt(a::topicoAberto));
         Visual.naEdt(() -> painel.setSize(1440, 860));
