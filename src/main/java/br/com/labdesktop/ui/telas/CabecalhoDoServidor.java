@@ -50,7 +50,7 @@ final class CabecalhoDoServidor extends Painel {
         protegido.setVisible(false);
         linhaDaProtecao.setName("linha-da-protecao");
         linhaDaProtecao.setVisible(false);
-        add(Caixa.linha(12, nome, new AEsquerda(estado), new AEsquerda(protegido), Caixa.mola(), leitura, atualizar), BorderLayout.NORTH);
+        add(Caixa.linha(12, nome, new AEsquerda(Caixa.linha(8, estado, protegido)), Caixa.mola(), leitura, atualizar), BorderLayout.NORTH);
         add(Caixa.coluna(0, linhaDaProtecao, linhaDeBaixo, ficha), BorderLayout.CENTER);
         atualizar.addActionListener(e -> aoAtualizar.run());
         atualizar.setToolTipText("Consulta o servidor agora");
