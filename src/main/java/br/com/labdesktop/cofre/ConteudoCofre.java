@@ -38,6 +38,13 @@ final class ConteudoCofre {
      * cofre sem servidor local continua versão 1, legível por qualquer app.
      */
     static final int VERSAO_COM_SERVIDOR_LOCAL = 2;
+    /**
+     * O conteúdo em que algum servidor tem a marca "Servidor protegido" ou a recusa da marca automática. Um app sem a marca abriria o
+     * cofre, ignoraria os campos que não conhece e, ao regravar, APAGARIA a proteção em silêncio; com a versão 3 ele recusa abrir ("versão não suportada"),
+     * como foi feito com o servidor local. A versão 2 não serve: um app sem a marca já a aceita. Cofre sem nenhuma marca continua nas
+     * versões 1 e 2 de sempre, o mesmo arquivo de hoje.
+     */
+    static final int VERSAO_COM_PROTECAO = 3;
 
     @JsonProperty("versao")
     int versao = VERSAO;
@@ -189,6 +196,9 @@ final class ConteudoCofre {
         if (memoria.servidores.stream().anyMatch(s -> s.config.ehLocal())) {
             json.versao = VERSAO_COM_SERVIDOR_LOCAL;
         }
+        if (memoria.servidores.stream().anyMatch(s -> s.config.protegido() || s.config.protecaoAutomaticaRecusada())) {
+            json.versao = VERSAO_COM_PROTECAO;
+        }
         for (ChaveSsh c : memoria.chaves) {
             ChaveJson j = new ChaveJson();
             j.id = c.id();
@@ -261,7 +271,7 @@ final class ConteudoCofre {
      * o que já tinha criado, para não deixar chave solta na memória.
      */
     ConteudoEmMemoria paraMemoria() throws CofreCorrompidoException {
-        if (versao != VERSAO && versao != VERSAO_COM_SERVIDOR_LOCAL) {
+        if (versao != VERSAO && versao != VERSAO_COM_SERVIDOR_LOCAL && versao != VERSAO_COM_PROTECAO) {
             throw new CofreCorrompidoException("Versão do conteúdo do cofre não suportada: " + versao + ".");
         }
         List<ChaveSsh> chavesProntas = new ArrayList<>();

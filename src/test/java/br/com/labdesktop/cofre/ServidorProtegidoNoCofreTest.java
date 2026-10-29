@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.labdesktop.util.CaminhosApp;
@@ -150,13 +151,36 @@ class ServidorProtegidoNoCofreTest {
     }
 
     @Test
-    void idaEVoltaPeloJsonMantemAsMarcas() throws Exception {
-        String json = jsonDoServidor(",\"protegido\":true");
+    void idaEVoltaPeloJsonMantemAsMarcasEGravaAVersao3() throws Exception {
+        String json = jsonDoServidor(",\"protegido\":true").replace("\"versao\":1", "\"versao\":3");
         ConteudoEmMemoria m = Json.mapper().readValue(json, ConteudoCofre.class).paraMemoria();
         var original = Json.mapper().readTree(json);
         var nova = Json.mapper().readTree(Json.mapper().writeValueAsBytes(ConteudoCofre.de(m)));
         assertEquals(original, nova);
         assertTrue(nova.get("servidores").get(0).get("protegido").asBoolean());
+        assertEquals(3, nova.get("versao").asInt());
+    }
+
+    @Test
+    void qualquerMarcaGravaAVersao3EOCofreSemMarcaContinuaComoHoje() throws Exception {
+        for (String extras : new String[] {",\"protegido\":true", ",\"protecaoAutomaticaRecusada\":true", ",\"protegido\":true,\"protecaoAutomaticaRecusada\":true"}) {
+            ConteudoEmMemoria m = Json.mapper().readValue(jsonDoServidor(extras), ConteudoCofre.class).paraMemoria(); // um arquivo de versão 1 com a marca também abre
+            assertEquals(3, ConteudoCofre.de(m).versao, extras);
+        }
+        ConteudoEmMemoria semMarca = Json.mapper().readValue(jsonDoServidor(""), ConteudoCofre.class).paraMemoria();
+        assertEquals(1, ConteudoCofre.de(semMarca).versao, "sem marca nenhuma o arquivo é o de hoje, versão 1");
+    }
+
+    @Test
+    void aVersao3NaoEUmaDasQueOAppDeAntesAceitaEAVersaoDeAntesContinuaLendo() throws Exception {
+        // um app sem a marca de proteção aceita só estas; a 3 o faz recusar com "versão não suportada" em vez de regravar e apagar a marca em silêncio
+        assertFalse(java.util.Set.of(ConteudoCofre.VERSAO, ConteudoCofre.VERSAO_COM_SERVIDOR_LOCAL).contains(ConteudoCofre.VERSAO_COM_PROTECAO));
+        assertEquals(3, ConteudoCofre.VERSAO_COM_PROTECAO);
+        // e o app novo lê as três (e recusa o que não conhece)
+        for (int v : new int[] {1, 2, 3}) {
+            assertEquals("lab", lerConfig(jsonDoServidor("").replace("\"versao\":1", "\"versao\":" + v)).nome(), "versão " + v);
+        }
+        assertThrows(CofreCorrompidoException.class, () -> lerConfig(jsonDoServidor("").replace("\"versao\":1", "\"versao\":4")));
     }
 
     @Test
@@ -171,8 +195,9 @@ class ServidorProtegidoNoCofreTest {
     }
 
     @Test
-    void cofreNovoComOCampoContinuaLegivelPeloLeitorDeHoje() throws Exception {
-        // o leitor de antes ignora campo que não conhece (ignoreUnknown): o mesmo arquivo com a marca abre e traz o resto do servidor
+    void servidorComCampoDesconhecidoNoJsonContinuaLegivel() throws Exception {
+        // prova só o que diz: o leitor ignora campo que não conhece (ignoreUnknown) e traz o resto do servidor. Que o app de ANTES não regrave e apague a marca é
+        // a versão 3 (teste acima), não isto.
         ConfigServidor c = lerConfig(jsonDoServidor(",\"protegido\":true,\"campoQueUmDiaExistira\":1"));
         assertEquals("lab", c.nome());
         assertEquals(22, c.porta());
