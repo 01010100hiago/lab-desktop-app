@@ -28,6 +28,9 @@ import org.slf4j.LoggerFactory;
  * do instalador) e nunca o que já existia (dados de uma instalação anterior, o Docker). O erro volta como texto, com o que o
  * servidor disse.
  *
+ * <p><b>O que instalar.</b> {@link #escolher} fixa os passos de SÓ o que o usuário escolheu ({@link EscolhaDeInstalacao}): o que não foi
+ * escolhido não roda, não aparece como passo e não entra nas verificações que podem barrar. Sem escolha, {@link #instalar} faz tudo, como sempre fez.
+ *
  * <p>Uma instância serve a UMA tela: guarda o último relatório de verificação e o que já foi feito. Não é thread-safe: uma thread só.
  */
 public final class InstaladorDeAgente {

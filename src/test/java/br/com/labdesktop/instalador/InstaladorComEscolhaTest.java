@@ -154,4 +154,17 @@ class InstaladorComEscolhaTest {
         assertEquals(Desfecho.CONCLUIDA, instalador.instalar(obs, Cancelamento.NUNCA).desfecho());
         assertEquals(6, obs.ultimo.size());
     }
+
+    @Test
+    void conferirDeNovoMantemOFiltroEOsPassosDaEscolha() throws Exception {
+        servidor.ubuntu().semDocker();
+        servidor.discoLivreKib = 100 * 1024; // problema só do agente
+        instalador.escolher(escolher(Set.of("docker")));
+
+        RelatorioDeVerificacao denovo = verificar(); // "Conferir de novo": devolve o completo, mas o que vale para instalar continua filtrado
+        assertTrue(denovo.bloqueado(), "o relatório completo continua mostrando o problema do agente");
+        assertFalse(instalador.relatorio().bloqueado(), "o que vale para a escolha (só o Docker) não é barrado por ele");
+        assertEquals(List.of(PassoDeInstalacao.DOCKER), instalador.passosAExecutar());
+        assertEquals(Desfecho.CONCLUIDA, instalador.instalar(obs, Cancelamento.NUNCA).desfecho());
+    }
 }
