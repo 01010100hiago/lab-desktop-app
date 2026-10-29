@@ -474,6 +474,7 @@ class ServidorProtegidoNoServidorLabTest {
         assertTrue(ssh.comandos.subList(comandosAntes, ssh.comandos.size()).stream().noneMatch(c -> c.contains("authorized_keys") || c.contains("token-revogar")),
             "nenhum comando de revogar foi ao servidor: " + ssh.comandos);
         assertTrue(cofre.servidores().isEmpty(), "mas o app esqueceu o servidor");
+        assertTrue(lab.protegido(), "uma tela que ainda aponta para o servidor removido recebe a última leitura, não uma exceção");
     }
 
     @Test

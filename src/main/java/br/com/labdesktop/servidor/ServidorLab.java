@@ -256,7 +256,13 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      * recusou a marca automática. "Este computador" nunca é. É o que toda recusa e toda oferta de instalar, atualizar ou remover consulta.
      */
     public boolean protegido() {
-        return protegidoAgora(config());
+        ConfigServidor c;
+        try {
+            c = config();
+        } catch (IllegalStateException servidorQueSumiuDoCofre) {
+            c = ultimaConfig; // uma tela que ainda aponta para um servidor já removido pergunta e recebe a última leitura, não uma exceção
+        }
+        return protegidoAgora(c);
     }
 
     private boolean protegidoAgora(ConfigServidor c) {

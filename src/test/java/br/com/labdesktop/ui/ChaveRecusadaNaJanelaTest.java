@@ -74,6 +74,7 @@ class ChaveRecusadaNaJanelaTest {
         ssh = ServidorSshDeTeste.ed25519();
         ssh.aceitarSenha("labuser", SENHA_DO_SERVIDOR);
         agente = new AgenteDoLab();
+        agente.perfil = "monitor"; // o agente do app: um agente sem perfil (ou o do lab) faria o app marcar o servidor como protegido, e este teste é de um servidor sem a marca
         shell = new ShellDeTeste(Files.createDirectories(tmp.resolve("home")), ssh).outrosComandos(agente.comandosPorSsh());
         cofre = CofreDeChaves.criar(CaminhosApp.de(tmp.resolve("dados"), tmp.resolve("logs")), SENHA_MESTRA.clone(), ParametrosKdf.MINIMO);
         gerenciador = new GerenciadorServidores(cofre, PedidoDeCodigo2fa.NUNCA, ConfigSsh.rapida());

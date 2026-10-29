@@ -125,7 +125,8 @@ class EdicaoERemocaoPelaInterfaceTest {
         String dispositivo = "mac-" + nome;
         agente.tokens.put(token.hashSha256Hex(), dispositivo);
         ConfigServidor cfg = new ConfigServidor(ConfigServidor.novoId(), nome, "127.0.0.1", ssh.porta(), "labuser", chave.id(),
-            portaDoAgente, List.of(ssh.pin()), Transporte.DIRETO, dispositivo, Estado2fa.DESLIGADO);
+            portaDoAgente, List.of(ssh.pin()), Transporte.DIRETO, dispositivo, Estado2fa.DESLIGADO,
+            false, true); // o agente falso não diz o perfil e o app o tomaria por um agente de fora; estes testes são do servidor sem a marca, então a marca automática já está recusada
         cofre.adicionarServidor(cfg, token);
         ServidorLab lab = gerenciador.adicionar(cfg.id());
         if (conectar) {

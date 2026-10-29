@@ -74,6 +74,7 @@ class EdicaoERemocaoDeServidorTest {
     void montar() throws Exception {
         ssh = ServidorSshDeTeste.ed25519();
         agente = new AgenteDoLab();
+        agente.perfil = "monitor"; // o agente do app: um agente sem perfil (ou o do lab) faria o app marcar o servidor como protegido, e este teste é de um servidor sem a marca
         ServidorSshDeTeste.Manipulador doAgente = agente.comandosPorSsh();
         ssh.comandoRemoto((linha, stdin, saida) -> {
             if (linha.startsWith("sh -c")) { // tirar a chave do authorized_keys

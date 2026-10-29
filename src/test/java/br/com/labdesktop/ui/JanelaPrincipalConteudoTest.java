@@ -162,8 +162,12 @@ class JanelaPrincipalConteudoTest {
     }
 
     @Test
-    void ositensDoMenuDeContextoDependemDoEstado() {
+    void ositensDoMenuDeContextoDependemDoEstado() throws Exception {
         ServidorLab lab = cenario.lab;
+        // o agente falso não diz o perfil: o app o toma por um agente de fora e marca o servidor como protegido; este teste é do servidor sem a marca
+        Espera.ate(Duration.ofSeconds(30), () -> "estado=" + lab.estado(), () -> lab.estado().conexao() == EstadoConexao.CONECTADO);
+        br.com.labdesktop.teste.EdicaoDaProtecao.definir(cenario.gerenciador, lab.id(), false);
+        Espera.ate(Duration.ofSeconds(30), () -> "ainda protegido", () -> !lab.estado().protegido());
         List<Item> itens = MenuDoServidor.itensPara(lab.estado());
         assertEquals(List.of(Item.ATUALIZAR, Item.CONFIGURAR_2FA, Item.EDITAR, Item.INSTALAR_CHAVE, Item.REMOVER), itens);
         List<String> rotulos = new ArrayList<>();

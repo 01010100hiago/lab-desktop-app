@@ -100,7 +100,7 @@ class CofreLocalTest {
         assertEquals(2, json.versao, "um app mais antigo vê 'versão não suportada', não 'chave inexistente'");
         assertEquals(local, json.paraMemoria().servidores.get(0).config, "e este app lê a versão 2");
         ConteudoCofre futuro = ConteudoCofre.de(comLocal);
-        futuro.versao = 3;
+        futuro.versao = 4;
         assertThrows(CofreCorrompidoException.class, futuro::paraMemoria);
     }
 }
