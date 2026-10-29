@@ -110,6 +110,19 @@ class DescobertaDeFerramentasTest {
     }
 
     @Test
+    void entradasRelativasDoPathSaoIgnoradasNosTresSistemas() {
+        var mac = de(SistemaOperacional.MAC, "/Users/ana", Map.of("PATH", ".:bin::/usr/local/bin:../x:~/bin"), "./aws", "bin/aws", "/usr/local/bin/aws");
+        assertEquals(List.of("/usr/local/bin"), mac.pastasDoPath(), "só a absoluta");
+        assertEquals(Optional.of("/usr/local/bin/aws"), mac.localizar(FerramentaExterna.AWS));
+        var semAbsoluta = de(SistemaOperacional.LINUX, "/home/ana", Map.of("PATH", ".:bin"), "./cloudflared", "bin/cloudflared");
+        assertEquals(List.of(), semAbsoluta.pastasDoPath());
+        assertEquals(Optional.empty(), semAbsoluta.localizar(FerramentaExterna.CLOUDFLARED), "um cloudflared na pasta de trabalho não conta");
+        var win = de(SistemaOperacional.WINDOWS, "C:\\Users\\ana", Map.of("Path", ".;bin;C:\\Ferramentas;\\\\servidor\\pasta;D:relativo"), "C:\\Ferramentas\\aws.exe", "bin\\aws.exe");
+        assertEquals(List.of("C:\\Ferramentas", "\\\\servidor\\pasta"), win.pastasDoPath());
+        assertEquals(Optional.of("C:\\Ferramentas\\aws.exe"), win.localizar(FerramentaExterna.AWS));
+    }
+
+    @Test
     void asPastasDeBuscaNaoRepetemEComecamPeloPath() {
         var d = de(SistemaOperacional.MAC, "/Users/ana", Map.of("PATH", "/usr/local/bin:/meu/bin"));
         List<String> pastas = d.pastasDeBusca(FerramentaExterna.AWS);

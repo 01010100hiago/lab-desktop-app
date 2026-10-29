@@ -1,6 +1,8 @@
 package br.com.labdesktop.cofre;
 
 import br.com.labdesktop.seguranca.ValidadorDeTransporte;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -129,8 +131,21 @@ public record Transporte(Tipo tipo, String hostname, String instanciaId, String 
     /** Onde o servidor está, numa linha (sem usuário): a instância e a região, ou o hostname. Vazio no direto e no local. */
     public String destinoEmTexto() {
         return switch (tipo) {
-            case SSM -> instanciaId + (regiao == null && perfilAws == null ? ""
-                : " (" + (regiao == null ? "" : regiao) + (regiao != null && perfilAws != null ? ", " : "") + (perfilAws == null ? "" : "perfil " + perfilAws) + ")");
+            case SSM -> {
+                // a porta SSH da instância só aparece quando não é a 22: texto igual = mesma máquina, e é com ele que o Adicionar lembra o que o usuário já conferiu
+                // (o cofre apaga a impressão quando a porta muda, então a chave de comparação também tem de mudar)
+                List<String> partes = new ArrayList<>();
+                if (regiao != null) {
+                    partes.add(regiao);
+                }
+                if (perfilAws != null) {
+                    partes.add("perfil " + perfilAws);
+                }
+                if (portaSshNaInstancia != ValidadorDeTransporte.PORTA_SSH_PADRAO) {
+                    partes.add("porta " + portaSshNaInstancia);
+                }
+                yield instanciaId + (partes.isEmpty() ? "" : " (" + String.join(", ", partes) + ")");
+            }
             case CLOUDFLARED -> hostname;
             case DIRETO, LOCAL -> "";
         };

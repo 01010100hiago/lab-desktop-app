@@ -90,7 +90,8 @@ public final class DescobertaDeFerramentas implements LocalizadorDeFerramenta {
                 if (limpa.length() > 1 && limpa.startsWith("\"") && limpa.endsWith("\"")) {
                     limpa = limpa.substring(1, limpa.length() - 1); // o PATH do Windows às vezes traz pastas entre aspas
                 }
-                if (!limpa.isEmpty()) {
+                // só pasta ABSOLUTA: uma entrada relativa do PATH (".", "bin", vazia) mudaria de lugar conforme a pasta de trabalho do app, e o programa achado ali não é o que o usuário instalou
+                if (!limpa.isEmpty() && ambiente.ehAbsoluto(limpa)) {
                     l.add(limpa);
                 }
             }

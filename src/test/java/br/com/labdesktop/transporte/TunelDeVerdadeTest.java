@@ -199,6 +199,52 @@ class TunelDeVerdadeTest {
             assertThrows(java.net.SocketTimeoutException.class, s::accept);
         }
         assertFalse(portas.alguemEscuta(p));
-        assertTrue(portas.reservar() != portas.reservar() || true);
     }
+
+    @Test
+    void aReservaDeUmaPortaDoTunelELoopbackENuncaARede() throws Exception {
+        assertEquals("127.0.0.1", PortasLocais.LACO.getHostAddress());
+        assertTrue(PortasLocais.LACO.isLoopbackAddress());
+        try (ServerSocket s = PortasLocais.abrirParaReservar()) {
+            assertTrue(s.getInetAddress().isLoopbackAddress(), "a reserva está ligada em " + s.getInetAddress());
+            assertEquals("127.0.0.1", s.getInetAddress().getHostAddress());
+            assertFalse(s.getInetAddress().isAnyLocalAddress(), "nunca 0.0.0.0");
+        }
+        int porta = PortasLocais.doSistema().reservar();
+        assertFalse(PortasLocais.doSistema().alguemEscuta(porta), "reservada e já liberada: a porta não está ocupada");
+        try (ServerSocket de = new ServerSocket(porta, 1, PortasLocais.LACO)) {
+            assertEquals(porta, de.getLocalPort(), "e dá para ocupá-la logo em seguida");
+        }
+    }
+
+    @Test
+    void oLancadorFechaAEntradaDoProgramaFilhoEleNuncaEsperaOTeclado() throws Exception {
+        LancadorDeFerramentaFalsa lancador = new LancadorDeFerramentaFalsa(1, Map.of("LABTEST_LER_ENTRADA", "1"));
+        var p = lancador.lancar(List.of("/ferramentas/aws", "--qualquer"), Map.of());
+        Integer codigo = p.aoSair().get(20, java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(0, codigo, "o programa que lê a entrada até o fim terminou: a entrada dele foi fechada");
+        assertTrue(p.saida().contains("ENTRADA-FECHADA"), p.saida());
+    }
+
+    @Test
+    void osDescendentesEmVariosNiveisTambemMorremAoFechar() throws Exception {
+        Path netoArq = tmp.resolve("neto.pid");
+        Path bisnetoArq = tmp.resolve("bisneto.pid");
+        LancadorDeFerramentaFalsa lancador = new LancadorDeFerramentaFalsa(eco.getLocalPort(), Map.of("LABTEST_NETO_ARQUIVO", netoArq.toString(), "LABTEST_BISNETO_ARQUIVO", bisnetoArq.toString()));
+        long pidDoNeto;
+        long pidDoBisneto;
+        try (DestinoSsh d = abridor(lancador).abrir(CLOUD, "x", 1)) {
+            for (int i = 0; i < 300 && !(Files.exists(bisnetoArq) && Files.size(bisnetoArq) > 0 && Files.exists(netoArq) && Files.size(netoArq) > 0); i++) {
+                Thread.sleep(50);
+            }
+            pidDoNeto = Long.parseLong(Files.readString(netoArq).strip());
+            pidDoBisneto = Long.parseLong(Files.readString(bisnetoArq).strip());
+            assertTrue(vivo(pidDoNeto) && vivo(pidDoBisneto));
+        }
+        esperarMorrer(pidDoNeto);
+        esperarMorrer(pidDoBisneto);
+        assertFalse(vivo(pidDoNeto), "o neto");
+        assertFalse(vivo(pidDoBisneto), "e o bisneto");
+    }
+
 }

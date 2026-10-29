@@ -91,12 +91,25 @@ class TransporteNoCofreTest {
         assertEquals(2222, t.portaSshNaInstancia());
         assertNull(t.hostname());
         assertEquals("Sem porta aberta: SSM", t.selo().orElseThrow());
-        assertEquals(INSTANCIA + " (us-east-1, perfil meu-perfil)", t.destinoEmTexto());
+        assertEquals(INSTANCIA + " (us-east-1, perfil meu-perfil, porta 2222)", t.destinoEmTexto());
         // perfil e região são opcionais
         Transporte minimo = Transporte.ssm(INSTANCIA, "", "", 22);
         assertNull(minimo.regiao());
         assertNull(minimo.perfilAws());
         assertEquals(INSTANCIA, minimo.destinoEmTexto());
+    }
+
+    @Test
+    void oTextoDoDestinoMudaQuandoMudaAPortaSshPorqueELeQueOAdicionarUsaParaLembrarOQueFoiConferido() {
+        String padrao = Transporte.ssm(INSTANCIA, "us-east-1", "p", 22).destinoEmTexto();
+        String outra = Transporte.ssm(INSTANCIA, "us-east-1", "p", 2222).destinoEmTexto();
+        assertNotEquals(padrao, outra, "o cofre apaga a impressão quando a porta muda, então este texto também tem de mudar");
+        assertEquals(INSTANCIA + " (us-east-1, perfil p, porta 2222)", outra);
+        assertEquals(INSTANCIA + " (us-east-1, perfil p)", padrao, "a 22 não aparece, como sempre");
+        assertEquals(INSTANCIA + " (porta 2222)", Transporte.ssm(INSTANCIA, null, null, 2222).destinoEmTexto());
+        assertNotEquals(Transporte.ssm(INSTANCIA, null, null, 22).destinoEmTexto(), Transporte.ssm(INSTANCIA, null, null, 23).destinoEmTexto());
+        // e a regra do cofre continua a mesma: a porta mudou, a impressão sai
+        assertTrue(ssm().editar("lab", Transporte.ssm(INSTANCIA, "us-east-1", "meu-perfil", 2222), "x", 0, "ubuntu", 7000).pins().isEmpty());
     }
 
     @Test

@@ -21,22 +21,30 @@ public interface PortasLocais {
     /** Alguém escuta nesta porta de 127.0.0.1 agora? Confere SEM conectar (conectar abriria uma sessão do SSM, ou o login da Cloudflare, à toa). */
     boolean alguemEscuta(int porta);
 
+    /** O endereço de TODAS as portas do túnel: só o laço de volta, nunca a rede (127.0.0.1). */
+    InetAddress LACO = laco();
+
+    private static InetAddress laco() {
+        try {
+            return InetAddress.getByAddress(new byte[] {127, 0, 0, 1});
+        } catch (java.net.UnknownHostException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** A porta aleatória aberta de verdade, só em 127.0.0.1 (quem a pede lê o número e a fecha). Separada para o teste provar que a reserva nunca é na rede. */
+    static ServerSocket abrirParaReservar() throws IOException {
+        return new ServerSocket(0, 1, LACO);
+    }
+
     /** As portas do sistema. */
     static PortasLocais doSistema() {
         return new PortasLocais() {
-            private final InetAddress laco = ladoDeCa();
-
-            private InetAddress ladoDeCa() {
-                try {
-                    return InetAddress.getByAddress(new byte[] {127, 0, 0, 1});
-                } catch (java.net.UnknownHostException e) {
-                    throw new IllegalStateException(e);
-                }
-            }
+            private final InetAddress laco = LACO;
 
             @Override
             public int reservar() throws IOException {
-                try (ServerSocket s = new ServerSocket(0, 1, laco)) {
+                try (ServerSocket s = abrirParaReservar()) {
                     return s.getLocalPort();
                 }
             }

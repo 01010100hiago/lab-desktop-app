@@ -633,7 +633,7 @@ public abstract class PaginaDoServidor extends Painel {
             this.assunto = assunto;
             fundo(Tokens.SUPERFICIE).borda(Tokens.BORDA).raio(14);
             setBorder(javax.swing.BorderFactory.createEmptyBorder(24, 24, 24, 24));
-            tentar = Botoes.secundario("Tentar de novo", "atualizar");
+            tentar = Botoes.secundario("Tentar agora", "atualizar"); // o mesmo nome da ação do aviso de conexão e dos textos do app ("Tentar agora")
             tentar.addActionListener(e -> aoTentar.run());
             add(titulo, BorderLayout.NORTH);
             add(texto, BorderLayout.CENTER);

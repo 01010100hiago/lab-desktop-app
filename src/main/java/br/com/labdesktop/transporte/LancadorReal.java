@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -122,21 +124,54 @@ public final class LancadorReal implements LancadorDeProcesso {
 
         @Override
         public void encerrar() {
-            List<ProcessHandle> filhos = new ArrayList<>();
-            try {
-                processo.descendants().forEach(filhos::add); // antes de matar o pai: depois, os filhos viram órfãos e somem da árvore
-            } catch (RuntimeException e) {
-                LOG.debug("Não consegui listar os filhos do programa: {}", e.toString());
+            // A lista de descendentes se refaz: um filho pode nascer enquanto o pai morre, e depois de o pai morrer os filhos viram órfãos e somem da árvore dele.
+            // Por isso: lista e mata os filhos (até três rodadas, para os que nasceram no meio), mata o pai, lista DE NOVO a partir de cada um que já se viu e força o que sobrou.
+            Set<ProcessHandle> vistos = new LinkedHashSet<>();
+            for (int rodada = 0; rodada < 3; rodada++) {
+                List<ProcessHandle> novos = descendentesNovos(vistos);
+                if (novos.isEmpty()) {
+                    break;
+                }
+                vistos.addAll(novos);
+                novos.forEach(ProcessHandle::destroy);
             }
-            filhos.forEach(ProcessHandle::destroy);
             processo.destroy();
             if (!esperar()) {
-                filhos.forEach(ProcessHandle::destroyForcibly);
+                vistos.forEach(ProcessHandle::destroyForcibly);
                 processo.destroyForcibly();
                 esperar();
             }
-            // os filhos que sobraram depois do pai: força de uma vez
-            filhos.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
+            // a segunda listagem, depois de o pai morrer: o que ainda está de pé (e o que esses ainda geraram) é morto de uma vez
+            List<ProcessHandle> sobraram = new ArrayList<>(vistos);
+            for (ProcessHandle h : List.copyOf(vistos)) {
+                sobraram.addAll(descendentesDe(h));
+            }
+            sobraram.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
+        }
+
+        private List<ProcessHandle> descendentesNovos(Set<ProcessHandle> vistos) {
+            List<ProcessHandle> novos = new ArrayList<>();
+            try {
+                processo.descendants().filter(h -> !vistos.contains(h)).forEach(novos::add);
+            } catch (RuntimeException e) {
+                LOG.debug("Não consegui listar os filhos do programa: {}", e.toString());
+            }
+            for (ProcessHandle h : List.copyOf(vistos)) {
+                for (ProcessHandle d : descendentesDe(h)) {
+                    if (!vistos.contains(d) && !novos.contains(d)) {
+                        novos.add(d);
+                    }
+                }
+            }
+            return novos;
+        }
+
+        private static List<ProcessHandle> descendentesDe(ProcessHandle h) {
+            try {
+                return h.descendants().toList();
+            } catch (RuntimeException e) {
+                return List.of();
+            }
         }
 
         private boolean esperar() {
