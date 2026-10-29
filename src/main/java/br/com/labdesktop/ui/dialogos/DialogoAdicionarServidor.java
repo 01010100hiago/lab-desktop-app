@@ -3,6 +3,7 @@ package br.com.labdesktop.ui.dialogos;
 import br.com.labdesktop.cofre.ImportacaoDeChaveException;
 import br.com.labdesktop.cofre.InfoChave;
 import br.com.labdesktop.cofre.Pin;
+import br.com.labdesktop.cofre.Transporte;
 import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Conclusao;
 import br.com.labdesktop.servidor.AssistenteDeServidor.Dados;
@@ -161,8 +162,10 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     // ---- passo 1: dados ----
     private final JTextField nome = Campos.texto(14, "lab");
-    private final JTextField host = Campos.mono(16, "192.0.2.5");
-    private final JTextField porta = Campos.mono(5, "22");
+    /** "Como conectar": direto (endereço e porta), AWS Session Manager ou Cloudflare, cada um com os campos dele. */
+    private final SecaoComoConectar secao;
+    /** O que se faz com o relatório da conferência das ferramentas: abrir o {@link DialogoDasFerramentas} (os testes trocam, porque sem janela não há diálogo). */
+    private java.util.function.Consumer<br.com.labdesktop.transporte.RelatorioDeFerramentas> mostradorDasFerramentas;
     private final JTextField usuario = Campos.mono(14, "usuario");
     private final JTextField portaDoAgente = Campos.mono(5, "7000");
     /** "Servidor protegido": para quem conecta um servidor que já trabalha; desmarcada por padrão. Vai no cadastro, antes de qualquer conexão. */
@@ -199,6 +202,11 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private String destinoDaSenhaDigitada = "";
 
     private record ConfirmacaoDeHost(String endereco, int porta, Pin pin) { }
+
+    /** Onde o servidor está, para as frases e para lembrar o que o usuário já conferiu: {@code host:porta} no direto; a instância ou o hostname nos modos sem porta aberta. */
+    private static String enderecoDe(Dados dados) {
+        return dados.transporteEfetivo().ehTunel() ? dados.transporteEfetivo().rotulo() + " " + dados.transporteEfetivo().destinoEmTexto() : dados.host() + ":" + dados.porta();
+    }
 
     private InfoChave chaveGerada;
     private InfoChave chaveImportada;
@@ -279,7 +287,19 @@ public final class DialogoAdicionarServidor extends Dialogo {
                                     Consumer<ServidorLab> aoConcluir, ConfirmadorDeHost confirmadorDeHost,
                                     SeletorDeArquivo seletorDeArquivo, CopiadorDeTexto copiador,
                                     PedidoDeInstalarAgente instalarAgente, BiConsumer<ServidorLab, Runnable> desligarSenha) {
+        this(assistente, primeiro, avisos, aoConcluir, confirmadorDeHost, seletorDeArquivo, copiador, instalarAgente, desligarSenha, null);
+    }
+
+    /** Também com a conferência das ferramentas trocável (testes: a de verdade procura no disco e roda {@code --version}); {@code null} pergunta ao assistente. */
+    public DialogoAdicionarServidor(AssistenteDeServidor assistente, boolean primeiro, Notificacoes avisos,
+                                    Consumer<ServidorLab> aoConcluir, ConfirmadorDeHost confirmadorDeHost,
+                                    SeletorDeArquivo seletorDeArquivo, CopiadorDeTexto copiador,
+                                    PedidoDeInstalarAgente instalarAgente, BiConsumer<ServidorLab, Runnable> desligarSenha, SecaoComoConectar.Conferencia conferencia) {
         super("Adicionar servidor");
+        CopiadorDeTexto paraCopiar = copiador != null ? copiador : CopiadorDeTexto.doSistema();
+        this.secao = new SecaoComoConectar(conferencia != null ? conferencia : assistente::conferirFerramentas,
+            relatorio -> mostradorDasFerramentas.accept(relatorio), avisos, this::reajustar);
+        this.mostradorDasFerramentas = relatorio -> new DialogoDasFerramentas(relatorio, paraCopiar, avisos).mostrar(janela());
         this.instalarAgente = instalarAgente != null ? instalarAgente : (lab, aoInstalar, aoSoSsh) -> { };
         this.desligarSenha = desligarSenha != null ? desligarSenha : (lab, depois) -> { };
         this.assistente = assistente;
@@ -291,8 +311,8 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
         Dados padrao = primeiro ? Dados.padraoDoPrimeiro() : new Dados("", "", 22, "", 7000);
         nome.setText(padrao.nome());
-        host.setText(padrao.host());
-        porta.setText(String.valueOf(padrao.porta()));
+        secao.campoDoHost().setText(padrao.host());
+        secao.campoDaPorta().setText(String.valueOf(padrao.porta()));
         usuario.setText(padrao.usuario());
         portaDoAgente.setText(String.valueOf(padrao.portaDoAgente()));
 
@@ -328,10 +348,9 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     private JComponent montarPaginaDeDados() {
         JComponent dados = Caixa.coluna(8,
-            linhaDeCampos("Nome", nome, "Usuário", usuario),
-            linhaDeCampos("Endereço", host, "Porta do SSH", porta),
-            linhaDeCampos("Porta do painel no servidor", portaDoAgente, null, null),
+            linhaDeTresCampos("Nome", nome, "Usuário", usuario, "Porta do painel no servidor", portaDoAgente),
             dicaCorrida(DICA_DA_PORTA_DO_PAINEL),
+            secao.componente(),
             Caixa.coluna(2, protegido, dicaCorrida(ProtecaoDoServidor.FRASE_DA_CAIXA)));
         protegido.setName("caixa-protegido");
         return Caixa.coluna(12,
@@ -409,6 +428,11 @@ public final class DialogoAdicionarServidor extends Dialogo {
         linha.setBorder(BorderFactory.createEmptyBorder(0, 26, 0, 0));
         linha.setVisible(false);
         return linha;
+    }
+
+    /** Nome, usuário e porta do painel numa linha só (a altura do passo 1 e do Editar com a seção "Como conectar" cabe num diálogo sem rolar). */
+    static JComponent linhaDeTresCampos(String r1, JComponent c1, String r2, JComponent c2, String r3, JComponent c3) {
+        return Caixa.linha(12, Caixa.coluna(3, Rotulo.rotuloDeCampo(r1), c1), Caixa.coluna(3, Rotulo.rotuloDeCampo(r2), c2), Caixa.coluna(3, Rotulo.rotuloDeCampo(r3), c3), Caixa.mola());
     }
 
     private static JComponent linhaDeCampos(String r1, JComponent c1, String r2, JComponent c2) {
@@ -522,11 +546,21 @@ public final class DialogoAdicionarServidor extends Dialogo {
     }
 
     public JTextField campoDoHost() {
-        return host;
+        return secao.campoDoHost();
     }
 
     public JTextField campoDaPorta() {
-        return porta;
+        return secao.campoDaPorta();
+    }
+
+    /** Só para os testes: o que fazer com o relatório da conferência das ferramentas (por padrão abre o {@link DialogoDasFerramentas}). */
+    public void usarMostradorDasFerramentas(java.util.function.Consumer<br.com.labdesktop.transporte.RelatorioDeFerramentas> novo) {
+        this.mostradorDasFerramentas = novo;
+    }
+
+    /** A seção "Como conectar" (os testes escolhem o modo e digitam nos campos dela). */
+    public SecaoComoConectar secaoComoConectar() {
+        return secao;
     }
 
     public JTextField campoDoUsuario() {
@@ -748,11 +782,14 @@ public final class DialogoAdicionarServidor extends Dialogo {
     }
 
     private Dados lerDados() {
-        int p;
-        try {
-            p = Integer.parseInt(porta.getText().strip());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("A porta do SSH precisa ser um número.");
+        Transporte transporte = secao.transporte(); // SSM e Cloudflare: lança com a frase do que falta; direto: o endereço e a porta valem no Dados.validar
+        int p = 22;
+        if (secao.modo() == SecaoComoConectar.Modo.DIRETO) {
+            try {
+                p = Integer.parseInt(secao.portaDiretaEmTexto());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("A porta do SSH precisa ser um número.");
+            }
         }
         int a;
         try {
@@ -760,7 +797,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("A porta do painel precisa ser um número.");
         }
-        Dados d = new Dados(nome.getText().strip(), host.getText().strip(), p, usuario.getText().strip(), a, protegido.isSelected());
+        Dados d = new Dados(nome.getText().strip(), secao.hostDireto(), p, usuario.getText().strip(), a, protegido.isSelected(), null, transporte);
         d.validar();
         return d;
     }
@@ -810,7 +847,9 @@ public final class DialogoAdicionarServidor extends Dialogo {
     }
 
     private String destinoDaSenha() {
-        return (host.getText().strip().toLowerCase(java.util.Locale.ROOT) + "|" + porta.getText().strip() + "|" + usuario.getText().strip());
+        return (secao.modo() + "|" + secao.hostDireto().toLowerCase(java.util.Locale.ROOT) + "|" + secao.portaDiretaEmTexto() + "|" + secao.campoDaInstancia().getText().strip() + "|"
+            + secao.campoDaRegiao().getText().strip() + "|" + secao.campoDoPerfil().getText().strip() + "|" + secao.campoDaPortaSsh().getText().strip() + "|"
+            + secao.campoDoHostname().getText().strip().toLowerCase(java.util.Locale.ROOT) + "|" + usuario.getText().strip());
     }
 
     private String nomeAtual() {
@@ -1037,12 +1076,12 @@ public final class DialogoAdicionarServidor extends Dialogo {
             return;
         }
         dizerErro(erro, "");
-        estado.setText("Consultando a chave do servidor em " + dados.host() + ":" + dados.porta() + "…");
+        estado.setText("Consultando a chave do servidor em " + enderecoDe(dados) + "…");
         ocupar(true);
-        Tarefas.rodar(() -> assistente.sondar(dados.host(), dados.porta()), resultado -> {
+        Tarefas.rodar(() -> assistente.sondar(dados.transporteEfetivo(), dados.host(), dados.porta()), resultado -> {
             ocupar(false);
             estado.setText("");
-            confirmadorDeHost.confirmar(dados.nome(), dados.host() + ":" + dados.porta(), resultado, confiou -> {
+            confirmadorDeHost.confirmar(dados.nome(), enderecoDe(dados), resultado, confiou -> {
                 if (!confiou) {
                     mostrarErro(TEXTO_DE_SERVIDOR_NAO_CONFIRMADO);
                     return;
@@ -1109,21 +1148,21 @@ public final class DialogoAdicionarServidor extends Dialogo {
         }
         dizerErro(erro, "");
         ConfirmacaoDeHost ja = hostConfirmado;
-        if (ja != null && ja.endereco().equals(dados.host()) && ja.porta() == dados.porta()) {
+        if (ja != null && ja.endereco().equals(enderecoDe(dados))) {
             instalarComSenha(dados, daVez, ja.pin()); // o usuário já conferiu este endereço e esta porta: tentar a senha de novo não pergunta outra vez
             return;
         }
-        estado.setText("Consultando a chave do servidor em " + dados.host() + ":" + dados.porta() + "…");
+        estado.setText("Consultando a chave do servidor em " + enderecoDe(dados) + "…");
         ocupar(true, entrarComSenha);
-        Tarefas.rodar(() -> assistente.sondar(dados.host(), dados.porta()), resultado -> {
+        Tarefas.rodar(() -> assistente.sondar(dados.transporteEfetivo(), dados.host(), dados.porta()), resultado -> {
             ocupar(false);
             estado.setText("");
-            confirmadorDeHost.confirmar(dados.nome(), dados.host() + ":" + dados.porta(), resultado, confiou -> {
+            confirmadorDeHost.confirmar(dados.nome(), enderecoDe(dados), resultado, confiou -> {
                 if (!confiou) {
                     mostrarErro(TEXTO_DE_SERVIDOR_NAO_CONFIRMADO);
                     return;
                 }
-                hostConfirmado = new ConfirmacaoDeHost(dados.host(), dados.porta(), resultado.pin());
+                hostConfirmado = new ConfirmacaoDeHost(enderecoDe(dados), 0, resultado.pin());
                 instalarComSenha(dados, daVez, resultado.pin());
             });
         }, falha -> {
@@ -1200,9 +1239,10 @@ public final class DialogoAdicionarServidor extends Dialogo {
 
     private void ocupar(boolean sim, Botao quem) {
         ocupado = sim;
-        for (JComponent c : new JComponent[] {nome, host, porta, usuario, portaDoAgente, protegido, continuar}) {
+        for (JComponent c : new JComponent[] {nome, usuario, portaDoAgente, protegido, continuar}) {
             c.setEnabled(!sim);
         }
+        secao.ocupar(sim);
         if (sim) {
             desfazerOcupado = quem.ocupar();
         } else {

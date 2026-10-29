@@ -514,6 +514,10 @@ public abstract class PaginaDoServidor extends Painel {
         private final Botao instalarChave = Botoes.miniPrimario(br.com.labdesktop.ui.ConteudoDosAvisos.Acao.INSTALAR_CHAVE.rotulo(), "chave");
         private Runnable aoInstalar;
         private Runnable aoInstalarChave;
+        /** O que o aviso deixa copiar: o passo de instalar um programa, o comando de login da AWS ou o endereço de login da Cloudflare. */
+        private String copiavel;
+        private final Botao copiar = br.com.labdesktop.ui.componentes.BotaoCopiar.criarSemToast("Copiar",
+            () -> copiavel == null ? "" : copiavel, br.com.labdesktop.ui.componentes.CopiadorDeTexto.doSistema());
 
         private final JPanel linhaDoTitulo = new Painel(new BorderLayout(10, 0));
 
@@ -522,7 +526,9 @@ public abstract class PaginaDoServidor extends Painel {
             setBorder(javax.swing.BorderFactory.createEmptyBorder(9, 14, 9, 14));
             // o botão mora na linha do título (à direita): o aviso "agente não instalado" ocupa UMA linha e deixa a altura para o Registro (o Resumo cabe em 1100 x 700)
             linhaDoTitulo.add(titulo, BorderLayout.CENTER);
-            linhaDoTitulo.add(Caixa.linha(8, instalarChave, instalar), BorderLayout.EAST);
+            copiar.setName("copiar-do-aviso");
+            copiar.setVisible(false);
+            linhaDoTitulo.add(Caixa.linha(8, copiar, instalarChave, instalar), BorderLayout.EAST);
             add(linhaDoTitulo, BorderLayout.NORTH);
             add(texto, BorderLayout.CENTER);
             instalar.setVisible(false);
@@ -559,8 +565,14 @@ public abstract class PaginaDoServidor extends Painel {
             return instalarChave;
         }
 
+        public Botao botaoCopiar() {
+            return copiar;
+        }
+
         public void mostrar(SituacaoDaVisao s) {
             setVisible(s.temAviso());
+            copiavel = s.textoCopiavel();
+            copiar.setVisible(s.temAviso() && copiavel != null);
             instalarChave.setVisible(s.temAviso() && s.oferecerInstalarChave() && aoInstalarChave != null);
             instalar.setText(s.modo() == SituacaoDaVisao.Modo.LOCAL_A_PREPARAR ? "Preparar este computador" : "Instalar agente");
             instalar.setVisible(s.temAviso() && s.oferecerInstalar() && aoInstalar != null);
@@ -607,6 +619,9 @@ public abstract class PaginaDoServidor extends Painel {
         private Runnable aoInstalar;
         private Runnable aoInstalarChave;
         private final String assunto;
+        private String copiavel;
+        private final Botao copiar = br.com.labdesktop.ui.componentes.BotaoCopiar.criarSemToast("Copiar o passo",
+            () -> copiavel == null ? "" : copiavel, br.com.labdesktop.ui.componentes.CopiadorDeTexto.doSistema());
 
         SemDados(Runnable aoTentar) {
             this(aoTentar, "do servidor");
@@ -634,7 +649,9 @@ public abstract class PaginaDoServidor extends Painel {
                     aoInstalarChave.run();
                 }
             });
-            add(Caixa.linha(8, instalar, instalarChave, tentar, Caixa.mola()), BorderLayout.SOUTH);
+            copiar.setName("copiar-do-aviso");
+            copiar.setVisible(false);
+            add(Caixa.linha(8, instalar, instalarChave, tentar, copiar, Caixa.mola()), BorderLayout.SOUTH);
             setVisible(false);
             setName("sem-dados");
         }
@@ -655,7 +672,13 @@ public abstract class PaginaDoServidor extends Painel {
             return instalarChave;
         }
 
+        Botao botaoCopiar() {
+            return copiar;
+        }
+
         void mostrar(String erro, SituacaoDaVisao situacao) {
+            copiavel = erro == null && situacao != null ? situacao.textoCopiavel() : null;
+            copiar.setVisible(copiavel != null);
             instalarChave.setVisible(erro == null && situacao != null && situacao.oferecerInstalarChave() && aoInstalarChave != null);
             instalar.setText(situacao != null && situacao.modo() == SituacaoDaVisao.Modo.LOCAL_A_PREPARAR ? "Preparar este computador" : "Instalar agente");
             instalar.setVisible(erro == null && situacao != null && situacao.oferecerInstalar() && aoInstalar != null);

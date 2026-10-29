@@ -34,6 +34,8 @@ final class CabecalhoDoServidor extends Painel {
     private final Selo estado = new Selo("", br.com.labdesktop.ui.Gravidade.NEUTRO, "info");
     /** "Protegido": só aparece com o servidor protegido; a linha de baixo explica e diz como mudar. */
     private final Selo protegido = new Selo("Protegido", br.com.labdesktop.ui.Gravidade.NEUTRO, "cadeado");
+    /** "Sem porta aberta: SSM" ou "Cloudflare": só nos servidores que conectam por túnel. */
+    private final Selo modoDeConexao = new Selo("Sem porta aberta", br.com.labdesktop.ui.Gravidade.NEUTRO, "rede");
     private final Rotulo linhaDaProtecao = new Rotulo(ProtecaoDoServidor.EXPLICACAO_DO_SELO).corDoToken(Tokens.TEXTO3).tamanho(12f).truncavel();
     /** Só a frase de "esperando a primeira leitura"; com a leitura, quem fala é a ficha. */
     private final Rotulo linhaDeBaixo = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12.5f).truncavel();
@@ -48,9 +50,12 @@ final class CabecalhoDoServidor extends Painel {
         protegido.setName("selo-protegido");
         protegido.setToolTipText(ProtecaoDoServidor.EXPLICACAO_DO_SELO);
         protegido.setVisible(false);
+        modoDeConexao.setName("selo-modo-de-conexao");
+        modoDeConexao.setToolTipText(br.com.labdesktop.ui.TextosDoTransporte.EXPLICACAO_DO_SELO);
+        modoDeConexao.setVisible(false);
         linhaDaProtecao.setName("linha-da-protecao");
         linhaDaProtecao.setVisible(false);
-        add(Caixa.linha(12, nome, new AEsquerda(Caixa.linha(8, estado, protegido)), Caixa.mola(), leitura, atualizar), BorderLayout.NORTH);
+        add(Caixa.linha(12, nome, new AEsquerda(Caixa.linha(8, estado, protegido, modoDeConexao)), Caixa.mola(), leitura, atualizar), BorderLayout.NORTH);
         add(Caixa.coluna(0, linhaDaProtecao, linhaDeBaixo, ficha), BorderLayout.CENTER);
         atualizar.addActionListener(e -> aoAtualizar.run());
         atualizar.setToolTipText("Consulta o servidor agora");
@@ -65,10 +70,15 @@ final class CabecalhoDoServidor extends Painel {
             Apresentacao a = ApresentacaoDoEstado.de(e);
             estado.atualizar(a.texto(), a.gravidade(), a.icone());
             protegido.setVisible(e.protegido());
+            modoDeConexao.setVisible(e.semPortaAberta());
+            if (e.semPortaAberta()) {
+                modoDeConexao.atualizar(e.transporte().selo().orElse(""), br.com.labdesktop.ui.Gravidade.NEUTRO, "rede");
+            }
             // Sem o agente o aviso da página já é essa linha (no lugar do botão Instalar agente): não a repete, para o Resumo caber em 1100 x 700.
             linhaDaProtecao.setVisible(e.protegido() && !e.agenteFaltaMasServidorProtegido());
         } else {
             protegido.setVisible(false);
+            modoDeConexao.setVisible(false);
             linhaDaProtecao.setVisible(false);
             estado.atualizar("Lendo…", br.com.labdesktop.ui.Gravidade.NEUTRO, "atualizar");
         }
@@ -120,6 +130,11 @@ final class CabecalhoDoServidor extends Painel {
 
     Selo seloProtegido() {
         return protegido;
+    }
+
+    /** O selo do modo de conectar; está à vista só nos servidores sem porta aberta. */
+    Selo seloDoModo() {
+        return modoDeConexao;
     }
 
     String textoDaLinhaDeBaixo() {

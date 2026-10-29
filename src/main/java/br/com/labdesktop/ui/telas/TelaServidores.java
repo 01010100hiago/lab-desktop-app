@@ -170,6 +170,8 @@ public final class TelaServidores extends Painel {
         private final Rotulo endereco = new Rotulo().mono(12f).corDoToken(Tokens.TEXTO2);
         /** "Protegido": só com o servidor protegido; o app não instala, atualiza nem remove nada nele. */
         private final Selo seloProtegido = new Selo("Protegido", Gravidade.NEUTRO, "cadeado");
+        /** "Sem porta aberta: SSM" ou "Sem porta aberta: Cloudflare": só nos servidores que conectam por túnel; o resto não tem selo. */
+        private final Selo seloDoModo = new Selo("Sem porta aberta", Gravidade.NEUTRO, "rede");
         private final Rotulo estadoDaConexao = new Rotulo().negrito().tamanho(13f);
         private final Rotulo detalheDoEstado = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f).truncavel();
         private final Rotulo token = new Rotulo().tamanho(12.5f);
@@ -195,7 +197,10 @@ public final class TelaServidores extends Painel {
             seloProtegido.setName("selo-protegido");
             seloProtegido.setToolTipText(ProtecaoDoServidor.EXPLICACAO_DO_SELO);
             seloProtegido.setVisible(false);
-            cabecalho.add(Caixa.coluna(2, Caixa.linha(10, nome, new AEsquerda(seloProtegido), Caixa.mola()), endereco), BorderLayout.CENTER);
+            seloDoModo.setName("selo-modo-de-conexao");
+            seloDoModo.setToolTipText(br.com.labdesktop.ui.TextosDoTransporte.EXPLICACAO_DO_SELO);
+            seloDoModo.setVisible(false);
+            cabecalho.add(Caixa.coluna(2, Caixa.linha(10, nome, new AEsquerda(Caixa.linha(6, seloProtegido, seloDoModo)), Caixa.mola()), endereco), BorderLayout.CENTER);
             cabecalho.add(Caixa.coluna(2, estadoDaConexao, detalheDoEstado), BorderLayout.EAST);
             ((JComponent) cabecalho.getComponent(1)).setAlignmentX(RIGHT_ALIGNMENT);
             add(cabecalho, BorderLayout.NORTH);
@@ -248,6 +253,10 @@ public final class TelaServidores extends Painel {
             Apresentacao a = ApresentacaoDoEstado.de(e);
             nome.setText(e.nome());
             seloProtegido.setVisible(e.protegido());
+            seloDoModo.setVisible(e.semPortaAberta());
+            if (e.semPortaAberta()) {
+                seloDoModo.atualizar(e.transporte().selo().orElse(""), Gravidade.NEUTRO, "rede");
+            }
             endereco.setText(cfg.ehLocal() ? "Este computador (sem SSH), agente em 127.0.0.1:" + cfg.portaAgente()
                 : cfg.usuario() + "@" + cfg.enderecoParaMostrar() + ", painel na porta " + cfg.portaAgente());
             estadoDaConexao.setIcon(Icones.colorido(a.icone(), 16, a.gravidade().tokenDoTexto()));
@@ -393,6 +402,11 @@ public final class TelaServidores extends Painel {
 
         public Selo seloProtegido() {
             return seloProtegido;
+        }
+
+        /** O selo do modo de conectar ("Sem porta aberta: SSM"). */
+        public Selo seloDoModo() {
+            return seloDoModo;
         }
 
         public String textoDoToken() {

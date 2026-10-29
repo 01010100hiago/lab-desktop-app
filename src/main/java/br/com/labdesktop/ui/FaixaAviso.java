@@ -55,6 +55,7 @@ public final class FaixaAviso extends Painel {
     }
 
     private final Ouvinte ouvinte;
+    private br.com.labdesktop.ui.componentes.CopiadorDeTexto copiador = br.com.labdesktop.ui.componentes.CopiadorDeTexto.doSistema();
     private final java.util.function.Supplier<Instant> relogio;
     private final Timer contagem;
     private final boolean comRetomar;
@@ -87,6 +88,11 @@ public final class FaixaAviso extends Painel {
         contagem.setRepeats(true);
         getAccessibleContext().setAccessibleName("Avisos do servidor");
         setVisible(false);
+    }
+
+    /** Troca a área de transferência do botão Copiar (os testes não têm a do sistema). */
+    public void usarCopiador(br.com.labdesktop.ui.componentes.CopiadorDeTexto novo) {
+        this.copiador = novo;
     }
 
     /** Mostra os avisos de um servidor (ou nenhum, com {@code null}). Na EDT. */
@@ -167,8 +173,14 @@ public final class FaixaAviso extends Painel {
         Rotulo titulo = new Rotulo(a.titulo()).negrito();
         TextoCorrido texto = new TextoCorrido(a.texto(), 640).corDoToken(Tokens.TEXTO2).tamanho(12.5f);
         p.add(Caixa.coluna(2, titulo, texto), BorderLayout.CENTER);
-        if (!a.acoes().isEmpty()) {
+        if (!a.acoes().isEmpty() || a.textoCopiavel() != null) {
             List<java.awt.Component> botoes = new ArrayList<>();
+            if (a.textoCopiavel() != null) {
+                // o passo de instalar, o comando de login ou o endereço de login: TEXTO que o usuário copia (o app nunca o executa nem o abre)
+                Botao copiar = br.com.labdesktop.ui.componentes.BotaoCopiar.criarSemToast("Copiar", a::textoCopiavel, copiador);
+                copiar.setName("copiar-do-aviso");
+                botoes.add(copiar);
+            }
             for (Acao acao : a.acoes()) {
                 Botao b = acao == a.acoes().get(0) ? Botoes.miniPrimario(acao.rotulo(), null) : Botoes.mini(acao.rotulo(), null);
                 b.addActionListener(e -> ouvinte.aoAcionar(acao));

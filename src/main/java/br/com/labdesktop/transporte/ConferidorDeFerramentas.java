@@ -30,6 +30,12 @@ public final class ConferidorDeFerramentas {
     private final SistemaOperacional sistema;
     private final Duration prazo;
 
+    /** O de produção: este computador (o PATH e as pastas conhecidas do sistema) e o lançador de processos de verdade. */
+    public static ConferidorDeFerramentas doSistema() {
+        DescobertaDeFerramentas descoberta = DescobertaDeFerramentas.doSistema();
+        return new ConferidorDeFerramentas(descoberta, new LancadorReal(), descoberta.ambiente().sistema());
+    }
+
     public ConferidorDeFerramentas(LocalizadorDeFerramenta localizador, LancadorDeProcesso lancador, SistemaOperacional sistema) {
         this(localizador, lancador, sistema, PRAZO_DA_VERSAO);
     }

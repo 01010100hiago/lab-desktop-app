@@ -159,7 +159,9 @@ public final class AssistenteDeServidor {
         private static final long serialVersionUID = 1L;
 
         /** Os motivos que a tela sabe tratar. */
-        public enum Motivo { CHAVE_RECUSADA, CHAVE_DO_HOST, TEMPO_ESGOTADO, COFRE_BLOQUEADO, AGENTE_FORA, AGENTE_DESATUALIZADO }
+        public enum Motivo { CHAVE_RECUSADA, CHAVE_DO_HOST, TEMPO_ESGOTADO, COFRE_BLOQUEADO, AGENTE_FORA, AGENTE_DESATUALIZADO,
+            /** Sem porta aberta: o túnel do SSM ou da Cloudflare não sobe (programa ausente, login expirado...). Esperar não resolve: a mensagem é a causa. */
+            TRANSPORTE }
 
         private final Motivo motivo;
 
@@ -184,6 +186,7 @@ public final class AssistenteDeServidor {
     private final GerenciadorServidores gerenciador;
     private final ConfigSsh cfgSsh;
     private final LimiteDeTentativas limiteDeSenha;
+    private volatile br.com.labdesktop.transporte.ConferidorDeFerramentas conferidor = br.com.labdesktop.transporte.ConferidorDeFerramentas.doSistema();
 
     public AssistenteDeServidor(CofreDeChaves cofre, GerenciadorServidores gerenciador, ConfigSsh cfgSsh) {
         this(cofre, gerenciador, cfgSsh, novoFreioDeSenhas());
@@ -289,6 +292,20 @@ public final class AssistenteDeServidor {
      */
     public SondagemDeHost.Resultado sondar(Transporte transporte, String host, int porta) throws SondagemException {
         return SondagemDeHost.sondar(new RotaDoSsh(transporte == null ? Transporte.DIRETO : transporte, host == null ? "" : host.strip(), porta, gerenciador.abridor()), cfgSsh);
+    }
+
+    /**
+     * "Conferir as ferramentas neste computador": procura o aws, o plugin do Session Manager e o cloudflared e roda só {@code --version}. Bloqueia: fora da EDT.
+     * Nunca instala nada.
+     */
+    public br.com.labdesktop.transporte.RelatorioDeFerramentas conferirFerramentas() throws InterruptedException {
+        return conferidor.conferirTodas();
+    }
+
+    /** Troca a conferência das ferramentas (os testes entregam uma com programas falsos). */
+    public AssistenteDeServidor comConferidorDeFerramentas(br.com.labdesktop.transporte.ConferidorDeFerramentas novo) {
+        this.conferidor = novo;
+        return this;
     }
 
     /** A rota até o SSH dos dados do formulário (direta, ou por túnel externo). */
@@ -652,7 +669,8 @@ public final class AssistenteDeServidor {
      * folga (até 2 s) a espera leria o erro velho e desistiria de uma tentativa que nem começou.
      */
     private void esperarSairDoErro(ServidorLab lab, EstadoConexao antes) {
-        if (antes != EstadoConexao.ERRO_AUTENTICACAO && antes != EstadoConexao.ERRO_CHAVE_HOST) {
+        boolean tunelCaido = antes == EstadoConexao.RECONECTANDO && lab.estado().falha() != null && lab.estado().falha().ehDoTransporte();
+        if (antes != EstadoConexao.ERRO_AUTENTICACAO && antes != EstadoConexao.ERRO_CHAVE_HOST && !tunelCaido) {
             return;
         }
         long limite = System.nanoTime() + Duration.ofSeconds(2).toNanos();
@@ -703,6 +721,10 @@ public final class AssistenteDeServidor {
             EstadoConexao c = e.conexao();
             if (c.permiteExec()) {
                 return;
+            }
+            if (c == EstadoConexao.RECONECTANDO && e.falha() != null && e.falha().ehDoTransporte()) {
+                // o túnel do modo sem porta aberta não sobe (programa ausente, login da AWS expirado, instância sem SSM, Cloudflare pedindo login): esperar não resolve
+                throw new ErroDoAssistente(ErroDoAssistente.Motivo.TRANSPORTE, e.falha().mensagem());
             }
             switch (c) {
                 case ERRO_AUTENTICACAO -> throw new ErroDoAssistente(ErroDoAssistente.Motivo.CHAVE_RECUSADA,

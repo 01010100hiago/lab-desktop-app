@@ -57,9 +57,18 @@ public final class ConteudoDosAvisos {
         String icone();
     }
 
-    /** Problema de conexão, agente ou token, com o botão que resolve. */
-    public record AvisoDeConexao(Gravidade gravidade, String icone, String titulo, String texto, List<Acao> acoes)
+    /**
+     * Problema de conexão, agente ou token, com o botão que resolve.
+     *
+     * @param textoCopiavel o que o usuário pode COPIAR (o passo de instalar um programa, o comando de login da AWS, o endereço de login da Cloudflare); {@code null} na maioria. Texto puro:
+     *                      o app nunca o executa nem o abre sozinho
+     */
+    public record AvisoDeConexao(Gravidade gravidade, String icone, String titulo, String texto, List<Acao> acoes, String textoCopiavel)
         implements Aviso {
+
+        public AvisoDeConexao(Gravidade gravidade, String icone, String titulo, String texto, List<Acao> acoes) {
+            this(gravidade, icone, titulo, texto, acoes, null);
+        }
     }
 
     /** Crédito do plano em 75 % ou mais. As partes são "janela de 5 h em 42%", "semana em 61% (zera em 5 d 3 h)". */
@@ -162,6 +171,9 @@ public final class ConteudoDosAvisos {
             case DESCONECTADO -> new AvisoDeConexao(Gravidade.NEUTRO, "rede", nome + " está desconectado",
                 "O app não está conectado a este servidor.", List.of(Acao.CONECTAR));
             case RECONECTANDO -> {
+                if (falha != null && falha.ehDoTransporte()) {
+                    yield deTransporte(e, nome, falha, agora);
+                }
                 String desde = e.semConexaoDesde() == null ? "" : " desde " + Formato.fmtHora(e.semConexaoDesde(), fuso)
                     .substring(0, 5);
                 yield new AvisoDeConexao(Gravidade.ATENCAO, "atualizar", "Sem conexão com " + nome + desde,
@@ -213,6 +225,40 @@ public final class ConteudoDosAvisos {
             case SUSPENSO -> new AvisoDeConexao(Gravidade.NEUTRO, "pausa", "O computador está em repouso",
                 "A conexão com " + nome + " volta quando ele acordar.", List.of());
         };
+    }
+
+    /**
+     * Sem porta aberta: o túnel do SSM ou da Cloudflare não sobe. A frase é a da causa (programa que falta, login da AWS expirado, instância sem SSM, Cloudflare pedindo
+     * login) e o que se copia vem junto. Só ESTE servidor mostra o aviso; o app e os outros servidores seguem normais. Grafite, sem âmbar: é uma situação do dia a dia, e o app
+     * tenta de novo sozinho.
+     */
+    private static AvisoDeConexao deTransporte(EstadoServidor e, String nome, Falha falha, Instant agora) {
+        String titulo;
+        String icone;
+        switch (falha.tipo()) {
+            case TRANSPORTE_FERRAMENTA_AUSENTE -> {
+                titulo = "Falta um programa neste computador para conectar em " + nome;
+                icone = "sistema";
+            }
+            case TRANSPORTE_LOGIN_AWS -> {
+                titulo = "Não consigo entrar em " + nome + ": falta o login da AWS";
+                icone = "chave";
+            }
+            case TRANSPORTE_INSTANCIA_SEM_SSM -> {
+                titulo = "O Session Manager não alcança " + nome;
+                icone = "alerta";
+            }
+            case TRANSPORTE_LOGIN_CLOUDFLARE -> {
+                titulo = "Falta entrar na Cloudflare para chegar a " + nome;
+                icone = "chave";
+            }
+            default -> {
+                titulo = "O túnel de " + nome + " não está de pé";
+                icone = "alerta";
+            }
+        }
+        String tentativa = e.tentativa() > 0 ? " (tentativa " + e.tentativa() + proxima(e, agora) + ")" : "";
+        return new AvisoDeConexao(Gravidade.NEUTRO, icone, titulo, falha.mensagem() + " O app tenta de novo sozinho" + tentativa + ".", List.of(Acao.TENTAR_AGORA), falha.textoCopiavel());
     }
 
     /** "Este computador" com o agente fora: o que falta, em palavras de Docker (nunca "SSH"), e o botão que leva à tela que pergunta. */

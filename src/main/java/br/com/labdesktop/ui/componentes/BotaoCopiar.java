@@ -24,6 +24,15 @@ public final class BotaoCopiar {
      * @param avisos   quem mostra o toast
      */
     public static Botao criar(String rotulo, Supplier<String> texto, CopiadorDeTexto copiador, Notificacoes avisos) {
+        return criar(rotulo, texto, copiador, avisos, true);
+    }
+
+    /** Um "Copiar" que só troca o próprio texto por "Copiado" (sem toast): para os avisos de uma faixa, que não têm quem mostre toast. */
+    public static Botao criarSemToast(String rotulo, Supplier<String> texto, CopiadorDeTexto copiador) {
+        return criar(rotulo, texto, copiador, null, false);
+    }
+
+    private static Botao criar(String rotulo, Supplier<String> texto, CopiadorDeTexto copiador, Notificacoes avisos, boolean comToast) {
         Botao botao = Botoes.mini(rotulo, "copiar");
         Timer voltar = new Timer(MILISSEGUNDOS_DO_FEEDBACK, e -> {
             botao.setText(rotulo);
@@ -35,8 +44,10 @@ public final class BotaoCopiar {
                 botao.setText(ROTULO_DEPOIS_DE_COPIAR);
                 botao.setIcon(Icones.de("ok", 14));
                 voltar.restart();
-                avisos.info("Copiado.");
-            } else {
+                if (comToast) {
+                    avisos.info("Copiado.");
+                }
+            } else if (comToast) {
                 avisos.atencao("Não consegui copiar. Selecione o texto e use " + Teclas.nome() + "+C.");
             }
         });

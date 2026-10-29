@@ -9,6 +9,6 @@
 4. Se o computador acabou de acordar do repouso, espere alguns segundos: o app reconecta sozinho.
 5. Se persistir, copie as informações do app e peça ajuda.
 [Ir para Servidores](ir:servidores)
-@veja: pedir-ajuda chave-recusada
+@veja: pedir-ajuda chave-recusada sem-porta-aberta
 ## Mais detalhes
 O app tenta de novo com intervalos cada vez maiores. No Mac, a primeira vez que ele fala com a rede local o sistema pergunta se pode: se você negou, libere o app nas Configurações do Sistema, em Privacidade e Segurança, na parte de Rede Local.

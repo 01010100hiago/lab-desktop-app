@@ -91,7 +91,7 @@ class ProcessosSemEfeitoSozinhoTest {
         assertEquals(List.of(), quemUsa(Pattern.compile("\"taskkill\""), permitidos));
         assertEquals(List.of(), quemUsa(Pattern.compile("\\.destroy(Forcibly)?\\(\\)"), Set.of("processos/ProcessosDoSistema.java", "processos/ControleLocal.java", "terminal/TransporteLocal.java", "local/ProcessosLocais.java",
             "terminal/SessaoTerminal.java", "ui/terminal/SshTtyConnector.java", "ui/terminal/PainelTerminal.java",
-            "plataforma/ConsultaPorProcesso.java", "AutoTeste.java")), "ninguém mais mata processo do computador (as duas exceções encerram o PRÓPRIO processo filho que o app abriu, uma consulta de sistema e o autoteste)");
+            "plataforma/ConsultaPorProcesso.java", "AutoTeste.java", "transporte/LancadorReal.java")), "ninguém mais mata processo do computador (as exceções encerram o PRÓPRIO processo filho que o app abriu, o túnel do SSM ou da Cloudflare, uma consulta de sistema e o autoteste)");
     }
 
     @Test

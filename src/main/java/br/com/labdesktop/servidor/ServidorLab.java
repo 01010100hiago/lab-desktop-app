@@ -201,7 +201,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         this.ultimaConfig = config;
         this.estado = new EstadoServidor(config.id(), config.nome(),
             br.com.labdesktop.ssh.EstadoConexao.DESCONECTADO, null, 0, null, null, 0,
-            config.estado2fa(), config.nomeDoDispositivo(), null, null, SituacaoDoAgente.DESCONHECIDA, config.ehLocal(), config.protegido());
+            config.estado2fa(), config.nomeDoDispositivo(), null, null, SituacaoDoAgente.DESCONHECIDA, config.ehLocal(), config.protegido(), config.transporte());
 
         this.sondador = new Sondador(agendador, trabalho, entrega, this::aoErroDeConsulta);
         this.local = config.ehLocal();
@@ -485,7 +485,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     void aoEditarNoCofre() {
         ConfigServidor nova = config();
         boolean protegida = protegidoAgora(nova);
-        atualizarEstado(e -> e.comNome(nova.nome()).comProtegido(protegida));
+        atualizarEstado(e -> e.comNome(nova.nome()).comProtegido(protegida).comTransporte(nova.transporte()));
         conexao.reconectar();
     }
 

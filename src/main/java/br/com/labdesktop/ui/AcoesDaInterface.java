@@ -1067,7 +1067,8 @@ public final class AcoesDaInterface {
         // a seção "Acesso" mostra a chave que o app usa neste servidor; sem a chave no cofre ela some (o resto da edição segue igual)
         DialogoEditarServidor.Acesso acesso = (assistente == null ? java.util.Optional.<AssistenteDeServidor.AcessoDoServidor>empty() : assistente.acessoDo(lab)).map(a -> new DialogoEditarServidor.Acesso(a.chave().nome(), a.chave().impressao(), a.chave().publica(),
             lab.protegido() ? null : () -> instalarChaveComSenha(lab))).orElse(null); // protegido: o botão da chave nem aparece
-        apresentador.mostrar(new DialogoEditarServidor(lab.config(), dados -> gerenciador.atualizar(lab.id(), dados), avisos, acesso, CopiadorDeTexto.doSistema()));
+        apresentador.mostrar(new DialogoEditarServidor(lab.config(), dados -> gerenciador.atualizar(lab.id(), dados), avisos, acesso, CopiadorDeTexto.doSistema(),
+            assistente == null ? null : assistente::conferirFerramentas));
     }
 
     /**

@@ -40,9 +40,10 @@ public final class GuiaDeInstalacao {
 
     /** O aviso de que o programa não está neste computador, com o que fazer. */
     public static FalhaDoTunel ausente(FerramentaExterna ferramenta, SistemaOperacional sistema) {
+        String passo = String.join(" ", passos(ferramenta, sistema));
         return new FalhaDoTunel(FalhaDoTunel.Tipo.FERRAMENTA_AUSENTE,
             "Não encontrei o programa " + ferramenta.nomeBase() + " (" + ferramenta.rotulo() + ") neste computador. O app não instala nada: instale o programa "
-                + "(" + sistema.rotulo() + ") e clique em Tentar agora. Para instalar: " + String.join(" ", passos(ferramenta, sistema)),
+                + "(" + sistema.rotulo() + ") e clique em Tentar agora. Para instalar: " + passo + (passo.endsWith(".") ? "" : "."),
             textoDosPassos(ferramenta, sistema));
     }
 }

@@ -3,6 +3,7 @@
 [Comece aqui]
 conectar
 adicionar-servidor
+sem-porta-aberta
 agente
 [Projetos]
 projetos

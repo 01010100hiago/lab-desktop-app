@@ -21,9 +21,15 @@ import java.time.ZoneId;
  * @param esmaecer  os dados na tela são antigos: mostrar apagados, com o aviso dizendo de quando são
  * @param oferecerInstalar o aviso leva o botão "Instalar agente" (o servidor não tem o agente; nunca se instala sozinho)
  * @param oferecerInstalarChave o aviso leva o botão "Instalar a chave com a senha…" (o servidor SSH recusou a chave do app; o clique abre um diálogo, nada acontece sozinho)
+ * @param textoCopiavel o que o aviso deixa COPIAR (o passo de instalar um programa, o comando de login da AWS, o endereço de login da Cloudflare); {@code null} sem isso. Texto puro
  */
 public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, String titulo, String texto, boolean esmaecer,
-                              boolean oferecerInstalar, boolean oferecerInstalarChave) {
+                              boolean oferecerInstalar, boolean oferecerInstalarChave, String textoCopiavel) {
+
+    public SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, String titulo, String texto, boolean esmaecer,
+                           boolean oferecerInstalar, boolean oferecerInstalarChave) {
+        this(modo, gravidade, icone, titulo, texto, esmaecer, oferecerInstalar, oferecerInstalarChave, null);
+    }
 
     /** As situações. {@code AGENTE_NAO_INSTALADO}: o SSH conectou e a leitura por SSH disse que o agente não existe (uma pergunta, não um erro). */
     public enum Modo { CARREGANDO, NORMAL, SEM_CONEXAO_COM_DADOS, SEM_CONEXAO_SEM_DADOS, SEM_AGENTE_COM_DADOS, SEM_AGENTE_SEM_DADOS,
@@ -118,14 +124,18 @@ public record SituacaoDaVisao(Modo modo, Gravidade gravidade, String icone, Stri
                     "O agente do painel não responde neste servidor", explicacao, false);
         }
         var aviso = ConteudoDosAvisos.deConexao(estado, agora, fuso);
-        String causa = aviso == null ? "Conectando ao servidor…" : aviso.titulo() + ". " + aviso.texto();
+        // o túnel do SSM ou da Cloudflare que não sobe: a frase da causa já diz tudo (grafite, sem âmbar, e sem repetir o título)
+        boolean doTunel = c == EstadoConexao.RECONECTANDO && estado.falha() != null && estado.falha().ehDoTransporte() && aviso != null;
+        Gravidade peso = doTunel ? Gravidade.NEUTRO : Gravidade.ATENCAO;
+        String causa = aviso == null ? "Conectando ao servidor…" : doTunel ? aviso.texto() : aviso.titulo() + ". " + aviso.texto();
         boolean instalarChave = aviso != null && aviso.acoes().contains(ConteudoDosAvisos.Acao.INSTALAR_CHAVE);
+        String copiavel = aviso == null ? null : aviso.textoCopiavel();
         if (temDados) {
-            return new SituacaoDaVisao(Modo.SEM_CONEXAO_COM_DADOS, Gravidade.ATENCAO, "rede",
+            return new SituacaoDaVisao(Modo.SEM_CONEXAO_COM_DADOS, peso, "rede",
                 "Sem conexão com o servidor: mostrando os últimos dados de " + (hora == null ? "antes" : hora),
-                causa, true, false, instalarChave);
+                causa, true, false, instalarChave, copiavel);
         }
-        return new SituacaoDaVisao(Modo.SEM_CONEXAO_SEM_DADOS, Gravidade.ATENCAO, "rede",
-            "Sem conexão com o servidor", causa + " Assim que a conexão voltar, as informações aparecem aqui.", false, false, instalarChave);
+        return new SituacaoDaVisao(Modo.SEM_CONEXAO_SEM_DADOS, peso, "rede",
+            "Sem conexão com o servidor", causa + " Assim que a conexão voltar, as informações aparecem aqui.", false, false, instalarChave, copiavel);
     }
 }

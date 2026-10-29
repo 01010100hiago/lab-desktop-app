@@ -3,6 +3,7 @@ package br.com.labdesktop.servidor;
 import br.com.labdesktop.api.modelo.LimitesConta;
 import br.com.labdesktop.api.modelo.VersaoAgente;
 import br.com.labdesktop.cofre.Estado2fa;
+import br.com.labdesktop.cofre.Transporte;
 import br.com.labdesktop.ssh.EstadoConexao;
 import br.com.labdesktop.ssh.Falha;
 import java.time.Instant;
@@ -44,12 +45,22 @@ public record EstadoServidor(
     LimitesConta limites,
     SituacaoDoAgente situacaoDoAgente,
     boolean local,
-    boolean protegido) {
+    boolean protegido,
+    Transporte transporte) {
 
     public EstadoServidor {
         if (situacaoDoAgente == null) {
             situacaoDoAgente = SituacaoDoAgente.DESCONHECIDA;
         }
+        transporte = transporte == null ? Transporte.DIRETO : transporte;
+    }
+
+    /** Sem o modo de conectar (direto): o que toda tela e todo teste que não tratam de conexão sem porta aberta usam. */
+    public EstadoServidor(String servidorId, String nome, EstadoConexao conexao, Falha falha, int tentativa,
+                          Instant proximaTentativaEm, Instant semConexaoDesde, long geracao, Estado2fa estado2fa,
+                          String nomeDoDispositivo, VersaoAgente versao, LimitesConta limites, SituacaoDoAgente situacaoDoAgente, boolean local, boolean protegido) {
+        this(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde, geracao, estado2fa, nomeDoDispositivo, versao,
+            limites, situacaoDoAgente, local, protegido, Transporte.DIRETO);
     }
 
     /** Sem a marca de protegido (falsa): o que a maioria dos testes e das telas que não tratam de proteção usa. */
@@ -80,44 +91,55 @@ public record EstadoServidor(
     EstadoServidor comConexao(br.com.labdesktop.ssh.InfoConexao info) {
         return new EstadoServidor(servidorId, nome, info.estado(), info.falha(), info.tentativa(),
             info.proximaTentativaEm(), info.semConexaoDesde(), info.geracao(), estado2fa, nomeDoDispositivo, versao,
-            limites, info.estado() == EstadoConexao.SSH_OK_SEM_AGENTE ? situacaoDoAgente : SituacaoDoAgente.DESCONHECIDA, local, protegido);
+            limites, info.estado() == EstadoConexao.SSH_OK_SEM_AGENTE ? situacaoDoAgente : SituacaoDoAgente.DESCONHECIDA, local, protegido, transporte);
     }
 
     EstadoServidor comVersao(VersaoAgente nova, Estado2fa novoEstado2fa) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, novoEstado2fa, nomeDoDispositivo, nova, limites, situacaoDoAgente, local, protegido);
+            geracao, novoEstado2fa, nomeDoDispositivo, nova, limites, situacaoDoAgente, local, protegido, transporte);
     }
 
     EstadoServidor comLimites(LimitesConta novos) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, novos, situacaoDoAgente, local, protegido);
+            geracao, estado2fa, nomeDoDispositivo, versao, novos, situacaoDoAgente, local, protegido, transporte);
     }
 
     EstadoServidor comEstado2fa(Estado2fa novo) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, novo, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido);
+            geracao, novo, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido, transporte);
     }
 
     EstadoServidor comDispositivo(String nomeNovo) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeNovo, versao, limites, situacaoDoAgente, local, protegido);
+            geracao, estado2fa, nomeNovo, versao, limites, situacaoDoAgente, local, protegido, transporte);
     }
 
     /** Copia com o nome novo (o usuário editou o servidor). */
     EstadoServidor comNome(String nomeNovo) {
         return new EstadoServidor(servidorId, nomeNovo, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido);
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido, transporte);
     }
 
     EstadoServidor comSituacaoDoAgente(SituacaoDoAgente nova) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, limites, nova, local, protegido);
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, nova, local, protegido, transporte);
     }
 
     /** Copia com a marca de protegido nova (o usuário mudou a caixa, ou o app viu o agente do lab de fora). */
     EstadoServidor comProtegido(boolean novo) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, novo);
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, novo, transporte);
+    }
+
+    /** Copia com o modo de conectar novo (o usuário trocou em Editar servidor). */
+    EstadoServidor comTransporte(Transporte novo) {
+        return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido, novo);
+    }
+
+    /** O servidor conecta SEM PORTA ABERTA (AWS Session Manager ou Cloudflare)? */
+    public boolean semPortaAberta() {
+        return transporte.ehTunel();
     }
 
     /**

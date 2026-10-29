@@ -1,0 +1,22 @@
+# Como conecto a um servidor sem abrir porta de SSH?
+@rotulo: Conexão sem porta aberta
+@busca: sem porta aberta ssm session manager aws cloudflare cloudflared túnel acesso remoto segurança porta 22 login sso ferramentas aws cli plugin access tcp
+@resumo: O servidor só faz conexão de saída e o app entra por um túnel do AWS Session Manager ou da Cloudflare, sem porta de SSH aberta na internet.
+@onde: Escolher o modo | Barra da esquerda > Adicionar > Outro servidor (SSH), parte Como conectar | servidores
+@onde: Conferir os programas | Botão "Conferir as ferramentas neste computador", na parte Como conectar
+@onde: Qual modo cada servidor usa | Cartão do servidor > selo Sem porta aberta | servidores
+1. Em Adicionar servidor (ou Editar servidor), na parte "Como conectar", escolha AWS Session Manager (SSM) ou Cloudflare. Direto (SSH) é o padrão.
+2. Preencha só o que o modo pede: o ID da instância e a região (SSM) ou o endereço do túnel (Cloudflare). Endereço e porta de SSH não são pedidos.
+3. Clique em "Conferir as ferramentas neste computador": o app diz onde cada programa está e mostra, em texto, o passo de instalar o que faltar.
+4. Instale o que faltar você mesmo, no terminal deste computador. O app nunca instala esses programas.
+5. Siga o assistente: o app confere a impressão digital do servidor pelo túnel, como num servidor comum, e só então grava.
+6. Se aparecer "Seu login da AWS expirou", rode no terminal o comando que o app mostra e clique em "Tentar agora".
+[Ir para Servidores](ir:servidores)
+@veja: adicionar-servidor sem-conexao chave-recusada
+## Mais detalhes
+Para que serve: num servidor sem porta aberta, o servidor só faz conexões de saída e ninguém na internet consegue bater na porta do SSH dele. O app abre um túnel curto neste computador (uma porta aleatória, só em 127.0.0.1) e o SSH de sempre passa por dentro dele. Use quando o servidor está numa nuvem, atrás de um firewall ou de um provedor que não deixa abrir porta.
+O que precisa em cada sistema, SEMPRE neste computador, e não no servidor: para o AWS Session Manager, a linha de comando da AWS (aws) e o plugin do Session Manager; para a Cloudflare, o cloudflared. O app procura esses programas no PATH e nas pastas onde cada sistema os instala (Mac: Homebrew e os instaladores da AWS; Windows: Program Files; Linux: /usr/local/bin, /usr/bin, a pasta local do usuário e o snap). No Mac, instale com brew install awscli, brew install --cask session-manager-plugin e brew install cloudflared. No Windows, com winget install Amazon.AWSCLI e winget install Cloudflare.cloudflared; o plugin do Session Manager vem pelo instalador oficial da AWS. No Linux, pelo pacote da sua distribuição ou pelos instaladores oficiais. O app só mostra esses passos; quem os roda é você.
+O login: o app nunca faz login por você. Na AWS, faça o login no terminal (aws sso login, com o perfil que o app mostrar). Na Cloudflare, se ela pedir login no navegador, o app mostra o endereço como TEXTO para você copiar e abrir, e não abre nada sozinho; confira que o endereço é da Cloudflare antes de entrar.
+Aviso: o SSH direto fica como reserva. Nada é migrado: um servidor continua no modo em que foi cadastrado até você trocar em Editar servidor. Trocar o modo NÃO apaga a impressão digital já confirmada: o servidor é o mesmo, só o caminho muda; se o servidor por esse novo caminho for outra máquina, o app recusa conectar. Mudar a instância, a região, a porta SSH da instância ou o endereço do túnel (outra máquina) apaga a impressão, e a próxima conexão pede para você conferi-la de novo.
+Para exigir login com 2FA na frente do endereço da Cloudflare, crie uma regra de Access no painel da Cloudflare para esse endereço: isso é feito lá, e não no app.
+O que continua igual: "Servidor protegido" vale em qualquer modo; "Instalar a chave com a senha" e o resto funcionam por dentro do túnel; "Este computador" não tem modo de conexão. Se o programa do túnel cair, a conexão cai com a causa em palavras simples e o app tenta de novo sozinho, com intervalos cada vez maiores. Só o servidor com o problema mostra o aviso; os outros seguem normais.
