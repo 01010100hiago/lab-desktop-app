@@ -31,6 +31,12 @@ public final class Redator {
     private static final Pattern BEARER_SOLTO = Pattern.compile("(?i)\\bbearer\\s+[A-Za-z0-9._~+/=-]{8,}");
     private static final Pattern URI_OTPAUTH = Pattern.compile("(?i)otpauth://[^\\s\"'<>]+");
     private static final Pattern SEGREDO_PARAMETRO = Pattern.compile("(?i)([?&;\\s]secret=)[A-Za-z0-9=%]+");
+    // segredos da AWS (a saída do `aws` e do plugin do Session Manager vai para a tela e para o log): chave de acesso, chave secreta e token de sessão do arquivo de credenciais,
+    // os parâmetros assinados de uma URL e o TokenValue da resposta do StartSession
+    private static final Pattern CHAVE_DE_ACESSO_DA_AWS = Pattern.compile("\\b(?:AKIA|ASIA|AIDA|AROA)[A-Z0-9]{16}\\b");
+    private static final Pattern PAR_DA_AWS = Pattern.compile("(?i)\\b(aws_secret_access_key|aws_session_token|aws_access_key_id|aws_security_token)\\s*[:=]\\s*[^\\s,;\"']+");
+    private static final Pattern PARAMETRO_ASSINADO_DA_AWS = Pattern.compile("(?i)\\b(X-Amz-(?:Security-Token|Signature|Credential))\\s*[:=]\\s*[^&\\s\"']+");
+    private static final Pattern TOKEN_VALUE = Pattern.compile("(?i)(\"?\\bTokenValue\"?\\s*[:=]\\s*\"?)[^\"\\s,}&]+");
     private static final Pattern PAR_DE_SENHA = Pattern.compile(
         "(?i)\\b(senha|password|passphrase|segredo)\\s*[:=]\\s*[^\\s,;\"']+");
 
@@ -53,6 +59,10 @@ public final class Redator {
         r = TOKEN_DA_CLOUDFLARE.matcher(r).replaceAll(MASCARA);
         r = URL_COM_CREDENCIAL.matcher(r).replaceAll("$1" + MASCARA + "@");
         r = PAR_DE_SENHA.matcher(r).replaceAll("$1=" + MASCARA);
+        r = PAR_DA_AWS.matcher(r).replaceAll("$1=" + MASCARA);
+        r = PARAMETRO_ASSINADO_DA_AWS.matcher(r).replaceAll("$1=" + MASCARA);
+        r = TOKEN_VALUE.matcher(r).replaceAll("$1" + MASCARA);
+        r = CHAVE_DE_ACESSO_DA_AWS.matcher(r).replaceAll(MASCARA);
         return r;
     }
 
