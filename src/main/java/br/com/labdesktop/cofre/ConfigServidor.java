@@ -29,6 +29,9 @@ import java.util.Optional;
  * @param transporte direto (LAN) ou cloudflared
  * @param nomeDoDispositivo {@code nome_do_dispositivo} do token deste Mac no agente; {@code null} até o token ser registrado
  * @param estado2fa         última leitura do campo {@code totp} de {@code /api/versao} (dica; a fonte é o agente)
+ * @param protegido         "Servidor protegido": o app nunca instala, atualiza nem remove nada neste servidor (agente, Docker, Git);
+ *                          vale para servidores que já estão em produção. Sempre {@code false} em "Este computador"
+ * @param protecaoAutomaticaRecusada o usuário desligou a proteção: a marca AUTOMÁTICA (agente do lab instalado fora do app) não volta a ligar sozinha
  */
 public record ConfigServidor(
     String id,
@@ -41,7 +44,9 @@ public record ConfigServidor(
     List<Pin> pins,
     Transporte transporte,
     String nomeDoDispositivo,
-    Estado2fa estado2fa) {
+    Estado2fa estado2fa,
+    boolean protegido,
+    boolean protecaoAutomaticaRecusada) {
 
     public static final int PORTA_AGENTE_PADRAO = 7000;
     /**
@@ -91,6 +96,16 @@ public record ConfigServidor(
             throw new IllegalArgumentException("Nome do dispositivo inválido (a-z, 0-9 e hífen, até 40).");
         }
         estado2fa = estado2fa == null ? Estado2fa.DESLIGADO : estado2fa;
+        if (transporte.tipo() == Transporte.Tipo.LOCAL) {
+            protegido = false; // "Este computador" é a máquina do próprio usuário: preparar o laboratório é a razão de ele existir
+            protecaoAutomaticaRecusada = false;
+        }
+    }
+
+    /** Sem as marcas de proteção (servidor comum, e o formato antigo). */
+    public ConfigServidor(String id, String nome, String host, int porta, String usuario, String chaveId, int portaAgente, List<Pin> pins,
+                          Transporte transporte, String nomeDoDispositivo, Estado2fa estado2fa) {
+        this(id, nome, host, porta, usuario, chaveId, portaAgente, pins, transporte, nomeDoDispositivo, estado2fa, false, false);
     }
 
     /** Servidor novo, sem pins, sem token e com o agente na porta padrão. */
@@ -136,7 +151,7 @@ public record ConfigServidor(
 
     public ConfigServidor comPins(List<Pin> novos) {
         return new ConfigServidor(id, nome, host, porta, usuario, chaveId, portaAgente, novos, transporte,
-            nomeDoDispositivo, estado2fa);
+            nomeDoDispositivo, estado2fa, protegido, protecaoAutomaticaRecusada);
     }
 
     public ConfigServidor semPins() {
@@ -145,17 +160,49 @@ public record ConfigServidor(
 
     public ConfigServidor comNomeDoDispositivo(String novoNome) {
         return new ConfigServidor(id, nome, host, porta, usuario, chaveId, portaAgente, pins, transporte,
-            novoNome, estado2fa);
+            novoNome, estado2fa, protegido, protecaoAutomaticaRecusada);
     }
 
     public ConfigServidor comEstado2fa(Estado2fa novo) {
         return new ConfigServidor(id, nome, host, porta, usuario, chaveId, portaAgente, pins, transporte,
-            nomeDoDispositivo, novo);
+            nomeDoDispositivo, novo, protegido, protecaoAutomaticaRecusada);
     }
 
     public ConfigServidor comChaveId(String novaChaveId) {
         return new ConfigServidor(id, nome, host, porta, usuario, novaChaveId, portaAgente, pins, transporte,
-            nomeDoDispositivo, estado2fa);
+            nomeDoDispositivo, estado2fa, protegido, protecaoAutomaticaRecusada);
+    }
+
+    /**
+     * Liga ou desliga "Servidor protegido" por escolha do USUÁRIO (a caixa de Editar servidor ou do Adicionar servidor). Desligar uma proteção que estava
+     * ligada (a que o usuário pôs, ou a que o app pôs ao ver o agente do lab) também anota que a marca automática foi recusada: ela não volta
+     * a ligar sozinha. Em "Este computador" não faz nada (a marca não existe).
+     */
+    public ConfigServidor comProtegido(boolean novo) {
+        if (ehLocal()) {
+            return this;
+        }
+        boolean recusada = protecaoAutomaticaRecusada || (protegido && !novo);
+        return new ConfigServidor(id, nome, host, porta, usuario, chaveId, portaAgente, pins, transporte, nomeDoDispositivo, estado2fa, novo, recusada);
+    }
+
+    /** O app pode ligar a marca sozinho (viu o agente do lab instalado fora do app)? Só se não está ligada e o usuário nunca a desligou. */
+    public boolean podeProtegerSozinho() {
+        return !ehLocal() && !protegido && !protecaoAutomaticaRecusada;
+    }
+
+    /** A marca ligada pelo APP ao ver o agente do lab de fora. Devolve esta mesma configuração se não pode ({@link #podeProtegerSozinho}). */
+    public ConfigServidor comProtecaoAutomatica() {
+        if (!podeProtegerSozinho()) {
+            return this;
+        }
+        return new ConfigServidor(id, nome, host, porta, usuario, chaveId, portaAgente, pins, transporte, nomeDoDispositivo, estado2fa, true, false);
+    }
+
+    /** Mesma conexão que {@code outra}: tudo igual, menos no máximo as marcas de proteção (é o que decide se salvar reconecta). */
+    public boolean mesmaConexaoQue(ConfigServidor outra) {
+        return equals(new ConfigServidor(outra.id, outra.nome, outra.host, outra.porta, outra.usuario, outra.chaveId, outra.portaAgente, outra.pins,
+            outra.transporte, outra.nomeDoDispositivo, outra.estado2fa, protegido, protecaoAutomaticaRecusada));
     }
 
     /**
@@ -172,7 +219,7 @@ public record ConfigServidor(
         String usuarioLimpo = novoUsuario == null ? null : novoUsuario.strip();
         boolean mudouOEndereco = hostLimpo == null || !host.equalsIgnoreCase(hostLimpo) || porta != novaPorta;
         return new ConfigServidor(id, novoNome, hostLimpo, novaPorta, usuarioLimpo, chaveId, novaPortaAgente,
-            mudouOEndereco ? List.of() : pins, transporte, nomeDoDispositivo, estado2fa);
+            mudouOEndereco ? List.of() : pins, transporte, nomeDoDispositivo, estado2fa, protegido, protecaoAutomaticaRecusada);
     }
 
     /** O que o usuário muda de "Este computador": o nome e a porta do agente (o resto não existe nele). */
@@ -180,7 +227,8 @@ public record ConfigServidor(
         if (!ehLocal()) {
             throw new IllegalStateException("Só o servidor local tem esta edição.");
         }
-        return new ConfigServidor(id, novoNome, host, porta, usuario, chaveId, novaPortaAgente, pins, transporte, nomeDoDispositivo, estado2fa);
+        return new ConfigServidor(id, novoNome, host, porta, usuario, chaveId, novaPortaAgente, pins, transporte, nomeDoDispositivo, estado2fa,
+            protegido, protecaoAutomaticaRecusada);
     }
 
     /** {@code true} se {@code outra} aponta para o mesmo endereço e a mesma porta do SSH (o que decide se os pins ainda valem). */

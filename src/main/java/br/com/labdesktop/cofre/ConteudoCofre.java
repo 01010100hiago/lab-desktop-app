@@ -19,7 +19,7 @@ import java.util.Set;
  *
  * <p>{@code privadaOpenssh} e {@code tokenAgente} são {@code byte[]}: o Jackson os grava como base64 e os
  * devolve como {@code byte[]} direto, sem eu criar uma {@code String} com a chave. Campos desconhecidos
- * (versões futuras) são ignorados. Os campos {@code nomeDoDispositivo} e {@code estado2fa} do servidor foram
+ * (versões futuras) são ignorados. Os campos {@code protegido} e {@code protecaoAutomaticaRecusada} são opcionais, como os outros. Os campos {@code nomeDoDispositivo} e {@code estado2fa} do servidor foram
  * acrescentados à especificação de 5.3 (opcionais; ausentes valem {@code null} e {@code desligado}), por isso
  * a {@code versao} continua 1.
  *
@@ -109,6 +109,14 @@ final class ConteudoCofre {
         String agenteContainer;
         @JsonProperty("agenteComSudo")
         Boolean agenteComSudo;
+        /**
+         * "Servidor protegido" e a recusa da marca automática. Opcionais e gravados só quando valem {@code true}: cofre de antes não tem os
+         * campos (ausente vale {@code false}) e cofre novo sem proteção fica idêntico ao de hoje.
+         */
+        @JsonProperty("protegido")
+        Boolean protegido;
+        @JsonProperty("protecaoAutomaticaRecusada")
+        Boolean protecaoAutomaticaRecusada;
         /** O token de API da Cloudflare (base64 de bytes, como os outros segredos) e a escolha do usuário; opcionais, ausentes valem "nunca conectou". */
         @JsonProperty("cloudflareToken")
         byte[] cloudflareToken;
@@ -220,6 +228,8 @@ final class ConteudoCofre {
             j.transporte = tj;
             j.nomeDoDispositivo = cfg.nomeDoDispositivo();
             j.estado2fa = cfg.estado2fa().rotulo();
+            j.protegido = cfg.protegido() ? Boolean.TRUE : null;
+            j.protecaoAutomaticaRecusada = cfg.protecaoAutomaticaRecusada() ? Boolean.TRUE : null;
             if (s.agente != null) {
                 j.agenteContainer = s.agente.container();
                 j.agenteComSudo = s.agente.comSudo() ? Boolean.TRUE : null;
@@ -369,7 +379,8 @@ final class ConteudoCofre {
             };
         }
         return new ConfigServidor(j.id, j.nome, j.host, j.porta, j.usuario, j.chaveId, j.portaAgente, pins,
-            transporte, j.nomeDoDispositivo, Estado2fa.deRotulo(j.estado2fa));
+            transporte, j.nomeDoDispositivo, Estado2fa.deRotulo(j.estado2fa), Boolean.TRUE.equals(j.protegido),
+            Boolean.TRUE.equals(j.protecaoAutomaticaRecusada));
     }
 
     /** Zera os arrays de segredo que o Jackson alocou (usado quando a conversão falha). */
