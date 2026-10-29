@@ -1,17 +1,20 @@
 # O que é o agente? Preciso instalar? O Claude é obrigatório?
 @rotulo: Agente e Claude
-@busca: agente instalar claude opcional ia painel monitor atualizar remover
+@busca: agente instalar claude opcional ia painel monitor atualizar remover docker completo escolher só ssh
 @resumo: O agente é um programa pequeno no servidor que conta ao app CPU, containers e projetos; o Claude é opcional.
 @onde: Instalar agente | Faixa no alto da página do servidor, ou menu Servidor > Instalar agente…
 @onde: Atualizar ou remover o agente | Menu Servidor > Atualizar agente… ou Remover agente…
 1. Abra o servidor. Se o agente falta, a faixa no alto da página mostra o botão "Instalar agente".
 2. Também dá pelo menu Servidor, "Instalar agente…".
-3. O app mostra o que vai fazer e só instala depois da sua confirmação. Nunca instala sozinho nem pede a senha de novo.
-4. Depois, o menu Servidor oferece "Atualizar agente…" e "Remover agente…" (só do agente que o próprio app instalou).
+3. O app pergunta "O que instalar": Completo (o recomendado), Escolher (você marca só o que quer) ou Só SSH (não instala nada).
+4. Depois da escolha o app mostra só o que vai fazer e só instala depois da sua confirmação. Nunca instala sozinho nem pede a senha de novo.
+5. Depois, o menu Servidor oferece "Atualizar agente…" e "Remover agente…" (só do agente que o próprio app instalou).
 [Ir para Resumo](ir:resumo)
 @veja: conectar servidor
 ## Mais detalhes
 No assistente de Adicionar servidor, depois de a chave ser instalada e provada, o app pergunta se você quer instalar o agente agora. A senha do servidor já foi esquecida: a instalação usa só a chave.
 Se o seu usuário não pode usar o Docker nem o sudo sem senha, o app não tenta subir de nível: mostra o comando exato para quem administra o servidor rodar. Ele nunca pede nem guarda senha de sudo.
+Em Escolher, o Docker só aparece se faltar no servidor. O agente precisa do Docker: se você desmarcar o Docker com o agente marcado, o app explica e não deixa continuar, porque nunca instala metade.
+Só SSH não instala nada: o servidor segue usável pelo terminal, por Segurança e por Arquivos, e o app não pergunta de novo a cada conexão. Para mudar de ideia, use o botão "Instalar agente" do servidor.
 Sem o agente, o terminal, os arquivos e a tela Segurança funcionam só com o SSH; mas você não vê CPU, memória, containers nem projetos.
 O Claude é opcional: o app funciona igual sem ele. As telas do Claude (sessão, limite de uso, perguntas) só aparecem quando o servidor tem Claude, e o app nunca instala nenhuma IA.

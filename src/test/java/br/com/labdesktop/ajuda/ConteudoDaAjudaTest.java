@@ -189,4 +189,22 @@ class ConteudoDaAjudaTest {
         }
         assertTrue(linhas.stream().anyMatch(o -> o.caminho().equals("Servidor > Resumo > Registro do servidor")), "o exemplo do usuário: Servidor > Resumo > Registro");
     }
+
+    /** O tópico da instalação do agente conta as três escolhas e diz o que "Só SSH" significa. */
+    @Test
+    void oTopicoDoAgenteExplicaAsTresEscolhasEOSoSsh() {
+        TopicoDeAjuda t = GUIA.topico("agente");
+        StringBuilder texto = new StringBuilder();
+        for (List<Bloco> lista : List.of(t.corpo(), t.detalhes())) {
+            for (Bloco b : lista) {
+                texto.append(b instanceof Paragrafo p ? p.texto() : b instanceof Passo p ? p.texto() : "").append('\n');
+            }
+        }
+        String tudo = texto.toString();
+        assertTrue(tudo.contains("Completo") && tudo.contains("Escolher") && tudo.contains("Só SSH"), tudo);
+        assertTrue(tudo.contains("Só SSH não instala nada"), "a frase do Só SSH: " + tudo);
+        assertTrue(tudo.contains("nunca instala metade"), tudo);
+        assertFalse(tudo.toLowerCase().contains("perfil"), "a Ajuda não usa a palavra perfil");
+        assertTrue(t.passos().size() <= 7);
+    }
 }

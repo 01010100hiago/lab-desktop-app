@@ -183,7 +183,7 @@ class AgenteNaoInstaladoNaJanelaTest {
         Visual.naEdt(() -> cartao.botaoDa(Item.INSTALAR_AGENTE).doClick());
         Espera.ate(PRAZO, "a confirmação abriu", () -> !dialogos.mostrados.isEmpty());
         DialogoDoAgente d = dialogos.ultimoComo(DialogoDoAgente.class);
-        assertEquals("Instalar o agente", d.titulo());
+        assertEquals("Instalar no servidor", d.titulo());
         assertEquals("conferindo", Visual.naEdt(d::paginaAtual), "abre conferindo (só leitura); nada foi instalado");
         assertTrue(ssh.comandos.stream().allMatch(ComandosRemotos::ehLeitura));
     }

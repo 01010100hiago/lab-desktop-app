@@ -975,29 +975,33 @@ public final class AcoesDaInterface {
      * atualiza nem remove o agente sozinho, nem ao conectar, nem ao abrir, nem em segundo plano.
      */
     public void instalarAgente(ServidorLab lab) {
-        instalarAgente(lab, () -> { });
+        instalarAgente(lab, () -> { }, () -> avisos.info(lab.estado().nome() + " fica só por SSH: terminal, Segurança e Arquivos continuam funcionando. "
+            + "Quando quiser instalar, o botão Instalar agente está no cartão e na página do servidor."));
     }
 
-    /** Como {@link #instalarAgente(ServidorLab)}, e {@code aoInstalar} roda (na EDT) se o agente ficou instalado (o assistente de adicionar servidor continua). */
-    public void instalarAgente(ServidorLab lab, Runnable aoInstalar) {
+    /**
+     * Como {@link #instalarAgente(ServidorLab)}, e {@code aoInstalar} roda (na EDT) se algo ficou instalado (o assistente de adicionar servidor continua),
+     * e {@code aoSoSsh} roda se o usuário escolheu "Só SSH, não instalar nada" na tela "O que instalar" (o assistente conclui como "Agora não").
+     */
+    public void instalarAgente(ServidorLab lab, Runnable aoInstalar, Runnable aoSoSsh) {
         if (lab.ehLocal()) {
             prepararEsteComputador(lab); // em Este computador o agente nasce de "Preparar este computador"
             return;
         }
-        abrirDialogoDoAgente(lab, DialogoDoAgente.Acao.INSTALAR, aoInstalar);
+        abrirDialogoDoAgente(lab, DialogoDoAgente.Acao.INSTALAR, aoInstalar, aoSoSsh);
     }
 
     /** "Atualizar agente": a confirmação; instala a versão nova do pacote do app por cima, mantendo os dados e o token. */
     public void atualizarAgente(ServidorLab lab) {
-        abrirDialogoDoAgente(lab, DialogoDoAgente.Acao.ATUALIZAR, () -> { });
+        abrirDialogoDoAgente(lab, DialogoDoAgente.Acao.ATUALIZAR, () -> { }, () -> { });
     }
 
     /** "Remover agente": a confirmação; tira do servidor o que o app instalou (o Docker fica). */
     public void removerAgente(ServidorLab lab) {
-        abrirDialogoDoAgente(lab, DialogoDoAgente.Acao.REMOVER, () -> { });
+        abrirDialogoDoAgente(lab, DialogoDoAgente.Acao.REMOVER, () -> { }, () -> { });
     }
 
-    private void abrirDialogoDoAgente(ServidorLab lab, DialogoDoAgente.Acao acao, Runnable aoMudar) {
+    private void abrirDialogoDoAgente(ServidorLab lab, DialogoDoAgente.Acao acao, Runnable aoMudar, Runnable aoSoSsh) {
         EstadoServidor e = lab.estado();
         // O pacote vem do jar (leitura de recurso): fora da EDT.
         Tarefas.rodar(PacoteDoAgente::doClasspath, pacote -> {
@@ -1006,7 +1010,7 @@ public final class AcoesDaInterface {
             DialogoDoAgente dialogo = new DialogoDoAgente(acao, alvo, pacote, p -> lab.instaladorDoAgente(p, pacote), () -> {
                 lab.aoMudarOAgenteNoServidor();
                 aoMudar.run();
-            }, avisos, CopiadorDeTexto.doSistema());
+            }, aoSoSsh, avisos, CopiadorDeTexto.doSistema());
             apresentador.mostrar(dialogo);
         }, this::falhaDoPacoteDoAgente);
     }

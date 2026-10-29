@@ -77,6 +77,13 @@ class DialogoDoAgenteTest {
         Espera.ate(PRAZO, () -> "página=" + Visual.naEdt(d::paginaAtual), () -> pagina.equals(Visual.naEdt(d::paginaAtual)));
     }
 
+    /** Ao instalar num servidor sem agente a primeira tela é "O que instalar": o caminho de antes é Completo (já marcado) e Continuar. */
+    private static void seguirComCompleto(DialogoDoAgente d) {
+        esperarPagina(d, "escolher");
+        Visual.naEdt(() -> d.botaoContinuar().doClick());
+        assertEquals("confirmar", Visual.naEdt(d::paginaAtual));
+    }
+
     private static void esperarFim(DialogoDoAgente d) {
         Espera.ate(PRAZO, () -> "executando=" + Visual.naEdt(d::executando) + " situacao=" + Visual.naEdt(d::situacaoFinal),
             () -> !Visual.naEdt(d::executando) && !Visual.naEdt(d::situacaoFinal).isEmpty());
@@ -112,7 +119,7 @@ class DialogoDoAgenteTest {
     @Test
     void conferirSoLeEAConfirmacaoTemONomeDoServidorNoBotaoESemInstalarNada() {
         DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-        esperarPagina(d, "confirmar");
+        seguirComCompleto(d);
 
         assertTrue(servidor.escritas().isEmpty(), "só leitura até o clique: " + servidor.escritas());
         assertEquals("Instalar em vps-1", Visual.naEdt(() -> d.botaoConfirmar().getText()));
@@ -136,7 +143,7 @@ class DialogoDoAgenteTest {
     @Test
     void aTelaDeConfirmacaoDizOQueOAgenteAlcancaAntesDeConfirmar() {
         DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-        esperarPagina(d, "confirmar");
+        seguirComCompleto(d);
         String tela = textosDaRaiz(d);
         assertTrue(tela.contains("acesso ao Docker do servidor"), tela);
         assertTrue(tela.contains("equivale a ser administrador (root)"), tela);
@@ -176,7 +183,7 @@ class DialogoDoAgenteTest {
     void problemaBloqueiaEMostraOComandoExatoQueQuemAdministraDeveRodar() {
         servidor.semDocker().semPermissaoNenhuma();
         DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-        esperarPagina(d, "confirmar");
+        seguirComCompleto(d);
 
         assertFalse(Visual.naEdt(() -> d.botaoConfirmar().isEnabled()), "com problema não se confirma");
         assertTrue(Visual.naEdt(d::textoDoBloqueio).contains("impedem de continuar"), Visual.naEdt(d::textoDoBloqueio));
@@ -192,7 +199,7 @@ class DialogoDoAgenteTest {
     void dockerSemPermissaoBloqueiaEOBotaoVolta_aConferirDeNovo() {
         servidor.semPermissaoNenhuma(); // o Docker existe, o usuário não pode usá-lo
         DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-        esperarPagina(d, "confirmar");
+        seguirComCompleto(d);
         assertFalse(Visual.naEdt(() -> d.botaoConfirmar().isEnabled()));
         assertEquals("Conferir de novo", Visual.naEdt(() -> d.botaoConferirDeNovo().getText()));
         assertTrue(Visual.naEdt(d::comandosSugeridos).contains("sudo usermod -aG docker labuser"), Visual.naEdt(d::comandosSugeridos).toString());
@@ -205,7 +212,7 @@ class DialogoDoAgenteTest {
     void distribuicaoSemSuportePedeJaInstaleiContinuarEDepoisLiberaOBotao() {
         servidor.fedora().semDocker();
         DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-        esperarPagina(d, "confirmar");
+        seguirComCompleto(d);
         assertFalse(Visual.naEdt(() -> d.botaoConfirmar().isEnabled()));
         assertEquals("Já instalei, continuar", Visual.naEdt(() -> d.botaoConferirDeNovo().getText()));
         assertTrue(Visual.naEdt(d::textoDoBloqueio).contains("Já instalei, continuar"), Visual.naEdt(d::textoDoBloqueio));
@@ -219,7 +226,7 @@ class DialogoDoAgenteTest {
     @Test
     void cancelarNaConfirmacaoNaoMudaNadaNoServidor() {
         DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-        esperarPagina(d, "confirmar");
+        seguirComCompleto(d);
         Visual.naEdt(() -> d.botaoCancelar().doClick());
         assertTrue(servidor.escritas().isEmpty());
         assertEquals(0, mudancasNoServidor.get());
@@ -230,7 +237,7 @@ class DialogoDoAgenteTest {
     @Test
     void opcoesAvancadasFechadasEMudarONomeDoContainerConfereDeNovoComOutroNome() {
         DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-        esperarPagina(d, "confirmar");
+        seguirComCompleto(d);
         assertFalse(Visual.naEdt(() -> d.opcoesAvancadas().aberta()), "as opções de teste ficam recolhidas");
         assertEquals("painel-lab", Visual.naEdt(() -> d.campoDoContainer().getText()));
 
@@ -265,13 +272,13 @@ class DialogoDoAgenteTest {
             }
         });
         DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-        esperarPagina(d, "confirmar");
+        seguirComCompleto(d);
 
         Visual.naEdt(() -> d.botaoConfirmar().doClick());
         assertEquals("andamento", Visual.naEdt(d::paginaAtual));
         assertTrue(noBuild.await(PRAZO.toSeconds(), TimeUnit.SECONDS));
         Espera.ate(PRAZO, "construindo", () -> Visual.naEdt(() -> d.estadoDoPasso(PassoDeInstalacao.CONSTRUIR_IMAGEM)) == EstadoDoPasso.EM_ANDAMENTO);
-        assertEquals(EstadoDoPasso.JA_ESTAVA_FEITO, Visual.naEdt(() -> d.estadoDoPasso(PassoDeInstalacao.DOCKER)));
+        assertFalse(Visual.naEdt(d::passosMostrados).contains(PassoDeInstalacao.DOCKER), "o Docker já está no servidor e não foi escolhido: não vira passo");
         assertEquals(EstadoDoPasso.FEITO, Visual.naEdt(() -> d.estadoDoPasso(PassoDeInstalacao.ENVIAR_PACOTE)));
         assertEquals(EstadoDoPasso.PENDENTE, Visual.naEdt(() -> d.estadoDoPasso(PassoDeInstalacao.SUBIR_CONTAINER)));
         assertTrue(Visual.naEdt(() -> d.botaoCancelarExecucao().isVisible()));
@@ -286,7 +293,8 @@ class DialogoDoAgenteTest {
         assertTrue(Visual.naEdt(d::textoFinal).contains("0.1.0-abc1234"));
         assertTrue(Visual.naEdt(() -> d.botaoConcluir().isVisible()));
         assertFalse(Visual.naEdt(() -> d.botaoCancelarExecucao().isVisible()));
-        for (PassoDeInstalacao p : PassoDeInstalacao.values()) {
+        assertEquals(5, Visual.naEdt(d::passosMostrados).size(), "os cinco passos do agente (o Docker já estava e não foi escolhido)");
+        for (br.com.labdesktop.instalador.Passo p : Visual.naEdt(d::passosMostrados)) {
             assertTrue(Visual.naEdt(() -> d.estadoDoPasso(p)) == EstadoDoPasso.FEITO || Visual.naEdt(() -> d.estadoDoPasso(p)) == EstadoDoPasso.JA_ESTAVA_FEITO, p.toString());
         }
         assertEquals(1, mudancasNoServidor.get(), "o app é avisado UMA vez para repetir o teste do agente");
@@ -299,7 +307,7 @@ class DialogoDoAgenteTest {
     void falhaMostraOPassoOErroRealDoServidorOQueFoiDesfeitoETentarDeNovoConclui() {
         servidor.falharUmaVezEm(c -> c.contains(" build "), 1, "ERROR: failed to solve: node:22-alpine: failed to resolve source metadata");
         DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-        esperarPagina(d, "confirmar");
+        seguirComCompleto(d);
         Visual.naEdt(() -> d.botaoConfirmar().doClick());
         esperarFim(d);
 
@@ -336,7 +344,7 @@ class DialogoDoAgenteTest {
             }
         });
         DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-        esperarPagina(d, "confirmar");
+        seguirComCompleto(d);
         Visual.naEdt(() -> d.botaoConfirmar().doClick());
         assertTrue(noBuild.await(PRAZO.toSeconds(), TimeUnit.SECONDS));
 
@@ -377,7 +385,7 @@ class DialogoDoAgenteTest {
                 }
             });
             DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-            esperarPagina(d, "confirmar");
+            seguirComCompleto(d);
             Visual.naEdt(() -> d.botaoConfirmar().doClick());
             assertTrue(noBuild.await(PRAZO.toSeconds(), TimeUnit.SECONDS));
 
@@ -405,7 +413,7 @@ class DialogoDoAgenteTest {
         servidor.logsDoContainer = "Error: listen EADDRINUSE: address already in use 127.0.0.1:7000";
         ganchos.sonda(Sonda.NAO_RESPONDE);
         DialogoDoAgente d = abrir(DialogoDoAgente.Acao.INSTALAR, null);
-        esperarPagina(d, "confirmar");
+        seguirComCompleto(d);
         Visual.naEdt(() -> d.botaoConfirmar().doClick());
         esperarFim(d);
         assertTrue(Visual.naEdt(d::textoFinal).contains("EADDRINUSE"), Visual.naEdt(d::textoFinal));

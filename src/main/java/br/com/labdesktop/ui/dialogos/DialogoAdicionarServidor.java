@@ -147,7 +147,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
     private final SeletorDeArquivo seletorDeArquivo;
     private final CopiadorDeTexto copiador;
     /** Abre a confirmação "Instalar agente" para o servidor; o {@code Runnable} roda (na EDT) se o agente ficou instalado. */
-    private final BiConsumer<ServidorLab, Runnable> instalarAgente;
+    private final PedidoDeInstalarAgente instalarAgente;
     /** Abre a confirmação "Desligar a senha" para o servidor; o {@code Runnable} roda (na EDT) quando a janela dela fecha depois de o usuário ter agido. */
     private final BiConsumer<ServidorLab, Runnable> desligarSenha;
 
@@ -253,11 +253,21 @@ public final class DialogoAdicionarServidor extends Dialogo {
         this(assistente, primeiro, avisos, aoConcluir, confirmadorDeHost, seletorDeArquivo, copiador, null);
     }
 
+    /**
+     * O que abre a tela "O que instalar" quando o usuário clica em "Instalar agente" na pergunta do último passo: {@code aoInstalar} roda se algo
+     * foi instalado (o assistente segue para o registro do token) e {@code aoSoSsh} roda se ele escolheu "Só SSH, não instalar nada" (o
+     * assistente conclui como "Agora não, usar só por SSH").
+     */
+    @FunctionalInterface
+    public interface PedidoDeInstalarAgente {
+        void pedir(ServidorLab lab, Runnable aoInstalar, Runnable aoSoSsh);
+    }
+
     /** Com o que abre a confirmação "Instalar agente" (a pergunta do último passo, quando o servidor não tem o agente). */
     public DialogoAdicionarServidor(AssistenteDeServidor assistente, boolean primeiro, Notificacoes avisos,
                                     Consumer<ServidorLab> aoConcluir, ConfirmadorDeHost confirmadorDeHost,
                                     SeletorDeArquivo seletorDeArquivo, CopiadorDeTexto copiador,
-                                    BiConsumer<ServidorLab, Runnable> instalarAgente) {
+                                    PedidoDeInstalarAgente instalarAgente) {
         this(assistente, primeiro, avisos, aoConcluir, confirmadorDeHost, seletorDeArquivo, copiador, instalarAgente, null);
     }
 
@@ -265,9 +275,9 @@ public final class DialogoAdicionarServidor extends Dialogo {
     public DialogoAdicionarServidor(AssistenteDeServidor assistente, boolean primeiro, Notificacoes avisos,
                                     Consumer<ServidorLab> aoConcluir, ConfirmadorDeHost confirmadorDeHost,
                                     SeletorDeArquivo seletorDeArquivo, CopiadorDeTexto copiador,
-                                    BiConsumer<ServidorLab, Runnable> instalarAgente, BiConsumer<ServidorLab, Runnable> desligarSenha) {
+                                    PedidoDeInstalarAgente instalarAgente, BiConsumer<ServidorLab, Runnable> desligarSenha) {
         super("Adicionar servidor");
-        this.instalarAgente = instalarAgente != null ? instalarAgente : (lab, depois) -> { };
+        this.instalarAgente = instalarAgente != null ? instalarAgente : (lab, aoInstalar, aoSoSsh) -> { };
         this.desligarSenha = desligarSenha != null ? desligarSenha : (lab, depois) -> { };
         this.assistente = assistente;
         this.avisos = avisos;
@@ -467,7 +477,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
         substituirToken.addActionListener(e -> substituirOToken());
         concluir.addActionListener(e -> concluirDeVez());
         fecharConexao.addActionListener(e -> aoCancelar());
-        instalarOAgente.addActionListener(e -> instalarAgente.accept(lab, this::executarConclusao));
+        instalarOAgente.addActionListener(e -> instalarAgente.pedir(lab, this::executarConclusao, this::concluirSoPorSsh));
         agoraNao.addActionListener(e -> concluirSoPorSsh());
     }
 
@@ -1299,6 +1309,7 @@ public final class DialogoAdicionarServidor extends Dialogo {
             return;
         }
         concluido = true;
+        perguntandoDoAgente = false; // a pergunta foi respondida: não volta
         avisos.ok("Servidor " + lab.estado().nome() + " adicionado, só por SSH. Instale o agente quando quiser: o botão está no cartão do servidor.");
         terminarOuPerguntarDaSenha();
     }

@@ -38,6 +38,16 @@ public record RelatorioDeVerificacao(List<ResultadoDaVerificacao> resultados, Mo
         return resultados.stream().filter(ResultadoDaVerificacao::bloqueia).toList();
     }
 
+    /**
+     * O mesmo relatório só com as verificações que importam para o que foi escolhido: o que não foi escolhido não aparece e não pode
+     * bloquear (um problema de porta ou de espaço não impede quem só instala o Docker). Os fatos sobre o servidor (Docker presente,
+     * administrador, distribuição) não mudam.
+     */
+    public RelatorioDeVerificacao somenteDe(java.util.Set<ResultadoDaVerificacao.Item> itens) {
+        return new RelatorioDeVerificacao(resultados.stream().filter(r -> itens.contains(r.item())).toList(), modo, docker, administrador,
+            distribuicao, dockerPresente, dockerAusente);
+    }
+
     public ResultadoDaVerificacao de(ResultadoDaVerificacao.Item item) {
         return resultados.stream().filter(r -> r.item() == item).findFirst().orElse(null);
     }

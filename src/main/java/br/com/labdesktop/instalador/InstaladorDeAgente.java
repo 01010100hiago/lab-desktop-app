@@ -51,7 +51,14 @@ public final class InstaladorDeAgente {
     private Duration intervaloDaSonda = Duration.ofSeconds(1);
 
     private ModoDaInstalacao modo = ModoDaInstalacao.INSTALAR;
+    /** O relatório que vale para o que foi escolhido (sem escolha: o completo). */
     private RelatorioDeVerificacao relatorio;
+    /** Todas as verificações, antes de a escolha as filtrar: é com ele que a tela decide o que oferecer. */
+    private RelatorioDeVerificacao relatorioCompleto;
+    /** Os passos que {@link #instalar} executa. {@code null}: nenhuma escolha foi feita, vale o de sempre (todos). */
+    private Set<PassoDeInstalacao> escolhidos;
+    /** As verificações que importam para a escolha ({@code null}: todas). Guardadas para uma nova conferência manter o filtro. */
+    private Set<ResultadoDaVerificacao.Item> verificacoesDaEscolha;
     private String docker;
     private final Set<PassoDeInstalacao> concluidos = EnumSet.noneOf(PassoDeInstalacao.class);
     private boolean criouContainer;
@@ -108,9 +115,50 @@ public final class InstaladorDeAgente {
      */
     public RelatorioDeVerificacao verificar(ModoDaInstalacao como) throws IOException, InterruptedException {
         this.modo = como;
-        this.relatorio = verificacoes.executar(como);
+        this.relatorioCompleto = verificacoes.executar(como);
+        this.relatorio = verificacoesDaEscolha == null ? relatorioCompleto : relatorioCompleto.somenteDe(verificacoesDaEscolha);
         this.docker = relatorio.docker();
+        return relatorioCompleto;
+    }
+
+    /** O último relatório COMPLETO das verificações (antes da escolha), ou {@code null} se ainda não rodou. */
+    public RelatorioDeVerificacao relatorioCompleto() {
+        return relatorioCompleto;
+    }
+
+    /**
+     * Fixa o que {@link #instalar} vai fazer: SÓ os passos dos itens escolhidos (o que não foi escolhido não roda, não aparece como passo e
+     * não é conferido a ponto de impedir a instalação). Devolve o relatório já filtrado pelo que importa para a escolha. Pode ser chamada de
+     * novo (o usuário voltou e mudou de ideia); sem chamá-la, {@link #instalar} faz tudo, como sempre fez.
+     *
+     * @throws IllegalStateException    {@link #verificar} ainda não rodou
+     * @throws IllegalArgumentException a escolha é Só SSH (não há o que instalar) ou a combinação é inválida (o app nunca instala metade)
+     */
+    public RelatorioDeVerificacao escolher(EscolhaDeInstalacao escolha) {
+        if (relatorioCompleto == null) {
+            throw new IllegalStateException("Confira o servidor antes de escolher o que instalar.");
+        }
+        if (!escolha.instalaAlgo()) {
+            throw new IllegalArgumentException("Não há nada para instalar nesta escolha.");
+        }
+        if (!escolha.valida()) {
+            throw new IllegalArgumentException("Combinação inválida: " + String.join(" ", escolha.problemas()));
+        }
+        this.escolhidos = EnumSet.copyOf(escolha.passos());
+        this.verificacoesDaEscolha = escolha.verificacoes();
+        this.relatorio = relatorioCompleto.somenteDe(verificacoesDaEscolha);
         return relatorio;
+    }
+
+    /** Os passos que {@link #instalar} executa agora, na ordem. */
+    public List<PassoDeInstalacao> passosAExecutar() {
+        List<PassoDeInstalacao> l = new ArrayList<>();
+        for (PassoDeInstalacao p : PassoDeInstalacao.values()) {
+            if (escolhidos == null || escolhidos.contains(p)) {
+                l.add(p);
+            }
+        }
+        return l;
     }
 
     // =====================================================================================================
@@ -138,7 +186,7 @@ public final class InstaladorDeAgente {
         criouPasta = false;
         PassoDeInstalacao atual = null;
         try {
-            for (PassoDeInstalacao p : PassoDeInstalacao.values()) {
+            for (PassoDeInstalacao p : passosAExecutar()) {
                 atual = p;
                 conferirCancelamento();
                 obs.aoMudarPasso(p, EstadoDoPasso.EM_ANDAMENTO, "");

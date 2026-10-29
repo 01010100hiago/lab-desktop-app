@@ -62,6 +62,7 @@ class DialogoAdicionarServidorSemAgenteTest {
     private final List<ServidorLab> concluidos = new ArrayList<>();
     private final List<ServidorLab> pedidosDeInstalacao = new ArrayList<>();
     private final AtomicReference<Runnable> aoInstalar = new AtomicReference<>();
+    private final AtomicReference<Runnable> aoSoSsh = new AtomicReference<>();
 
     @BeforeEach
     void montar() throws Exception {
@@ -87,9 +88,10 @@ class DialogoAdicionarServidorSemAgenteTest {
         AssistenteDeServidor assistente = new AssistenteDeServidor(cofre, gerenciador, ConfigSsh.rapida());
         DialogoAdicionarServidor d = Visual.naEdt(() -> new DialogoAdicionarServidor(assistente, true, avisos, concluidos::add,
             (servidor, endereco, resultado, aoDecidir) -> aoDecidir.accept(true), janela -> java.util.Optional.empty(),
-            new CopiadorDeTexto(() -> new Clipboard("teste")), (lab, depois) -> {
+            new CopiadorDeTexto(() -> new Clipboard("teste")), (lab, depois, soSsh) -> {
                 pedidosDeInstalacao.add(lab);
                 aoInstalar.set(depois);
+                aoSoSsh.set(soSsh);
             }));
         Visual.naEdt(() -> {
             d.campoDoNome().setText("vps-1");
@@ -233,5 +235,27 @@ class DialogoAdicionarServidorSemAgenteTest {
         assertFalse(Visual.naEdt(() -> d.botaoInstalarAgente().isVisible()));
         Visual.naEdt(() -> d.botaoConcluir().doClick());
         assertEquals(List.of(lab), concluidos);
+    }
+
+    /**
+     * Na tela "O que instalar" o usuário pode escolher "Só SSH, não instalar nada". Para o assistente isso vale o mesmo que "Agora não, usar só
+     * por SSH": conclui, o servidor fica no cofre sem token, e a pergunta NÃO volta (o instalador nem chega a rodar).
+     */
+    @Test
+    void escolherSoSshNaTelaDeInstalarConcluiComoAgoraNaoESemPerguntarDeNovo() throws Exception {
+        DialogoAdicionarServidor d = ateAPergunta();
+        ServidorLab lab = Visual.naEdt(d::servidorCadastrado);
+        Visual.naEdt(() -> d.botaoInstalarAgente().doClick());
+        assertEquals(List.of(lab), pedidosDeInstalacao);
+
+        Visual.naEdt(() -> aoSoSsh.get().run()); // o diálogo "O que instalar" avisa: Só SSH
+
+        assertEquals(List.of(lab), concluidos, "o servidor é entregue à janela, como em \"Agora não\"");
+        assertTrue(avisos.disse("ok", "adicionado, só por SSH"), avisos.todos.toString());
+        assertTrue(lab.estado().semToken());
+        assertTrue(agente.tokens.isEmpty());
+        assertFalse(Visual.naEdt(d::perguntandoDoAgente), "a pergunta não volta");
+        assertEquals(1, pedidosDeInstalacao.size(), "e ninguém pede de novo a instalação");
+        assertEquals(EstadoConexao.SSH_OK_SEM_AGENTE, lab.estado().conexao());
     }
 }
