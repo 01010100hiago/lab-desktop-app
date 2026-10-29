@@ -149,7 +149,7 @@ public final class ComandosDeGit {
         if (!areaTemporariaValida(area)) {
             throw new IllegalArgumentException("Área temporária inválida.");
         }
-        return new ComandoGit(Natureza.TEMPORARIO, List.of("tee", area + "/info/exclude"), Set.of(), AMBIENTE, linhas);
+        return new ComandoGit(Natureza.TEMPORARIO, List.of("tee", area + "/info/exclude"), Set.of(), Map.of(), linhas);
     }
 
     /** Apaga a área temporária (só aceita o nome exato que o app gera). */
@@ -157,7 +157,7 @@ public final class ComandosDeGit {
         if (!areaRemotaValida(area)) {
             throw new IllegalArgumentException("Área temporária inválida.");
         }
-        return new ComandoGit(Natureza.TEMPORARIO, List.of("rm", "-rf", "--", area), Set.of(), AMBIENTE, null);
+        return new ComandoGit(Natureza.TEMPORARIO, List.of("rm", "-rf", "--", area), Set.of(), Map.of(), null);
     }
 
     /**

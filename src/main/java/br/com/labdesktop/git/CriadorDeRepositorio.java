@@ -325,6 +325,7 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
             Lista fresca = new Lista();
             listar(null, null, 0, fresca);
             Set<String> conferidos = new LinkedHashSet<>(conf.arquivos());
+            conferidos.add(".gitignore"); // o arquivo que o app acabou de ajustar também vai no primeiro commit
             List<String> lista = fresca.arquivos.stream().filter(conferidos::contains).toList();
             int novosDepois = (int) fresca.arquivos.stream().filter(a -> !conferidos.contains(a)).count();
             List<String> segredos = lista.stream().filter(SegredosDoProjeto::pareceSegredo).toList();
