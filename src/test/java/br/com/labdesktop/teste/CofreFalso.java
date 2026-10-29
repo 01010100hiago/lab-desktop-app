@@ -139,13 +139,13 @@ public final class CofreFalso implements AcessoAoCofre {
     }
 
     @Override
-    public void gravarEstado2fa(String servidorId, Estado2fa estado) {
+    public synchronized void gravarEstado2fa(String servidorId, Estado2fa estado) { // atômico como o cofre de verdade (a marca automática grava em outra thread)
         exigirAberto();
         config = config.comEstado2fa(estado);
     }
 
     @Override
-    public void alterarServidor(String servidorId, UnaryOperator<ConfigServidor> mudanca) {
+    public synchronized void alterarServidor(String servidorId, UnaryOperator<ConfigServidor> mudanca) {
         exigirAberto();
         if (!ID.equals(servidorId) || removido) {
             throw new IllegalArgumentException("Servidor desconhecido.");
