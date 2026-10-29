@@ -87,13 +87,15 @@ class GitDoProjetoSemEfeitoSozinhoTest {
 
     @Test
     void criarSoSaiDaAcaoDaJanelaDepoisDoCliqueEDaTrava() throws IOException {
-        assertEquals(List.of(), quemUsa(Pattern.compile("\\.criarRepositorio\\("), Set.of(ACOES)), "o motor da janela é o único que chama criarRepositorio");
+        assertEquals(List.of(), quemUsa(Pattern.compile("\\.criarRepositorio\\("), Set.of("ui/MotorDeCriarRepositorio.java")), "o motor da janela é o único que chama criarRepositorio");
         assertEquals(List.of(), quemUsa(Pattern.compile("operacoesDeGit\\("), Set.of("servidor/ServidorLab.java", ACOES)), "quem pede as operações de escrita é a ação do clique");
         assertEquals(List.of(), quemUsa(Pattern.compile("\\bnew DialogoCriarRepositorio\\("), Set.of(ACOES)));
         String acao = metodo(arquivo(ACOES), "public void criarRepositorioGit(", "public void conectarCloudflare(");
-        assertTrue(Pattern.compile("trava\\.getAsBoolean\\(\\)").matcher(acao).results().count() >= 2, "a trava é conferida ao montar a janela E dentro do motor, na hora de criar");
-        assertTrue(acao.indexOf("trava.getAsBoolean()", acao.indexOf("public ResultadoDaCriacao criar") < 0 ? acao.indexOf("criar(") : acao.indexOf("criar(")) < acao.indexOf("operacoes.criarRepositorio("),
-            "a trava vem ANTES de criarRepositorio dentro do motor");
+        assertTrue(acao.contains("new MotorDeCriarRepositorio(operacoes, trava)"), "o motor da janela é o que confere a trava na hora de criar");
+        assertTrue(acao.contains("trava.getAsBoolean()"), "e a janela já nasce sabendo se a trava está ligada");
+        String motor = arquivo("ui/MotorDeCriarRepositorio.java");
+        assertTrue(motor.indexOf("trava.getAsBoolean()") > 0 && motor.indexOf("trava.getAsBoolean()") < motor.indexOf("operacoes.criarRepositorio("), "a trava vem ANTES de criarRepositorio dentro do motor");
+        assertEquals(List.of(), quemUsa(Pattern.compile("\\bnew MotorDeCriarRepositorio\\("), Set.of(ACOES)));
     }
 
     @Test

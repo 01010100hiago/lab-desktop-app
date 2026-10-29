@@ -334,22 +334,7 @@ public final class AcoesDaInterface {
         }
         boolean liberada = trava.getAsBoolean();
         boolean protegido = !lab.ehLocal() && lab.protegido();
-        br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio.Motor motor = new br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio.Motor() {
-            @Override
-            public br.com.labdesktop.git.ConferenciaDoRepositorio conferir() throws Exception {
-                return operacoes.conferirCriacao();
-            }
-
-            @Override
-            public br.com.labdesktop.git.ResultadoDaCriacao criar(br.com.labdesktop.git.PedidoDeCriacao pedido, br.com.labdesktop.git.OperacoesDeGit.Observador observador,
-                                                                       br.com.labdesktop.arquivos.Cancelamento cancelamento) throws Exception {
-                if (!trava.getAsBoolean()) {
-                    return new br.com.labdesktop.git.ResultadoDaCriacao(false, false,
-                        br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio.RAZAO_DA_TRAVA + " Nada foi criado.", List.of(), List.of(), null, 0, "", null);
-                }
-                return operacoes.criarRepositorio(pedido, observador, cancelamento);
-            }
-        };
+        br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio.Motor motor = new MotorDeCriarRepositorio(operacoes, trava);
         br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio[] janela = new br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio[1];
         janela[0] = new br.com.labdesktop.ui.dialogos.DialogoCriarRepositorio(lab.estado().nome(), projeto, motor, liberada, protegido,
             () -> instalarGit(lab, () -> janela[0].conferir()), verCommits, depois, avisos, CopiadorDeTexto.doSistema());
