@@ -2,6 +2,9 @@ package br.com.labdesktop.ssh;
 
 import br.com.labdesktop.cofre.Pin;
 import br.com.labdesktop.seguranca.Redator;
+import br.com.labdesktop.transporte.DestinoSsh;
+import br.com.labdesktop.transporte.FalhaDoTunelException;
+import br.com.labdesktop.transporte.RotaDoSsh;
 import java.net.SocketAddress;
 import java.security.PublicKey;
 import java.util.concurrent.atomic.AtomicReference;
@@ -112,6 +115,34 @@ public final class SondagemDeHost {
 
     private static String minusculas(Throwable t) {
         return String.valueOf(t.getMessage()).toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * A sondagem pela ROTA do servidor: direta, ou por um túnel externo (AWS Session Manager, Cloudflare) que sobe só para isto e é fechado ao terminar. A chave do
+     * host que o usuário confere é a do SSH do servidor atrás do túnel, a mesma de uma conexão direta. Bloqueia: fora da EDT.
+     *
+     * @throws SondagemException o túnel não subiu (a frase diz por quê) ou o SSH não respondeu por ele
+     */
+    public static Resultado sondar(RotaDoSsh rota, ConfigSsh cfg) throws SondagemException {
+        if (!rota.ehTunel()) {
+            return sondar(rota.host(), rota.porta(), cfg);
+        }
+        DestinoSsh destino;
+        try {
+            destino = rota.abrir();
+        } catch (FalhaDoTunelException e) {
+            throw new SondagemException(e.falha().mensagem(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new SondagemException("A conferência foi interrompida.", e);
+        }
+        try (destino) {
+            try {
+                return sondar(destino.host(), destino.porta(), cfg);
+            } catch (SondagemException e) {
+                throw new SondagemException(FrasesDoCaminho.semSshPeloTunel(rota.transporte(), destino), e.getCause());
+            }
+        }
     }
 
     /**

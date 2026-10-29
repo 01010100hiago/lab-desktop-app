@@ -49,11 +49,13 @@ public final class DialogoInstalarChave extends Dialogo {
                        String chavePublica) {
 
         public static Alvo de(ConfigServidor config, InfoChave chave) {
-            return new Alvo(config.nome(), config.usuario(), config.host(), config.porta(), config.pins(), chave.nome(), chave.impressao(), chave.publica());
+            boolean semPortaAberta = config.transporte().ehTunel(); // o endereço é o destino do túnel (instância ou hostname), sem porta de SSH
+            return new Alvo(config.nome(), config.usuario(), semPortaAberta ? config.enderecoParaMostrar() : config.host(), semPortaAberta ? 0 : config.porta(), config.pins(),
+                chave.nome(), chave.impressao(), chave.publica());
         }
 
         String endereco() {
-            return usuario + "@" + host + ":" + porta;
+            return porta > 0 ? usuario + "@" + host + ":" + porta : usuario + "@" + host;
         }
     }
 

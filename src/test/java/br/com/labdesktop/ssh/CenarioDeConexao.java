@@ -38,7 +38,7 @@ final class CenarioDeConexao implements AutoCloseable {
     private volatile boolean sondaPorHttp;
 
     private CenarioDeConexao(ServidorSshDeTeste ssh, AgenteFalso agente, CofreFalso cofre, ProxyTcp proxy, ConfigSsh cfg,
-                             PoliticaDeBackoff backoff) {
+                             PoliticaDeBackoff backoff, br.com.labdesktop.transporte.AbridorDeDestino abridor) {
         this.ssh = ssh;
         this.agente = agente;
         this.cofre = cofre;
@@ -47,7 +47,10 @@ final class CenarioDeConexao implements AutoCloseable {
             chamadasDaSonda.incrementAndGet();
             return sondaPorHttp ? sondarPorHttp(tunel) : respostaDaSonda.get();
         };
-        this.conexao = backoff == null
+        this.conexao = abridor != null
+            ? new ConexaoSsh(CofreFalso.ID, cofre, cfg, sonda, br.com.labdesktop.util.Agendador.doFundo(),
+                backoff != null ? backoff : new PoliticaDeBackoff(cfg.escalaBackoff(), Math::random), abridor)
+            : backoff == null
             ? new ConexaoSsh(CofreFalso.ID, cofre, cfg, sonda)
             : new ConexaoSsh(CofreFalso.ID, cofre, cfg, sonda, br.com.labdesktop.util.Agendador.doFundo(), backoff);
         this.conexao.observar(historico::add);
@@ -81,7 +84,20 @@ final class CenarioDeConexao implements AutoCloseable {
         List<Pin> pins = comPin ? List.of(ssh.pin()) : List.of();
         CofreFalso cofre = new CofreFalso("127.0.0.1", portaDoCliente, pins).comPortaDoAgente(agente.porta());
         ssh.aceitar(cofre.par().getPublic());
-        return new CenarioDeConexao(ssh, agente, cofre, proxy, cfg, backoff);
+        return new CenarioDeConexao(ssh, agente, cofre, proxy, cfg, backoff, null);
+    }
+
+    /**
+     * O servidor conecta SEM PORTA ABERTA: o cofre tem o transporte dado (e o pin do servidor SSH embutido), o endereço guardado é um nome que nunca resolve, e o
+     * {@code abridor} é quem sobe o túnel (com ferramentas FALSAS: nunca a aws nem o cloudflared de verdade).
+     */
+    static CenarioDeConexao pelaTunel(br.com.labdesktop.cofre.Transporte transporte, br.com.labdesktop.transporte.AbridorDeDestino abridor, ConfigSsh cfg,
+                                      PoliticaDeBackoff backoff) throws IOException, GeneralSecurityException {
+        ServidorSshDeTeste ssh = ServidorSshDeTeste.ed25519();
+        AgenteFalso agente = new AgenteFalso();
+        CofreFalso cofre = new CofreFalso("127.0.0.1", 1, List.of(ssh.pin())).comPortaDoAgente(agente.porta()).comTransporte(transporte);
+        ssh.aceitar(cofre.par().getPublic());
+        return new CenarioDeConexao(ssh, agente, cofre, null, cfg, backoff, abridor);
     }
 
     CenarioDeConexao sondaPorHttp() {

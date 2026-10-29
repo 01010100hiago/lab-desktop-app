@@ -70,6 +70,12 @@ public final class CofreFalso implements AcessoAoCofre {
         return this;
     }
 
+    /** O servidor passa a conectar por outro modo, mantendo tudo o mais, inclusive os pins. */
+    public CofreFalso comTransporte(Transporte transporte) {
+        config = config.comTransporte(transporte);
+        return this;
+    }
+
     /** Quem criou a chave do servidor (o padrão é o app): decide se a remoção a tira do servidor. */
     public CofreFalso comOrigemDaChave(InfoChave.Origem origem) {
         this.origemDaChave = origem;

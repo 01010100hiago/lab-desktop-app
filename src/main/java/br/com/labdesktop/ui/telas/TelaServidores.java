@@ -249,7 +249,7 @@ public final class TelaServidores extends Painel {
             nome.setText(e.nome());
             seloProtegido.setVisible(e.protegido());
             endereco.setText(cfg.ehLocal() ? "Este computador (sem SSH), agente em 127.0.0.1:" + cfg.portaAgente()
-                : cfg.usuario() + "@" + cfg.host() + ":" + cfg.porta() + ", painel na porta " + cfg.portaAgente());
+                : cfg.usuario() + "@" + cfg.enderecoParaMostrar() + ", painel na porta " + cfg.portaAgente());
             estadoDaConexao.setIcon(Icones.colorido(a.icone(), 16, a.gravidade().tokenDoTexto()));
             estadoDaConexao.setIconTextGap(7);
             estadoDaConexao.setText(a.texto());

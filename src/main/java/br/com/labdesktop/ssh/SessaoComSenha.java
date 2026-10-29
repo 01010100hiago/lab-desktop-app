@@ -2,6 +2,9 @@ package br.com.labdesktop.ssh;
 
 import br.com.labdesktop.cofre.Pin;
 import br.com.labdesktop.seguranca.Redator;
+import br.com.labdesktop.transporte.DestinoSsh;
+import br.com.labdesktop.transporte.FalhaDoTunelException;
+import br.com.labdesktop.transporte.RotaDoSsh;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.time.Duration;
@@ -30,11 +33,14 @@ public final class SessaoComSenha implements AutoCloseable {
     private final SshClient cliente;
     private final ClientSession sessao;
     private final ConfigSsh cfg;
+    /** O caminho até o SSH: nos modos sem porta aberta, o túnel externo que esta sessão usa e que fecha junto com ela. */
+    private final DestinoSsh destino;
 
-    private SessaoComSenha(SshClient cliente, ClientSession sessao, ConfigSsh cfg) {
+    private SessaoComSenha(SshClient cliente, ClientSession sessao, ConfigSsh cfg, DestinoSsh destino) {
         this.cliente = cliente;
         this.sessao = sessao;
         this.cfg = cfg;
+        this.destino = destino;
     }
 
     /**
@@ -55,6 +61,25 @@ public final class SessaoComSenha implements AutoCloseable {
      */
     public static SessaoComSenha abrir(String host, int porta, String usuario, List<Pin> pins, char[] senha, ConfigSsh cfg)
         throws FalhaDeEntradaPorSenha {
+        return abrir(RotaDoSsh.direta(host, porta), usuario, pins, senha, cfg);
+    }
+
+    /**
+     * Como {@link #abrir(String, int, String, List, char[], ConfigSsh)}, pela ROTA do servidor: direta, ou por um túnel externo (AWS Session Manager, Cloudflare)
+     * que sobe para esta sessão e fecha junto com ela. A chave do host é conferida contra os pins ANTES de a senha sair, do mesmo jeito.
+     */
+    public static SessaoComSenha abrir(RotaDoSsh rota, String usuario, List<Pin> pins, char[] senha, ConfigSsh cfg)
+        throws FalhaDeEntradaPorSenha {
+        DestinoSsh destino;
+        try {
+            destino = rota.abrir();
+        } catch (FalhaDoTunelException e) {
+            throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, e.falha().mensagem(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, "A conexão foi interrompida.", e);
+        }
+        boolean entregue = false;
         List<Pin> confirmadas = List.copyOf(pins);
         VerificadorDeChaveDoServidor verificador = new VerificadorDeChaveDoServidor(() -> confirmadas);
         EntradaPorSenha.Relato relato = new EntradaPorSenha.Relato();
@@ -63,17 +88,23 @@ public final class SessaoComSenha implements AutoCloseable {
         cliente.start();
         ClientSession s = null;
         try {
-            s = cliente.connect(usuario, host, porta).verify(cfg.conectar()).getSession();
+            s = cliente.connect(usuario, destino.host(), destino.porta()).verify(cfg.conectar()).getSession();
             s.auth().verify(cfg.autenticar());
             relato.encerrada.set(true);
-            return new SessaoComSenha(cliente, s, cfg);
+            SessaoComSenha pronta = new SessaoComSenha(cliente, s, cfg, destino);
+            entregue = true;
+            return pronta;
         } catch (IOException | RuntimeException e) {
             relato.encerrada.set(true); // o prazo pode ter estourado com o pedido ainda na fila: depois disto nenhuma senha sai
             fecharQuieto(cliente, s);
             if (e instanceof InterruptedIOException) {
                 Thread.currentThread().interrupt();
             }
-            throw traduzir(e, verificador, relato, host, porta);
+            throw traduzir(e, verificador, relato, rota, destino);
+        } finally {
+            if (!entregue) {
+                destino.close();
+            }
         }
     }
 
@@ -84,7 +115,11 @@ public final class SessaoComSenha implements AutoCloseable {
 
     @Override
     public void close() {
-        fecharQuieto(cliente, sessao);
+        try {
+            fecharQuieto(cliente, sessao);
+        } finally {
+            destino.close();
+        }
     }
 
     private static void fecharQuieto(SshClient cliente, ClientSession sessao) {
@@ -101,8 +136,8 @@ public final class SessaoComSenha implements AutoCloseable {
 
     /** Do que o MINA lançou e do que o relato da tentativa sabe para a frase que o usuário lê. Nada daqui carrega a senha. */
     private static FalhaDeEntradaPorSenha traduzir(Throwable causa, VerificadorDeChaveDoServidor verificador, EntradaPorSenha.Relato relato,
-                                                   String host, int porta) {
-        LOG.info("Entrada com senha em {}:{} não deu certo (senha enviada={}, recusada={}): {}", host, porta, relato.senhaEnviada.get(),
+                                                   RotaDoSsh rota, DestinoSsh destino) {
+        LOG.info("Entrada com senha em {} não deu certo (senha enviada={}, recusada={}): {}", rota.descricao(), relato.senhaEnviada.get(),
             relato.recusada.get(), Redator.redigir(causa));
         VerificadorDeChaveDoServidor.Resultado conferencia = verificador.ultimo();
         if (conferencia == VerificadorDeChaveDoServidor.Resultado.DIVERGENTE
@@ -129,7 +164,7 @@ public final class SessaoComSenha implements AutoCloseable {
                 "Este servidor não aceita entrar com senha (só com chave). Instale a chave pública nele pelas opções avançadas: o app "
                     + "mostra a chave e o comando.");
         }
-        return new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, SondagemDeHost.traduzirFalha(host, porta, causa), causa);
+        return new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, FrasesDoCaminho.traduzir(rota, destino, causa), causa);
     }
 
     private static boolean semMetodoDeAutenticacao(Throwable causa) {

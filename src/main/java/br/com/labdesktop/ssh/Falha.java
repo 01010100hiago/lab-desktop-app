@@ -8,7 +8,7 @@ import br.com.labdesktop.seguranca.TextoSeguro;
  * tela e para o log); {@code tipo} deixa a tela escolher a ação certa (abrir o diálogo de confiar no host,
  * oferecer reprovisionar o token...).
  */
-public record Falha(Tipo tipo, String mensagem) {
+public record Falha(Tipo tipo, String mensagem, String textoCopiavel) {
 
     /** O que deu errado, em categorias que a tela sabe tratar. */
     public enum Tipo {
@@ -35,7 +35,17 @@ public record Falha(Tipo tipo, String mensagem) {
         /** "Este computador": o agente do laboratório local não responde (a tela fala de Docker, não de SSH). */
         LOCAL_AGENTE_FORA,
         /** "Este computador": o agente local é de antes do app nativo. */
-        LOCAL_AGENTE_DESATUALIZADO
+        LOCAL_AGENTE_DESATUALIZADO,
+        /** Sem porta aberta: falta o programa (aws, plugin do Session Manager ou cloudflared) neste computador. */
+        TRANSPORTE_FERRAMENTA_AUSENTE,
+        /** Sem porta aberta: o login da AWS expirou (ou não existe). */
+        TRANSPORTE_LOGIN_AWS,
+        /** Sem porta aberta: a instância não está ligada ao Session Manager. */
+        TRANSPORTE_INSTANCIA_SEM_SSM,
+        /** Sem porta aberta: a Cloudflare pede login no navegador (o endereço vai no texto copiável). */
+        TRANSPORTE_LOGIN_CLOUDFLARE,
+        /** Sem porta aberta: o túnel não subiu, caiu, ou o SSH não respondeu por ele. */
+        TRANSPORTE_OUTRO
     }
 
     public Falha {
@@ -43,5 +53,33 @@ public record Falha(Tipo tipo, String mensagem) {
             throw new IllegalArgumentException("tipo");
         }
         mensagem = TextoSeguro.limparLinha(Redator.redigir(mensagem));
+        if (textoCopiavel != null) {
+            String limpo = TextoSeguro.limpar(Redator.redigir(textoCopiavel)).strip();
+            textoCopiavel = limpo.isEmpty() ? null : TextoSeguro.truncar(limpo, 800);
+        }
+    }
+
+    public Falha(Tipo tipo, String mensagem) {
+        this(tipo, mensagem, null);
+    }
+
+    /** A falha de um túnel de transporte sem porta aberta, na categoria que a tela sabe tratar. */
+    public static Falha doTunel(br.com.labdesktop.transporte.FalhaDoTunel f) {
+        Tipo tipo = switch (f.tipo()) {
+            case FERRAMENTA_AUSENTE -> Tipo.TRANSPORTE_FERRAMENTA_AUSENTE;
+            case LOGIN_AWS_EXPIRADO -> Tipo.TRANSPORTE_LOGIN_AWS;
+            case INSTANCIA_SEM_SSM -> Tipo.TRANSPORTE_INSTANCIA_SEM_SSM;
+            case CLOUDFLARE_PEDE_LOGIN -> Tipo.TRANSPORTE_LOGIN_CLOUDFLARE;
+            case PRAZO_ESTOURADO, SAIU, NAO_INICIOU, PORTA_OCUPADA -> Tipo.TRANSPORTE_OUTRO;
+        };
+        return new Falha(tipo, f.mensagem(), f.textoCopiavel());
+    }
+
+    /** É uma falha do túnel de transporte (e não do SSH, da chave ou do agente)? */
+    public boolean ehDoTransporte() {
+        return switch (tipo) {
+            case TRANSPORTE_FERRAMENTA_AUSENTE, TRANSPORTE_LOGIN_AWS, TRANSPORTE_INSTANCIA_SEM_SSM, TRANSPORTE_LOGIN_CLOUDFLARE, TRANSPORTE_OUTRO -> true;
+            default -> false;
+        };
     }
 }

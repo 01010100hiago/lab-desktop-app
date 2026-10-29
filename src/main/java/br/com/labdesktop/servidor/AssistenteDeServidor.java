@@ -26,6 +26,7 @@ import br.com.labdesktop.ssh.ProvaPorChave;
 import br.com.labdesktop.ssh.SessaoComSenha;
 import br.com.labdesktop.ssh.SondagemDeHost;
 import br.com.labdesktop.ssh.SondagemException;
+import br.com.labdesktop.transporte.RotaDoSsh;
 import br.com.labdesktop.util.NomeDoComputador;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -69,17 +70,34 @@ public final class AssistenteDeServidor {
      *                       perguntar aousuário, como os testes mais antigos, nunca desliga a proteção por esquecimento; o Editar servidor só manda o valor se o usuário mexeu na caixa)
      * @param protegidoVisto o valor da marca que a tela mostrava quando abriu ({@code null}: não se sabe, aplica sempre). Se a marca do cofre já é outra (o app marcou
      *                       sozinho com a tela aberta), o valor que o usuário mandou NÃO sobrescreve a configuração atual
+     * @param transporte     "Como conectar": direto, AWS Session Manager ou Cloudflare. {@code null}: ao cadastrar vale direto; ao editar, o modo fica como está. Nos
+     *                       modos sem porta aberta o endereço e a porta do SSH não existem (não são pedidos nem validados)
      */
-    public record Dados(String nome, String host, int porta, String usuario, int portaDoAgente, Boolean protegido, Boolean protegidoVisto) {
+    public record Dados(String nome, String host, int porta, String usuario, int portaDoAgente, Boolean protegido, Boolean protegidoVisto, Transporte transporte) {
+
+        /** Sem falar do "Como conectar": ao cadastrar vale direto; ao editar, o modo fica como está. */
+        public Dados(String nome, String host, int porta, String usuario, int portaDoAgente, Boolean protegido, Boolean protegidoVisto) {
+            this(nome, host, porta, usuario, portaDoAgente, protegido, protegidoVisto, null);
+        }
 
         /** Sem falar da proteção: ao cadastrar vale "não protegido"; ao editar, a marca fica como está. */
         public Dados(String nome, String host, int porta, String usuario, int portaDoAgente) {
-            this(nome, host, porta, usuario, portaDoAgente, null, null);
+            this(nome, host, porta, usuario, portaDoAgente, null, null, null);
         }
 
         /** Com a caixa, sem dizer o que a tela viu ao abrir (aplica sempre). */
         public Dados(String nome, String host, int porta, String usuario, int portaDoAgente, Boolean protegido) {
-            this(nome, host, porta, usuario, portaDoAgente, protegido, null);
+            this(nome, host, porta, usuario, portaDoAgente, protegido, null, null);
+        }
+
+        /** O modo de conexão que vale: o escolhido, ou o direto quando ninguém falou nele. */
+        public Transporte transporteEfetivo() {
+            return transporte == null ? Transporte.DIRETO : transporte;
+        }
+
+        /** A mesma coisa, com outro modo de conectar. */
+        public Dados comTransporte(Transporte novo) {
+            return new Dados(nome, host, porta, usuario, portaDoAgente, protegido, protegidoVisto, novo);
         }
 
         /** O que o usuário vê na primeira vez (ARQUITETURA 8.3): campos vazios, com a porta SSH padrão (22) e a porta padrão do agente. */
@@ -93,11 +111,13 @@ public final class AssistenteDeServidor {
             if (nomeLimpo.isEmpty() || nomeLimpo.length() > 64) {
                 throw new IllegalArgumentException("O nome do servidor deve ter de 1 a 64 caracteres.");
             }
-            if (!ValidadorDeNomes.hostValido(host == null ? "" : host.strip())) {
-                throw new IllegalArgumentException("O endereço do servidor é inválido (use um IP ou um nome DNS).");
-            }
-            if (porta < 1 || porta > 65_535) {
-                throw new IllegalArgumentException("A porta do SSH vai de 1 a 65535.");
+            if (transporte == null || !transporte.ehTunel()) { // sem porta aberta não há endereço nem porta de SSH
+                if (!ValidadorDeNomes.hostValido(host == null ? "" : host.strip())) {
+                    throw new IllegalArgumentException("O endereço do servidor é inválido (use um IP ou um nome DNS).");
+                }
+                if (porta < 1 || porta > 65_535) {
+                    throw new IllegalArgumentException("A porta do SSH vai de 1 a 65535.");
+                }
             }
             if (!ValidadorDeNomes.usuarioSshValido(usuario == null ? "" : usuario.strip())) {
                 throw new IllegalArgumentException("O usuário do SSH é inválido.");
@@ -264,14 +284,27 @@ public final class AssistenteDeServidor {
     }
 
     /**
+     * A sondagem pelo caminho do servidor: direto, ou por um túnel externo (AWS Session Manager, Cloudflare) que sobe só para conferir a chave do host e é fechado ao
+     * terminar. Nenhuma credencial vai: é só o key exchange.
+     */
+    public SondagemDeHost.Resultado sondar(Transporte transporte, String host, int porta) throws SondagemException {
+        return SondagemDeHost.sondar(new RotaDoSsh(transporte == null ? Transporte.DIRETO : transporte, host == null ? "" : host.strip(), porta, gerenciador.abridor()), cfgSsh);
+    }
+
+    /** A rota até o SSH dos dados do formulário (direta, ou por túnel externo). */
+    private RotaDoSsh rotaDe(Dados dados) {
+        return new RotaDoSsh(dados.transporteEfetivo(), dados.host() == null ? "" : dados.host().strip(), dados.porta(), gerenciador.abridor());
+    }
+
+    /**
      * Grava o servidor no cofre COM o pin que o usuário acabou de confirmar e passa a acompanhá-lo (sem conectar ainda).
      *
      * @throws IllegalArgumentException se os dados não valem
      */
     public ServidorLab cadastrar(Dados dados, String chaveId, Pin pin) throws CofreException {
         dados.validar();
-        ConfigServidor config = new ConfigServidor(ConfigServidor.novoId(), dados.nome(), dados.host().strip(),
-            dados.porta(), dados.usuario().strip(), chaveId, dados.portaDoAgente(), List.of(pin), Transporte.DIRETO,
+        ConfigServidor config = new ConfigServidor(ConfigServidor.novoId(), dados.nome(), dados.host() == null ? "" : dados.host().strip(),
+            dados.porta(), dados.usuario().strip(), chaveId, dados.portaDoAgente(), List.of(pin), dados.transporteEfetivo(),
             null, Estado2fa.DESLIGADO, Boolean.TRUE.equals(dados.protegido()), false);
         cofre.adicionarServidor(config, null);
         return gerenciador.adicionar(config.id());
@@ -424,7 +457,7 @@ public final class AssistenteDeServidor {
             if (cfg.pins().isEmpty()) {
                 throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_IMPRESSAO_CONFIRMADA, TEXTO_SEM_IMPRESSAO);
             }
-            Dados dados = new Dados(cfg.nome(), cfg.host(), cfg.porta(), cfg.usuario(), cfg.portaAgente());
+            Dados dados = new Dados(cfg.nome(), cfg.host(), cfg.porta(), cfg.usuario(), cfg.portaAgente()).comTransporte(cfg.transporte());
             dados.validar();
             ChaveSsh daVez = cofre.chaveSsh(cfg.chaveId()).orElseThrow(() -> new CofreException("A chave deste servidor não está no cofre."));
             InstaladorDeChave.Resultado r;
@@ -451,7 +484,9 @@ public final class AssistenteDeServidor {
     private InstaladorDeChave.Resultado entrarInstalarEProvar(Dados dados, ChaveSsh daVez, List<Pin> pins, char[] senha,
                                                               Consumer<EtapaDoPrimeiroAcesso> progresso)
         throws FalhaDeEntradaPorSenha, CofreException, InterruptedException {
-        String conta = LimiteDeTentativas.chave(dados.host(), dados.porta(), dados.usuario());
+        String conta = dados.transporteEfetivo().ehTunel()
+            ? LimiteDeTentativas.chave(dados.transporteEfetivo().destinoEmTexto(), 0, dados.usuario())
+            : LimiteDeTentativas.chave(dados.host(), dados.porta(), dados.usuario());
         var pausa = limiteDeSenha.pausaRestante(conta);
         if (pausa.isPresent()) {
             throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.MUITAS_TENTATIVAS,
@@ -472,7 +507,7 @@ public final class AssistenteDeServidor {
         }
         progresso.accept(EtapaDoPrimeiroAcesso.PROVANDO);
         try {
-            new ProvaPorChave(dados.host().strip(), dados.porta(), dados.usuario().strip(), daVez.paraKeyPair(), pins, cfgSsh).provar();
+            new ProvaPorChave(rotaDe(dados), dados.usuario().strip(), daVez.paraKeyPair(), pins, cfgSsh).provar();
         } catch (FalhaDeEntradaPorSenha f) {
             switch (f.motivo()) {
                 case SEM_LOGIN_POR_CHAVE -> {
@@ -523,7 +558,7 @@ public final class AssistenteDeServidor {
 
     private SessaoComSenha abrirComSenha(Dados dados, List<Pin> pins, char[] senha, String conta) throws FalhaDeEntradaPorSenha {
         try {
-            SessaoComSenha s = SessaoComSenha.abrir(dados.host().strip(), dados.porta(), dados.usuario().strip(), pins, senha, cfgSsh);
+            SessaoComSenha s = SessaoComSenha.abrir(rotaDe(dados), dados.usuario().strip(), pins, senha, cfgSsh);
             Zeragem.zerar(senha); // já autenticou: a senha não serve mais a ninguém, nem ao resto da operação
             return s; // a conta só zera quando a PROVA da chave passa (entrarInstalarEProvar), não só porque a senha entrou
         } catch (FalhaDeEntradaPorSenha f) {

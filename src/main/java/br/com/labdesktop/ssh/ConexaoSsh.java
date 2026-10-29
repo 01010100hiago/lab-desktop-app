@@ -5,7 +5,12 @@ import br.com.labdesktop.cofre.CofreBloqueadoException;
 import br.com.labdesktop.cofre.CofreException;
 import br.com.labdesktop.cofre.ConfigServidor;
 import br.com.labdesktop.cofre.Pin;
+import br.com.labdesktop.cofre.Transporte;
 import br.com.labdesktop.seguranca.Redator;
+import br.com.labdesktop.transporte.AbridorDeDestino;
+import br.com.labdesktop.transporte.DestinoSsh;
+import br.com.labdesktop.transporte.FalhaDoTunel;
+import br.com.labdesktop.transporte.FalhaDoTunelException;
 import br.com.labdesktop.util.Agendador;
 import br.com.labdesktop.util.Agendador.Cancelavel;
 import br.com.labdesktop.util.Fundo;
@@ -65,6 +70,12 @@ import org.slf4j.LoggerFactory;
  * pin, "chave recusada", último erro da sessão) fica na PRÓPRIA {@link ClientSession}, em atributos, e nunca em
  * campos desta classe: o resultado de uma tentativa só pode ser lido pela tentativa que o criou.
  *
+ * <h2>Sem porta aberta</h2>
+ * Num servidor {@code SSM} ou {@code Cloudflare} o SSH não conecta no endereço do servidor: a cada tentativa o {@link AbridorDeDestino} sobe um túnel externo (um programa do
+ * computador do usuário, por lista de argumentos) numa porta aleatória de 127.0.0.1 e o SSH conecta nela. O túnel é fechado junto com a sessão (queda, nova tentativa, editar, remover,
+ * bloquear, fechar). Se o programa do túnel terminar sozinho, a sessão cai com a causa em palavras simples e a reconexão segue o mesmo backoff de sempre (nunca em laço apertado).
+ * Os pins ficam presos ao servidor (o id, no cofre), não à porta aleatória: a mudança de porta e a troca de modo não os tocam, e uma chave de host diferente continua recusada.
+ *
  * <h2>Segurança</h2>
  * O {@link KeyPair} sai do cofre, vai para {@code addPublicKeyIdentity} e a referência é solta logo depois da
  * autenticação. Nenhuma identidade de {@code ~/.ssh} entra (ver {@link ClienteSshFactory}). O verificador só
@@ -83,6 +94,7 @@ public final class ConexaoSsh implements ConexaoDoServidor {
     private final SondaDoAgente sonda;
     private final Agendador agendador;
     private final PoliticaDeBackoff backoff;
+    private final AbridorDeDestino abridor;
 
     private final ExecutorService ator;
     private final List<Consumer<InfoConexao>> ouvintes = new CopyOnWriteArrayList<>();
@@ -98,6 +110,8 @@ public final class ConexaoSsh implements ConexaoDoServidor {
     private static final AttributeKey<Boolean> CHAVE_OFERECIDA = new AttributeKey<>();
     /** A impressão (SHA256:...) da chave do cofre que o app usou nesta sessão: informação pública, vai para a tela e para o log. */
     private static final AttributeKey<String> IMPRESSAO_DA_CHAVE = new AttributeKey<>();
+    /** O túnel externo terminou sozinho e foi por isso que a sessão caiu: a causa vai para a mensagem. */
+    private static final AttributeKey<FalhaDoTunel> FALHA_DO_TUNEL = new AttributeKey<>();
 
     /** O que uma tentativa que falhou deixou na sessão dela: tudo o que a classificação da falha precisa. */
     private record Autopsia(VerificadorDeChaveDoServidor.Veredito veredito, boolean chaveRecusada, Throwable erroDaSessao, boolean servidorRecusou,
@@ -127,6 +141,8 @@ public final class ConexaoSsh implements ConexaoDoServidor {
     private long idTentativa;
     private ClientSession sessao;
     private TunelSsh tunel;
+    /** O caminho até o SSH desta sessão (nos modos sem porta aberta, o túnel externo): fecha junto com ela. */
+    private DestinoSsh destinoAtual;
     private Cancelavel timer;
     private Cancelavel timerEstavel;
     private boolean retentouAutenticacao;
@@ -138,20 +154,29 @@ public final class ConexaoSsh implements ConexaoDoServidor {
     private volatile ClientSession sessaoViva;
     private volatile TunelSsh tunelAtual;
     private SshClient cliente; // criado sob demanda, guardado por "this"
+    /** A thread que está abrindo o túnel externo desta tentativa (para interromper ao descartá-la: um túnel que demora não segura o fechamento). */
+    private volatile Thread threadAbrindoOTunel;
 
     public ConexaoSsh(String servidorId, AcessoAoCofre cofre, ConfigSsh cfg, SondaDoAgente sonda) {
         this(servidorId, cofre, cfg, sonda, Agendador.doFundo(),
             new PoliticaDeBackoff(cfg.escalaBackoff(), Math::random));
     }
 
+    /** Só o modo direto: um servidor sem porta aberta não conecta (quem precisa de túnel passa o {@link AbridorDeDestino} de verdade). */
     public ConexaoSsh(String servidorId, AcessoAoCofre cofre, ConfigSsh cfg, SondaDoAgente sonda,
                       Agendador agendador, PoliticaDeBackoff backoff) {
+        this(servidorId, cofre, cfg, sonda, agendador, backoff, AbridorDeDestino.SO_DIRETO);
+    }
+
+    public ConexaoSsh(String servidorId, AcessoAoCofre cofre, ConfigSsh cfg, SondaDoAgente sonda,
+                      Agendador agendador, PoliticaDeBackoff backoff, AbridorDeDestino abridor) {
         this.servidorId = servidorId;
         this.cofre = cofre;
         this.cfg = cfg;
         this.sonda = sonda;
         this.agendador = agendador;
         this.backoff = backoff;
+        this.abridor = abridor;
         this.verificador = new VerificadorDeChaveDoServidor(this::pinsAtuais);
         this.ator = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "conexao-" + servidorId);
@@ -309,10 +334,11 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         CompletableFuture<Void> pronto = new CompletableFuture<>();
         try {
             ator.execute(() -> {
+                CompletableFuture<Void> descartado = CompletableFuture.completedFuture(null);
                 try {
                     encerrado = true;
                     cancelarTimer();
-                    descartarSessaoAtual();
+                    descartado = descartarSessaoAtual();
                     mudar(EstadoConexao.DESCONECTADO, null, null);
                 } finally {
                     SshClient c;
@@ -320,19 +346,22 @@ public final class ConexaoSsh implements ConexaoDoServidor {
                         c = cliente;
                         cliente = null;
                     }
-                    if (c == null) {
-                        pronto.complete(null);
-                    } else {
-                        Fundo.ioVirtual().execute(() -> {
-                            try {
-                                c.stop();
-                            } catch (RuntimeException e) {
-                                LOG.debug("Falha ao parar o cliente SSH: {}", e.toString());
-                            } finally {
-                                pronto.complete(null);
-                            }
-                        });
-                    }
+                    // só termina depois de a sessão e o túnel externo (o programa do SSM ou da Cloudflare) terem sido fechados
+                    descartado.whenComplete((v, e) -> {
+                        if (c == null) {
+                            pronto.complete(null);
+                        } else {
+                            Fundo.ioVirtual().execute(() -> {
+                                try {
+                                    c.stop();
+                                } catch (RuntimeException ex) {
+                                    LOG.debug("Falha ao parar o cliente SSH: {}", ex.toString());
+                                } finally {
+                                    pronto.complete(null);
+                                }
+                            });
+                        }
+                    });
                     ator.shutdown();
                 }
             });
@@ -504,6 +533,22 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         }
     }
 
+    /** Como {@link #post}, mas diz se o ator ainda aceitava (um ator já encerrado recusa, e quem entrega algo que precisa de limpeza deve limpar). */
+    private boolean tentarPost(Runnable r) {
+        try {
+            ator.execute(() -> {
+                try {
+                    r.run();
+                } catch (RuntimeException e) {
+                    LOG.error("Erro inesperado na conexão {}: {}", servidorId, e.toString(), e);
+                }
+            });
+            return true;
+        } catch (RejectedExecutionException e) {
+            return false;
+        }
+    }
+
     private void reiniciarDoZero() {
         cancelarTimer();
         descartarSessaoAtual();
@@ -540,9 +585,17 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         Fase fase = Fase.CONECTANDO;
         ClientSession s = null;
         TunelSsh t = null;
+        DestinoSsh destino = null;
         try {
+            // Sem porta aberta: sobe o túnel externo (ou, no direto, só devolve o endereço do servidor). A porta de um túnel é nova a cada tentativa.
+            threadAbrindoOTunel = Thread.currentThread();
+            try {
+                destino = abridor.abrir(servidor.transporte(), servidor.host(), servidor.porta(), falha -> post(() -> aoCairOTunel(id, falha)));
+            } finally {
+                threadAbrindoOTunel = null;
+            }
             SshClient c = clienteParaConectar(servidor);
-            s = c.connect(servidor.usuario(), servidor.host(), servidor.porta()).verify(cfg.conectar()).getSession();
+            s = c.connect(servidor.usuario(), destino.host(), destino.porta()).verify(cfg.conectar()).getSession();
             fase = Fase.AUTENTICANDO;
             KeyPair par = cofre.keyPairDoServidor(servidor.id());
             s.setAttribute(IMPRESSAO_DA_CHAVE, KeyUtils.getFingerPrint(par.getPublic()));
@@ -555,23 +608,33 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             t = new TunelSsh(rastreador, contadorDeGeracao.incrementAndGet());
             ClientSession sessaoPronta = s;
             TunelSsh tunelPronto = t;
-            post(() -> aoSshPronto(id, sessaoPronta, tunelPronto));
+            DestinoSsh destinoPronto = destino;
+            if (!tentarPost(() -> aoSshPronto(id, sessaoPronta, tunelPronto, destinoPronto))) {
+                fecharQuieto(s, t, destino); // o ator já encerrou (fechar() passou): ninguém mais vai fechar isto, e o programa do túnel não pode ficar órfão
+            }
         } catch (Throwable e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             Autopsia autopsia = Autopsia.de(s); // antes de fechar: o que esta sessão aprendeu
-            fecharQuieto(s, t);
+            // a causa do túnel (o programa saiu: login da AWS expirado, instância sem SSM...) vale mais que o erro de rede que veio dela
+            FalhaDoTunel doTunel = e instanceof FalhaDoTunelException x ? x.falha() : destino == null ? null : destino.falhaDoTunel().orElse(null);
+            boolean tunelDeTransporte = servidor.transporte().ehTunel();
+            fecharQuieto(s, t, destino);
             Fase onde = fase;
             Throwable erro = e;
-            post(() -> aoFalharConexao(id, onde, erro, autopsia));
+            tentarPost(() -> aoFalharConexao(id, onde, erro, autopsia, doTunel, tunelDeTransporte));
         }
     }
 
-    private void aoSshPronto(long id, ClientSession s, TunelSsh t) {
+    private void aoSshPronto(long id, ClientSession s, TunelSsh t, DestinoSsh destino) {
         if (id != idTentativa || encerrado || estado != EstadoConexao.CONECTANDO) {
-            fecharQuieto(s, t); // tentativa velha (bloqueou, dormiu ou reiniciou no meio)
+            fecharQuieto(s, t, destino); // tentativa velha (bloqueou, dormiu ou reiniciou no meio)
             return;
         }
         sessao = s;
         tunel = t;
+        destinoAtual = destino;
         sessaoViva = s;
         tunelAtual = t;
         s.addCloseFutureListener(f -> post(() -> aoSessaoFechada(id)));
@@ -646,12 +709,18 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         }
     }
 
-    private void aoFalharConexao(long id, Fase fase, Throwable erro, Autopsia autopsia) {
+    private void aoFalharConexao(long id, Fase fase, Throwable erro, Autopsia autopsia, FalhaDoTunel doTunel, boolean tunelDeTransporte) {
         if (id != idTentativa || encerrado || estado != EstadoConexao.CONECTANDO) {
             return;
         }
         if (erro instanceof CofreBloqueadoException) {
             mudar(EstadoConexao.BLOQUEADO_COFRE, null, null);
+            return;
+        }
+        if (doTunel != null) {
+            // o túnel externo não subiu ou morreu (programa ausente, login expirado, prazo...): a frase é a da causa, e a próxima tentativa segue o backoff de sempre
+            tentativa++;
+            reconectarComBackoff(Falha.doTunel(doTunel));
             return;
         }
         VerificadorDeChaveDoServidor.Veredito veredito = autopsia.veredito();
@@ -693,7 +762,28 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             return;
         }
         tentativa++;
-        reconectarComBackoff(MensagensDeFalha.rede(erro, autopsia.erroDaSessao()));
+        reconectarComBackoff(tunelDeTransporte
+            ? MensagensDeFalha.sshPeloTunel(erro, autopsia.erroDaSessao())
+            : MensagensDeFalha.rede(erro, autopsia.erroDaSessao()));
+    }
+
+    /** O túnel externo terminou sozinho depois de pronto: derruba a sessão que andava por ele, com a causa na mensagem. */
+    private void aoCairOTunel(long id, FalhaDoTunel falha) {
+        if (id != idTentativa || encerrado) {
+            return; // o túnel desta tentativa já foi descartado
+        }
+        ClientSession s = sessao;
+        if (s == null) {
+            return; // ainda conectando: o connect falha e a causa do túnel é lida lá (conectarEmFundo)
+        }
+        s.setAttribute(FALHA_DO_TUNEL, falha);
+        Fundo.ioVirtual().execute(() -> {
+            try {
+                s.close(true);
+            } catch (RuntimeException e) {
+                LOG.debug("Falha ao fechar a sessão do túnel que caiu: {}", e.toString());
+            }
+        });
     }
 
     /**
@@ -721,9 +811,13 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             return; // a sessão foi descartada por nós (bloqueio, sono, nova tentativa)
         }
         Throwable motivo = sessao == null ? null : sessao.getAttribute(ERRO_DA_SESSAO);
+        FalhaDoTunel doTunel = sessao == null ? null : sessao.getAttribute(FALHA_DO_TUNEL);
+        if (doTunel == null && destinoAtual != null) {
+            doTunel = destinoAtual.falhaDoTunel().orElse(null); // o aviso da queda pode ainda não ter chegado: confere na hora
+        }
         descartarSessaoAtual();
         tentativa++;
-        reconectarComBackoff(MensagensDeFalha.sessaoPerdida(motivo));
+        reconectarComBackoff(doTunel != null ? Falha.doTunel(doTunel) : MensagensDeFalha.sessaoPerdida(motivo));
     }
 
     private void reconectarComBackoff(Falha motivo) {
@@ -830,31 +924,56 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         }
     }
 
-    /** Fecha sessão e túnel em segundo plano e invalida os eventos que ainda chegarem dela. */
-    private void descartarSessaoAtual() {
+    /**
+     * Fecha sessão, túnel do agente e caminho até o SSH (o túnel externo) em segundo plano e invalida os eventos que ainda chegarem deles. O futuro completa quando tudo foi
+     * fechado (o {@link #fechar()} espera por ele para o programa do túnel não ficar órfão).
+     */
+    private CompletableFuture<Void> descartarSessaoAtual() {
         idTentativa++;
         ClientSession s = sessao;
         TunelSsh t = tunel;
+        DestinoSsh d = destinoAtual;
         sessao = null;
         tunel = null;
+        destinoAtual = null;
         sessaoViva = null;
         tunelAtual = null;
         verificando = false;
         cancelarTimerEstavel();
-        if (s != null || t != null) {
-            Fundo.ioVirtual().execute(() -> fecharQuieto(s, t));
+        Thread abrindo = threadAbrindoOTunel;
+        if (abrindo != null) {
+            abrindo.interrupt(); // uma tentativa ainda esperando o túnel subir: o túnel que subir tarde é encerrado por quem o abre
         }
+        CompletableFuture<Void> pronto = new CompletableFuture<>();
+        if (s == null && t == null && d == null) {
+            pronto.complete(null);
+        } else {
+            Fundo.ioVirtual().execute(() -> {
+                try {
+                    fecharQuieto(s, t, d);
+                } finally {
+                    pronto.complete(null);
+                }
+            });
+        }
+        return pronto;
     }
 
-    private static void fecharQuieto(ClientSession s, TunelSsh t) {
-        if (t != null) {
-            t.close();
-        }
-        if (s != null) {
-            try {
-                s.close(true);
-            } catch (RuntimeException e) {
-                LOG.debug("Falha ao fechar a sessão: {}", e.toString());
+    private static void fecharQuieto(ClientSession s, TunelSsh t, DestinoSsh d) {
+        try {
+            if (t != null) {
+                t.close();
+            }
+            if (s != null) {
+                try {
+                    s.close(true);
+                } catch (RuntimeException e) {
+                    LOG.debug("Falha ao fechar a sessão: {}", e.toString());
+                }
+            }
+        } finally {
+            if (d != null) {
+                d.close(); // por último: encerra o programa do túnel externo (e os filhos dele)
             }
         }
     }
@@ -1031,6 +1150,12 @@ public final class ConexaoSsh implements ConexaoDoServidor {
 
         static Falha rede(Throwable erro, Throwable daSessao) {
             return new Falha(Falha.Tipo.REDE, "Não consegui conectar: " + descrever(erro, daSessao) + ".");
+        }
+
+        /** O túnel externo abriu, mas o SSH não deu certo por ele (a causa de rede, em palavras simples, e para onde olhar). */
+        static Falha sshPeloTunel(Throwable erro, Throwable daSessao) {
+            return new Falha(Falha.Tipo.TRANSPORTE_OUTRO, "O túnel abriu, mas não consegui falar SSH por ele: " + descrever(erro, daSessao)
+                + ". Confira se o SSH está ligado no servidor (e, no SSM, a porta SSH da instância).");
         }
 
         static Falha sessaoPerdida(Throwable motivo) {

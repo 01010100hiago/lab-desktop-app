@@ -10,6 +10,8 @@ import br.com.labdesktop.servidor.AssistenteDeServidor.Dados;
 import br.com.labdesktop.util.Agendador;
 import br.com.labdesktop.ssh.ConfigSsh;
 import br.com.labdesktop.ssh.MonitorDeSono;
+import br.com.labdesktop.transporte.AbridorDeDestino;
+import br.com.labdesktop.transporte.AbridorDeTuneis;
 import br.com.labdesktop.util.Fundo;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -42,6 +44,8 @@ public final class GerenciadorServidores implements AutoCloseable {
     private final PedidoDeCodigo2fa pedidoDeCodigo;
     private final ConfigSsh cfgSsh;
     private final ServicosLocais locais;
+    /** Quem abre o caminho até o SSH de cada servidor (o direto, ou o túnel externo do SSM e da Cloudflare). */
+    private final AbridorDeDestino abridor;
     private final Map<String, ServidorLab> servidores = new LinkedHashMap<>();
     private final List<Consumer<List<ServidorLab>>> observadoresDaLista = new CopyOnWriteArrayList<>();
     private final List<Consumer<ServidorLab>> ligadoresDeSono = new ArrayList<>();
@@ -59,10 +63,16 @@ public final class GerenciadorServidores implements AutoCloseable {
 
     /** Com os serviços do computador local (processos, plataforma, sonda) injetáveis: os testes do servidor "Este computador". */
     public GerenciadorServidores(AcessoAoCofre cofre, PedidoDeCodigo2fa pedidoDeCodigo, ConfigSsh cfgSsh, ServicosLocais locais) {
+        this(cofre, pedidoDeCodigo, cfgSsh, locais, AbridorDeTuneis.padrao());
+    }
+
+    /** Com o abridor de caminhos também injetável (os testes dos modos sem porta aberta usam um com ferramentas FALSAS, nunca a aws nem o cloudflared de verdade). */
+    public GerenciadorServidores(AcessoAoCofre cofre, PedidoDeCodigo2fa pedidoDeCodigo, ConfigSsh cfgSsh, ServicosLocais locais, AbridorDeDestino abridor) {
         this.cofre = cofre;
         this.pedidoDeCodigo = pedidoDeCodigo;
         this.cfgSsh = cfgSsh;
         this.locais = locais;
+        this.abridor = abridor;
         for (ConfigServidor c : cofre.servidores()) {
             servidores.put(c.id(), novoServidor(c.id()));
         }
@@ -70,7 +80,7 @@ public final class GerenciadorServidores implements AutoCloseable {
     }
 
     private ServidorLab novoServidor(String id) {
-        ServidorLab lab = new ServidorLab(id, cofre, pedidoDeCodigo, cfgSsh, Agendador.doFundo(), Fundo::naEdt, Fundo.ioVirtual(), locais);
+        ServidorLab lab = new ServidorLab(id, cofre, pedidoDeCodigo, cfgSsh, Agendador.doFundo(), Fundo::naEdt, Fundo.ioVirtual(), locais, abridor);
         lab.aoProtegerSozinho(this::avisarProtecaoAutomatica);
         return lab;
     }
@@ -90,6 +100,11 @@ public final class GerenciadorServidores implements AutoCloseable {
         for (Consumer<ServidorLab> o : observadoresDaProtecaoAutomatica) {
             Fundo.naEdt(() -> o.accept(lab));
         }
+    }
+
+    /** Quem abre o caminho até o SSH (o assistente de adicionar servidor e o conserto da chave abrem o mesmo túnel que a conexão). */
+    public AbridorDeDestino abridor() {
+        return abridor;
     }
 
     /** Os servidores, na ordem do cofre. */
@@ -194,7 +209,7 @@ public final class GerenciadorServidores implements AutoCloseable {
         AtomicReference<ConfigServidor> antes = new AtomicReference<>();
         AtomicReference<ConfigServidor> depois = new AtomicReference<>();
         cofre.alterarServidor(servidorId, atual -> {
-            ConfigServidor nova = atual.editar(dados.nome(), dados.host(), dados.porta(), dados.usuario(), dados.portaDoAgente());
+            ConfigServidor nova = atual.editar(dados.nome(), dados.transporte(), dados.host(), dados.porta(), dados.usuario(), dados.portaDoAgente());
             // A caixa "Servidor protegido" só vale se o usuário mexeu nela (o diálogo manda nulo se não mexeu) e se a marca do cofre ainda é a que a tela viu ao abrir:
             // se o app marcou sozinho com a tela aberta, o que o usuário mandou não sobrescreve a configuração atual.
             if (dados.protegido() != null && (dados.protegidoVisto() == null || dados.protegidoVisto() == atual.protegido())) {

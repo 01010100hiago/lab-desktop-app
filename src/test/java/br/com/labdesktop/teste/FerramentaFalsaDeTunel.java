@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
  * do teste), dada na variável {@code LABTEST_ALVO}. Não fala com a internet, não conhece AWS nem Cloudflare.
  *
  * <p>Variáveis para o teste programar o comportamento: {@code LABTEST_MORRER_APOS_MS} (sai sozinho depois de escutar), {@code LABTEST_SAIR_LOGO_TEXTO} (escreve o texto e sai na hora,
- * sem escutar), {@code LABTEST_NETO_ARQUIVO} (cria um processo filho que grava o próprio pid nesse arquivo e fica dormindo: prova que os descendentes também morrem) e
+ * sem escutar), {@code LABTEST_NAO_ESCUTAR} (fica de pé e nunca escuta), {@code LABTEST_NETO_ARQUIVO} (cria um processo filho que grava o próprio pid nesse arquivo e fica dormindo: prova que os descendentes também morrem) e
  * {@code LABTEST_PATH_ARQUIVO} (grava o PATH que o app pediu para o filho).
  */
 public final class FerramentaFalsaDeTunel {
@@ -43,6 +43,9 @@ public final class FerramentaFalsaDeTunel {
         String arquivoDoPath = System.getenv("LABTEST_PATH_ARQUIVO");
         if (arquivoDoPath != null) {
             Files.writeString(Path.of(arquivoDoPath), String.valueOf(System.getenv("LABTEST_PATH_PEDIDO")), StandardCharsets.UTF_8);
+        }
+        if (System.getenv("LABTEST_NAO_ESCUTAR") != null) {
+            Thread.sleep(Long.MAX_VALUE); // o túnel "demora": fica de pé e nunca escuta
         }
         int local = portaLocal(args);
         int alvo = Integer.parseInt(System.getenv("LABTEST_ALVO"));

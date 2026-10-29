@@ -2,6 +2,9 @@ package br.com.labdesktop.ssh;
 
 import br.com.labdesktop.cofre.Pin;
 import br.com.labdesktop.seguranca.Redator;
+import br.com.labdesktop.transporte.DestinoSsh;
+import br.com.labdesktop.transporte.FalhaDoTunelException;
+import br.com.labdesktop.transporte.RotaDoSsh;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.security.KeyPair;
@@ -25,8 +28,7 @@ public final class ProvaPorChave implements ProvaDeChave {
     public static final String COMANDO_DA_PROVA = "echo lab-desktop-prova";
     private static final String RESPOSTA_ESPERADA = "lab-desktop-prova";
 
-    private final String host;
-    private final int porta;
+    private final RotaDoSsh rota;
     private final String usuario;
     private final KeyPair chave;
     private final List<Pin> pins;
@@ -37,8 +39,12 @@ public final class ProvaPorChave implements ProvaDeChave {
      * @param pins  as impressões digitais confirmadas do servidor
      */
     public ProvaPorChave(String host, int porta, String usuario, KeyPair chave, List<Pin> pins, ConfigSsh cfg) {
-        this.host = host;
-        this.porta = porta;
+        this(RotaDoSsh.direta(host, porta), usuario, chave, pins, cfg);
+    }
+
+    /** Pela rota do servidor: direta ou por um túnel externo que sobe só para esta prova e é fechado ao terminar. */
+    public ProvaPorChave(RotaDoSsh rota, String usuario, KeyPair chave, List<Pin> pins, ConfigSsh cfg) {
+        this.rota = rota;
         this.usuario = usuario;
         this.chave = chave;
         this.pins = List.copyOf(pins);
@@ -47,12 +53,26 @@ public final class ProvaPorChave implements ProvaDeChave {
 
     @Override
     public void provar() throws FalhaDeEntradaPorSenha, InterruptedException {
+        DestinoSsh destino;
+        try {
+            destino = rota.abrir();
+        } catch (FalhaDoTunelException e) {
+            throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, e.falha().mensagem(), e);
+        }
+        try {
+            provarPor(destino);
+        } finally {
+            destino.close();
+        }
+    }
+
+    private void provarPor(DestinoSsh destino) throws FalhaDeEntradaPorSenha, InterruptedException {
         VerificadorDeChaveDoServidor verificador = new VerificadorDeChaveDoServidor(() -> pins);
         SshClient cliente = ClienteSshFactory.criar(verificador, cfg, AlgoritmosDeHost.paraPins(pins));
         cliente.start();
         ClientSession s = null;
         try {
-            s = cliente.connect(usuario, host, porta).verify(cfg.conectar()).getSession();
+            s = cliente.connect(usuario, destino.host(), destino.porta()).verify(cfg.conectar()).getSession();
             s.addPublicKeyIdentity(chave);
             s.auth().verify(cfg.autenticar());
             ResultadoExec r = new ExecRemoto(s, cfg.abrirCanal()).executar(COMANDO_DA_PROVA, new byte[0], Duration.ofSeconds(15));
@@ -65,7 +85,7 @@ public final class ProvaPorChave implements ProvaDeChave {
             Thread.currentThread().interrupt();
             throw new InterruptedException("Interrompido durante a prova da chave.");
         } catch (IOException | RuntimeException e) {
-            throw traduzir(e, verificador);
+            throw traduzir(e, verificador, destino);
         } finally {
             try {
                 if (s != null) {
@@ -79,8 +99,8 @@ public final class ProvaPorChave implements ProvaDeChave {
         }
     }
 
-    private FalhaDeEntradaPorSenha traduzir(Throwable causa, VerificadorDeChaveDoServidor verificador) {
-        LOG.info("Prova da chave em {}:{} não passou: {}", host, porta, Redator.redigir(causa));
+    private FalhaDeEntradaPorSenha traduzir(Throwable causa, VerificadorDeChaveDoServidor verificador, DestinoSsh destino) {
+        LOG.info("Prova da chave em {} não passou: {}", rota.descricao(), Redator.redigir(causa));
         VerificadorDeChaveDoServidor.Resultado conferencia = verificador.ultimo();
         if (conferencia == VerificadorDeChaveDoServidor.Resultado.DIVERGENTE
             || conferencia == VerificadorDeChaveDoServidor.Resultado.SEM_PIN_PARA_O_ALGORITMO) {
@@ -96,6 +116,6 @@ public final class ProvaPorChave implements ProvaDeChave {
                         + "authorized_keys do usuário têm as permissões certas (sem escrita para grupo e outros).");
             }
         }
-        return new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, SondagemDeHost.traduzirFalha(host, porta, causa), causa);
+        return new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, FrasesDoCaminho.traduzir(rota, destino, causa), causa);
     }
 }

@@ -1153,9 +1153,9 @@ public final class AcoesDaInterface {
      */
     public void conferirImpressao(ServidorLab lab) {
         ConfigServidor cfg = lab.config();
-        String endereco = cfg.host() + ":" + cfg.porta();
+        String endereco = cfg.enderecoParaMostrar();
         avisos.info("Consultando a chave do servidor em " + endereco + "…");
-        Tarefas.rodar(() -> assistente.sondar(cfg.host(), cfg.porta()), resultado ->
+        Tarefas.rodar(() -> assistente.sondar(cfg.transporte(), cfg.host(), cfg.porta()), resultado ->
             apresentador.mostrar(new DialogoConfiarHost(cfg.nome(), endereco, resultado, avisos, confiou -> {
                 if (!confiou) {
                     return;

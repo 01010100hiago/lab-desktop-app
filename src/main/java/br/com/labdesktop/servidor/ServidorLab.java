@@ -43,6 +43,9 @@ import br.com.labdesktop.ssh.FalhaDeEntradaPorSenha;
 import br.com.labdesktop.ssh.ProvaDeChave;
 import br.com.labdesktop.ssh.ProvaPorChave;
 import br.com.labdesktop.ssh.InfoConexao;
+import br.com.labdesktop.transporte.AbridorDeDestino;
+import br.com.labdesktop.transporte.AbridorDeTuneis;
+import br.com.labdesktop.transporte.RotaDoSsh;
 import br.com.labdesktop.ssh.PoliticaDeBackoff;
 import br.com.labdesktop.ssh.ProvisionadorRemoto;
 import br.com.labdesktop.ssh.SegredoTotp;
@@ -128,6 +131,8 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     private Inscricao assinaturaDeLimites;
     private final AtomicBoolean diagnosticando = new AtomicBoolean();
     private final Runnable desinscreverConexao;
+    /** Quem abre o caminho até o SSH. */
+    private final AbridorDeDestino abridor;
 
     private final List<Consumer<EstadoServidor>> observadores = new CopyOnWriteArrayList<>();
     private final Object trava = new Object();
@@ -177,6 +182,13 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
     /** Com os serviços do computador local também injetáveis (testes do servidor "Este computador"). */
     public ServidorLab(String servidorId, AcessoAoCofre cofre, PedidoDeCodigo2fa pedidoDeCodigo, ConfigSsh cfgSsh,
                        Agendador agendador, Executor entrega, Executor trabalho, ServicosLocais locais) {
+        this(servidorId, cofre, pedidoDeCodigo, cfgSsh, agendador, entrega, trabalho, locais, AbridorDeTuneis.padrao());
+    }
+
+    /** Também com o abridor do caminho até o SSH injetável (os testes do SSM e da Cloudflare usam ferramentas FALSAS). */
+    public ServidorLab(String servidorId, AcessoAoCofre cofre, PedidoDeCodigo2fa pedidoDeCodigo, ConfigSsh cfgSsh,
+                       Agendador agendador, Executor entrega, Executor trabalho, ServicosLocais locais, AbridorDeDestino abridor) {
+        this.abridor = abridor;
         this.id = servidorId;
         this.locais = locais;
         this.cofre = cofre;
@@ -199,7 +211,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
                 new ExecutorDeLinhaFixa(locais.executor()));
         } else {
             this.conexaoSsh = new ConexaoSsh(servidorId, cofre, cfgSsh, t -> sondar(t), agendador,
-                new PoliticaDeBackoff(cfgSsh.escalaBackoff(), Math::random));
+                new PoliticaDeBackoff(cfgSsh.escalaBackoff(), Math::random), abridor);
             this.conexao = conexaoSsh;
         }
         this.pastaDosProjetosLocais = () -> locais.plataforma().pastaDeProjetosPadrao();
@@ -788,16 +800,21 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         ProvaDeChave prova = () -> {
             ConfigServidor c = config();
             try {
-                new ProvaPorChave(c.host(), c.porta(), c.usuario(), cofre.keyPairDoServidor(id), c.pins(), cfgSsh).provar();
+                new ProvaPorChave(rotaDoSsh(c), c.usuario(), cofre.keyPairDoServidor(id), c.pins(), cfgSsh).provar();
             } catch (CofreException e) {
                 throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_LOGIN_POR_CHAVE, "Não consegui ler a chave deste servidor no cofre.", e);
             }
         };
         br.com.labdesktop.ssh.SondaDeMetodos sonda = () -> {
             ConfigServidor c = config();
-            return br.com.labdesktop.ssh.SondaDeMetodos.para(c.host(), c.porta(), c.usuario(), c.pins(), cfgSsh).ler();
+            return br.com.labdesktop.ssh.SondaDeMetodos.para(rotaDoSsh(c), c.usuario(), c.pins(), cfgSsh).ler();
         };
         return new DesligadorDeSenha(new ExecutorSsh(conexaoSsh), prova, java.time.LocalDateTime::now, sonda, config().usuario());
+    }
+
+    /** A rota até o SSH deste servidor: direta, ou pelo túnel externo do SSM ou da Cloudflare. */
+    private RotaDoSsh rotaDoSsh(ConfigServidor c) {
+        return new RotaDoSsh(c.transporte(), c.host(), c.porta(), abridor);
     }
 
     /** O instalador terminou (instalou, atualizou ou removeu): repete o teste do agente para o estado refletir o que há no servidor. */
