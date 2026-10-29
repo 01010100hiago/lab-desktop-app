@@ -8,10 +8,10 @@ import java.util.regex.Pattern;
 
 /**
  * O que "Publicar na internet" muda no {@code docker-compose.yml}: o serviço ganha um {@code container_name} único e entra na rede {@code edge} (a rede
- * que o cloudflared enxerga), e o arquivo declara {@code edge} como rede externa. Edição por ACRÉSCIMO de linhas, como TEXTO (sem biblioteca de YAML:
+ * que o cloudflared enxerga), e o arquivo declara {@code edge} como rede externa. Edição por ACRÉSCIMO de linhas (a lista de redes em uma linha ganha {@code edge} dentro dos colchetes), como TEXTO (sem biblioteca de YAML:
  * uma que reescreve o arquivo perderia os comentários e a ordem do usuário).
  *
- * <p>Só edita um compose no formato comum (blocos com recuo de espaços, serviços com dois espaços de recuo, {@code networks:} como lista ou como mapa,
+ * <p>Só edita um compose no formato comum (blocos com recuo de espaços, serviços com dois espaços de recuo, {@code networks:} como lista, como mapa ou como lista em uma linha ({@code [default, edge]}),
  * sem CRLF, sem tabulação, sem {@code network_mode}). Qualquer outra coisa vira {@link Situacao#MANUAL}: o app NÃO escreve e mostra o bloco para o usuário
  * copiar, com a frase de onde cada parte vai (o compose do usuário nunca é reescrito, igual ao "Adicionar container").
  */
@@ -230,8 +230,59 @@ public final class ComposeComEdge {
         return new Servico(b.nome(), container == null || container.isEmpty() ? null : container, edge, porta);
     }
 
-    /** Os nomes de rede de um {@code networks:} do serviço, em lista ({@code - nome}) ou mapa ({@code nome:}). Vazio se está em uma linha só. */
+    /**
+     * Os nomes de uma lista de redes escrita em uma linha ({@code [default, edge]}, com ou sem aspas e com comentário no fim), ou {@code null} se o valor é
+     * outra coisa (mapa entre chaves, lista que continua na linha de baixo, vazia, com âncora, variável ou nome estranho): aí o app não a lê nem a edita.
+     */
+    private static List<String> redesDeLinhaSo(String valor) {
+        String v = valor.strip();
+        if (!v.startsWith("[")) {
+            return null;
+        }
+        int fecha = v.indexOf(']');
+        if (fecha < 0) {
+            return null;
+        }
+        String depois = v.substring(fecha + 1);
+        // em YAML o "#" só abre comentário depois de um espaço: "[a]#x" é um arquivo que o compose rejeita, e o app não escreve em cima dele
+        if (!depois.isBlank() && !(depois.stripLeading().startsWith("#") && Character.isWhitespace(depois.charAt(0)))) {
+            return null;
+        }
+        String dentro = v.substring(1, fecha);
+        if (dentro.isBlank() || dentro.indexOf('[') >= 0 || dentro.indexOf('{') >= 0 || dentro.indexOf('#') >= 0) {
+            return null;
+        }
+        String semVirgulaFinal = dentro.stripTrailing();
+        if (semVirgulaFinal.endsWith(",")) { // a vírgula final é YAML válido
+            dentro = semVirgulaFinal.substring(0, semVirgulaFinal.length() - 1);
+        }
+        List<String> nomes = new ArrayList<>();
+        for (String parte : dentro.split(",", -1)) {
+            String nome = semAspas(parte);
+            if (!nome.matches("^[A-Za-z0-9][A-Za-z0-9_.-]*$")) {
+                return null;
+            }
+            nomes.add(nome);
+        }
+        return nomes;
+    }
+
+    /** O que vem depois de {@code networks:} na linha do serviço, sem o comentário vazio: {@code ""} quando as redes vêm nas linhas de baixo. */
+    private static String valorDoNetworks(Mapa m, int linhaDoNetworks) {
+        Matcher c = CHAVE_DO_SERVICO.matcher(m.l.get(linhaDoNetworks));
+        if (!c.matches() || c.group(2).isBlank() || c.group(2).strip().startsWith("#")) {
+            return "";
+        }
+        return c.group(2);
+    }
+
+    /** Os nomes de rede de um {@code networks:} do serviço, em lista ({@code - nome}), mapa ({@code nome:}) ou lista em uma linha. Vazio se está em outro formato de uma linha só. */
     private static List<String> listaDeRedes(Mapa m, int linhaDoNetworks, int fimDoServico) {
+        String emLinha = valorDoNetworks(m, linhaDoNetworks);
+        if (!emLinha.isEmpty()) {
+            List<String> lida = redesDeLinhaSo(emLinha);
+            return lida == null ? List.of() : lida;
+        }
         List<String> nomes = new ArrayList<>();
         for (int i = linhaDoNetworks + 1; i < fimDoServico; i++) {
             String l = m.l.get(i);
@@ -299,6 +350,7 @@ public final class ComposeComEdge {
         boolean temContainerName = false;
         boolean temNetworks = false;
         boolean redesEmLinhaSo = false;
+        boolean redesEmLinhaLegiveis = false;
         boolean usaNetworkMode = false;
         int linhaDoNetworks = -1;
         if (alvo != null) {
@@ -322,6 +374,7 @@ public final class ComposeComEdge {
                         linhaDoNetworks = i;
                         if (!c.group(2).isBlank() && !c.group(2).strip().startsWith("#")) {
                             redesEmLinhaSo = true;
+                            redesEmLinhaLegiveis = redesDeLinhaSo(c.group(2)) != null;
                         }
                     }
                     case "network_mode" -> {
@@ -332,7 +385,7 @@ public final class ComposeComEdge {
                     default -> { }
                 }
             }
-            if (redesEmLinhaSo) {
+            if (redesEmLinhaSo && !redesEmLinhaLegiveis) {
                 motivos.add("As redes do serviço estão escritas em uma linha só (entre colchetes ou chaves).");
             }
             for (Bloco outro : blocosDeServico(m)) {
@@ -372,7 +425,7 @@ public final class ComposeComEdge {
             }
         }
         // com network_mode o bloco (networks: default e edge) CONTRADIZ o bloqueio: não há o que colar, só o motivo
-        String bloco = usaNetworkMode ? "" : blocoParaCopiar(servico, nome, temContainerName, temNetworks);
+        String bloco = usaNetworkMode ? "" : blocoParaCopiar(servico, nome, temContainerName, temNetworks, redesEmLinhaSo);
         if (!motivos.isEmpty()) {
             return new Proposta(Situacao.MANUAL, null, nome, motivos, bloco);
         }
@@ -387,6 +440,7 @@ public final class ComposeComEdge {
         // do arquivo pode vir antes ou depois dos serviços).
         record Acrescimo(int onde, List<String> linhas) { }
         List<Acrescimo> acrescimos = new ArrayList<>();
+        String linhaDasRedes = null; // a lista de redes em uma linha, com edge dentro dos colchetes (troca a linha no lugar; as demais só ganham linhas)
         if (redeAMenos) {
             if (m.redesDeCima < 0) {
                 acrescimos.add(new Acrescimo(m.l.size(), List.of("", "networks:", "  " + REDE_EDGE + ":", "    external: true")));
@@ -397,6 +451,12 @@ public final class ComposeComEdge {
         if (!servicoNaEdge) {
             if (!temNetworks) {
                 acrescimos.add(new Acrescimo(alvo.inicio() + 1, List.of("    networks:", "      - default", "      - " + REDE_EDGE)));
+            } else if (redesEmLinhaSo) {
+                String linha = m.l.get(linhaDoNetworks);
+                int fecha = linha.indexOf(']');
+                String antes = linha.substring(0, fecha);
+                String separador = antes.stripTrailing().endsWith(",") ? " " : ", "; // com vírgula final, não repete a vírgula
+                linhaDasRedes = antes + separador + REDE_EDGE + linha.substring(fecha);
             } else {
                 boolean emLista = false;
                 for (int i = linhaDoNetworks + 1; i < alvo.fim(); i++) {
@@ -425,6 +485,9 @@ public final class ComposeComEdge {
             acrescimos.add(new Acrescimo(alvo.inicio() + 1, List.of("    container_name: " + nome)));
         }
         List<String> novas = new ArrayList<>(m.l);
+        if (linhaDasRedes != null) {
+            novas.set(linhaDoNetworks, linhaDasRedes);
+        }
         List<Acrescimo> ordenados = new ArrayList<>(acrescimos);
         ordenados.sort((x, y) -> Integer.compare(y.onde(), x.onde())); // estável: no mesmo lugar, o que veio depois entra primeiro na linha (container_name antes de networks)
         for (Acrescimo a : ordenados) {
@@ -444,7 +507,7 @@ public final class ComposeComEdge {
         return false;
     }
 
-    private static String blocoParaCopiar(String servico, String nome, boolean temContainerName, boolean temNetworks) {
+    private static String blocoParaCopiar(String servico, String nome, boolean temContainerName, boolean temNetworks, boolean redesEmLinhaSo) {
         StringBuilder sb = new StringBuilder();
         sb.append("# 1) No serviço \"").append(servico).append("\" do docker-compose.yml, dentro dele (com quatro espaços de recuo), acrescente");
         if (temContainerName) {
@@ -454,7 +517,10 @@ public final class ComposeComEdge {
         if (!temContainerName) {
             sb.append("    container_name: ").append(nome).append('\n');
         }
-        if (temNetworks) {
+        if (temNetworks && redesEmLinhaSo) {
+            sb.append("    # em networks:, que está escrito em uma linha, acrescente ").append(REDE_EDGE)
+                .append(" ao que já está lá, sem tirar nada (ou escreva as redes em linhas separadas, uma por linha, e acrescente - ").append(REDE_EDGE).append(")\n");
+        } else if (temNetworks) {
             sb.append("    # em networks:, acrescente a linha:\n      - ").append(REDE_EDGE).append('\n');
         } else {
             sb.append("    networks:\n      - default\n      - ").append(REDE_EDGE).append('\n');

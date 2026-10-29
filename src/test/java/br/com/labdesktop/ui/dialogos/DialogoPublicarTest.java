@@ -260,7 +260,7 @@ class DialogoPublicarTest {
 
     @Test
     void composeDoDonoForaDoFormatoBloqueiaEMostraOBlocoParaCopiar() throws Exception {
-        c.lab.escrever(LabSimulado.PROJETOS + "/demo/docker-compose.yml", PublicadorPorArquivoTestApoio.COMPOSE.replace("    networks:\n      - default\n", "    networks: [default, interna]\n"));
+        c.lab.escrever(LabSimulado.PROJETOS + "/demo/docker-compose.yml", PublicadorPorArquivoTestApoio.COMPOSE.replace("    networks:\n      - default\n", "    networks: {default: {}}\n"));
         DialogoPublicar d = abrir();
         Espera.ate(PRAZO, "o serviço do compose", () -> ed(() -> d.caixaDeServicos().getItemCount()) == 1);
         Visual.naEdt(() -> d.botaoConferir().doClick());

@@ -132,7 +132,10 @@ class ComposeComEdgeTest {
         List<Caso> casos = List.of(
             new Caso(base.replace("\n", "\r\n"), "web", "CRLF"),
             new Caso("services:\n\tweb:\n\t\timage: nginx\n", "web", "tabulação"),
-            new Caso("services:\n  web:\n    image: nginx\n    networks: [default, interna]\n", "web", "uma linha só"),
+            new Caso("services:\n  web:\n    image: nginx\n    networks: {default: {}}\n", "web", "uma linha só"),
+            new Caso("services:\n  web:\n    image: nginx\n    networks: []\n", "web", "uma linha só"),
+            new Caso("services:\n  web:\n    image: nginx\n    networks: [default,\n      interna]\n", "web", "uma linha só"),
+            new Caso("services:\n  web:\n    image: nginx\n    networks: [default, ${REDE}]\n", "web", "uma linha só"),
             new Caso("services:\n  web:\n    image: nginx\n    network_mode: host\n", "web", "network_mode"),
             new Caso("services: {web: {image: nginx}}\n", "web", "services"),
             new Caso("services:\n  web:\n    image: nginx\nnetworks: {}\n", "web", "networks do arquivo"),
@@ -174,5 +177,81 @@ class ComposeComEdgeTest {
         for (String ruim : List.of("Demo", "-v", "a b", "demo;ls", "", "a".repeat(60))) {
             assertThrows(IllegalArgumentException.class, () -> ComposeComEdge.propor(DO_APP, "app", ruim), ruim);
         }
+    }
+
+    /** O compose do projeto de exemplo do lab: container_name com comentário, redes em uma linha e edge já declarada. */
+    private static final String WHOAMI = "# Projeto de exemplo\n"
+        + "name: whoami\n"
+        + "services:\n"
+        + "  whoami:\n"
+        + "    image: traefik/whoami\n"
+        + "    container_name: whoami        # nome único: é assim que o cloudflared o encontra\n"
+        + "    restart: unless-stopped\n"
+        + "    networks: [default, edge]\n"
+        + "\n"
+        + "networks:\n"
+        + "  edge:\n"
+        + "    external: true\n";
+
+    @Test
+    void redesEmUmaLinhaComEdgeJaEstaProntoENadaSeEscreve() {
+        ComposeComEdge.Proposta p = ComposeComEdge.propor(WHOAMI, "whoami", "demo-whoami");
+        assertEquals(Situacao.PRONTO, p.situacao(), p.motivos().toString());
+        assertEquals("whoami", p.containerName());
+        assertEquals(WHOAMI, p.novoTexto());
+        assertTrue(ComposeComEdge.servicos(WHOAMI).get(0).naRedeEdge(), "a lista de serviços também vê a edge");
+        for (String forma : List.of("[default, edge]", "[ \"default\" , 'edge' ]", "[edge]", "[default, edge]   # as redes")) {
+            String t = WHOAMI.replace("[default, edge]", forma);
+            assertEquals(Situacao.PRONTO, ComposeComEdge.propor(t, "whoami", "demo-whoami").situacao(), forma);
+        }
+    }
+
+    @Test
+    void redesEmUmaLinhaSemEdgeGanhamEdgeDentroDosColchetesSemMexerNoResto() {
+        String t = "services:\n  web:\n    image: nginx\n    container_name: site\n    networks: [default, interna]  # redes\n    restart: always\n"
+            + "\nnetworks:\n  edge:\n    external: true\n";
+        ComposeComEdge.Proposta p = ComposeComEdge.propor(t, "web", "demo-web");
+        assertEquals(Situacao.EDITAVEL, p.situacao(), p.motivos().toString());
+        assertEquals(t.replace("[default, interna]  # redes", "[default, interna, edge]  # redes"), p.novoTexto());
+        assertEquals(Situacao.EDITAVEL, ComposeComEdge.propor("services:\n  web:\n    image: nginx\n    networks: [default]\n", "web", "demo-web").situacao());
+        String semContainer = "services:\n  web:\n    image: nginx\n    networks: [default]\n";
+        assertEquals("services:\n  web:\n    container_name: demo-web\n    image: nginx\n    networks: [default, edge]\n\nnetworks:\n  edge:\n    external: true\n",
+            ComposeComEdge.propor(semContainer, "web", "demo-web").novoTexto());
+    }
+
+    @Test
+    void oBlocoParaCopiarDizOQueFazerQuandoAsRedesEstaoEmUmaLinhaQueOAppNaoEdita() {
+        ComposeComEdge.Proposta p = ComposeComEdge.propor("services:\n  web:\n    image: nginx\n    networks: {default: {}}\n", "web", "demo-web");
+        assertEquals(Situacao.MANUAL, p.situacao());
+        assertTrue(p.blocoParaCopiar().contains("escrito em uma linha, acrescente edge ao que já está lá"), p.blocoParaCopiar());
+        assertFalse(p.blocoParaCopiar().contains("acrescente a linha"), "não manda acrescentar uma linha de lista a quem escreveu em uma linha");
+        assertFalse(p.blocoParaCopiar().contains("networks: ["), "o exemplo não inventa a rede default de quem não a usava");
+    }
+
+    @Test
+    void listaEmUmaLinhaComVirgulaFinalOuComentarioColadoEntendeCorretamente() {
+        String base = "services:\n  web:\n    image: nginx\n    container_name: site\n    networks: FORMA\n\nnetworks:\n  edge:\n    external: true\n";
+        assertEquals(Situacao.PRONTO, ComposeComEdge.propor(base.replace("FORMA", "[default, edge,]"), "web", "demo-web").situacao(), "vírgula final é YAML válido");
+        ComposeComEdge.Proposta p = ComposeComEdge.propor(base.replace("FORMA", "[default,]"), "web", "demo-web");
+        assertEquals(Situacao.EDITAVEL, p.situacao());
+        assertEquals(base.replace("FORMA", "[default, edge]"), p.novoTexto(), "sem vírgula dupla");
+        for (String forma : List.of("[default]#c", "[default,edge]#c", "[\"a]b\", edge]", "[default] x")) {
+            assertEquals(Situacao.MANUAL, ComposeComEdge.propor(base.replace("FORMA", forma), "web", "demo-web").situacao(), forma);
+        }
+        ComposeComEdge.Proposta comentario = ComposeComEdge.propor(base.replace("FORMA", "[default]  # veja [x]"), "web", "demo-web");
+        assertEquals(base.replace("FORMA", "[default, edge]  # veja [x]"), comentario.novoTexto(), "o ] do comentário não conta");
+    }
+
+    @Test
+    void listaEmUmaLinhaSemEdgeComARedeDeCimaAntesDosServicosEOAlvoNoMeio() {
+        String t = "networks:\n  interna:\n  edge:\n    external: true\nservices:\n  db:\n    image: pg\n  web:\n    image: nginx\n    networks: [interna]\n  api:\n    image: x\n";
+        ComposeComEdge.Proposta p = ComposeComEdge.propor(t, "web", "demo-web");
+        assertEquals(Situacao.EDITAVEL, p.situacao(), p.motivos().toString());
+        assertEquals("networks:\n  interna:\n  edge:\n    external: true\nservices:\n  db:\n    image: pg\n  web:\n    container_name: demo-web\n    image: nginx\n"
+            + "    networks: [interna, edge]\n  api:\n    image: x\n", p.novoTexto());
+        String semRede = "networks:\n  interna:\nservices:\n  db:\n    image: pg\n  web:\n    image: nginx\n    networks: [interna]\n";
+        assertEquals("networks:\n  interna:\n  edge:\n    external: true\nservices:\n  db:\n    image: pg\n  web:\n    container_name: demo-web\n    image: nginx\n"
+            + "    networks: [interna, edge]\n", ComposeComEdge.propor(semRede, "web", "demo-web").novoTexto());
+        assertFalse(ComposeComEdge.servicos("services:\n  web:\n    image: nginx\n    networks: [interna]\n").get(0).naRedeEdge());
     }
 }
