@@ -128,6 +128,32 @@ class CaminhosPeloTunelTest {
     }
 
     @Test
+    void umaExcecaoDepoisDeAbrirOTunelNaoDeixaOProgramaDoTunelAberto() throws Exception {
+        // o destino abre e, ANTES de a sessão existir, algo lança RuntimeException (aqui: um pin nulo na lista): o túnel tem de fechar
+        java.util.concurrent.atomic.AtomicInteger fechamentos = new java.util.concurrent.atomic.AtomicInteger();
+        br.com.labdesktop.transporte.DestinoSsh destino = new br.com.labdesktop.transporte.DestinoSsh() {
+            @Override
+            public String host() {
+                return "127.0.0.1";
+            }
+
+            @Override
+            public int porta() {
+                return 1;
+            }
+
+            @Override
+            public void close() {
+                fechamentos.incrementAndGet();
+            }
+        };
+        RotaDoSsh rota = new RotaDoSsh(Transporte.cloudflared("ssh.example.com"), "", 0, (t, h, p, aoCair) -> destino);
+        List<Pin> comNulo = java.util.Arrays.asList((Pin) null);
+        assertThrows(FalhaDeEntradaPorSenha.class, () -> SessaoComSenha.abrir(rota, USUARIO, comNulo, "x".toCharArray(), ConfigSsh.rapida()));
+        assertEquals(1, fechamentos.get(), "o túnel fechou");
+    }
+
+    @Test
     void sessaoComSenhaPeloTunelFechaOTunelJuntoComAsessao() throws Exception {
         try (ServidorSshDeTeste ssh = ServidorSshDeTeste.ed25519()) {
             ssh.aceitarSenha(USUARIO, "senha-x");

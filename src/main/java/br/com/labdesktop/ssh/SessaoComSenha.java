@@ -80,14 +80,18 @@ public final class SessaoComSenha implements AutoCloseable {
             throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, "A conexão foi interrompida.", e);
         }
         boolean entregue = false;
-        List<Pin> confirmadas = List.copyOf(pins);
-        VerificadorDeChaveDoServidor verificador = new VerificadorDeChaveDoServidor(() -> confirmadas);
-        EntradaPorSenha.Relato relato = new EntradaPorSenha.Relato();
-        SshClient cliente = ClienteSshFactory.criar(verificador, cfg, AlgoritmosDeHost.paraPins(confirmadas));
-        cliente.setUserAuthFactories(List.of(new EntradaPorSenha.Fabrica(senha, relato)));
-        cliente.start();
+        SshClient cliente = null;
         ClientSession s = null;
+        EntradaPorSenha.Relato relato = new EntradaPorSenha.Relato();
+        VerificadorDeChaveDoServidor verificador = null;
         try {
+            // tudo depois de abrir o túnel fica DENTRO do try: qualquer exceção (até uma RuntimeException ao montar o cliente) fecha o destino, e o programa do túnel não vaza
+            List<Pin> confirmadas = List.copyOf(pins);
+            VerificadorDeChaveDoServidor v = new VerificadorDeChaveDoServidor(() -> confirmadas);
+            verificador = v;
+            cliente = ClienteSshFactory.criar(v, cfg, AlgoritmosDeHost.paraPins(confirmadas));
+            cliente.setUserAuthFactories(List.of(new EntradaPorSenha.Fabrica(senha, relato)));
+            cliente.start();
             s = cliente.connect(usuario, destino.host(), destino.porta()).verify(cfg.conectar()).getSession();
             s.auth().verify(cfg.autenticar());
             relato.encerrada.set(true);
@@ -96,9 +100,14 @@ public final class SessaoComSenha implements AutoCloseable {
             return pronta;
         } catch (IOException | RuntimeException e) {
             relato.encerrada.set(true); // o prazo pode ter estourado com o pedido ainda na fila: depois disto nenhuma senha sai
-            fecharQuieto(cliente, s);
+            if (cliente != null) {
+                fecharQuieto(cliente, s);
+            }
             if (e instanceof InterruptedIOException) {
                 Thread.currentThread().interrupt();
+            }
+            if (verificador == null) {
+                throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, "Não consegui preparar a conexão com o servidor.", e);
             }
             throw traduzir(e, verificador, relato, rota, destino);
         } finally {
