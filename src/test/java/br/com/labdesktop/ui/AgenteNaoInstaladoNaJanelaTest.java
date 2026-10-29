@@ -188,6 +188,56 @@ class AgenteNaoInstaladoNaJanelaTest {
         assertTrue(ssh.comandos.stream().allMatch(ComandosRemotos::ehLeitura));
     }
 
+    /** O app compilado sem o pacote do agente: o clique em "Instalar agente" só AVISA, em palavras simples, e nada abre nem é escrito. */
+    @Test
+    void semOPacoteDoAgenteOCliqueEmInstalarSoAvisaComTextoSimples() throws Exception {
+        ServidorLab lab = servidor("vps-1", false);
+        abrirAJanela();
+        TelaServidores.CartaoDeServidor cartao = cartaoDe(lab);
+        Espera.ate(PRAZO, () -> "aviso no cartão", () -> Visual.naEdt(cartao::textoDoAvisoDoAgente).contains("Agente não instalado"));
+        String anterior = br.com.labdesktop.instalador.PacoteDoAgente.trocarDescritorParaTeste("/agente-que-nao-existe/agente.json");
+        try {
+            Visual.naEdt(() -> cartao.botaoDa(Item.INSTALAR_AGENTE).doClick());
+            Espera.ate(PRAZO, "o aviso apareceu", () -> avisos.disse("atencao", "compilada sem o agente de monitoramento"));
+            assertTrue(avisos.disse("atencao", "Terminal, arquivos e segurança continuam funcionando"), avisos.todos.toString());
+            assertFalse(avisos.todos.toString().contains("gradlew"), "texto de usuário, sem comando de build: " + avisos.todos);
+            assertFalse(avisos.disse("erro", "Algo deu errado"), avisos.todos.toString());
+            assertTrue(dialogos.mostrados.isEmpty(), "nenhuma janela de instalação abre: " + dialogos.mostrados);
+            assertTrue(ssh.comandos.stream().allMatch(ComandosRemotos::ehLeitura), "nada foi escrito no servidor");
+        } finally {
+            br.com.labdesktop.instalador.PacoteDoAgente.trocarDescritorParaTeste(anterior);
+        }
+    }
+
+    /**
+     * "Só SSH" na tela "O que instalar" aberta pelo cartão (fora do assistente de adicionar servidor): a tela fecha, o app só AVISA que o
+     * servidor fica só por SSH (e onde instalar depois), e nada é escrito no servidor.
+     */
+    @Test
+    void soSshForaDoAssistenteSoAvisaENaoInstalaNada() throws Exception {
+        ServidorLab lab = servidor("vps-1", false);
+        abrirAJanela();
+        TelaServidores.CartaoDeServidor cartao = cartaoDe(lab);
+        Espera.ate(PRAZO, () -> "aviso no cartão", () -> Visual.naEdt(cartao::textoDoAvisoDoAgente).contains("Agente não instalado"));
+        Visual.naEdt(() -> cartao.botaoDa(Item.INSTALAR_AGENTE).doClick());
+        Espera.ate(PRAZO, "a tela abriu", () -> !dialogos.mostrados.isEmpty());
+        DialogoDoAgente d = dialogos.ultimoComo(DialogoDoAgente.class);
+        Visual.naEdt(d::iniciarConferencia); // sem janela de verdade o gancho de abrir não roda: faz como ele faria
+        Espera.ate(PRAZO, () -> "página=" + Visual.naEdt(d::paginaAtual), () -> "escolher".equals(Visual.naEdt(d::paginaAtual)));
+
+        Visual.naEdt(() -> d.cartao(br.com.labdesktop.instalador.EscolhaDeInstalacao.Tipo.SO_SSH).doClick());
+        Visual.naEdt(() -> d.botaoContinuar().doClick());
+
+        assertTrue(Visual.naEdt(d::fechada));
+        assertTrue(avisos.disse("info", "fica só por SSH"), avisos.todos.toString());
+        assertTrue(avisos.disse("info", "botão Instalar agente"), "diz onde instalar depois");
+        for (String c : ssh.comandos) {
+            assertTrue(ComandosRemotos.ehLeitura(c), "só leituras: " + c);
+        }
+        assertTrue(agente.tokens.isEmpty(), "nenhum token foi registrado");
+        assertEquals(SituacaoDoAgente.NAO_INSTALADO, lab.estado().situacaoDoAgente(), "o servidor segue como estava");
+    }
+
     @Test
     void oResumoDoServidorTambemDizEOferecoOBotaoSemJanelaSozinha() throws Exception {
         ServidorLab lab = servidor("vps-1", false);

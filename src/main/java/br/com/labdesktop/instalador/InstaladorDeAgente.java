@@ -144,8 +144,11 @@ public final class InstaladorDeAgente {
         if (!escolha.instalaAlgo()) {
             throw new IllegalArgumentException("Não há nada para instalar nesta escolha.");
         }
-        if (!escolha.valida()) {
-            throw new IllegalArgumentException("Combinação inválida: " + String.join(" ", escolha.problemas()));
+        // vale contra a conferência que ESTE instalador guardou, não contra a que a escolha trouxe: se o Docker sumiu no meio, recusa agora
+        // em vez de falhar no meio do instalar e deixar a pasta do instalador
+        EscolhaDeInstalacao atual = escolha.comRelatorio(relatorioCompleto);
+        if (!atual.valida()) {
+            throw new IllegalArgumentException("Combinação inválida: " + String.join(" ", atual.problemas()));
         }
         this.escolhidos = EnumSet.copyOf(escolha.passos());
         this.verificacoesDaEscolha = escolha.verificacoes();

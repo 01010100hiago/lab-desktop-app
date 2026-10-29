@@ -56,11 +56,13 @@ class DialogoDoAgenteTest {
     void preparar() {
         Visual.tema(Tema.CLARO);
         servidor.noGrupoDocker = true;
+        DialogoDoAgente.definirPrazoDaTravaDaConfirmacaoParaTeste(0); // a trava do clique duplo tem os testes dela (DialogoDoAgenteEscolhaTest)
     }
 
     @AfterEach
     void restaurar() {
         Visual.tema(Tema.CLARO);
+        DialogoDoAgente.definirPrazoDaTravaDaConfirmacaoParaTeste(600);
     }
 
     private DialogoDoAgente abrir(DialogoDoAgente.Acao acao, String versaoInstalada) {

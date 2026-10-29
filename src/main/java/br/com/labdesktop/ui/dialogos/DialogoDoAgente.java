@@ -197,6 +197,9 @@ public final class DialogoDoAgente extends Dialogo {
     private final AtomicBoolean cancelado = new AtomicBoolean();
     /** Quanto o botão fica em "Cancelando…" antes de oferecer "Fechar mesmo assim" (o desfazer continua em segundo plano). */
     private static volatile int prazoParaFecharMesmoAssimMs = 8000;
+    /** Quanto o "Instalar em ..." fica desligado depois do "Continuar" (acima). */
+    private static volatile int prazoDaTravaDaConfirmacaoMs = 600;
+    private javax.swing.Timer travaDaConfirmacao;
     private javax.swing.Timer prazoDoCancelamento;
     private boolean podeFecharMesmoAssim;
     private final AtomicReference<Thread> trabalhador = new AtomicReference<>();
@@ -784,8 +787,9 @@ public final class DialogoDoAgente extends Dialogo {
         }
         EscolhaDeInstalacao e = escolhaDaTela();
         if (e.tipo() == EscolhaDeInstalacao.Tipo.SO_SSH) {
-            aoEscolherSoSsh.run();
+            // fecha ANTES de avisar: o assistente de adicionar servidor conclui (e fecha a si mesmo) e não pode haver este diálogo filho aberto
             fechar();
+            aoEscolherSoSsh.run();
             return;
         }
         if (!e.valida()) {
@@ -793,12 +797,50 @@ public final class DialogoDoAgente extends Dialogo {
         }
         aplicarAEscolha(e);
         mostrarPagina(PAGINA_CONFIRMAR);
+        travarAConfirmacaoPorUmInstante();
+    }
+
+    /**
+     * O botão "Instalar em vps-1" nasce no mesmo lugar do "Continuar" que acabou de ser clicado: um clique duplo (ou dois Enter) cairia nele e
+     * instalaria SEM o clique de confirmação. Por um instante depois de chegar aqui vindo do "Continuar" o botão fica desligado e nenhum botão
+     * responde ao Enter; passado o prazo o usuário confirma com um clique deliberado.
+     */
+    private void travarAConfirmacaoPorUmInstante() {
+        pararATravaDaConfirmacao();
+        int ms = prazoDaTravaDaConfirmacaoMs;
+        if (ms <= 0 || !confirmar.isEnabled()) {
+            return;
+        }
+        confirmar.setEnabled(false);
+        botaoPadrao(null);
+        travaDaConfirmacao = new javax.swing.Timer(ms, e -> {
+            travaDaConfirmacao = null;
+            if (PAGINA_CONFIRMAR.equals(paginaAtual) && !executando && relatorio != null && !relatorio.bloqueado()) {
+                confirmar.setEnabled(true);
+                botaoPadrao(confirmar);
+            }
+        });
+        travaDaConfirmacao.setRepeats(false);
+        travaDaConfirmacao.start();
+    }
+
+    private void pararATravaDaConfirmacao() {
+        if (travaDaConfirmacao != null) {
+            travaDaConfirmacao.stop();
+            travaDaConfirmacao = null;
+        }
+    }
+
+    /** Só os testes: quanto o botão de confirmar fica desligado depois do "Continuar" (0 desliga a trava). */
+    public static void definirPrazoDaTravaDaConfirmacaoParaTeste(int milissegundos) {
+        prazoDaTravaDaConfirmacaoMs = milissegundos;
     }
 
     private void voltarParaAEscolha() {
         if (executando) {
             return;
         }
+        pararATravaDaConfirmacao();
         montarAEscolha();
         mostrarPagina(PAGINA_ESCOLHER);
     }
@@ -815,6 +857,7 @@ public final class DialogoDoAgente extends Dialogo {
         tentarConferirDeNovo.setVisible(false);
         textoDeConferindo.setVisible(true);
         mostrarPagina(PAGINA_CONFERINDO);
+        pararATravaDaConfirmacao();
         InstaladorDeAgente alvoDaConferencia = instalador;
         Fundo.emFundoComResultado(() -> alvoDaConferencia.verificar(acao.modo)).whenComplete((r, falha) -> Fundo.naEdt(() -> {
             if (alvoDaConferencia != instalador || jaFechou()) {
@@ -1017,7 +1060,8 @@ public final class DialogoDoAgente extends Dialogo {
             return;
         }
         String nome = campoDoContainer.getText().strip();
-        if (!nome.equals(parametros.container())) {
+        // o nome do container é do agente: se só o Docker foi escolhido o campo (escondido) não conta, e não pode deixar o botão mudo
+        if (escolheuOAgente() && !nome.equals(parametros.container())) {
             try {
                 parametros = new ParametrosDaInstalacao(nome, parametros.porta(), parametros.pasta());
             } catch (IllegalArgumentException e) {
@@ -1040,7 +1084,7 @@ public final class DialogoDoAgente extends Dialogo {
         if (executando || !confirmar.isEnabled()) {
             return;
         }
-        if (!campoDoContainer.getText().strip().equals(parametros.container())) {
+        if (escolheuOAgente() && !campoDoContainer.getText().strip().equals(parametros.container())) {
             // O nome do container mudou nas opções avançadas e ainda não foi conferido: as verificações (porta, container existente) eram de
             // outro nome. Confere de novo antes de instalar, em vez de instalar com o nome velho ou sem conferir o novo.
             conferirDepoisDeEditarOContainer();
@@ -1155,8 +1199,8 @@ public final class DialogoDoAgente extends Dialogo {
                             + "memória, disco, processos e containers do servidor.");
                     avisos.ok((acao == Acao.ATUALIZAR ? "Agente atualizado em " : "Agente instalado em ") + alvo.nome() + ".");
                 } else {
-                    mostrarFim(true, "Docker instalado", "Pronto: o Docker foi instalado em " + alvo.nome() + ". O agente de monitoramento não foi "
-                        + "instalado: quando quiser, o botão Instalar agente fica no cartão e na página do servidor.");
+                    mostrarFim(true, "Docker instalado", "Pronto: o Docker foi instalado em " + alvo.nome() + ". O agente de monitoramento ainda não foi "
+                        + "instalado: dá para instalá-lo quando quiser, pelo botão Instalar agente.");
                     avisos.ok("Docker instalado em " + alvo.nome() + ".");
                 }
                 aoMudarOServidor.run();
@@ -1291,6 +1335,7 @@ public final class DialogoDoAgente extends Dialogo {
 
     @Override
     protected void aoFechar() {
+        pararATravaDaConfirmacao();
         pararOPrazoDoCancelamento();
         Thread t = trabalhador.get();
         if (t != null) {

@@ -73,6 +73,11 @@ public final class EscolhaDeInstalacao {
         return new EscolhaDeInstalacao(Tipo.SO_SSH, List.of(), null, Set.of());
     }
 
+    /** A mesma escolha avaliada contra OUTRO relatório (o mais novo): serve para revalidar uma escolha feita com a conferência de antes. */
+    public EscolhaDeInstalacao comRelatorio(RelatorioDeVerificacao novo) {
+        return new EscolhaDeInstalacao(tipo, catalogo, novo, marcados);
+    }
+
     public Tipo tipo() {
         return tipo;
     }

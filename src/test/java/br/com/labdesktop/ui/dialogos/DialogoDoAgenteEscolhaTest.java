@@ -52,22 +52,31 @@ class DialogoDoAgenteEscolhaTest {
     private final AvisosGravados avisos = new AvisosGravados();
     private final AtomicInteger mudancasNoServidor = new AtomicInteger();
     private final AtomicInteger pediramSoSsh = new AtomicInteger();
+    /** Se o diálogo já estava fechado quando avisou "Só SSH" (o assistente conclui nesse aviso e não pode ter o filho aberto). */
+    private final List<Boolean> fechadoNoAviso = new ArrayList<>();
+    private final java.util.concurrent.atomic.AtomicReference<DialogoDoAgente> aberto = new java.util.concurrent.atomic.AtomicReference<>();
 
     @BeforeEach
     void preparar() {
         Visual.tema(Tema.CLARO);
         servidor.noGrupoDocker = true;
+        DialogoDoAgente.definirPrazoDaTravaDaConfirmacaoParaTeste(0); // os testes clicam logo; a trava tem os testes dela
     }
 
     @AfterEach
     void restaurar() {
         Visual.tema(Tema.CLARO);
+        DialogoDoAgente.definirPrazoDaTravaDaConfirmacaoParaTeste(600);
     }
 
     private DialogoDoAgente abrir(DialogoDoAgente.Acao acao, String versaoInstalada) {
         DialogoDoAgente d = Visual.naEdt(() -> new DialogoDoAgente(acao, new DialogoDoAgente.Alvo(NOME, 7000, versaoInstalada), PACOTE,
             p -> new InstaladorDeAgente(servidor, p, PACOTE, ganchos).comSonda(Duration.ofMillis(300), Duration.ofMillis(10)),
-            mudancasNoServidor::incrementAndGet, pediramSoSsh::incrementAndGet, avisos, new CopiadorDeTexto(() -> new Clipboard("teste"))));
+            mudancasNoServidor::incrementAndGet, () -> {
+                pediramSoSsh.incrementAndGet();
+                fechadoNoAviso.add(aberto.get().fechada());
+            }, avisos, new CopiadorDeTexto(() -> new Clipboard("teste"))));
+        aberto.set(d);
         Visual.naEdt(d::iniciarConferencia);
         return d;
     }
@@ -288,6 +297,7 @@ class DialogoDoAgenteEscolhaTest {
 
         assertTrue(Visual.naEdt(d::fechada), "a tela fecha");
         assertEquals(1, pediramSoSsh.get(), "quem abriu é avisado: o assistente conclui como Agora não");
+        assertEquals(List.of(true), fechadoNoAviso, "o diálogo já estava fechado quando avisou: o assistente conclui sem este filho aberto");
         assertTrue(servidor.escritas().isEmpty(), "nada foi escrito no servidor: " + servidor.escritas());
         assertTrue(servidor.envios.isEmpty());
         assertTrue(ganchos.chamadas.isEmpty(), "o instalador não chegou a instalar nem a registrar token");
@@ -341,7 +351,7 @@ class DialogoDoAgenteEscolhaTest {
         Visual.naEdt(() -> d.botaoConfirmar().doClick());
         esperarFim(d);
         assertEquals("Docker instalado", Visual.naEdt(d::situacaoFinal));
-        assertTrue(Visual.naEdt(d::textoFinal).contains("O agente de monitoramento não foi instalado"), Visual.naEdt(d::textoFinal));
+        assertTrue(Visual.naEdt(d::textoFinal).contains("O agente de monitoramento ainda não foi instalado"), Visual.naEdt(d::textoFinal));
         assertEquals(ComandosRemotos.instalarODocker(false, "ubuntu"), servidor.escritas());
         assertNull(servidor.containerNome);
         assertTrue(ganchos.chamadas.isEmpty());
@@ -508,5 +518,116 @@ class DialogoDoAgenteEscolhaTest {
         List<String> todos = new ArrayList<>();
         CatalogoDeInstalacao.itens().forEach(i -> todos.add(i.titulo() + i.frase() + i.alcance() + i.exige()));
         assertFalse(String.join(" ", todos).toLowerCase().contains("perfil"), "texto para o usuário sem a palavra perfil");
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Clique duplo, nome inválido escondido, escolha de relatório velho, "Tentar de novo" parcial
+    // ---------------------------------------------------------------------------------------------
+
+    private void cliqueDuploEEnterDuploNaoInstalam(Tipo tipo) {
+        DialogoDoAgente.definirPrazoDaTravaDaConfirmacaoParaTeste(400);
+        DialogoDoAgente d = abrirNaEscolha();
+        escolherOTipo(d, tipo);
+
+        // o segundo clique cai onde estava o "Continuar": no botão de instalar, que acabou de aparecer no mesmo lugar
+        Visual.naEdt(() -> {
+            d.botaoContinuar().doClick();
+            d.botaoConfirmar().doClick();
+        });
+        assertEquals("confirmar", Visual.naEdt(d::paginaAtual));
+        assertFalse(Visual.naEdt(d::executando), "o clique duplo não instala");
+        assertFalse(Visual.naEdt(() -> d.botaoConfirmar().isEnabled()), "o botão de instalar nasce desligado");
+        assertTrue(servidor.escritas().isEmpty(), "nada foi escrito: " + servidor.escritas());
+        assertTrue(ganchos.chamadas.isEmpty());
+
+        // dois Enter: nenhum botão é o padrão enquanto a trava dura
+        Visual.naEdt(() -> {
+            javax.swing.JButton padrao = d.botaoDoEnter();
+            assertTrue(padrao == null || padrao != d.botaoConfirmar(), "o Instalar não responde ao Enter ainda");
+            if (padrao != null) {
+                padrao.doClick();
+            }
+        });
+        assertFalse(Visual.naEdt(d::executando));
+        assertTrue(servidor.escritas().isEmpty());
+
+        // passado o prazo, um clique deliberado instala
+        Espera.ate(PRAZO, "o botão liga", () -> Visual.naEdt(() -> d.botaoConfirmar().isEnabled()));
+        assertEquals(Visual.naEdt(d::botaoConfirmar), Visual.naEdt(d::botaoDoEnter), "e volta a ser o botão do Enter");
+        Visual.naEdt(() -> d.botaoConfirmar().doClick());
+        esperarFim(d);
+        assertEquals("Agente instalado", Visual.naEdt(d::situacaoFinal));
+        assertEquals("painel-lab", servidor.containerNome);
+    }
+
+    @Test
+    void cliqueDuploEDoisEnterEmContinuarComCompletoNaoInstalamSemOCliqueDeConfirmacao() {
+        cliqueDuploEEnterDuploNaoInstalam(Tipo.COMPLETO);
+    }
+
+    @Test
+    void cliqueDuploEDoisEnterEmContinuarComEscolherNaoInstalamSemOCliqueDeConfirmacao() {
+        cliqueDuploEEnterDuploNaoInstalam(Tipo.ESCOLHER);
+    }
+
+    @Test
+    void nomeDeContainerInvalidoDigitadoNaoDeixaOInstalarSoODockerMudo() {
+        servidor.ubuntu().semDocker();
+        DialogoDoAgente d = abrirNaEscolha();
+        Visual.naEdt(() -> d.botaoContinuar().doClick()); // Completo
+        Visual.naEdt(() -> d.campoDoContainer().setText("Painel; rm -rf /"));
+        Visual.naEdt(() -> d.botaoVoltar().doClick());
+        escolherOTipo(d, Tipo.ESCOLHER);
+        marcar(d, "agente", false); // só o Docker: o nome do container (escondido) não conta
+        Visual.naEdt(() -> d.botaoContinuar().doClick());
+        assertEquals("confirmar", Visual.naEdt(d::paginaAtual));
+
+        Visual.naEdt(() -> d.botaoConfirmar().doClick());
+        esperarFim(d);
+        assertEquals("Docker instalado", Visual.naEdt(d::situacaoFinal), "o botão não ficou mudo");
+        assertEquals(ComandosRemotos.instalarODocker(false, "ubuntu"), servidor.escritas());
+    }
+
+    @Test
+    void tentarDeNovoComEscolhaParcialRefazSoOQueFoiEscolhido() {
+        servidor.ubuntu().semDocker();
+        servidor.falharUmaVezEm(c -> c.contains("apt-get install -y docker-ce"), 100, "E: Unable to locate package docker-ce");
+        DialogoDoAgente d = abrirNaEscolha();
+        escolherOTipo(d, Tipo.ESCOLHER);
+        marcar(d, "agente", false);
+        Visual.naEdt(() -> d.botaoContinuar().doClick());
+        Visual.naEdt(() -> d.botaoConfirmar().doClick());
+        esperarFim(d);
+        assertEquals("Parou em um passo", Visual.naEdt(d::situacaoFinal));
+        assertTrue(Visual.naEdt(d::textoFinal).contains("Unable to locate package"), Visual.naEdt(d::textoFinal));
+        assertEquals(List.of(PassoDeInstalacao.DOCKER), Visual.naEdt(d::passosMostrados));
+
+        Visual.naEdt(() -> d.botaoTentarDeNovo().doClick());
+        Espera.ate(PRAZO, "sucesso", () -> "Docker instalado".equals(Visual.naEdt(d::situacaoFinal)));
+        assertEquals(List.of(PassoDeInstalacao.DOCKER), Visual.naEdt(d::passosMostrados), "a segunda tentativa também só tem o passo do Docker");
+        assertNull(servidor.containerNome, "o agente não foi escolhido: nunca foi criado");
+        assertTrue(servidor.envios.isEmpty());
+        assertTrue(ganchos.chamadas.isEmpty());
+        assertEquals(1, mudancasNoServidor.get());
+    }
+
+    @Test
+    void conferirDeNovoNoSentidoInversoOAgenteSeguePoisODockerQueEstavaMarcadoJaFoiInstaladoAMao() {
+        servidor.fedora().semDocker(); // o app não instala o Docker no Fedora
+        DialogoDoAgente d = abrirNaEscolha();
+        escolherOTipo(d, Tipo.ESCOLHER); // marcados: Docker e agente
+        Visual.naEdt(() -> d.botaoContinuar().doClick());
+        assertFalse(Visual.naEdt(() -> d.botaoConfirmar().isEnabled()), "bloqueado: o Docker precisa ser instalado à mão");
+
+        servidor.dockerInstalado = true; // o usuário o instalou
+        Visual.naEdt(() -> d.botaoConferirDeNovo().doClick());
+        Espera.ate(PRAZO, "confirmação liberada", () -> Visual.naEdt(() -> d.botaoConfirmar().isEnabled()));
+        assertEquals("confirmar", Visual.naEdt(d::paginaAtual));
+        assertEquals(List.of("agente"), Visual.naEdt(() -> d.escolhaEmVigor().itens().stream().map(i -> i.id()).toList()), "sobra só o agente");
+        assertFalse(Visual.naEdt(d::passosMostrados).contains(PassoDeInstalacao.DOCKER));
+
+        Visual.naEdt(() -> d.botaoVoltar().doClick());
+        assertNull(Visual.naEdt(() -> d.caixaDoItem("docker")), "o Docker sumiu da lista: já está no servidor");
+        assertTrue(Visual.naEdt(() -> d.caixaDoItem("agente").isSelected()));
     }
 }

@@ -167,4 +167,19 @@ class InstaladorComEscolhaTest {
         assertEquals(List.of(PassoDeInstalacao.DOCKER), instalador.passosAExecutar());
         assertEquals(Desfecho.CONCLUIDA, instalador.instalar(obs, Cancelamento.NUNCA).desfecho());
     }
+
+    /** Uma escolha feita com a conferência de ANTES (o Docker estava lá) não vale se o Docker sumiu depois: recusa já, sem deixar pasta nem nada. */
+    @Test
+    void escolhaFeitaComUmRelatorioAntigoEhRevalidadaContraAConferenciaDoInstalador() throws Exception {
+        servidor.noGrupoDocker = true;
+        EscolhaDeInstalacao antiga = escolher(Set.of("agente")); // com o Docker no servidor: válida
+        assertTrue(antiga.valida());
+
+        servidor.semDocker().ubuntu(); // o Docker sumiu entre a conferência e o escolher
+        verificar();
+        IllegalArgumentException falha = assertThrows(IllegalArgumentException.class, () -> instalador.escolher(antiga));
+        assertTrue(falha.getMessage().contains("precisa do Docker, que falta neste servidor"), falha.getMessage());
+        assertTrue(servidor.escritas().isEmpty(), "nada foi escrito: " + servidor.escritas());
+        assertEquals(List.of(PassoDeInstalacao.values()), instalador.passosAExecutar(), "a escolha recusada não ficou valendo");
+    }
 }
