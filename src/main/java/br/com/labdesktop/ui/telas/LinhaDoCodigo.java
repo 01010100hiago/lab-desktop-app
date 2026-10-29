@@ -66,12 +66,12 @@ final class LinhaDoCodigo extends Painel {
         linhaDoComando.add(comando, BorderLayout.CENTER);
         linhaDoComando.add(copiar, BorderLayout.EAST);
         linhaDoComando.setVisible(false);
+        linhaDoComando.setBorder(javax.swing.BorderFactory.createEmptyBorder(4, 0, 0, 0));
         JPanel coluna = new Painel();
         coluna.setLayout(new BoxLayout(coluna, BoxLayout.Y_AXIS));
         linha1.setAlignmentX(LEFT_ALIGNMENT);
         linhaDoComando.setAlignmentX(LEFT_ALIGNMENT);
         coluna.add(linha1);
-        coluna.add(Caixa.espacoVertical(4));
         coluna.add(linhaDoComando);
         add(coluna, BorderLayout.CENTER);
         for (Botao b : new Botao[] {criar, verCommits, instalar, tentarDeNovo}) {
@@ -147,7 +147,7 @@ final class LinhaDoCodigo extends Painel {
         instalar.setVisible(false);
         tentarDeNovo.setVisible(false);
         linhaDoComando.setVisible(false);
-        if (atual == null) {
+        if (atual == null || lendo && atual.estado() == ResumoDoRepositorio.Estado.ERRO) {
             texto.setText(lendo ? "Lendo o Git do projeto…" : textoDoAgente);
             texto.setToolTipText(null);
             revalidate();

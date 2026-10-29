@@ -1,0 +1,23 @@
+# Como vejo os commits do projeto e crio o repositório Git?
+@rotulo: Git do projeto
+@busca: git commit commits diff repositório criar branch alterações segredos env gitignore identidade primeiro commit safe.directory proprietário diferente
+@resumo: Veja os últimos commits e o que cada um mudou sem sair do app, e crie o repositório do projeto se ele ainda não tem um.
+@onde: Estado do código | Página do projeto > Visão geral > linha Código | projetos
+@onde: Últimos commits e diff | Página do projeto > aba Git
+@onde: Criar repositório Git | Página do projeto > Visão geral > Código > Criar repositório Git
+1. Abra a página do projeto: a linha "Código" da Visão geral diz o branch, o último commit e quantas alterações ainda não foram salvas.
+2. Clique em "Ver commits" para abrir a aba Git: ela lista os últimos 50 commits, e "Carregar mais" traz os mais antigos.
+3. Clique num commit para ver a mensagem inteira, os arquivos com as linhas acrescentadas e tiradas, e o diff do arquivo escolhido.
+4. "Alterações" mostra o que mudou na pasta e ainda não foi commitado; "Branches" lista os branches, com o atual marcado.
+5. Num projeto sem Git, clique em "Criar repositório Git": a janela confere a pasta (só leitura) e mostra tudo antes de você confirmar.
+[Ir para Projetos](ir:projetos)
+@acoes: sim
+@veja: projetos git publicar
+## Mais detalhes
+Ler o Git nunca escreve nada: a aba Git usa só comandos de leitura, pelo mesmo caminho do Terminal (SSH, inclusive pelo túnel do Session Manager ou da Cloudflare, ou o processo do seu computador). Ela lê quando você abre a aba e quando clica em Atualizar, nunca de tempos em tempos.
+O diff mostra "+" nas linhas acrescentadas e "-" nas tiradas, além do tom do fundo, e corta em 2000 linhas por arquivo (o aviso "diff cortado" diz). Arquivo binário aparece como "arquivo binário", sem conteúdo.
+Se o Git não está instalado, a linha Código e a aba oferecem "Instalar o Git…", o mesmo fluxo de sempre, com os comandos exatos. Num servidor protegido o app nunca instala nada: o botão fica desligado, mas a leitura continua valendo.
+Se o Git recusar a pasta porque ela é de outro usuário, o app mostra a explicação e o comando "git config --global --add safe.directory <pasta>" para você copiar e rodar no Terminal. O app nunca executa esse comando.
+Criar o repositório é uma ação de escrita e fica atrás da mesma trava das outras. Antes do clique a janela mostra: se o Git existe, quem assina os commits (se falta, ela pede nome e e-mail e grava SÓ neste repositório, nunca na configuração global), os arquivos que entram, o que fica de fora e as linhas que o app acrescentaria ao .gitignore.
+Segredos nunca entram: .env, .env.local, chaves (.pem, .key, id_rsa), credenciais e .npmrc ficam de fora, e o app confere com o próprio Git antes de adicionar qualquer arquivo. O .env.example, que é só o modelo, pode entrar. Arquivos com mais de 5 MB ficam de fora, a menos que você marque a caixa.
+Uma pasta que já tem o próprio Git (um clone feito à parte, por exemplo) fica de fora do repositório do projeto, com uma linha no .gitignore; a janela explica como guardá-la aqui, se for o caso. O app só cria o repositório local, no branch main, com o commit "Primeiro commit": não faz push, não liga a remoto nenhum e nunca usa --force. Se algo falhar no meio, ele diz o que fez e o que não fez e mostra o comando para desfazer: nunca apaga a pasta .git sozinho.

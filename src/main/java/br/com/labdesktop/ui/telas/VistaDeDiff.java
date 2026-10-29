@@ -65,7 +65,8 @@ final class VistaDeDiff extends Painel {
         lista.setBackground(Tokens.cor(Tokens.LOGS_BG));
         lista.getAccessibleContext().setAccessibleName("Linhas do diff");
         JScrollPane rolagem = new JScrollPane(lista);
-        rolagem.setBorder(BorderFactory.createLineBorder(Tokens.cor(Tokens.LOGS_BORDA)));
+        rolagem.setPreferredSize(new Dimension(400, 130)); // quem usa decide a altura; 2000 linhas rolam por dentro
+        rolagem.setBorder(br.com.labdesktop.ui.componentes.Bordas.contorno(Tokens.LOGS_BORDA));
         rolagem.getViewport().setBackground(Tokens.cor(Tokens.LOGS_BG));
         mensagem.setBorder(BorderFactory.createEmptyBorder(24, 16, 24, 16));
         JPanel quadro = new Painel(new BorderLayout());

@@ -30,7 +30,7 @@ import javax.swing.JPanel;
 
 /**
  * A aba "Visão geral": UMA tela, sem rolagem (regra dura, com teste: cabe em 1100 x 700 e em 1440 x 860). De cima para baixo:
- * o cabeçalho do projeto (a descrição e uma FICHA rotulada: endereços públicos, código, tamanho e última alteração; compose e redes ficam em "Detalhes técnicos", fechado) com
+ * o cabeçalho do projeto (a descrição e uma FICHA rotulada: o código (o Git do projeto, numa linha inteira) e, em três colunas, endereços públicos, tamanho e última alteração; compose e redes ficam em "Detalhes técnicos", fechado) com
  * os botões de ação; o alerta de sessão desatualizada, quando houver; a linha de cinco indicadores; e a caixa com a tabela de
  * containers (paginada, com Reiniciar por container). Só usa o detalhe do projeto, que a {@link TelaProjeto} assina.
  */
@@ -43,7 +43,7 @@ final class PaginaVisaoGeral extends PaginaDoProjeto {
     private final Rotulo descricao = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(13f).truncavel();
     private final JPanel urls = new Painel();
     /** A ficha do cabeçalho: endereços, código, tamanho e última alteração (só o que existe). */
-    private final FichaRotulada ficha = new FichaRotulada(2, 32);
+    private final FichaRotulada ficha = new FichaRotulada(3, 32);
     /** Compose e redes: o que só quem mexe na infraestrutura quer, numa seção FECHADA por padrão. */
     private final FichaRotulada fichaTecnica = new FichaRotulada(2, 32);
     private final SecaoRecolhivel secaoTecnica = new SecaoRecolhivel("Detalhes técnicos", "Esconder os detalhes técnicos", fichaTecnica,

@@ -58,7 +58,11 @@ public final class FichaRotulada extends Painel {
         this.itens = List.copyOf(novos);
         removeAll();
         int i = 0;
-        for (Item item : itens) {
+        // os dados de linha inteira (o Código) vão para a primeira linha; os outros correm em colunas logo abaixo (a ordem de {@link #pares} não muda)
+        List<Item> ordem = new ArrayList<>();
+        itens.stream().filter(Item::linhaInteira).forEach(ordem::add);
+        itens.stream().filter(x -> !x.linhaInteira()).forEach(ordem::add);
+        for (Item item : ordem) {
             if (item.linhaInteira() && i % colunas != 0) {
                 i += colunas - i % colunas; // começa uma linha nova
             }

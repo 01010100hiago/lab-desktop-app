@@ -378,7 +378,7 @@ class ConexaoPeloTunelTest {
     }
 
     /** O lançador de ferramenta falsa que só descobre a porta do SSHD depois de o cenário existir. */
-    private static class LancadorDeFerramentaFalsaAdiado implements br.com.labdesktop.transporte.LancadorDeProcesso {
+    static class LancadorDeFerramentaFalsaAdiado implements br.com.labdesktop.transporte.LancadorDeProcesso {
         private final AtomicInteger portaDoSsh;
         private final Map<String, String> variaveis;
         private volatile LancadorDeFerramentaFalsa real;

@@ -10,6 +10,7 @@
 4. O app mostra o que muda no docker-compose.yml. Clique em "Gravar no docker-compose.yml" e, se quiser, em "Iniciar o projeto".
 [Ir para Projetos](ir:projetos)
 @acoes: sim
-@veja: publicar arquivos
+@veja: publicar arquivos git-do-projeto
 ## Mais detalhes
 O nome do projeto usa letras minúsculas, números e hífen, e é também o nome da pasta. O que já está no projeto nunca é sobrescrito ao importar. Nada é gravado antes do seu clique final.
+Para guardar o código com Git, abra o projeto e use "Criar repositório Git" na linha Código da Visão geral, tanto num projeto novo quanto num que já estava iniciado: a janela mostra o que entra antes de criar, e segredos como o .env nunca entram. O tópico Git do projeto explica.

@@ -277,7 +277,7 @@ class AjustesNaJanelaTest {
         abrir(Secao.NAVEGACAO);
         assertEquals(List.of("Resumo", "Segurança", "Containers", "Processos", "Máquina", "Projetos", "Arquivos", "Terminal", "Cloudflare"),
             Visual.naEdt(() -> blocoDoServidor().rotulosEmOrdem()));
-        assertEquals(List.of("Visão geral", "Logs", "Terminal", "Arquivos", "Backups", "Consumo e limite", "Internet", "Processos"), Visual.naEdt(() -> blocoDoProjeto().rotulosEmOrdem()));
+        assertEquals(List.of("Visão geral", "Logs", "Terminal", "Arquivos", "Git", "Backups", "Consumo e limite", "Internet", "Processos"), Visual.naEdt(() -> blocoDoProjeto().rotulosEmOrdem()));
     }
 
     @Test
@@ -417,7 +417,7 @@ class AjustesNaJanelaTest {
     void aOrdemDasAbasDoProjetoVaiParaAPaginaDoProjetoAbertaENaGuardada() {
         Visual.naEdt(() -> painel.navegacao().abrirProjeto(cenario.lab, "app-loja"));
         TelaProjeto projeto = Visual.naEdt(() -> servidor().projetoAberto());
-        assertEquals(List.of("visao-geral", "logs", "terminal", "arquivos", "backups", "consumo", "internet", "processos"), Visual.naEdt(() -> projeto.abas().idsVisiveis()));
+        assertEquals(List.of("visao-geral", "logs", "terminal", "arquivos", "git", "backups", "consumo", "internet", "processos"), Visual.naEdt(() -> projeto.abas().idsVisiveis()));
         assertEquals("visao-geral", Visual.naEdt(() -> painel.abaAbertaDoProjeto()));
         abrir(Secao.NAVEGACAO);
         assertFalse(Visual.naEdt(() -> blocoDoProjeto().caixaDe("visao-geral").isEnabled()), "a aba aberta do projeto também não se esconde");

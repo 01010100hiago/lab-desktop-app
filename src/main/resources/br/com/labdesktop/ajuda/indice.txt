@@ -8,6 +8,7 @@ agente
 projetos
 publicar
 git
+git-do-projeto
 [Arquivos e backups]
 arquivos
 backups

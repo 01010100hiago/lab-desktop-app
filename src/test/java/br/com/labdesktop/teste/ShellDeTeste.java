@@ -112,7 +112,7 @@ public final class ShellDeTeste implements ProvisionadorRemoto.Executor {
                 Thread.currentThread().interrupt();
             }
         }
-        if (outros != null && !linha.equals(br.com.labdesktop.acesso.ComandosDoAcesso.instalarChave())
+        if (outros != null && !ehDoGit(linha) && !linha.equals(br.com.labdesktop.acesso.ComandosDoAcesso.instalarChave())
             && !linha.equals(br.com.labdesktop.ssh.ProvaPorChave.COMANDO_DA_PROVA)
             && !linha.equals(br.com.labdesktop.acesso.ComandosDoAcesso.lerPermissoesDaPastaPessoal())) {
             recebidos.add(linha);
@@ -133,6 +133,11 @@ public final class ShellDeTeste implements ProvisionadorRemoto.Executor {
             Thread.currentThread().interrupt();
             return 130;
         }
+    }
+
+    /** As linhas do Git do projeto sempre rodam no shell de verdade, mesmo com {@link #outrosComandos} ligado para o resto. */
+    private static boolean ehDoGit(String linha) {
+        return linha.startsWith("env GIT_") || linha.startsWith("git ") || linha.startsWith("tee /tmp/lab-desktop-git-") || linha.startsWith("rm -rf -- /tmp/lab-desktop-git-");
     }
 
     private static byte[] lerTudo(InputStream in) throws IOException {

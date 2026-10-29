@@ -210,10 +210,10 @@ class TelaProjetoTest {
     }
 
     @Test
-    void sao8AbasNaOrdemDaTelaESoUmaVisivel() {
+    void sao9AbasNaOrdemDaTelaESoUmaVisivel() {
         Visual.tema(Tema.CLARO);
         Cena c = new Cena(true, Aba.VISAO_GERAL).com(EstadoConexao.CONECTADO, FixturesDeApi.detalheDoProjetoSintetico());
-        assertEquals(List.of("Visão geral", "Logs", "Terminal", "Arquivos", "Backups (5)", "Consumo e limite", "Internet", "Processos"),
+        assertEquals(List.of("Visão geral", "Logs", "Terminal", "Arquivos", "Git", "Backups (5)", "Consumo e limite", "Internet", "Processos"),
             java.util.Arrays.stream(Aba.values()).map(a -> Visual.naEdt(() -> c.tela.abas().botao(a.id()).getText())).toList());
         for (Aba a : Aba.values()) {
             Visual.naEdt(() -> c.tela.abas().botao(a.id()).doClick());
@@ -340,8 +340,8 @@ class TelaProjetoTest {
             }
             PaginaDoProjeto p = c.tela.pagina(a);
             assertEquals(SituacaoDaVisao.Modo.CARREGANDO, Visual.naEdt(() -> p.situacao().modo()), a.toString());
-            if (a == Aba.TERMINAL || a == Aba.INTERNET || a == Aba.PROCESSOS) {
-                // o terminal é SSH puro, a Internet fala só com o cofre e a Cloudflare e a aba Processos lê o servidor (não o detalhe do projeto): não esperam o detalhe nem mostram esqueleto (TerminalDoProjetoTest)
+            if (a == Aba.TERMINAL || a == Aba.INTERNET || a == Aba.PROCESSOS || a == Aba.GIT) {
+                // o Git é lido por SSH ou processo (PaginaGitTest), o terminal é SSH puro, a Internet fala só com o cofre e a Cloudflare e a aba Processos lê o servidor (não o detalhe do projeto): não esperam o detalhe nem mostram esqueleto (TerminalDoProjetoTest)
                 assertFalse(Visual.naEdt(p::mostraEsqueleto), a + ": sem esqueleto");
                 assertTrue(Visual.naEdt(p::mostraCorpo), a + ": o shell está à mão");
                 continue;

@@ -114,7 +114,10 @@ class ProcessosSemEfeitoSozinhoTest {
         assertEquals(List.of(), quemUsa(Pattern.compile("instaladorDeGit\\("), Set.of("servidor/ServidorLab.java", ACOES, "ui/telas/BlocoDoGit.java")),
             "o ServidorLab só monta; quem pede é a ação do clique e o bloco que lê o git (git --version)");
         assertEquals(List.of(), quemUsa(Pattern.compile("\\bnew InstaladorDeGit\\("), Set.of("servidor/ServidorLab.java")));
-        assertEquals(List.of(), quemUsa(Pattern.compile("git config|\"git\", \"config\"|\"config\", \"--global\""), Set.of()), "o app nunca mexe na configuração do git");
+        // Git do projeto: o texto "git config --global --add safe.directory" é só MOSTRADO ao usuário (nunca executado) e o "git config --local" do repositório que o app acabou de criar (identidade) é frase da janela; os comandos de
+        // verdade estão em ComandosDeGit, conferidos por GitDoProjetoSemEfeitoSozinhoTest (nunca --global, nunca --system)
+        assertEquals(List.of(), quemUsa(Pattern.compile("git config|\"git\", \"config\"|\"config\", \"--global\""),
+            Set.of("git/ClassificadorDeErrosDoGit.java", "git/CriadorDeRepositorio.java", "ui/dialogos/DialogoCriarRepositorio.java")), "o app nunca mexe na configuração do git");
         assertEquals(List.of(), quemUsa(Pattern.compile("GerenciadorDePacotes\\.[a-z]+\\(.*comandosDeInstalar|\\.comandosDeInstalar\\("), Set.of("instalador/InstaladorDeGit.java", "instalador/GerenciadorDePacotes.java")),
             "os comandos de instalar só são montados no instalador");
     }

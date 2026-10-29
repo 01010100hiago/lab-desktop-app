@@ -520,6 +520,10 @@ public final class DialogoCriarRepositorio extends Dialogo {
         return razaoDaTrava.isVisible();
     }
 
+    public boolean fechado() {
+        return jaFechou();
+    }
+
     public String faseAtual() {
         return fase.name();
     }
