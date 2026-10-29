@@ -10,7 +10,7 @@
 4. Se não, ou se as ações de escrita estão desligadas, a janela mostra o comando para rodar no Terminal, com Copiar; depois, "Já instalei, conferir de novo".
 5. Em Novo projeto, Repositório Git, o mesmo aviso e botão aparecem quando falta o git.
 [Ir para Máquina](ir:maquina)
-@veja: projetos adicionar-servidor
+@veja: projetos adicionar-servidor git-do-projeto
 ## Mais detalhes
 O app nunca digita senha de administrador e não mexe na configuração do git. Os gerenciadores que ele conhece são apt-get, dnf, yum, apk, pacman e zypper.
 Em Este computador, "Instalar o Git…" abre "Preparar este computador", que mostra o jeito de instalar no seu sistema (Homebrew, ferramentas da Apple ou winget).
