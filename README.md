@@ -2,7 +2,7 @@
 
 Criado por Thiago Bezerra. Licença MIT.
 
-Aplicativo de computador (Mac, Windows e Linux) para cuidar de servidores e de projetos com Docker numa janela só, com cofre cifrado, SSH, terminal, arquivos e gráficos. Em Java 21, **software livre e gratuito**.
+Aplicativo de computador (Mac e Linux e, em modo experimental, Windows) para cuidar de servidores e de projetos com Docker numa janela só, com cofre cifrado, SSH, terminal, arquivos e gráficos. Em Java 21, **software livre e gratuito**.
 
 <table>
   <tr>
@@ -69,21 +69,28 @@ As telas são do app, com dados de exemplo inventados, dentro de uma moldura de 
 
 Baixe o instalador do seu sistema (veja [docs/INSTALAR.md](docs/INSTALAR.md)) ou rode `./gradlew run` (veja [docs/DESENVOLVIMENTO.md](docs/DESENVOLVIMENTO.md)). Na primeira abertura o app pede a senha-mestra do cofre; ela não tem recuperação, então guarde-a bem. Depois escolha "Adicionar servidor", informe como conectar, confira a impressão digital e, se quiser, deixe o app instalar a chave e o agente depois de mostrar o que vai fazer. Quem não tem servidor pode usar "Este computador".
 
+## Testes e qualidade
+
+[![build](https://github.com/01010100hiago/lab-desktop-app/actions/workflows/build.yml/badge.svg)](https://github.com/01010100hiago/lab-desktop-app/actions/workflows/build.yml) [![instaladores](https://github.com/01010100hiago/lab-desktop-app/actions/workflows/instaladores.yml/badge.svg)](https://github.com/01010100hiago/lab-desktop-app/actions/workflows/instaladores.yml)
+
+O `./gradlew build` roda 3.962 testes automáticos (13 ficam pulados quando falta o Docker de verdade, o `node` ou dados reais de um servidor; telas desenhadas sem abrir janela, SSH e agente de mentira, cofre, Git) e confere as dependências. No GitHub o `build` roda em Linux, Mac e Windows: Linux e Mac são exigidos (se falharem, o commit fica reprovado); o Windows é experimental e informativo (o resultado aparece, mas não reprova). Os selos acima mostram o resultado do momento, que pode estar verde ou vermelho. Para rodar tudo no seu computador: `./gradlew build`. O que falta no Windows está em [docs/CI.md](docs/CI.md), na seção "Windows: o que falta".
+
 ## Limites de hoje
 
 - O agente que o app leva dentro do programa só monitora: lê a máquina (CPU, memória, disco, rede, processos e Docker), exige o token e não usa IA. Projetos e Claude no servidor pedem um agente que os ofereça; sem agente o app segue com terminal, arquivos e segurança.
 - O agente recebe o acesso ao Docker do servidor (o app não monta o disco nem a pasta dos projetos nele). O filtro do agente só deixa três leituras, mas o poder desse acesso é o do Docker inteiro, e é o risco que resta.
-- A conexão por AWS e por Cloudflare foi testada só com programas de mentira e um processo de verdade; falta prova contra a AWS e a Cloudflare reais.
+- AWS Session Manager foi provado com uma instância EC2 real (Amazon Linux 2023): o túnel subiu, o SSH entrou por dentro e o app conectou. O agente de monitoramento não foi instalado nela porque a imagem não tinha Docker (o instalador só instala o Docker sozinho em Debian e Ubuntu).
+- Cloudflare: o caminho (`cloudflared access tcp` e o SSH por dentro) foi provado de ponta a ponta pela linha de comando contra um servidor real com túnel da Cloudflare; falta conferir o fluxo completo pela tela do app.
 - O Git do projeto lê e cria o repositório local. Aprovar e mesclar, desfazer e publicar não existem.
 - O app procura o repositório Git da pasta do projeto NO SERVIDOR; um repositório que está só no seu computador ou no GitHub só aparece depois de ser clonado ou enviado para lá.
 - Os instaladores não têm assinatura de código paga.
-- No Windows e no Linux o código é o mesmo, mas a prova de ponta a ponta foi feita no Mac.
+- O Windows é experimental (no primeiro CI, 271 de 3904 testes falharam nele; veja `docs/CI.md`), e Linux e Windows não têm prova de ponta a ponta: o CI do Linux passa a suíte, mas a janela, o Docker e os servidores foram provados à mão só no Mac.
 
 ## Documentação
 
 | Arquivo | O que tem |
 |---|---|
-| [docs/INSTALAR.md](docs/INSTALAR.md) | Instalar no Windows e no Mac, para quem não é técnico |
+| [docs/INSTALAR.md](docs/INSTALAR.md) | Instalar no Mac e no Windows (experimental), para quem não é técnico |
 | [docs/RECURSOS.md](docs/RECURSOS.md) | O que o app faz e o estado de cada recurso |
 | [docs/CONFIGURACOES.md](docs/CONFIGURACOES.md) | O que dá para mudar, onde fica e o que o app NÃO faz sozinho |
 | [docs/GALERIA.md](docs/GALERIA.md) | Telas do app nos temas claro e escuro |

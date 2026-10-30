@@ -55,6 +55,8 @@ Faça num servidor de TESTE (ou num projeto de teste), nunca em produção: cria
 4. **Reconexão.** Cadastre um servidor de teste pelo AWS Session Manager com um ID de instância que não existe (invente um) e deixe o app aberto: nos primeiros minutos a faixa diz "Reconectando (tentativa N)"; depois de 12 falhas seguidas ela passa a "Tentando de novo a cada 5 min", com a causa. No `ps` do computador, o `aws ssm start-session` aparece uma vez a cada 5 minutos. "Tentar agora" faz uma tentativa na hora e volta ao ritmo normal.
 5. **Encerrar um processo.** Num servidor de teste, deixe um `sleep 600` rodando, abra Servidor > Processos, clique em Encerrar e confira nome, número e hora na confirmação.
 
+**Provas contra serviços reais (feitas à mão, fora da suíte).** Os testes automáticos usam o `aws` e o `cloudflared` de mentira, mais um processo de verdade que faz o papel deles. À parte, o AWS Session Manager foi provado com uma instância EC2 real (Amazon Linux 2023): o túnel subiu, o SSH entrou por dentro e o app conectou; o agente de monitoramento não foi instalado nela porque a imagem não tinha Docker (o instalador só instala o Docker sozinho em Debian e Ubuntu). Na Cloudflare, o caminho (`cloudflared access tcp` e o SSH por dentro) foi provado de ponta a ponta pela linha de comando contra um servidor real com túnel; falta conferir o fluxo completo pela tela do app.
+
 Os testes do app gravam as telas em `build/telas/` (tema claro e escuro) e as imagens da galeria em `build/galeria/`.
 
 ## Recursos opcionais do Claude
