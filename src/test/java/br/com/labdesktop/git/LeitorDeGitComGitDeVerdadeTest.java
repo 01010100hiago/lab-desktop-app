@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -308,5 +309,141 @@ class LeitorDeGitComGitDeVerdadeTest {
         assertTrue(l.diffDoCommit(c.hash(), d.arquivos().get(0)).ok());
         assertTrue(l.branches().ok());
         assertTrue(l.status().ok());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Casos de borda da leitura
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void commitComOsSeparadoresAntigosNoAssuntoENoAutorAparecePorInteiroNaListaEPaginaCerto() throws Exception {
+        Path p = g.repositorio("loja-web");
+        for (int i = 1; i <= 4; i++) {
+            g.escrever(p, "f" + i + ".txt", "x" + i);
+            g.git(p, "add", "-A");
+            String assunto = i % 2 == 0 ? "assunto\u001edois\u001ftres " + i : "normal " + i;
+            g.git(p, "-c", "user.name=Ana\u001fSilva\u001e", "commit", "-q", "-m", assunto);
+        }
+        PaginaDeCommits a = leitor(p).commits(null, 0, 2).valorOuNulo();
+        assertEquals(2, a.commits().size(), "os dois commits da página aparecem, os de assunto estranho também");
+        assertTrue(a.temMais(), "há mais: calculado sobre o que o git devolveu, não sobre uma lista que perdeu commits");
+        assertEquals("assuntodoistres 4", a.commits().get(0).assunto());
+        assertEquals("AnaSilva", a.commits().get(0).autor());
+        assertEquals("normal 3", a.commits().get(1).assunto());
+        PaginaDeCommits b = leitor(p).commits(null, 2, 2).valorOuNulo();
+        assertEquals(List.of("assuntodoistres 2", "normal 1"), b.commits().stream().map(Commit::assunto).toList());
+        assertFalse(b.temMais());
+        assertEquals("assuntodoistres 4", leitor(p).resumo().valorOuNulo().ultimo().assunto());
+        DetalheDoCommit d = leitor(p).detalhe(a.commits().get(0).hash()).valorOuNulo();
+        assertEquals("assuntodoistres 4", d.commit().assunto(), "o cabeçalho também aguenta o U+001E e o U+001F");
+    }
+
+    @Test
+    void autorQueSeChamaComoUmaMarcaFixaNaoPartePaginaNemSomeCommit() throws Exception {
+        Path p = g.repositorio("loja-web");
+        for (String nome : List.of("LABREC", "x", "@")) {
+            g.escrever(p, nome + ".txt", nome);
+            g.git(p, "add", "-A");
+            g.git(p, "-c", "user.name=" + nome, "-c", "user.email=a@example.com", "commit", "-q", "-m", "do " + nome);
+        }
+        assertEquals(List.of("do @", "do x", "do LABREC"), leitor(p).commits(null, 0, 10).valorOuNulo().commits().stream().map(Commit::assunto).toList());
+    }
+
+    @Test
+    void asPaginasSeguintesPartemDoHashDaCabecaDaPrimeiraPaginaEUmCommitNovoNaoRepeteNemPula() throws Exception {
+        Path p = g.repositorio("loja-web");
+        for (int i = 1; i <= 5; i++) {
+            g.escrever(p, "f" + i + ".txt", "x" + i);
+            g.commitar(p, "commit " + i);
+        }
+        PaginaDeCommits primeira = leitor(p).commits(null, 0, 2).valorOuNulo();
+        assertEquals(List.of("commit 5", "commit 4"), primeira.commits().stream().map(Commit::assunto).toList());
+        String ancora = primeira.commits().get(0).hash();
+        g.escrever(p, "f6.txt", "x6");
+        g.commitar(p, "commit 6, que entrou enquanto o usuário olhava");
+        assertEquals(List.of("commit 4", "commit 3"), leitor(p).commits(null, 2, 2).valorOuNulo().commits().stream().map(Commit::assunto).toList(),
+            "sem âncora o --skip repete o commit 4: é o erro que a âncora evita");
+        PaginaDeCommits segunda = leitor(p).commits(ancora, 2, 2).valorOuNulo();
+        assertEquals(List.of("commit 3", "commit 2"), segunda.commits().stream().map(Commit::assunto).toList(), "a página 2 parte da cabeça que o usuário viu: nem repete nem pula");
+        assertTrue(segunda.temMais());
+        assertEquals(List.of("commit 1"), leitor(p).commits(ancora, 4, 2).valorOuNulo().commits().stream().map(Commit::assunto).toList());
+    }
+
+    @Test
+    void repositorioSha256ApareceComSeusCommitsEOStatusEODiffFuncionam() throws Exception {
+        Path p = g.projeto("loja-web");
+        assumeTrue(g.bruto(p, "init", "-q", "-b", "main", "--object-format=sha256").status() == 0, "este git não faz repositório SHA-256");
+        g.git(p, "config", "--local", "user.name", "Ana Teste");
+        g.git(p, "config", "--local", "user.email", "ana@example.com");
+        g.escrever(p, "a.txt", "a\n");
+        g.commitar(p, "primeiro no sha256");
+        g.escrever(p, "a.txt", "a\nb\n");
+        String h64 = g.git(p, "rev-parse", "HEAD").strip();
+        assertEquals(64, h64.length());
+        g.commitar(p, "segundo no sha256");
+        ResumoDoRepositorio r = leitor(p).resumo().valorOuNulo();
+        assertEquals(ResumoDoRepositorio.Estado.COM_GIT, r.estado());
+        assertFalse(r.semCommits(), "o repositório tem commits: nunca diz que não tem");
+        assertEquals("segundo no sha256", r.ultimo().assunto());
+        assertEquals(64, r.ultimo().hash().length());
+        PaginaDeCommits pg = leitor(p).commits(null, 0, 10).valorOuNulo();
+        assertEquals(2, pg.commits().size());
+        DetalheDoCommit d = leitor(p).detalhe(pg.commits().get(0).hash()).valorOuNulo();
+        assertEquals(1, leitor(p).diffDoCommit(pg.commits().get(0).hash(), d.arquivos().get(0)).valorOuNulo().acrescentadas());
+        g.escrever(p, "a.txt", "a\nb\nc\n"); // alteração ainda não commitada: o status e o diff usam a árvore vazia DESTE repositório
+        Pendencia mod = leitor(p).status().valorOuNulo().pendencias().get(0);
+        assertEquals(1, leitor(p).diffPendente(mod, false).valorOuNulo().acrescentadas());
+        assertEquals(64, leitor(p).commits(pg.commits().get(0).hash(), 0, 5).valorOuNulo().commits().get(0).hash().length(), "a âncora de 64 letras vale");
+    }
+
+    @Test
+    void pastaNovaNoStatusMostraQuantosArquivosENaoDaErro() throws Exception {
+        Path p = repositorioComHistoria();
+        g.escrever(p, "novo/a.txt", "a");
+        g.escrever(p, "novo/sub/b.txt", "b");
+        g.escrever(p, "novo/ação com espaço.txt", "c");
+        Path fora = Files.createDirectories(tmp.resolve("fora"));
+        for (int i = 0; i < 5; i++) {
+            Files.writeString(fora.resolve("x" + i), "x");
+        }
+        Files.createSymbolicLink(p.resolve("novo/atalho"), fora); // um link para uma pasta com 5 arquivos: não se segue
+        StatusDoGit st = leitor(p).status().valorOuNulo();
+        Pendencia pasta = st.pendencias().stream().filter(x -> x.caminho().equals("novo/")).findFirst().orElseThrow();
+        ResultadoDoGit<DiffDoArquivo> r = leitor(p).diffPendente(pasta, false);
+        assertTrue(r.ok(), String.valueOf(r.falhaOuNula()));
+        DiffDoArquivo d = r.valorOuNulo();
+        assertEquals("pasta nova: 4 arquivos", d.linhas().get(0).texto(), "três arquivos de verdade mais o link, sem seguir o link: " + d.linhas());
+        assertTrue(d.linhas().stream().anyMatch(l -> l.texto().equals("novo/ação com espaço.txt")));
+        assertTrue(d.linhas().stream().noneMatch(l -> l.texto().contains("x0")), "o que está do outro lado do link não entra");
+        assertFalse(d.binario());
+    }
+
+    @Test
+    void pastaNovaQueEUmRepositorioDeDentroDizIssoEnaoOlhaLaDentro() throws Exception {
+        Path p = repositorioComHistoria();
+        Path clone = Files.createDirectories(p.resolve("clone-externo"));
+        g.git(clone, "init", "-q", "-b", "main");
+        g.escrever(clone, "lib.js", "x");
+        StatusDoGit st = leitor(p).status().valorOuNulo();
+        Pendencia pasta = st.pendencias().stream().filter(x -> x.caminho().equals("clone-externo/")).findFirst().orElseThrow();
+        DiffDoArquivo d = leitor(p).diffPendente(pasta, false).valorOuNulo();
+        assertTrue(d.linhas().get(0).texto().startsWith("pasta nova com um repositório Git dentro"), d.linhas().toString());
+        assertEquals(1, d.linhas().size());
+    }
+
+    @Test
+    void branchesComAcentoESimbolosAparecemEDaoCommitsInclusivePelaRegraDeLinhaRemota() throws Exception {
+        Path p = g.repositorio("loja-web");
+        g.escrever(p, "a.txt", "a");
+        g.commitar(p, "base");
+        for (String nome : List.of("ação", "fix#12", "a+b", "user@host", "feat/versão")) {
+            g.git(p, "branch", nome);
+        }
+        List<Branch> bs = leitor(p).branches().valorOuNulo();
+        assertEquals(Set.of("main", "ação", "fix#12", "a+b", "user@host", "feat/versão"), bs.stream().map(Branch::nome).collect(java.util.stream.Collectors.toSet()), "nenhum branch válido é omitido");
+        LeitorDeGit pelaRegra = new LeitorDeGitPorExecutor(g.executorComRegraDeSsh(), p.toString());
+        for (String nome : List.of("ação", "fix#12", "a+b", "user@host", "feat/versão")) {
+            assertEquals(1, pelaRegra.commits(nome, 0, 5).valorOuNulo().commits().size(), "o branch " + nome + " vai entre aspas como texto livre");
+        }
     }
 }

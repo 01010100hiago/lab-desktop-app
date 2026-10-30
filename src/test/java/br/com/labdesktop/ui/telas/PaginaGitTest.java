@@ -492,6 +492,77 @@ class PaginaGitTest {
     }
 
     // ---------------------------------------------------------------------------------------------
+    // Casos de borda da leitura e da criação
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void carregarMaisNaoRepeteNemPulaQuandoEntraCommitNovoNoMeio() {
+        Visual.tema(Tema.CLARO);
+        Cena c = new Cena(true).comCommits(120);
+        c.ler();
+        assertEquals(50, ed(c.pagina::commitsCarregados));
+        // chega um commit novo no servidor enquanto o usuário olha a primeira página
+        List<Commit> novos = new java.util.ArrayList<>();
+        novos.add(LeitorDeGitFalso.commit(121));
+        novos.addAll(c.leitor.commits);
+        c.leitor.commits = novos;
+        Visual.naEdt(() -> c.pagina.botaoCarregarMais().doClick(0));
+        esperar("segunda página", () -> c.pagina.commitsCarregados() == 100);
+        TabelaDeDados<Commit> t = c.pagina.tabelaDeCommits();
+        java.util.List<String> curtos = ed(() -> java.util.stream.IntStream.range(0, 100).mapToObj(i -> t.textoDa(i, 1)).toList());
+        assertEquals(100, curtos.stream().distinct().count(), "nenhum commit repetido");
+        assertTrue(curtos.get(0).startsWith("Commit número 120:"), curtos.get(0));
+        assertTrue(curtos.get(99).startsWith("Commit número 21:"), "e nenhum pulado: 120 até 21, sem buraco: " + curtos.get(99));
+    }
+
+    @Test
+    void arquivoNaoRastreadoComCaraDeSegredoNaoTemOConteudoLidoNemMostradoAteODonoPedir() {
+        Visual.tema(Tema.CLARO);
+        Cena c = new Cena(true).comCommits(1);
+        c.leitor.status = new StatusDoGit("main", false, LeitorDeGitFalso.commit(1).hash(), null, -1, -1, List.of(
+            new Pendencia(".env", null, Pendencia.Tipo.NAO_RASTREADO, false, true), new Pendencia("src/a.js", null, Pendencia.Tipo.MODIFICADO, false, true)));
+        c.leitor.diffs = chave -> new ResultadoDoGit.Ok<>(LeitorDeGitFalso.diff("+SENHA=muito-secreta"));
+        c.ler();
+        Visual.naEdt(() -> c.pagina.subAbas().selecionar("alteracoes"));
+        TabelaDeDados<Pendencia> t = c.pagina.tabelaDePendencias();
+        Visual.naEdt(() -> t.selecionarLinha(0));
+        assertEquals("Este arquivo parece conter segredos: o conteúdo não é exibido.", ed(() -> c.pagina.diffPendente().textoDaMensagem()));
+        assertTrue(ed(() -> c.pagina.diffPendente().botaoMostrarMesmoAssim().isVisible()));
+        assertEquals("Mostrar mesmo assim", ed(() -> c.pagina.diffPendente().botaoMostrarMesmoAssim().getText()));
+        assertFalse(ed(() -> c.pagina.diffPendente().mostraDiff()));
+        assertFalse(TelaProjetoTest.textos(c.pagina).contains("muito-secreta"), "o conteúdo não foi nem lido nem desenhado");
+        assertEquals(0, c.leitor.quantas("pendente:.env"), "o app nem pediu o diff ao git");
+        // um arquivo comum não passa por isso
+        Visual.naEdt(() -> t.selecionarLinha(1));
+        esperar("diff comum", () -> c.pagina.diffPendente().mostraDiff());
+        assertFalse(ed(() -> c.pagina.diffPendente().botaoMostrarMesmoAssim().isVisible()));
+        // o botão explícito mostra
+        Visual.naEdt(() -> t.selecionarLinha(0));
+        Visual.naEdt(() -> c.pagina.diffPendente().botaoMostrarMesmoAssim().doClick(0));
+        esperar("diff do segredo depois do clique", () -> c.pagina.diffPendente().mostraDiff());
+        assertEquals(1, c.leitor.quantas("pendente:.env"));
+        assertTrue(TelaProjetoTest.textos(c.pagina).contains("muito-secreta"));
+    }
+
+    @Test
+    void oDiffDeUmEnvDeUmCommitTambemEsperaOPedidoDoDono() {
+        Visual.tema(Tema.CLARO);
+        Cena c = new Cena(true).comCommits(1);
+        Commit k = LeitorDeGitFalso.commit(1);
+        c.leitor.detalhes.put(k.hash(), LeitorDeGitFalso.detalhe(k, "adiciona o .env por engano", new ArquivoDoCommit(".env", null, 1, 0), new ArquivoDoCommit("src/app.js", null, 1, 0)));
+        c.leitor.diffs = chave -> new ResultadoDoGit.Ok<>(LeitorDeGitFalso.diff("+SENHA=muito-secreta"));
+        c.ler();
+        Visual.naEdt(() -> c.pagina.tabelaDeCommits().selecionarLinha(0));
+        esperar("detalhe", () -> k.hash().equals(c.pagina.hashDoDetalhe()));
+        Visual.naEdt(() -> c.pagina.tabelaDeArquivos().selecionarLinha(0));
+        assertEquals("Este arquivo parece conter segredos: o conteúdo não é exibido.", ed(() -> c.pagina.diffDoCommit().textoDaMensagem()));
+        assertEquals(0, c.leitor.quantas("diff:" + k.hash() + ":.env"));
+        Visual.naEdt(() -> c.pagina.diffDoCommit().botaoMostrarMesmoAssim().doClick(0));
+        esperar("depois do clique", () -> c.pagina.diffDoCommit().mostraDiff());
+        assertEquals(1, c.leitor.quantas("diff:" + k.hash() + ":.env"));
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // O que se vê: sem rolagem do corpo, sem transbordo, PNGs
     // ---------------------------------------------------------------------------------------------
 
