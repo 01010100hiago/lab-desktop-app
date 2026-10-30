@@ -55,6 +55,9 @@ class CoresDosDialogosCompletoTest {
 
     Map<String, Supplier<Dialogo>> catalogo() {
         Map<String, Supplier<Dialogo>> m = new LinkedHashMap<>();
+        m.put("confirmar sair do projeto (nao perguntar de novo)", () -> DialogoConfirmar.comNaoPerguntarDeNovo("Sair de app-loja?", "alerta",
+            "Este projeto tem um terminal aberto. Se sair da página dele agora, o terminal fecha e o que estiver rodando nele para. A conversa do Claude continua no servidor.",
+            "Sair do projeto", true, "Não perguntar de novo", "Para voltar a ser perguntado: Ajustes, Terminal.", d -> { }));
         m.put("2fa do servidor", () -> new Configurar2fa("lab", br.com.labdesktop.cofre.Estado2fa.DESLIGADO, DubleDeInterface.de(br.com.labdesktop.servidor.OperacoesDe2fa.class), avisos));
         m.put("adicionar container", () -> new DialogoAdicionarContainer("demo", DubleDeInterface.de(DialogoAdicionarContainer.Motor.class), () -> { }, () -> { }, avisos, copiador()));
         m.put("conectar cloudflare", () -> new DialogoConectarCloudflare(DubleDeInterface.de(DialogoConectarCloudflare.Motor.class), avisos, copiador(), () -> { }));

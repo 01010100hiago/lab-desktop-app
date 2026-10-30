@@ -362,4 +362,71 @@ class PreferenciasTest {
         assertEquals("app", p.repositorioGitDe("s", "loja"));
         assertEquals(java.util.Set.of("db"), p.comRepositorioGit("s", "outra", "web").containersProtegidosDe("s"), "e escolher não perde as outras preferências");
     }
+
+    // ---- "Não perguntar de novo" ao sair de um projeto com terminal ----
+
+    @Test
+    void aPerguntaDeSairDoProjetoComTerminalComecaLigada() {
+        assertTrue(Preferencias.padrao().perguntarAoSairDoProjetoComTerminal());
+    }
+
+    @Test
+    void semArquivoOuSemOCampoOAppPergunta(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        assertTrue(Preferencias.carregar(c).perguntarAoSairDoProjetoComTerminal(), "sem arquivo");
+        c.prepararPastas();
+        Files.writeString(c.arquivoPreferencias(), "{\"tema\": \"escuro\"}");
+        assertTrue(Preferencias.carregar(c).perguntarAoSairDoProjetoComTerminal(), "arquivo sem o campo (de antes dessa preferência existir)");
+    }
+
+    @Test
+    void campoDeTipoErradoOuArquivoCorrompidoTambemPergunta(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        c.prepararPastas();
+        for (String ruim : new String[] {"\"false\"", "0", "\"nao\"", "null", "[false]", "{\"valor\": false}", "1.5"}) {
+            Files.writeString(c.arquivoPreferencias(), "{ \"tema\": \"escuro\", \"perguntarAoSairDoProjetoComTerminal\": " + ruim + " }");
+            Preferencias p = Preferencias.carregar(c);
+            assertTrue(p.perguntarAoSairDoProjetoComTerminal(), "valor " + ruim + " não pode silenciar a pergunta");
+            assertEquals(Tema.ESCURO, p.tema(), "e o vizinho bom não se perde (valor " + ruim + ")");
+        }
+        Files.writeString(c.arquivoPreferencias(), "{ isto nao e json");
+        assertTrue(Preferencias.carregar(c).perguntarAoSairDoProjetoComTerminal());
+    }
+
+    @Test
+    void desligarEReligarAPerguntaViajaPeloArquivo(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Preferencias desligada = Preferencias.padrao().comTema(Tema.CLARO).comPerguntarAoSairDoProjetoComTerminal(false);
+        assertFalse(desligada.perguntarAoSairDoProjetoComTerminal());
+        assertEquals(Tema.CLARO, desligada.tema(), "só o campo mudou");
+        desligada.salvar(c);
+        assertTrue(Files.readString(c.arquivoPreferencias()).contains("\"perguntarAoSairDoProjetoComTerminal\" : false"));
+        Preferencias lida = Preferencias.carregar(c);
+        assertFalse(lida.perguntarAoSairDoProjetoComTerminal());
+        assertEquals(desligada, lida);
+        lida.comPerguntarAoSairDoProjetoComTerminal(true).salvar(c);
+        assertTrue(Preferencias.carregar(c).perguntarAoSairDoProjetoComTerminal());
+    }
+
+    @Test
+    void asOutrasMudancasNaoReligamAPerguntaDesligada() {
+        Preferencias p = Preferencias.padrao().comPerguntarAoSairDoProjetoComTerminal(false)
+            .comTema(Tema.ESCURO).comJanela(new Janela(1, 2, 1000, 700, false)).comTamanhoFonteTerminal(15).comOpcaoComoMeta(true)
+            .comCopiarAoSelecionar(true).comAviso(Aviso.CREDITO_75, false).comAutoBloqueioMinutos(5).comEscalaTexto(115).comDonoExclusivo(true)
+            .comAbasDoServidor(OrdemDeAbas.PADRAO).comAbasDoProjeto(OrdemDeAbas.PADRAO).comContainerProtegido("lab", "db", true);
+        assertFalse(p.perguntarAoSairDoProjetoComTerminal());
+    }
+
+    @Test
+    void aPerguntaDeSairEORepositorioGitDoPacoteSNaoSePerdemUmAoOutro(@TempDir Path tmp) throws Exception {
+        Preferencias p = Preferencias.padrao().comRepositorioGit("lab", "app-loja", "app").comPerguntarAoSairDoProjetoComTerminal(false);
+        assertEquals("app", p.repositorioGitDe("lab", "app-loja"), "desligar a pergunta preserva o repositório lembrado");
+        assertFalse(p.perguntarAoSairDoProjetoComTerminal());
+        Preferencias q = p.comRepositorioGit("lab", "outro", "web").comTema(Tema.CLARO).comContainerProtegido("lab", "db", true);
+        assertFalse(q.perguntarAoSairDoProjetoComTerminal(), "mexer no repositório Git, no tema e nos containers não religa a pergunta");
+        assertEquals("app", q.repositorioGitDe("lab", "app-loja"));
+        CaminhosApp c = caminhos(tmp);
+        q.salvar(c);
+        assertEquals(q, Preferencias.carregar(c));
+    }
 }
