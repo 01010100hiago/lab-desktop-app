@@ -310,6 +310,39 @@ class SondadorTest {
     }
 
     @Test
+    void muitasTentativasDoAgenteFazOTopicoEsperarOQueEleDisseSemMartelar() throws Exception {
+        Brinquedo t = new Brinquedo("t", false);
+        t.falha = new ErroApi.ServidorErro(429, br.com.labdesktop.util.Json.mapper()
+            .readTree("{\"codigo\":\"muitas_tentativas\",\"aguarde_s\":45}"), "Muitas tentativas. Aguarde 45 s.");
+        Colecao<Integer> ouvinte = new Colecao<>();
+        sondador.assinar(t.topico, ouvinte);
+
+        relogio.avancar(Duration.ofSeconds(100));
+
+        // a primeira consulta em 0 s, a seguinte só depois dos 45 s pedidos (e não aos 10 s da cadência): duas em 100 s, não onze
+        assertEquals(List.of(0L, 45L), t.momentos.stream().map(m -> Duration.between(t.momentos.get(0), m).toSeconds()).toList().subList(0, 2));
+        assertEquals(3, t.chamadas.get(), "0 s, 45 s e 90 s");
+        assertEquals(3, ouvinte.erros.size(), "cada resposta chega à tela, que mostra a frase de espera");
+
+        // passado o bloqueio, o sucesso volta à cadência normal de 10 s
+        t.falha = null;
+        relogio.avancar(Duration.ofSeconds(60));
+        t.momentos.clear();
+        relogio.avancar(Duration.ofSeconds(25));
+        assertEquals(List.of(10L), List.of(Duration.between(t.momentos.get(0), t.momentos.get(1)).toSeconds()));
+    }
+
+    @Test
+    void umPedidoDeEsperaAbsurdoTemTetoDeCincoMinutos() throws Exception {
+        Brinquedo t = new Brinquedo("t", false);
+        t.falha = new ErroApi.ServidorErro(429, br.com.labdesktop.util.Json.mapper()
+            .readTree("{\"codigo\":\"muitas_tentativas\",\"aguarde_s\":86400}"), "x");
+        sondador.assinar(t.topico, new Colecao<>());
+        relogio.avancar(Duration.ofMinutes(6));
+        assertEquals(2, t.chamadas.get(), "0 s e 300 s");
+    }
+
+    @Test
     void umSucessoZeraAContagemDeFalhas() {
         Brinquedo t = new Brinquedo("t", false);
         t.falha = new ErroRede("sem rede", null);

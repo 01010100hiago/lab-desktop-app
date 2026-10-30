@@ -403,8 +403,19 @@ public final class InstaladorDeAgente {
                     "Não consegui parar o agente anterior para liberar a porta");
             }
         }
+        // O agente roda como usuário comum desde o primeiro instante (e sem capacidades): precisa do grupo do soquete do Docker e, num volume que já
+        // existia, de a pasta de dados ser dele.
+        ResultadoExec g = rodar(ComandosRemotos.lerGidDoSoquete(docker, parametros.imagem(pacote.versao())), ESCRITA_CURTA);
+        String gid = g.status() == 0 ? ComandosRemotos.gidValido(g.stdout()) : null;
+        if (gid == null) {
+            throw new FalhaDePasso("Não consegui descobrir o grupo do soquete do Docker neste servidor: " + saidaDeErro(g));
+        }
+        if (volumeExistia) {
+            exigirSucesso(ComandosRemotos.acertarDonoDosDados(docker, parametros, pacote), ESCRITA_CURTA,
+                "Não consegui entregar a pasta de dados do agente anterior ao usuário do agente novo");
+        }
         criouContainer = true; // mesmo que o `run` falhe no meio: o desfazer confere e remove só se existir
-        ResultadoExec x = rodar(ComandosRemotos.subirContainer(docker, parametros, pacote), ESCRITA_CURTA);
+        ResultadoExec x = rodar(ComandosRemotos.subirContainer(docker, parametros, pacote, gid), ESCRITA_CURTA);
         if (x.status() != 0) {
             // `docker run` que falha pode deixar um container "Created": criouContainer segue verdadeiro e o desfazer o remove se existir.
             throw new FalhaDePasso("O Docker não conseguiu subir o container do agente: " + saidaDeErro(x));

@@ -7,8 +7,8 @@ import java.util.Set;
 import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /**
- * Confere a pasta dos projetos ANTES de criá-la ou de montá-la no container: o container do agente recebe essa pasta com permissão de escrita,
- * então ela nunca pode ser a raiz do disco, a pasta pessoal inteira nem uma pasta do sistema. Regra neutra de sistema, só sobre o texto (nada de
+ * Confere a pasta dos projetos ANTES de criá-la: o app cria, edita e apaga projetos dentro dela (e roda o compose deles), então ela nunca pode ser a
+ * raiz do disco, a pasta pessoal inteira nem uma pasta do sistema. (Ela NÃO entra no container do agente: o agente de monitoramento não a abre.) Regra neutra de sistema, só sobre o texto (nada de
  * disco), testada para Mac, Linux e Windows num Mac.
  */
 public final class ValidadorDaPastaDosProjetos {
@@ -51,7 +51,7 @@ public final class ValidadorDaPastaDosProjetos {
         String normal = "/" + String.join("/", partes);
         String baixo = normal.toLowerCase(Locale.ROOT);
         if (partes.isEmpty()) {
-            return Optional.of("A pasta dos projetos não pode ser a raiz do disco (/): o container do agente escreveria nela. Use uma pasta sua, como LabLocal/projects.");
+            return Optional.of("A pasta dos projetos não pode ser a raiz do disco (/): o app mexeria em tudo o que há no disco. Use uma pasta sua, como LabLocal/projects.");
         }
         if (eIgualOuAncestralDaCasa(normal, casa == null ? "" : casa.replace('\\', '/'))) {
             return Optional.of("A pasta dos projetos não pode ser a sua pasta pessoal inteira (nem uma acima dela): use uma pasta dentro dela, como LabLocal/projects.");
@@ -77,7 +77,7 @@ public final class ValidadorDaPastaDosProjetos {
             return Optional.of("A pasta dos projetos não pode ter . nem .. no caminho: escreva o caminho completo.");
         }
         if (partes.isEmpty()) {
-            return Optional.of("A pasta dos projetos não pode ser a raiz do disco (" + Character.toUpperCase(p.charAt(0)) + ":\\): o container do agente escreveria nela.");
+            return Optional.of("A pasta dos projetos não pode ser a raiz do disco (" + Character.toUpperCase(p.charAt(0)) + ":\\): o app mexeria em tudo o que há no disco.");
         }
         String normal = Character.toUpperCase(p.charAt(0)) + ":/" + String.join("/", partes);
         String c = casa == null ? "" : casa.replace('\\', '/');

@@ -388,8 +388,8 @@ public final class AgenteDoLab implements AutoCloseable {
                         }
                         totpPendente = true;
                         saida.append("{\"ok\":true,\"segredo\":\"").append(SEGREDO)
-                            .append("\",\"uri\":\"otpauth://totp/Painel%20do%20Lab:lab?secret=").append(SEGREDO)
-                            .append("&issuer=Painel%20do%20Lab\"}\n");
+                            .append("\",\"uri\":\"otpauth://totp/Lab%20Desktop:lab?secret=").append(SEGREDO)
+                            .append("&issuer=Lab%20Desktop\"}\n");
                         return 0;
                     }
                     case "totp-confirmar" -> {

@@ -7,14 +7,17 @@ import java.io.InputStream;
 import java.nio.file.Path;
 
 /**
- * O que a tela "Sobre" mostra do app e do computador, em texto e sem nada sensível: a versão (a mesma do {@code --versao}), o agente que vai dentro do app, o
+ * O que a tela "Sobre" mostra do app e do computador, em texto e sem nada sensível: a versão, o commit e a data da compilação (os mesmos do {@code --versao}), o agente que vai dentro do app, o
  * Java, o sistema e a arquitetura e a pasta de dados (com a pasta do usuário trocada por {@code ~}). É também o texto que o botão "Copiar informações" põe na área de
  * transferência para o usuário colar num chamado: nenhuma senha, chave, token nem endereço de servidor entra aqui.
  *
- * @param agenteVersao versão do agente empacotado ({@code 0.1.0-abc1234}), ou "não incluído"
- * @param agenteCommit commit do repositório do agente de onde o agente foi montado (o {@code -PagenteCommit} de {@code empacotarAgente}), ou "não incluído"
+ * @param versao {@code 0.1.320}, ou {@code dev}
+ * @param commit commit curto da compilação ({@code a207ad4}, com {@code -alterado} se havia mudanças não commitadas), ou {@code desconhecido}
+ * @param dataDaCompilacao {@code AAAA-MM-DD} (UTC), ou {@code desconhecida}
+ * @param agenteVersao versão do agente empacotado ({@code 0.1.0-dadf957}), ou "não incluído"
+ * @param agenteCommit commit do repositório do agente de onde o agente foi montado ({@code agenteCommit} do {@code gradle.properties}), ou "não incluído"
  */
-public record InformacoesDoApp(String nome, String versao, String agenteVersao, String agenteCommit, String versaoDoJava, String sistema, String arquitetura,
+public record InformacoesDoApp(String nome, String versao, String commit, String dataDaCompilacao, String agenteVersao, String agenteCommit, String versaoDoJava, String sistema, String arquitetura,
                                String pastaDeDados) {
 
     private static final String RECURSO_DO_AGENTE = "/agente/agente.json";
@@ -40,7 +43,7 @@ public record InformacoesDoApp(String nome, String versao, String agenteVersao, 
         }
         String versaoJava = System.getProperty("java.version", "?");
         String fornecedor = System.getProperty("java.vendor", "");
-        return new InformacoesDoApp(Versao.NOME, Versao.atual(), versaoDoAgente, commitDoAgente,
+        return new InformacoesDoApp(Versao.NOME, Versao.atual(), Versao.commit(), Versao.data(), versaoDoAgente, commitDoAgente,
             fornecedor.isBlank() ? versaoJava : versaoJava + " (" + fornecedor + ")",
             br.com.labdesktop.plataforma.DescricaoDoSistema.nomeEVersao(), br.com.labdesktop.plataforma.DescricaoDoSistema.arquitetura(),
             redigirPasta(caminhos.pastaDados(), pastaDoUsuario));
@@ -62,9 +65,11 @@ public record InformacoesDoApp(String nome, String versao, String agenteVersao, 
         return absoluta.toString();
     }
 
-    /** O bloco que o botão "Copiar informações" copia: versão, sistema, Java e agente. */
+    /** O bloco que o botão "Copiar informações" copia: versão, commit e data da compilação, sistema, Java e agente (sem pasta de dados, usuário nem endereço). */
     public String comoTexto() {
         return nome + " " + versao + "\n"
+            + "Commit: " + commit + "\n"
+            + "Compilado em: " + dataDaCompilacao + "\n"
             + "Sistema: " + sistema.strip() + " (" + arquitetura + ")\n"
             + "Java: " + versaoDoJava + "\n"
             + (NAO_INCLUIDO.equals(agenteVersao) ? "Agente empacotado: " + NAO_INCLUIDO

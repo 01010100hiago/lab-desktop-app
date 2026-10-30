@@ -226,17 +226,98 @@ public final class ComandosRemotos {
     }
 
     /**
-     * Sobe o container do agente: reinício automático, SÓ no loopback (o agente escuta em 127.0.0.1 e a rede é a do servidor, então
-     * nada entra por fora; o app chega pelo túnel SSH), pasta de dados num volume nomeado e logs com teto. O
-     * agente já nasce exigindo a credencial do app; o app a registra logo depois de subir e tolera o 401 até lá.
+     * Os TRÊS arquivos da máquina que o agente lê (e só eles), com o caminho que o container os enxerga: o nome da máquina, o sistema e os
+     * nomes de usuário dos processos. Antes o container recebia a raiz do disco inteira (somente leitura); o agente de monitoramento só abre
+     * estes três, então é só o que entra.
      */
-    public static String subirContainer(String docker, ParametrosDaInstalacao p, PacoteDoAgente pacote) {
+    public static final List<String> ARQUIVOS_DA_MAQUINA = List.of("/etc/hostname", "/etc/os-release", "/etc/passwd");
+
+    /**
+     * As opções {@code --mount} dos {@link #ARQUIVOS_DA_MAQUINA}, só leitura. {@code --mount} e não {@code -v} DE PROPÓSITO: com {@code -v}, um
+     * arquivo que não existe no servidor vira uma PASTA criada pelo Docker na raiz do sistema dele (um {@code /etc/hostname} que é pasta quebra
+     * a máquina); com {@code --mount type=bind} o Docker recusa e o container não sobe.
+     */
+    public static List<String> montagemDosArquivosDaMaquina() {
+        List<String> l = new java.util.ArrayList<>();
+        for (String arquivo : ARQUIVOS_DA_MAQUINA) {
+            l.add("--mount");
+            l.add("type=bind,source=" + arquivo + ",target=/host" + arquivo + ",readonly");
+        }
+        return List.copyOf(l);
+    }
+
+    /** O usuário (uid:gid) do agente DENTRO da imagem: alto e sem dono na máquina (o 1000 costuma ser o do administrador). É o dono da pasta de dados da imagem. */
+    public static final String USUARIO_DO_AGENTE = "10001:10001";
+
+    /** O caminho do soquete do Docker, dentro do container e na máquina. */
+    public static final String SOQUETE_DO_DOCKER = "/var/run/docker.sock";
+
+    /** Os grupos do soquete são números ({@code stat -c %g}). */
+    private static final Pattern GID = Pattern.compile("^[0-9]{1,10}$");
+
+    /**
+     * O grupo dono do soquete do Docker, como o container o enxerga: sobe um container descartável com o soquete montado e pergunta ao
+     * {@code stat}. É ESCRITA (cria e apaga um container), só roda depois do clique, e serve ao {@code --group-add} do agente (que roda sem ser
+     * root e por isso precisa estar no grupo do soquete). No Docker Desktop o grupo é 0 (root); num Linux comum é o do grupo {@code docker}.
+     * Imprime só o número.
+     */
+    public static String lerGidDoSoquete(String docker, String imagem) {
+        return exigirDocker(docker) + " run --rm --network none -v " + SOQUETE_DO_DOCKER + ":" + SOQUETE_DO_DOCKER + " " + exigirImagem(imagem)
+            + " stat -c %g " + SOQUETE_DO_DOCKER;
+    }
+
+    /** A saída de {@link #lerGidDoSoquete} é um número? Devolve-o limpo, ou {@code null}. */
+    public static String gidValido(String saida) {
+        String g = saida == null ? "" : saida.strip();
+        return GID.matcher(g).matches() ? g : null;
+    }
+
+    /**
+     * Entrega a pasta de dados ao usuário do agente ({@link #USUARIO_DO_AGENTE}). Só para um volume que JÁ existia (de uma versão anterior, cujos arquivos
+     * são de root ou de outro uid): o agente já não começa como root e por isso não acerta o dono sozinho. Container descartável, sem rede, como root
+     * só para esta troca; um volume novo nasce com o usuário certo (a imagem o cria assim) e não passa por aqui.
+     */
+    public static String acertarDonoDosDados(String docker, ParametrosDaInstalacao p, PacoteDoAgente pacote) {
+        return exigirDocker(docker) + " run --rm --network none --user 0:0 -v " + p.volume() + ":/srv/painel/dados " + p.imagem(pacote.versao())
+            + " chown -R " + USUARIO_DO_AGENTE + " /srv/painel/dados";
+    }
+
+    /**
+     * As opções que fecham o container: o agente roda como {@link #USUARIO_DO_AGENTE} desde o primeiro instante (nunca como root), entra no grupo do
+     * soquete, sem NENHUMA capacidade, sem poder ganhar privilégio, com o sistema de arquivos só leitura (a única escrita é o volume de dados e o
+     * {@code /tmp} em memória). Provado no Docker de verdade: sem {@code --user}, o {@code --cap-drop ALL} impede a troca de usuário e o agente não
+     * sobe; com {@code --user}, ele sobe e o {@code docker exec ... node acesso.js} (que o app usa para o token) também roda como o mesmo usuário.
+     */
+    public static List<String> opcoesDeEndurecimento(String gidDoSoquete) {
+        if (gidValido(gidDoSoquete) == null) {
+            throw new IllegalArgumentException("Grupo do soquete inválido.");
+        }
+        return List.of("--user", USUARIO_DO_AGENTE, "--group-add", gidDoSoquete.strip(), "--cap-drop", "ALL",
+            "--security-opt", "no-new-privileges", "--read-only", "--tmpfs", "/tmp");
+    }
+
+    /**
+     * Sobe o container do agente: reinício automático, SÓ no loopback (o agente escuta em 127.0.0.1 e a rede é a do servidor, então
+     * nada entra por fora; o app chega pelo túnel SSH), pasta de dados num volume nomeado e logs com teto. {@code PAINEL_EXIGE_TOKEN=1}: o
+     * agente (que exige o token sempre) o aceita e ignora; o app registra o token logo depois de subir e tolera o 401 até lá.
+     *
+     * <p>O que o container recebe: o soquete do Docker (o agente só faz {@code GET} em {@code /info}, {@code /system/df} e
+     * {@code /containers/json}, pelo filtro {@code docker-proxy.js} dele; o {@code :ro} num soquete NÃO impede escrita, quem impede é o
+     * filtro, então o soquete é o poder grande do container e o risco que resta), {@code --pid host} (a visão dos processos), os três arquivos de
+     * {@link #montagemDosArquivosDaMaquina()} e as {@link #opcoesDeEndurecimento}. A opção mais fechada do README do agente (um segundo container, sem
+     * rede, com o único acesso ao soquete) ainda não é feita pelo app.
+     *
+     * @param gidDoSoquete o grupo do soquete ({@link #lerGidDoSoquete})
+     */
+    public static String subirContainer(String docker, ParametrosDaInstalacao p, PacoteDoAgente pacote, String gidDoSoquete) {
         return exigirDocker(docker) + " run -d --name " + p.container()
             + " --restart unless-stopped --network host --pid host"
+            + " " + String.join(" ", opcoesDeEndurecimento(gidDoSoquete))
             + " --label " + ROTULO_DO_AGENTE + "=" + pacote.versao()
             + " --log-opt max-size=10m --log-opt max-file=3"
             + " -e PORT=" + p.porta() + " -e PAINEL_PERFIL=monitor -e PAINEL_EXIGE_TOKEN=1"
-            + " -v /var/run/docker.sock:/var/run/docker.sock -v /:/host:ro -v " + p.volume() + ":" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + " "
+            + " -v " + SOQUETE_DO_DOCKER + ":" + SOQUETE_DO_DOCKER + " " + String.join(" ", montagemDosArquivosDaMaquina())
+            + " -v " + p.volume() + ":" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + " "
             + p.imagem(pacote.versao());
     }
 

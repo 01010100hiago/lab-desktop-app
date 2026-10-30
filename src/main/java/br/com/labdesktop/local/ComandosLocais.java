@@ -21,9 +21,6 @@ public final class ComandosLocais {
     /** Marca o que o laboratório local criou (rede, container): é como o app sabe que é dele e nunca mexe no que não é. */
     public static final String ROTULO_LOCAL = "br.com.labdesktop.local";
 
-    /** Guarda uma marca da pasta dos projetos que o container montou (para recriar o container se o usuário trocar a pasta). */
-    public static final String ROTULO_PASTA = "br.com.labdesktop.pasta";
-
     private static final String DOCKER = "docker";
 
     private ComandosLocais() { }
@@ -179,42 +176,51 @@ public final class ComandosLocais {
     }
 
     /**
-     * Sobe o container do agente do laboratório local. NÃO usa {@code --network host} (o Docker Desktop roda numa máquina virtual: a rede do
-     * "host" é a dela, não a do computador): publica a porta SÓ no loopback ({@code -p 127.0.0.1:porta:porta}) e o agente escuta em todas as
-     * interfaces DO CONTAINER . Exige a credencial do app desde o primeiro minuto. A pasta dos projetos entra no container no
-     * caminho que o daemon também entende ({@link MapeamentoDeCaminhos}).
-     *
-     * <p><b>O que o container recebe</b>: o aviso ao usuário, em {@link AvisoDeSeguranca}, diz exatamente o que ele recebe.
-     *
-     * @param montagemDaMaquina {@link PlataformaLocal#montagemDaMaquina()}
-     * @param pastaNoContainer  {@link PlataformaLocal#noContainer(String)} da pasta dos projetos
+     * O grupo dono do soquete do Docker como o container o enxerga (um container descartável com {@code stat}); no Docker Desktop é o 0. ESCRITA (cria e
+     * apaga um container), só depois do clique. Serve ao {@code --group-add} do agente, que não roda como root.
      */
-    public static List<String> subirContainer(ParametrosDoLaboratorio p, PacoteDoAgente pacote, List<String> montagemDaMaquina,
-                                              String pastaNoContainer) {
-        List<String> c = new ArrayList<>(List.of(DOCKER, "run", "-d", "--name", p.container(), "--restart", "unless-stopped",
-            "-p", "127.0.0.1:" + p.porta() + ":" + p.porta(), "--pid", "host",
-            "--label", ComandosRemotos.ROTULO_DO_AGENTE + "=" + pacote.versao(), "--label", ROTULO_LOCAL + "=1",
-            "--label", ROTULO_PASTA + "=" + marcaDaPasta(p.pastaDosProjetos()),
-            "--log-opt", "max-size=10m", "--log-opt", "max-file=3",
-            "-e", "PORT=" + p.porta(), "-e", "PAINEL_PERFIL=monitor", "-e", "PAINEL_EXIGE_TOKEN=1", "-e", "PAINEL_ESCUTA=todas",
-            "-v", "/var/run/docker.sock:/var/run/docker.sock"));
-        c.addAll(montagemDaMaquina);
-        c.addAll(List.of("-v", p.volume() + ":" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + "", "-v", p.pastaDosProjetos() + ":" + pastaNoContainer, p.imagem(pacote.versao())));
-        return List.copyOf(c);
+    public static List<String> lerGidDoSoquete(ParametrosDoLaboratorio p, PacoteDoAgente pacote) {
+        return List.of(DOCKER, "run", "--rm", "--network", "none", "-v", ComandosRemotos.SOQUETE_DO_DOCKER + ":" + ComandosRemotos.SOQUETE_DO_DOCKER,
+            p.imagem(pacote.versao()), "stat", "-c", "%g", ComandosRemotos.SOQUETE_DO_DOCKER);
     }
 
-    /** Uma marca curta e estável da pasta (16 hexadecimais de um hash do texto): o rótulo não leva o caminho, que pode ter vírgula e acento. */
-    public static String marcaDaPasta(String pasta) {
-        try {
-            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(pasta.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 8; i++) {
-                sb.append(String.format("%02x", h[i]));
-            }
-            return sb.toString();
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
+    /**
+     * Entrega a pasta de dados de um volume que JÁ existia (de uma versão anterior) ao usuário do agente. Container descartável, sem rede, como root só
+     * para a troca de usuário. Um volume novo já nasce com o usuário certo.
+     */
+    public static List<String> acertarDonoDosDados(ParametrosDoLaboratorio p, PacoteDoAgente pacote) {
+        return List.of(DOCKER, "run", "--rm", "--network", "none", "--user", "0:0", "-v", p.volume() + ":/srv/painel/dados", p.imagem(pacote.versao()),
+            "chown", "-R", ComandosRemotos.USUARIO_DO_AGENTE, "/srv/painel/dados");
+    }
+
+    /**
+     * Sobe o container do agente do laboratório local. NÃO usa {@code --network host} (o Docker Desktop roda numa máquina virtual: a rede do
+     * "host" é a dela, não a do computador): publica a porta SÓ no loopback ({@code -p 127.0.0.1:porta:porta}) e o agente escuta em todas as
+     * interfaces DO CONTAINER ({@code PAINEL_ESCUTA=todas}). Exige o token desde o primeiro minuto.
+     *
+     * <p><b>O que o container recebe, de fato</b> (o aviso ao usuário, em {@link AvisoDeSeguranca}, diz o mesmo): o soquete do Docker
+     * ({@code /var/run/docker.sock}), {@code --pid host} (a visão dos processos) e, no Mac e no Linux, três arquivos da máquina só para leitura
+     * ({@code /etc/hostname}, {@code /etc/os-release} e {@code /etc/passwd}, ver {@link PlataformaLocal#montagemDaMaquina()}). NÃO recebe a raiz do
+     * disco nem a pasta dos projetos (o agente de monitoramento não abre nenhuma das duas). Roda como o usuário 10001, sem capacidades, sem ganhar
+     * privilégio e com o sistema de arquivos só leitura ({@link ComandosRemotos#opcoesDeEndurecimento}). O soquete é o poder grande: o agente só faz
+     * {@code GET} em três caminhos da API (filtro {@code docker-proxy.js} dele), mas quem o comprometesse alcançaria a API inteira, que no Linux
+     * equivale a ser root e no Mac e no Windows alcança as pastas que o Docker Desktop compartilha. Por isso a porta é só do loopback e o token é exigido
+     * desde o primeiro minuto. A opção mais fechada do README do agente (um segundo container, sem rede, é o único com o soquete) ainda não é feita pelo app.
+     *
+     * @param montagemDaMaquina {@link PlataformaLocal#montagemDaMaquina()}
+     * @param gidDoSoquete      {@link #lerGidDoSoquete}
+     */
+    public static List<String> subirContainer(ParametrosDoLaboratorio p, PacoteDoAgente pacote, List<String> montagemDaMaquina, String gidDoSoquete) {
+        List<String> c = new ArrayList<>(List.of(DOCKER, "run", "-d", "--name", p.container(), "--restart", "unless-stopped",
+            "-p", "127.0.0.1:" + p.porta() + ":" + p.porta(), "--pid", "host"));
+        c.addAll(ComandosRemotos.opcoesDeEndurecimento(gidDoSoquete));
+        c.addAll(List.of("--label", ComandosRemotos.ROTULO_DO_AGENTE + "=" + pacote.versao(), "--label", ROTULO_LOCAL + "=1",
+            "--log-opt", "max-size=10m", "--log-opt", "max-file=3",
+            "-e", "PORT=" + p.porta(), "-e", "PAINEL_PERFIL=monitor", "-e", "PAINEL_EXIGE_TOKEN=1", "-e", "PAINEL_ESCUTA=todas",
+            "-v", ComandosRemotos.SOQUETE_DO_DOCKER + ":" + ComandosRemotos.SOQUETE_DO_DOCKER));
+        c.addAll(montagemDaMaquina);
+        c.addAll(List.of("-v", p.volume() + ":" + br.com.labdesktop.instalador.PastasNoContainer.DADOS, p.imagem(pacote.versao())));
+        return List.copyOf(c);
     }
 
     public static List<String> removerContainer(String container) {

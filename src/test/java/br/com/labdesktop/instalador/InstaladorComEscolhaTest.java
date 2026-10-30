@@ -68,7 +68,7 @@ class InstaladorComEscolhaTest {
         assertFalse(obs.ultimo.containsKey(PassoDeInstalacao.DOCKER), "o Docker não foi escolhido: nem aparece como passo");
         assertEquals(5, obs.ultimo.size());
         assertEquals(List.of(ComandosRemotos.criarPasta(p), ComandosRemotos.extrairPacote(p, PACOTE), ComandosRemotos.construirImagem("docker", p, PACOTE),
-            ComandosRemotos.subirContainer("docker", p, PACOTE)), servidor.escritas());
+            ComandosRemotos.lerGidDoSoquete("docker", p.imagem(PACOTE.versao())), ComandosRemotos.subirContainer("docker", p, PACOTE, "999")), servidor.escritas());
         assertEquals(List.of("sondar", "registrarToken"), ganchos.chamadas);
     }
 

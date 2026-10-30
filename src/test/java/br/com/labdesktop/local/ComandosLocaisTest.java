@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.labdesktop.instalador.ComandosRemotos;
 import br.com.labdesktop.instalador.PacoteDoAgente;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,7 +26,8 @@ class ComandosLocaisTest {
 
     private List<List<String>> escritas() {
         return List.of(ComandosLocais.criarRede(p), ComandosLocais.removerRede(p), ComandosLocais.construirImagem(p, PACOTE),
-            ComandosLocais.subirContainer(p, PACOTE, List.of("-v", "/:/host:ro"), "/Users/ana/LabLocal/projects"),
+            ComandosLocais.subirContainer(p, PACOTE, ComandosRemotos.montagemDosArquivosDaMaquina(), "0"),
+            ComandosLocais.lerGidDoSoquete(p, PACOTE), ComandosLocais.acertarDonoDosDados(p, PACOTE),
             ComandosLocais.removerContainer("painel-lab"), ComandosLocais.renomearContainer("painel-lab", "painel-lab-anterior"),
             ComandosLocais.pararContainer("painel-lab"), ComandosLocais.iniciarContainer("painel-lab"), ComandosLocais.removerVolume(p),
             ComandosLocais.removerImagem(p, PACOTE.versao()), ComandosLocais.criarVolume(p));
@@ -48,13 +50,12 @@ class ComandosLocaisTest {
         assertEquals("", LeituraDoDocker.rotulo("a=b,xbr.com.labdesktop.local=1", ComandosLocais.ROTULO_LOCAL), "a chave tem de casar inteira");
         assertEquals("", LeituraDoDocker.rotulo("", ComandosLocais.ROTULO_LOCAL));
         List<LeituraDoDocker.Container> l = LeituraDoDocker.containers(
-            "painel-lab|org.x=a|b,br.com.labdesktop.agente=0.1.0,br.com.labdesktop.local=1,br.com.labdesktop.pasta=ab12|running|127.0.0.1:7070->7070/tcp\n");
+            "painel-lab|org.x=a|b,br.com.labdesktop.agente=0.1.0,br.com.labdesktop.local=1|running|127.0.0.1:7070->7070/tcp\n");
         assertEquals(1, l.size());
         assertEquals("painel-lab", l.get(0).nome());
         assertEquals("0.1.0", l.get(0).rotuloDoAgente());
         assertEquals("1", l.get(0).rotuloLocal());
         assertEquals("running", l.get(0).estado());
-        assertEquals("ab12", l.get(0).marcaDaPasta());
         assertTrue(l.get(0).publicaNoLoopback(7070));
         assertFalse(l.get(0).publicaNoLoopback(7071));
         assertEquals(7070, l.get(0).portaNoLoopback());
@@ -96,14 +97,26 @@ class ComandosLocaisTest {
     }
 
     @Test
-    void oDockerRunPublicaSoNoLoopbackNaoUsaRedeDoHostExigeTokenEMontaAPastaNoMesmoCaminho() {
-        List<String> r = ComandosLocais.subirContainer(p, PACOTE, List.of("-v", "/:/host:ro"), "/Users/ana/LabLocal/projects");
+    void oDockerRunPublicaSoNoLoopbackNaoUsaRedeDoHostExigeTokenEMontaSoOsTresArquivos() {
+        List<String> r = ComandosLocais.subirContainer(p, PACOTE, ComandosRemotos.montagemDosArquivosDaMaquina(), "0");
         assertEquals(List.of("docker", "run", "-d", "--name", "painel-lab", "--restart", "unless-stopped", "-p", "127.0.0.1:7070:7070", "--pid", "host",
+            "--user", "10001:10001", "--group-add", "0", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--read-only", "--tmpfs", "/tmp",
             "--label", "br.com.labdesktop.agente=0.1.0-abc1234", "--label", "br.com.labdesktop.local=1",
-            "--label", "br.com.labdesktop.pasta=" + ComandosLocais.marcaDaPasta("/Users/ana/LabLocal/projects"),
             "--log-opt", "max-size=10m", "--log-opt", "max-file=3", "-e", "PORT=7070", "-e", "PAINEL_PERFIL=monitor", "-e", "PAINEL_EXIGE_TOKEN=1",
-            "-e", "PAINEL_ESCUTA=todas", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", "/:/host:ro", "-v", "painel-lab-dados:" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + "",
-            "-v", "/Users/ana/LabLocal/projects:/Users/ana/LabLocal/projects", "labdesktop-agente:0.1.0-abc1234"), r);
+            "-e", "PAINEL_ESCUTA=todas", "-v", "/var/run/docker.sock:/var/run/docker.sock",
+            "--mount", "type=bind,source=/etc/hostname,target=/host/etc/hostname,readonly",
+            "--mount", "type=bind,source=/etc/os-release,target=/host/etc/os-release,readonly",
+            "--mount", "type=bind,source=/etc/passwd,target=/host/etc/passwd,readonly",
+            "-v", "painel-lab-dados:/srv/painel/dados", "labdesktop-agente:0.1.0-abc1234"), r);
+        assertFalse(r.contains("--privileged") || r.contains("--cap-add"), "nenhuma capacidade de volta: " + r);
+        assertEquals(List.of("docker", "run", "--rm", "--network", "none", "-v", "/var/run/docker.sock:/var/run/docker.sock", "labdesktop-agente:0.1.0-abc1234",
+            "stat", "-c", "%g", "/var/run/docker.sock"), ComandosLocais.lerGidDoSoquete(p, PACOTE));
+        assertEquals(List.of("docker", "run", "--rm", "--network", "none", "--user", "0:0", "-v", "painel-lab-dados:/srv/painel/dados",
+            "labdesktop-agente:0.1.0-abc1234", "chown", "-R", "10001:10001", "/srv/painel/dados"), ComandosLocais.acertarDonoDosDados(p, PACOTE));
+        assertThrows(IllegalArgumentException.class, () -> ComandosLocais.subirContainer(p, PACOTE, List.of(), "0; rm -rf /"), "o grupo é só número");
+        assertFalse(r.contains("/:/host:ro"), "a raiz do disco não entra");
+        assertFalse(r.stream().anyMatch(a -> a.contains("LabLocal")), "a pasta dos projetos não entra no container do agente de monitoramento: " + r);
+        assertFalse(r.stream().anyMatch(a -> a.startsWith("br.com.labdesktop.pasta")), "sem o rótulo da pasta");
         assertFalse(r.contains("--network"), "o Docker Desktop não tem rede de host de verdade");
         assertTrue(r.contains("127.0.0.1:7070:7070"), "nunca 0.0.0.0");
         assertFalse(r.stream().anyMatch(a -> a.startsWith("0.0.0.0")), r.toString());

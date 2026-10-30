@@ -1,5 +1,6 @@
 package br.com.labdesktop.local;
 
+import br.com.labdesktop.instalador.ComandosRemotos;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -126,16 +127,14 @@ public final class PlataformaLocal {
     }
 
     /**
-     * As opções do {@code docker run} que dão ao agente a visão da máquina (métricas): a raiz do disco SOMENTE LEITURA em {@code /host} no Mac e
-     * no Linux (é uma das coisas que {@link AvisoDeSeguranca} diz ao usuário); no Windows o {@code /} não é montável como no Mac.
+     * As opções do {@code docker run} que dão ao agente a visão da máquina: SÓ os três arquivos que ele lê ({@code /etc/hostname},
+     * {@code /etc/os-release} e {@code /etc/passwd}), montados somente para leitura em {@code /host/etc/...} ({@link ComandosRemotos#montagemDosArquivosDaMaquina}).
+     * Antes era a raiz do disco inteira. No Mac o Docker Desktop resolve esses caminhos na máquina virtual dele (são os dela que o agente mostra, como em
+     * todo Docker Desktop); no Windows o app não monta nada (o agente aceita a falta: nome e sistema ficam vazios) porque a montagem dos
+     * mesmos caminhos pelo WSL não foi verificada.
      */
     public List<String> montagemDaMaquina() {
-        return sistema == SistemaOperacional.WINDOWS ? List.of() : List.of("-v", "/:/host:ro");
-    }
-
-    /** O caminho da pasta como o container do agente a enxerga ({@link MapeamentoDeCaminhos}). */
-    public String noContainer(String caminhoDoAnfitriao) {
-        return MapeamentoDeCaminhos.doContainer(sistema, caminhoDoAnfitriao);
+        return sistema == SistemaOperacional.WINDOWS ? List.of() : ComandosRemotos.montagemDosArquivosDaMaquina();
     }
 
     /** O Docker precisa de virtualização ligada e do WSL 2 (só no Windows). */

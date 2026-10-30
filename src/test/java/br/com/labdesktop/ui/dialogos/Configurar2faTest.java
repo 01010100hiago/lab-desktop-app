@@ -41,7 +41,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 class Configurar2faTest {
 
     private static final String SEGREDO = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
-    private static final String URI = "otpauth://totp/Painel%20do%20Lab:lab?secret=" + SEGREDO + "&issuer=Painel%20do%20Lab";
+    private static final String URI = "otpauth://totp/Lab%20Desktop:lab?secret=" + SEGREDO + "&issuer=Lab%20Desktop";
 
     /** Um servidor de mentira para o diálogo. */
     private static class Falso implements OperacoesDe2fa {

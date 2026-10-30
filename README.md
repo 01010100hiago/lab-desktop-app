@@ -14,7 +14,7 @@ Aplicativo de computador (Mac, Windows e Linux) para cuidar de servidores e de p
 ## Por onde começar
 
 - **Instalar:** [docs/INSTALAR.md](docs/INSTALAR.md), escrito para quem não é técnico.
-- **Ver como é:** [docs/GALERIA.md](docs/GALERIA.md), com 77 telas nos temas claro e escuro.
+- **Ver como é:** [docs/GALERIA.md](docs/GALERIA.md), com 82 telas nos temas claro e escuro.
 - **Tudo o que o app faz:** [docs/RECURSOS.md](docs/RECURSOS.md). **O que dá para configurar:** [docs/CONFIGURACOES.md](docs/CONFIGURACOES.md).
 - **Mexer no código:** [docs/DESENVOLVIMENTO.md](docs/DESENVOLVIMENTO.md).
 
@@ -35,6 +35,7 @@ Aplicativo de computador (Mac, Windows e Linux) para cuidar de servidores e de p
 - **Git do projeto:** commits, diff, alterações e branches, só leitura, mais criar o repositório local.
 - **Cloudflare:** publicar um projeto na internet e adicionar domínio, com a prévia do que muda.
 - **Este computador:** o laboratório rodando no próprio Docker, sem servidor.
+- **Agente de monitoramento:** vai dentro do app e só lê a máquina (token obrigatório, sem inteligência artificial); só é instalado depois do seu clique.
 - **Cofre:** chaves e tokens cifrados (Argon2id e AES-256-GCM) que nunca saem do seu computador.
 
 Tudo isso, com o estado de cada recurso, em [docs/RECURSOS.md](docs/RECURSOS.md).
@@ -70,7 +71,8 @@ Baixe o instalador do seu sistema (veja [docs/INSTALAR.md](docs/INSTALAR.md)) ou
 
 ## Limites de hoje
 
-- O pacote do agente de monitoramento não vem neste repositório: sem ele o app avisa e segue com terminal, arquivos e segurança.
+- O agente que o app leva dentro do programa só monitora: lê a máquina (CPU, memória, disco, rede, processos e Docker), exige o token e não usa IA. Projetos e Claude no servidor pedem um agente que os ofereça; sem agente o app segue com terminal, arquivos e segurança.
+- O agente recebe o acesso ao Docker do servidor (o app não monta o disco nem a pasta dos projetos nele). O filtro do agente só deixa três leituras, mas o poder desse acesso é o do Docker inteiro, e é o risco que resta.
 - A conexão por AWS e por Cloudflare foi testada só com programas de mentira e um processo de verdade; falta prova contra a AWS e a Cloudflare reais.
 - O Git do projeto lê e cria o repositório local. Aprovar e mesclar, desfazer e publicar não existem.
 - O app procura o repositório Git da pasta do projeto NO SERVIDOR; um repositório que está só no seu computador ou no GitHub só aparece depois de ser clonado ou enviado para lá.

@@ -1,7 +1,7 @@
 # Como copio as informações do app para pedir ajuda?
 @rotulo: Pedir ajuda
-@busca: copiar informações ajuda chamado versão suporte sobre
-@resumo: Um botão copia a versão, o sistema, o Java e o agente, sem nada secreto, para você colar num chamado.
+@busca: copiar informações ajuda chamado versão qual versão commit compilação data suporte sobre
+@resumo: Um botão copia a versão, o commit, a data da compilação, o sistema, o Java e o agente, sem nada secreto, para você colar num chamado.
 @onde: Copiar informações | Ajustes > Sobre > Copiar informações | ajustes-sobre
 1. Abra Ajustes e vá em Sobre (ou menu Arquivo, Sobre o Lab Desktop).
 2. Clique em "Copiar informações".
@@ -9,4 +9,7 @@
 [Ir para Sobre](ir:ajustes-sobre)
 @veja: sem-conexao dados-do-app
 ## Mais detalhes
-O texto leva a versão do app, o sistema, o Java e o agente empacotado. Nada secreto vai junto: nem senha, nem chave, nem token, nem endereço de servidor. Se o problema é com um servidor, copie também a frase da faixa colorida no alto da página dele.
+O texto leva a versão do app, o commit e a data da compilação, o sistema, o Java e o agente empacotado. Nada secreto vai junto: nem senha, nem chave, nem token, nem endereço de servidor. Se o problema é com um servidor, copie também a frase da faixa colorida no alto da página dele.
+
+## Qual versão do app eu tenho?
+Em Ajustes, Sobre. A versão tem três números (por exemplo 0.1.320) e o último cresce a cada compilação: se mudou, o app é novo. O commit (por exemplo a207ad4) diz de que ponto do código ele saiu, e a data é a da compilação. Um commit terminado em "-alterado" saiu de uma pasta com mudanças ainda não guardadas no git. Versão "dev" é o app rodando direto do código, sem ser instalado.

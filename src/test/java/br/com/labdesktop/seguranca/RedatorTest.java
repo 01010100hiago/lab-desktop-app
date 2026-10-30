@@ -51,7 +51,7 @@ class RedatorTest {
 
     @Test
     void mascaraSegredoDoOtpauthEAUriInteira() {
-        String uri = "otpauth://totp/Painel%20do%20Lab:lab?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=Painel%20do%20Lab";
+        String uri = "otpauth://totp/Lab%20Desktop:lab?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=Lab%20Desktop";
         String r = Redator.redigir("QR: " + uri + " fim");
         assertFalse(r.contains("JBSWY3DP"), r);
         assertFalse(r.contains("otpauth://totp"), r);

@@ -65,7 +65,9 @@ class InstaladorDeAgenteTest {
             ComandosRemotos.criarPasta(p),
             ComandosRemotos.extrairPacote(p, PACOTE),
             ComandosRemotos.construirImagem(DK, p, PACOTE),
-            ComandosRemotos.subirContainer(DK, p, PACOTE)), escritas());
+            ComandosRemotos.lerGidDoSoquete(DK, p.imagem(PACOTE.versao())),
+            ComandosRemotos.subirContainer(DK, p, PACOTE, "999")), escritas());
+        assertFalse(servidor.donoDosDadosAcertado, "volume novo: nasce com o usuário certo, sem a troca de usuário");
         assertEquals(List.of("lab-agente/agente-0.1.0-abc1234.tar.gz"), servidor.envios);
         assertTrue(servidor.containerNome != null && servidor.rotuloDoContainer.equals("0.1.0-abc1234"));
         assertEquals(List.of("sondar", "registrarToken"), ganchos.chamadas);
@@ -82,17 +84,24 @@ class InstaladorDeAgenteTest {
     void oComandoQueSobeOContainerEExatamenteEsteEOAgenteSoEscutaNoLoopback() {
         // Texto literal: se alguém "simplificar" isto (porta publicada em 0.0.0.0, sem reinício, sem volume), o teste acusa.
         assertEquals("docker run -d --name painel-lab --restart unless-stopped --network host --pid host"
+            + " --user 10001:10001 --group-add 999 --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp"
             + " --label br.com.labdesktop.agente=0.1.0-abc1234 --log-opt max-size=10m --log-opt max-file=3"
-            + " -e PORT=7000 -e PAINEL_PERFIL=monitor -e PAINEL_EXIGE_TOKEN=1 -v /var/run/docker.sock:/var/run/docker.sock -v /:/host:ro"
-            + " -v painel-lab-dados:" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + " labdesktop-agente:0.1.0-abc1234",
-            ComandosRemotos.subirContainer(DK, p, PACOTE));
-        assertFalse(ComandosRemotos.subirContainer(DK, p, PACOTE).contains("0.0.0.0"));
-        assertFalse(ComandosRemotos.subirContainer(DK, p, PACOTE).contains(" -p "), "nenhuma porta publicada: o agente escuta no loopback do servidor");
+            + " -e PORT=7000 -e PAINEL_PERFIL=monitor -e PAINEL_EXIGE_TOKEN=1 -v /var/run/docker.sock:/var/run/docker.sock"
+            + " --mount type=bind,source=/etc/hostname,target=/host/etc/hostname,readonly --mount type=bind,source=/etc/os-release,target=/host/etc/os-release,readonly --mount type=bind,source=/etc/passwd,target=/host/etc/passwd,readonly"
+            + " -v painel-lab-dados:/srv/painel/dados labdesktop-agente:0.1.0-abc1234",
+            ComandosRemotos.subirContainer(DK, p, PACOTE, "999"));
+        assertFalse(ComandosRemotos.subirContainer(DK, p, PACOTE, "999").contains("0.0.0.0"));
+        assertFalse(ComandosRemotos.subirContainer(DK, p, PACOTE, "999").contains("--cap-add") || ComandosRemotos.subirContainer(DK, p, PACOTE, "999").contains("--privileged"));
+        assertFalse(ComandosRemotos.subirContainer(DK, p, PACOTE, "999").contains("/:/host"), "a raiz do disco não entra: só os três arquivos que o agente lê");
+        assertFalse(ComandosRemotos.subirContainer(DK, p, PACOTE, "999").contains(" -v /etc/"), "--mount, nunca -v: com -v um arquivo ausente vira PASTA na raiz do servidor");
+        assertFalse(ComandosRemotos.subirContainer(DK, p, PACOTE, "999").contains(" -p "), "nenhuma porta publicada: o agente escuta no loopback do servidor");
         assertEquals("sudo -n docker run -d --name painel-teste --restart unless-stopped --network host --pid host"
+            + " --user 10001:10001 --group-add 999 --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp"
             + " --label br.com.labdesktop.agente=0.1.0-abc1234 --log-opt max-size=10m --log-opt max-file=3"
-            + " -e PORT=7100 -e PAINEL_PERFIL=monitor -e PAINEL_EXIGE_TOKEN=1 -v /var/run/docker.sock:/var/run/docker.sock -v /:/host:ro"
-            + " -v painel-teste-dados:" + br.com.labdesktop.instalador.PastasNoContainer.DADOS + " labdesktop-agente:0.1.0-abc1234",
-            ComandosRemotos.subirContainer("sudo -n docker", new ParametrosDaInstalacao("painel-teste", 7100, "lab-agente"), PACOTE));
+            + " -e PORT=7100 -e PAINEL_PERFIL=monitor -e PAINEL_EXIGE_TOKEN=1 -v /var/run/docker.sock:/var/run/docker.sock"
+            + " --mount type=bind,source=/etc/hostname,target=/host/etc/hostname,readonly --mount type=bind,source=/etc/os-release,target=/host/etc/os-release,readonly --mount type=bind,source=/etc/passwd,target=/host/etc/passwd,readonly"
+            + " -v painel-teste-dados:/srv/painel/dados labdesktop-agente:0.1.0-abc1234",
+            ComandosRemotos.subirContainer("sudo -n docker", new ParametrosDaInstalacao("painel-teste", 7100, "lab-agente"), PACOTE, "999"));
     }
 
     @Test
@@ -203,11 +212,16 @@ class InstaladorDeAgenteTest {
         String antes = ComandosRemotos.renomearContainer(DK, p.container(), p.containerAnterior());
         assertTrue(w.contains(antes), "o agente antigo é GUARDADO (renomeado), não apagado: " + w);
         assertTrue(w.indexOf(antes) < w.indexOf(ComandosRemotos.pararContainer(DK, p.containerAnterior())));
-        assertTrue(w.indexOf(ComandosRemotos.pararContainer(DK, p.containerAnterior())) < w.indexOf(ComandosRemotos.subirContainer(DK, p, PACOTE)));
+        assertTrue(w.indexOf(ComandosRemotos.pararContainer(DK, p.containerAnterior())) < w.indexOf(ComandosRemotos.subirContainer(DK, p, PACOTE, "999")));
         assertFalse(w.contains(ComandosRemotos.removerContainer(DK, p)), "o agente antigo só sai no FIM, e pelo nome de reserva: " + w);
         String descarte = ComandosRemotos.removerContainerPeloNome(DK, p.containerAnterior());
-        assertTrue(w.indexOf(ComandosRemotos.subirContainer(DK, p, PACOTE)) < w.indexOf(descarte), "depois de o novo estar de pé: " + w);
+        assertTrue(w.indexOf(ComandosRemotos.subirContainer(DK, p, PACOTE, "999")) < w.indexOf(descarte), "depois de o novo estar de pé: " + w);
         assertNull(servidor.anteriorNome, "não sobra o agente antigo");
+        String dono = ComandosRemotos.acertarDonoDosDados(DK, p, PACOTE);
+        assertTrue(w.contains(dono), "o volume já existia (de uma versão anterior): a pasta de dados é entregue ao usuário do agente novo: " + w);
+        assertTrue(w.indexOf(dono) < w.indexOf(ComandosRemotos.subirContainer(DK, p, PACOTE, "999")), "antes de o agente novo subir");
+        assertTrue(w.indexOf(ComandosRemotos.pararContainer(DK, p.containerAnterior())) < w.indexOf(dono), "com o antigo já parado");
+        assertTrue(servidor.donoDosDadosAcertado);
         assertFalse(w.contains(ComandosRemotos.removerVolume(DK, p)), "os dados (e o token) ficam");
         assertEquals("0.1.0-abc1234", servidor.rotuloDoContainer);
         assertTrue(servidor.volumeExiste);
@@ -721,7 +735,7 @@ class InstaladorDeAgenteTest {
         verificar(ModoDaInstalacao.INSTALAR);
         instalar();
         List<String> log = new ArrayList<>(obs.log);
-        assertTrue(log.contains("$ " + ComandosRemotos.subirContainer(DK, p, PACOTE)), log.toString());
+        assertTrue(log.contains("$ " + ComandosRemotos.subirContainer(DK, p, PACOTE, "999")), log.toString());
         assertTrue(log.stream().anyMatch(l -> l.contains("Successfully built")), "a saída do build entra no log");
         assertTrue(log.stream().anyMatch(l -> l.startsWith("[enviando lab-agente/agente-0.1.0-abc1234.tar.gz")));
     }

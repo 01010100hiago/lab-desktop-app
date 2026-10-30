@@ -69,6 +69,7 @@ Regra do app: todo campo é anulável, `FAIL_ON_UNKNOWN_PROPERTIES` desligado, u
 | 401 | credencial ausente ou recusada (seção 6) |
 | 404 | projeto inexistente; `Sessão não está aberta.`; rota desconhecida (texto puro) |
 | 409 | sessão pausada pelo limite; Retomar que ainda estoura |
+| 429 | `muitas_tentativas`: o agente bloqueia por um tempo as chamadas de um endereço que errou a credencial muitas vezes e não traz um token válido: `{"erro","codigo":"muitas_tentativas","aguarde_s"}` com `Retry-After`. O app mostra "Muitas tentativas; espere um pouco", não repete e o `Sondador` espera o `aguarde_s` |
 | 500 | falha do Docker ou do compose; `Projeto não existe.` ao abrir sessão |
 | 503 | só `GET /api/tokens` antes do primeiro ciclo de consumo |
 
@@ -101,8 +102,8 @@ Colunas "Web" e "App" resumem a cadência; o detalhe está nas seções 3 e 4. T
 | 20 | `PUT /api/projetos/:p/limite` | define ou remove o teto | modal | ação | 30 s |
 | 21 | `POST /api/projetos/:p/limite/retomar` | tira a pausa e reabre | botão Retomar | ação | 6 min |
 | 22 | `PUT /api/limites/freio` | liga, ajusta ou desliga o freio global | modal na página de consumo | ação | 30 s |
-| 24 | `GET /api/containers` (NOVA, só perfil `monitor`) | todos os containers do servidor (rodando ou não), com CPU e memória | não existe | (o app ainda não usa; ver 3.12) | 20 s |
-| 25 | `GET /api/containers/:nome/logs?linhas=<n>` (NOVA, só perfil `monitor`) | logs de um container qualquer do servidor | não existe | (o app ainda não usa; ver 3.12) | 25 s |
+| 24 | ~~`GET /api/containers`~~ (REMOVIDA: o agente público de leitura não a tem) | | não existe | o app nunca a usou; ver 3.12 | |
+| 25 | ~~`GET /api/containers/:nome/logs?linhas=<n>`~~ (REMOVIDA, como a 24) | | não existe | o app nunca a usou; ver 3.12 | |
 
 Fora do app: `POST /api/diag`, `GET /terminal/<p>/*` (HTTP e WebSocket do ttyd) e as páginas estáticas (`/`, `/projeto/:p`, `/sessao/:p`, `/consumo`, `/servidor`, arquivos de `publico/`). O terminal do app é um canal SSH com PTY, não o ttyd.
 
@@ -390,12 +391,9 @@ Web: botão "Tela em texto" da página da sessão (usa `fetch` direto). App: aç
 
 ### 3.12 O perfil `monitor` e as rotas só dele
 
-O agente no perfil `monitor` responde uma lista FECHADA de rotas, todas de leitura: `GET /api/versao`, `GET /api/servidor`, `GET /api/servidor/historico` (3.2.1), `GET /api/servidor/detalhe` (sem `consumo` por projeto: `[]`; processo de container fica sem dono de projeto), `GET /api/containers` e `GET /api/containers/:nome/logs?linhas=<50..2000>`. **Todo o resto responde `404`** em JSON, antes de tocar em Docker ou disco: `{"erro":"Esta rota não existe no perfil monitor do agente (só leitura do servidor).","perfil":"monitor"}`. Isso inclui projetos, sessões do Claude, consumo, limites, terminal web, páginas e TODA rota de escrita. No perfil `lab` (o padrão, e o do servidor) nada mudou: as duas rotas de containers abaixo NÃO existem lá (404 em texto puro, como qualquer rota desconhecida).
-
-`GET /api/containers` → `{"containers":[{"nome","estado","status","portas","imagem","criado"(ISO|null),"compose"(nome do projeto compose|null),"cpu","mem","memLimite","net","bloco","pids"}]}` (`cpu`...`pids` são `null` sem leitura do `docker stats`, que roda a cada 15 s). `GET /api/containers/:nome/logs` → texto puro; o nome da URL só vai ao Docker se o `docker ps -a` o lista agora (senão `404 {"erro":"Container não existe."}`). **O app ainda não consome estas duas rotas** (a aba Containers do servidor continua lendo o resumo de `/api/servidor`); elas existem para a tela de containers do perfil monitor.
+O agente de leitura que o app instala (`lab-desktop-agente`, público, de perfil único `monitor`) responde uma lista FECHADA de rotas: `GET /api/versao`, `GET /api/servidor`, `GET /api/servidor/detalhe` (sem `consumo` por projeto: `[]`; processo de container fica sem dono de projeto), `GET /api/servidor/historico` (3.2.1) e a confirmação do 2FA, a única que escreve, e só no estado de acesso do próprio agente. **Todo o resto responde `404`** em JSON, depois da checagem do token: `{"erro":"Esta rota não existe no perfil monitor do agente (só leitura do servidor).","perfil":"monitor"}`. Isso inclui projetos, sessões do Claude, consumo, limites, terminal web, páginas e TODA outra rota de escrita. O token é SEMPRE exigido. `GET /api/containers` e `GET /api/containers/:nome/logs` NÃO existem nele: o app nunca as consumiu (a lista de containers do Resumo vem de `/api/servidor`). `GET /api/versao` diz `recursos: { claude: false, projetos: false, monitor: true, guia_ia: false, historico: true }`, e é isso que faz o app esconder a aba Projetos e o Claude. O histórico fica na pasta de dados do agente (`serie-historica.json`): trocar por um agente que usava outro arquivo perde o histórico antigo. A documentação do agente (`README.md`, `SECURITY.md` e `docs/API.md` do repositório dele) é a fonte da verdade da parte pública; o resto desta seção é o que o app espera de um agente com mais recursos.
 
 No container do laboratório local o agente atende em todas as interfaces DO CONTAINER, e o Docker publica a porta só no loopback do computador (`-p 127.0.0.1:<porta>:<porta>`).
-
 
 ## 4. Rotas de ação
 

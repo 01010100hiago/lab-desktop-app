@@ -66,6 +66,42 @@ class ClienteApiTest {
         "{\"api\":1,\"painel\":\"v22.5.0\",\"exigeToken\":false,\"cliente\":\"mac-de-teste\",\"totp\":\"desligado\"}";
 
     // ------------------------------------------------------------------------------------------------
+    // 429 muitas_tentativas (o limite de tentativas por endereço do agente de leitura)
+    // ------------------------------------------------------------------------------------------------
+
+    private static final String MUITAS_TENTATIVAS =
+        "{\"erro\":\"Muitas tentativas. Aguarde 42 s.\",\"codigo\":\"muitas_tentativas\",\"aguarde_s\":42}";
+
+    @Test
+    void muitasTentativasViraFraseDeEsperaNaoRepeteNemViraErroDeToken() {
+        agente.responder(p -> Resposta.json(429, MUITAS_TENTATIVAS).comCabecalho("Retry-After", "42"));
+
+        ServidorErro e = assertThrows(ServidorErro.class, api::versao);
+
+        assertEquals(429, e.status());
+        assertTrue(e.muitasTentativas());
+        assertEquals(42, e.aguardeSegundos());
+        assertEquals(1, agente.pedidos.size(), "uma chamada só: o cliente não repete sozinho (nem em laço) um 429");
+        assertEquals("Muitas tentativas; espere um pouco (cerca de 42 s) e tente de novo.", br.com.labdesktop.ui.MensagensDeErro.daApi(e));
+        assertEquals("Muitas tentativas; espere um pouco (cerca de 42 s) e tente de novo.", br.com.labdesktop.ui.MensagensDeErro.de(e));
+    }
+
+    @Test
+    void muitasTentativasSemOTempoNaoInventaSegundosEOutro429NaoContaComoMuitasTentativas() {
+        agente.responder(p -> Resposta.json(429, "{\"erro\":\"Muitas tentativas.\",\"codigo\":\"muitas_tentativas\"}"));
+        ServidorErro sem = assertThrows(ServidorErro.class, api::servidor);
+        assertTrue(sem.muitasTentativas());
+        assertEquals("Muitas tentativas; espere um pouco e tente de novo.", br.com.labdesktop.ui.MensagensDeErro.daApi(sem));
+
+        // o 429 do 2FA tem outro código e outro tratamento; um 429 sem código é só um erro do servidor com a frase dele
+        assertFalse(new ServidorErro(429, null, "x").muitasTentativas());
+        agente.responder(p -> Resposta.json(429, "{\"erro\":\"Calma.\",\"codigo\":\"totp_bloqueado\",\"aguarde_s\":60}"));
+        ServidorErro totp = assertThrows(ServidorErro.class, api::versao);
+        assertFalse(totp.muitasTentativas());
+        assertEquals("Calma.", br.com.labdesktop.ui.MensagensDeErro.daApi(totp));
+    }
+
+    // ------------------------------------------------------------------------------------------------
     // Cabeçalhos e protocolo
     // ------------------------------------------------------------------------------------------------
 

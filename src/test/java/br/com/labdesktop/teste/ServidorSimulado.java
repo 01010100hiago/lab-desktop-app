@@ -63,6 +63,9 @@ public final class ServidorSimulado implements ExecutorDeComandos {
     public String anteriorRotulo = "";
     public String anteriorEstado = "exited";
     public boolean volumeExiste;
+    /** O grupo do soquete do Docker que o container descartável de {@code lerGidDoSoquete} imprime, e se a pasta de dados de um volume antigo foi entregue ao agente. */
+    public String gidDoSoquete = "999";
+    public boolean donoDosDadosAcertado;
     public byte[] pacoteRecebido;
     /** O que o {@code docker logs} do container responde. */
     public String logsDoContainer = "node: tudo certo, escutando em 127.0.0.1:7000";
@@ -482,7 +485,20 @@ public final class ServidorSimulado implements ExecutorDeComandos {
             rotuloDoContainer = "";
             return ok(parametros.container() + "\n");
         }
-        if (c.equals(ComandosRemotos.subirContainer(dk, parametros, pacote))) {
+        if (c.equals(ComandosRemotos.lerGidDoSoquete(dk, imagem))) {
+            if (!permitido) {
+                return status(1, "", "permission denied");
+            }
+            return imagemExiste ? ok(gidDoSoquete + "\n") : status(125, "", "Unable to find image locally");
+        }
+        if (c.equals(ComandosRemotos.acertarDonoDosDados(dk, parametros, pacote))) {
+            if (!permitido || !imagemExiste) {
+                return status(1, "", "permission denied");
+            }
+            donoDosDadosAcertado = true;
+            return ok("");
+        }
+        if (c.equals(ComandosRemotos.subirContainer(dk, parametros, pacote, gidDoSoquete))) {
             if (!permitido) {
                 return status(1, "", "permission denied");
             }

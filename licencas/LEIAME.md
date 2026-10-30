@@ -21,6 +21,7 @@ Esta pasta guarda o texto completo das licenças das bibliotecas, fontes e ícon
 | `MIT-winpty.txt` | MIT | winpty (Ryan Prichard), dentro do pty4j, para o Windows |
 | `MIT-Windows-Terminal.txt` | MIT | OpenConsole e conpty (Windows Terminal, Microsoft), dentro do pty4j, para o Windows |
 | `MIT-zxcvbn-Dropbox.txt` | MIT | listas do zxcvbn (Dan Wheeler e Dropbox), origem da lista de senhas comuns |
+| `MIT-lab-desktop-agente.txt` | MIT | o agente de monitoramento que o app leva dentro do jar (mesmo autor do app; o pacote dele não traz o arquivo de licença) |
 | `ISC-Lucide.txt` | ISC (e MIT para os ícones herdados do Feather) | Lucide (ícones; formas próximas das de alguns ícones do app) |
 
 Estes textos também vão dentro do jar do app (menos este `LEIAME.md`): a tela Ajustes > Sobre os mostra em "Ver os textos completos das licenças". O `LicencasDeTerceirosTest` confere que cada arquivo desta pasta está nesta tabela e na lista do app.

@@ -112,7 +112,9 @@ class LaboratorioLocalTest {
         assertEquals(1, tokens.get());
         assertTrue(sondagens.get() >= 1);
         List<String> w = pc.escritas().stream().map(x -> x.get(1)).toList();
-        assertEquals(List.of("network", "build", "volume", "run"), w, "só estas escritas de Docker, nessa ordem (o volume rotulado nasce ANTES do run)");
+        assertEquals(List.of("network", "build", "volume", "run", "run"), w, "só estas escritas de Docker, nessa ordem (o volume rotulado nasce ANTES do run; o primeiro run é o container descartável que pergunta o grupo do soquete)");
+        assertFalse(pc.donoDosDadosAcertado, "volume novo: já nasce com o dono do agente, sem chown");
+        assertTrue(pc.containers.get("painel-lab").argumentos.containsAll(List.of("--user", "10001:10001", "--cap-drop", "ALL", "--read-only")), "o agente roda como o usuário 10001, sem capacidades");
         assertTrue(pc.volumesDoApp.contains("painel-lab-dados"));
         assertTrue(pc.imagensDoApp.contains("labdesktop-agente:0.1.0-abc1234"), "a imagem leva o rótulo do app");
         assertEquals(EstadoDoPasso.FEITO, ultimo.get(PassoDoLaboratorio.PASTA));
@@ -123,7 +125,7 @@ class LaboratorioLocalTest {
     }
 
     @Test
-    void oAgenteSobeSoNoLoopbackSemRedeDoHostEComAPastaNoMesmoCaminhoDoAnfitriao() {
+    void oAgenteSobeSoNoLoopbackSemRedeDoHostSemADiscoNemAPastaDosProjetos() {
         criar();
         List<String> run = pc.containers.get("painel-lab").argumentos;
         assertTrue(run.contains("127.0.0.1:7070:7070"));
@@ -133,7 +135,10 @@ class LaboratorioLocalTest {
         assertFalse(junto.contains("--network host") || junto.contains("--net host") || junto.contains("--cap-add") || junto.contains("--userns"), junto);
         assertFalse(run.stream().anyMatch(a -> a.startsWith("0.0.0.0") || a.equals("-P") || a.equals("--publish-all")), "a porta é só do loopback: " + run);
         assertTrue(run.contains("--pid") && run.contains("host") && run.indexOf("host") == run.indexOf("--pid") + 1, "só o pid do host, dito no aviso: " + run);
-        assertTrue(run.contains(projetos + ":" + projetos), "no Mac a pasta entra no container no MESMO caminho: " + run);
+        assertTrue(run.stream().noneMatch(a -> a.contains(projetos.toString())), "a pasta dos projetos não entra no container do agente de monitoramento: " + run);
+        assertFalse(run.contains("/:/host:ro"), "nem a raiz do disco: " + run);
+        assertEquals(3, run.stream().filter("--mount"::equals).count(), "só os três arquivos que o agente lê, com --mount (nunca -v): " + run);
+        assertTrue(run.stream().noneMatch(a -> a.startsWith("br.com.labdesktop.pasta")), "sem rótulo da pasta: " + run);
         assertTrue(run.contains("PAINEL_EXIGE_TOKEN=1"));
         assertTrue(run.contains("PAINEL_ESCUTA=todas"));
     }
@@ -592,14 +597,39 @@ class LaboratorioLocalTest {
     }
 
     @Test
-    void containerDaMesmaVersaoMasComOutraPastaDosProjetosTambemERecriado() {
+    void volumeQueJaExistiaTemADonoDosDadosEntregueAoUsuarioDoAgenteAntesDoRun() {
+        pc.volumes.add("painel-lab-dados");
+        pc.gidDoSoquete = "123";
+
         assertEquals(Desfecho.CONCLUIDA, criar().desfecho());
-        String antes = pc.containers.get("painel-lab").marcaDaPasta;
+
+        assertTrue(pc.donoDosDadosAcertado, "a pasta de dados de uma versão anterior passa ao usuário 10001");
+        List<String> w = pc.escritas().stream().map(x -> String.join(" ", x)).toList();
+        int chown = -1;
+        int run = -1;
+        for (int i = 0; i < w.size(); i++) {
+            if (w.get(i).contains(" chown ")) {
+                chown = i;
+            }
+            if (w.get(i).startsWith("docker run -d ")) {
+                run = i;
+            }
+        }
+        assertTrue(chown >= 0 && run > chown, "o chown vem antes do run do agente: " + w);
+        assertTrue(pc.containers.get("painel-lab").argumentos.containsAll(List.of("--group-add", "123")), "e o agente entra no grupo do soquete que o Docker disse");
+    }
+
+    @Test
+    void outraPastaDosProjetosNaoMexeNoContainerPoisOAgenteNaoRecebeAPasta() {
+        assertEquals(Desfecho.CONCLUIDA, criar().desfecho());
+        assertTrue(pc.containers.get("painel-lab").argumentos.stream().noneMatch(a -> a.contains(projetos.toString())),
+            "a pasta dos projetos não entra no container do agente de monitoramento: " + pc.containers.get("painel-lab").argumentos);
+        pc.limparRegistro();
         projetos = tmp.resolve("OutrosProjetos");
         p = p.comPasta(projetos.toString());
         assertEquals(Desfecho.CONCLUIDA, criar().desfecho());
-        assertFalse(antes.equals(pc.containers.get("painel-lab").marcaDaPasta));
-        assertTrue(pc.containers.get("painel-lab").argumentos.contains(projetos + ":" + projetos));
+        assertTrue(pc.escritas().stream().noneMatch(e -> e.get(1).equals("run") || e.get(1).equals("rename")), "o container não é recriado por causa da pasta: " + pc.escritas());
+        assertTrue(Files.isDirectory(projetos), "a pasta nova é criada para os projetos do app");
     }
 
     @Test

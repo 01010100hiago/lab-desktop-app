@@ -56,11 +56,14 @@ class PlataformaLocalTest {
     }
 
     @Test
-    void oDockerRunDoWindowsNaoMontaARaizEOMapeamentoVemDaPlataforma() {
-        assertEquals(List.of("-v", "/:/host:ro"), mac.montagemDaMaquina());
+    void oDockerRunMontaSoOsTresArquivosDaMaquinaNoMacENoLinuxENadaNoWindows() {
+        List<String> tres = List.of("--mount", "type=bind,source=/etc/hostname,target=/host/etc/hostname,readonly",
+            "--mount", "type=bind,source=/etc/os-release,target=/host/etc/os-release,readonly",
+            "--mount", "type=bind,source=/etc/passwd,target=/host/etc/passwd,readonly");
+        assertEquals(tres, mac.montagemDaMaquina());
+        assertEquals(tres, linux.montagemDaMaquina());
         assertEquals(List.of(), windows.montagemDaMaquina());
-        assertEquals("/Users/ana/LabLocal/projects", mac.noContainer("/Users/ana/LabLocal/projects"));
-        assertEquals("/run/desktop/mnt/host/c/Users/ana/LabLocal/projects", windows.noContainer(windows.pastaDeProjetosPadrao()));
+        assertFalse(mac.montagemDaMaquina().contains("/:/host:ro"), "a raiz do disco nunca mais entra no container");
         assertTrue(windows.exigeVirtualizacao());
         assertFalse(mac.exigeVirtualizacao());
     }

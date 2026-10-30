@@ -1034,6 +1034,17 @@ public final class DialogoDoAgente extends Dialogo {
             listaDoQueVaiAcontecer.add(dicaCorrida((i + 1) + ". " + itens.get(i)));
             listaDoQueVaiAcontecer.add(Caixa.espacoVertical(3));
         }
+        if (passos.contains(PassoDeInstalacao.SUBIR_CONTAINER)) {
+            listaDoQueVaiAcontecer.add(dicaCorrida("O agente só lê: não executa comando, não altera arquivo do servidor e escreve só na própria pasta de dados. Ele recebe "
+                + "o acesso ao Docker (e só faz leituras com ele) e três arquivos do servidor só para leitura (o nome da máquina, o sistema e os nomes de usuário). "
+                + "Não recebe o disco. Roda como um usuário comum (não administrador), sem capacidades extras e com o sistema de arquivos só para leitura."));
+            listaDoQueVaiAcontecer.add(Caixa.espacoVertical(3));
+        }
+        if (atualizar && passos.contains(PassoDeInstalacao.SUBIR_CONTAINER)) {
+            listaDoQueVaiAcontecer.add(dicaCorrida("O histórico dos gráficos que o agente anterior guardou não é levado para o novo: os gráficos de período maior "
+                + "(1 dia, 1 semana, 1 mês) recomeçam vazios e enchem com o tempo. O token e o 2FA continuam valendo (a pasta de dados passa ao usuário do agente novo)."));
+            listaDoQueVaiAcontecer.add(Caixa.espacoVertical(3));
+        }
         listaDoQueVaiAcontecer.add(dicaCorrida(escolheuOAgente()
             ? "Se algum passo falhar, o app mostra o erro e desfaz só o que ele criou (o container, os dados novos, a imagem e a pasta)"
                 + (atualizar ? ", e devolve o agente que estava funcionando" : "") + ". O Docker, se foi instalado, não é desinstalado."

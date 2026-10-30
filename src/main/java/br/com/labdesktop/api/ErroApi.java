@@ -155,7 +155,19 @@ public abstract sealed class ErroApi extends Exception {
             return status() == 503;
         }
 
-        /** 429 do 2FA: segundos de espera pedidos pelo agente (0 se não vieram). */
+        /** O código que o agente põe no 429 do limite de tentativas por endereço ({@code muitas_tentativas}). */
+        public static final String MUITAS_TENTATIVAS = "muitas_tentativas";
+
+        /**
+         * 429 do limite de tentativas do agente: ele recusou tudo, de qualquer token, por um tempo (30 credenciais recusadas em um minuto). Não é
+         * erro do token nem do agente: é para ESPERAR ({@link #aguardeSegundos()}), e repetir antes só gasta chamada. O 429 do 2FA
+         * ({@code totp_bloqueado}) tem outro código e outro tratamento.
+         */
+        public boolean muitasTentativas() {
+            return status() == 429 && MUITAS_TENTATIVAS.equals(codigo());
+        }
+
+        /** 429: segundos de espera pedidos pelo agente (0 se não vieram). */
         public int aguardeSegundos() {
             JsonNode n = corpo() == null ? null : corpo().get("aguarde_s");
             return n == null || !n.canConvertToInt() ? 0 : Math.max(0, n.asInt());

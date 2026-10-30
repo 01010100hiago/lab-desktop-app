@@ -30,8 +30,6 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
         public String rotulo = "";
         /** O rótulo do laboratório local ({@code br.com.labdesktop.local=1}); vazio se não foi ele. */
         public String rotuloLocal = "";
-        /** A marca da pasta dos projetos (rótulo {@code br.com.labdesktop.pasta}). */
-        public String marcaDaPasta = "";
         /** As portas como o {@code docker ps} as mostra; se vazio, saem de {@link #portaPublicada}. */
         public String portas = "";
         public String estado = "running";
@@ -349,7 +347,24 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
         }
     }
 
+    /** O grupo do soquete que o container descartável de {@code stat} imprime, e se um {@code chown} da pasta de dados de um volume antigo rodou. */
+    public String gidDoSoquete = "0";
+    public boolean donoDosDadosAcertado;
+
     private ResultadoExec run(List<String> a) {
+        if (a.contains("--rm")) { // container descartável: o grupo do soquete (stat) e a troca de dono dos dados (chown)
+            if (imagens.isEmpty()) {
+                return erro(125, "Unable to find image locally");
+            }
+            if (a.contains("stat")) {
+                return ok(gidDoSoquete + "\n");
+            }
+            if (a.contains("chown")) {
+                donoDosDadosAcertado = true;
+                return ok("");
+            }
+            throw new AssertionError("run --rm: " + a);
+        }
         String nome = a.get(a.indexOf("--name") + 1);
         String imagem = a.get(a.size() - 1);
         if (containers.containsKey(nome)) {
@@ -364,9 +379,6 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
         for (int i = 0; i < a.size() - 1; i++) {
             if (a.get(i).equals("--label") && a.get(i + 1).startsWith("br.com.labdesktop.agente=")) {
                 c.rotulo = a.get(i + 1).substring("br.com.labdesktop.agente=".length());
-            }
-            if (a.get(i).equals("--label") && a.get(i + 1).startsWith("br.com.labdesktop.pasta=")) {
-                c.marcaDaPasta = a.get(i + 1).substring("br.com.labdesktop.pasta=".length());
             }
             if (a.get(i).equals("--label") && a.get(i + 1).startsWith("br.com.labdesktop.local=")) {
                 c.rotuloLocal = a.get(i + 1).substring("br.com.labdesktop.local=".length());
@@ -392,9 +404,6 @@ public final class ComputadorSimulado implements ExecutorDeProcesso {
         }
         if (!c.rotuloLocal.isBlank()) {
             l.add("br.com.labdesktop.local=" + c.rotuloLocal);
-        }
-        if (!c.marcaDaPasta.isBlank()) {
-            l.add("br.com.labdesktop.pasta=" + c.marcaDaPasta);
         }
         return String.join(",", l);
     }

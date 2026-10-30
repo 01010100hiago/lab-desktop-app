@@ -16,7 +16,7 @@ final class LeituraDoDocker {
     private LeituraDoDocker() { }
 
     /** Um container lido por {@link ComandosLocais#lerContainerPeloNome}. */
-    record Container(String nome, String rotuloDoAgente, String rotuloLocal, String estado, String portas, String marcaDaPasta) {
+    record Container(String nome, String rotuloDoAgente, String rotuloLocal, String estado, String portas) {
         /**
          * Foi o laboratório local que o criou: tem o rótulo do agente do app E o rótulo local. O instalador por SSH grava só o primeiro:
          * num Debian usado como "Este computador", o painel instalado por SSH NÃO é deste laboratório e nunca é trocado nem removido.
@@ -76,8 +76,7 @@ final class LeituraDoDocker {
             }
             String rotulos = linha.substring(a + 1, y);
             l.add(new Container(linha.substring(0, a).strip(), rotulo(rotulos, ComandosRemotos.ROTULO_DO_AGENTE),
-                rotulo(rotulos, ComandosLocais.ROTULO_LOCAL), linha.substring(y + 1, z).strip(), linha.substring(z + 1).strip(),
-                rotulo(rotulos, ComandosLocais.ROTULO_PASTA)));
+                rotulo(rotulos, ComandosLocais.ROTULO_LOCAL), linha.substring(y + 1, z).strip(), linha.substring(z + 1).strip()));
         }
         return l;
     }

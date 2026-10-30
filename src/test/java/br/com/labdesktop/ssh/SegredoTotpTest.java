@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class SegredoTotpTest {
 
     private static final String SEGREDO = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
-    private static final String URI = "otpauth://totp/Painel%20do%20Lab:lab?secret=" + SEGREDO + "&issuer=Painel%20do%20Lab";
+    private static final String URI = "otpauth://totp/Lab%20Desktop:lab?secret=" + SEGREDO + "&issuer=Lab%20Desktop";
 
     @Test
     void naoEhRecordEOToStringNaoVazaNada() {

@@ -31,7 +31,8 @@ class ComandosRemotosTest {
         List<String> e = new ArrayList<>(ComandosRemotos.instalarODocker(true, "debian"));
         e.addAll(ComandosRemotos.instalarODocker(false, "ubuntu"));
         e.addAll(List.of(ComandosRemotos.criarPasta(p), ComandosRemotos.extrairPacote(p, PACOTE), ComandosRemotos.construirImagem(docker, p, PACOTE),
-            ComandosRemotos.removerContainer(docker, p), ComandosRemotos.subirContainer(docker, p, PACOTE), ComandosRemotos.removerVolume(docker, p),
+            ComandosRemotos.removerContainer(docker, p), ComandosRemotos.lerGidDoSoquete(docker, p.imagem(PACOTE.versao())),
+            ComandosRemotos.acertarDonoDosDados(docker, p, PACOTE), ComandosRemotos.subirContainer(docker, p, PACOTE, "999"), ComandosRemotos.removerVolume(docker, p),
             ComandosRemotos.removerImagem(docker, p.imagem(PACOTE.versao())), ComandosRemotos.removerPasta(p)));
         return e;
     }

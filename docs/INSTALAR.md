@@ -4,7 +4,7 @@ Guia para quem NÃO é técnico. O instalador leva o Java junto: você não inst
 
 O app nunca instala nada sozinho: cada instalação mostra o que vai fazer e só acontece depois do seu clique.
 
-O app público não traz o pacote do agente de monitoramento. Por isso, "Instalar agente…" e "Criar meu laboratório local" avisam que esta versão foi compilada sem o agente, em vez de instalar. O terminal, os arquivos e a segurança continuam funcionando; sem o agente você não vê CPU, memória, containers nem projetos.
+O app leva dentro de si o agente de monitoramento: um programa pequeno, só de leitura, que "Instalar agente…" e "Criar meu laboratório local" enviam ao servidor (ou ao Docker deste computador) depois do seu clique e da confirmação. Ele lê CPU, memória, disco, rede, temperatura, processos e Docker; exige um token; não executa comando, não altera nada no servidor, não usa inteligência artificial e não envia dados para fora. O que ele recebe do computador (o acesso ao Docker e três arquivos de leitura) é dito na tela antes do clique. Sem o agente, o terminal, os arquivos e a segurança continuam funcionando; você só não vê CPU, memória e containers.
 
 ## O que você precisa antes (e o que não precisa)
 
@@ -66,7 +66,7 @@ Precisa do **Docker Desktop**. O app confere e, se houver Homebrew, oferece `bre
 1. Abra o app e crie a **senha-mestra**.
 2. Escolha **Este computador** (laboratório local, precisa do Docker) ou **Outro servidor (SSH)**.
 3. Se algo faltar, o app diz em português o que é e o que fazer. Nada é instalado ou mudado sem o seu clique.
-4. Para "Este computador" e para instalar o agente, use uma versão do app que traga o pacote do agente; no app público, o app avisa que ele não está incluído.
+4. **Qual versão está instalada?** Ajustes, Sobre: a versão (por exemplo `0.1.320`; o último número cresce a cada compilação), o commit e a data da compilação. O mesmo número está no nome do instalador. No Mac, o Finder (Obter Informações) mostra a versão do pacote, que soma 1 ao primeiro número (`0.1.320` aparece como `1.1.320`): a que vale é a de Ajustes, Sobre.
 
 ## Se algo der errado
 

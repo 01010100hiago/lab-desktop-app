@@ -139,6 +139,8 @@ class DialogoDoAgenteTest {
         assertTrue(texto.contains("127.0.0.1:7000"));
         assertTrue(texto.contains("pasta ~/lab-agente"));
         assertTrue(texto.contains("desfaz só o que ele criou"));
+        assertTrue(texto.contains("O agente só lê") && texto.contains("Não recebe o disco"), "diz o que o agente recebe: " + texto);
+        assertFalse(texto.contains("histórico dos gráficos"), "numa instalação nova não há histórico antigo para avisar");
         fotografar(d, "dialogo-agente-confirmar");
     }
 
@@ -460,6 +462,8 @@ class DialogoDoAgenteTest {
         String tela = textosDaRaiz(d);
         assertTrue(tela.contains("Versão instalada: 0.0.9-velha. Versão do pacote deste app: 0.1.0-abc1234."), tela);
         assertTrue(tela.contains("Os dados e o token deste computador ficam como estão"), tela);
+        assertTrue(tela.contains("O histórico dos gráficos que o agente anterior guardou não é levado"), "avisa que os gráficos recomeçam: " + tela);
+        assertTrue(tela.contains("O agente só lê") && tela.contains("três arquivos do servidor só para leitura") && tela.contains("Não recebe o disco"), "diz o que o agente recebe: " + tela);
         fotografar(d, "dialogo-agente-atualizar");
 
         Visual.naEdt(() -> d.botaoConfirmar().doClick());

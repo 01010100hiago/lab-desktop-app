@@ -27,7 +27,7 @@ class ProvisionadorRemotoTest {
 
     private static final String BASE = "docker exec -i painel-lab node acesso.js ";
     private static final String SEGREDO = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
-    private static final String URI = "otpauth://totp/Painel%20do%20Lab:lab?secret=" + SEGREDO + "&issuer=Painel%20do%20Lab";
+    private static final String URI = "otpauth://totp/Lab%20Desktop:lab?secret=" + SEGREDO + "&issuer=Lab%20Desktop";
 
     /** Fake do executor: registra o que recebeu e devolve o que o teste mandou. */
     private static final class Fake implements ProvisionadorRemoto.Executor {

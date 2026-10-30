@@ -24,9 +24,9 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 
 /**
- * "Sobre o Lab Desktop": o nome e a versão do app (a mesma do {@code --versao}), o commit do agente que vai dentro dele, o Java, o sistema e a arquitetura, a pasta de dados
+ * "Sobre o Lab Desktop": o nome, a versão, o commit e a data da compilação do app (os mesmos do {@code --versao}), o commit do agente que vai dentro dele, o Java, o sistema e a arquitetura, a pasta de dados
  * (com o botão Copiar, e a pasta do usuário trocada por {@code ~}), o texto "software livre e gratuito, licença MIT, sem garantia", o texto oficial da licença e a tabela de
- * licenças de terceiros. Todo o texto de licença sai do jar (nada de rede). "Copiar informações" põe a versão, o sistema, o Java e o agente na área de transferência para o
+ * licenças de terceiros. Todo o texto de licença sai do jar (nada de rede). "Copiar informações" põe a versão, o commit, a data da compilação, o sistema, o Java e o agente na área de transferência para o
  * usuário colar num chamado. Aparece como seção da tela Ajustes e, quando não há janela principal (cofre bloqueado), no {@code DialogoSobre}.
  */
 public final class PainelSobre extends Painel {
@@ -51,19 +51,21 @@ public final class PainelSobre extends Painel {
         JComponent cabecalho = Caixa.linha(12, marca, Caixa.coluna(2, nome, versao), Caixa.mola());
 
         copiarInformacoes = BotaoCopiar.criar("Copiar informações", info::comoTexto, copiador, avisos);
-        copiarInformacoes.setToolTipText("Copia a versão, o sistema, o Java e o agente, para você colar num chamado");
+        copiarInformacoes.setToolTipText("Copia a versão, o commit e a data da compilação, o sistema, o Java e o agente, para você colar num chamado");
         copiarPasta = BotaoCopiar.criar("Copiar", info::pastaDeDados, copiador, avisos);
         copiarPasta.setToolTipText("Copia o caminho da pasta de dados (a sua pasta de usuário aparece como ~)");
 
         JPanel ficha = new Painel(new GridBagLayout());
         ficha.setOpaque(false);
         linhaDaFicha(ficha, 0, "Versão do app", info.versao(), null);
-        linhaDaFicha(ficha, 1, "Agente empacotado", info.agenteVersao(), null);
-        linhaDaFicha(ficha, 2, "Commit do agente", info.agenteCommit(), null);
-        linhaDaFicha(ficha, 3, "Java", info.versaoDoJava(), null);
-        linhaDaFicha(ficha, 4, "Sistema", info.sistema().strip(), null);
-        linhaDaFicha(ficha, 5, "Arquitetura", info.arquitetura(), null);
-        linhaDaFicha(ficha, 6, "Pasta de dados", info.pastaDeDados(), copiarPasta);
+        linhaDaFicha(ficha, 1, "Commit", info.commit(), null);
+        linhaDaFicha(ficha, 2, "Data da compilação", info.dataDaCompilacao(), null);
+        linhaDaFicha(ficha, 3, "Agente empacotado", info.agenteVersao(), null);
+        linhaDaFicha(ficha, 4, "Commit do agente", info.agenteCommit(), null);
+        linhaDaFicha(ficha, 5, "Java", info.versaoDoJava(), null);
+        linhaDaFicha(ficha, 6, "Sistema", info.sistema().strip(), null);
+        linhaDaFicha(ficha, 7, "Arquitetura", info.arquitetura(), null);
+        linhaDaFicha(ficha, 8, "Pasta de dados", info.pastaDeDados(), copiarPasta);
 
         TextoCorrido resumo = new TextoCorrido(LicencasDeTerceiros.resumoEmPortugues(), Paginas.LARGURA_DO_TEXTO).corDoToken(Tokens.TEXTO).tamanho(13.5f);
         AreaMonoespacada licenca = new AreaMonoespacada("Texto da licença MIT", true);

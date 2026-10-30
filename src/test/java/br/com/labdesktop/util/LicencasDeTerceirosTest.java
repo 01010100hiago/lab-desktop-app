@@ -303,10 +303,13 @@ class LicencasDeTerceirosTest {
     @Test
     void dadosEmbutidosTemCredito() throws IOException {
         List<Licenca> l = LicencasDeTerceiros.doJar();
-        for (String nome : new String[] {"Lista de senhas comuns (derivada do zxcvbn, Dropbox)", "OpenJDK (o Java que vai dentro do app)", "Ícones da interface (Feather e Lucide)", "FlatLaf Fonts Inter", "FlatLaf Fonts JetBrains Mono"}) {
+        for (String nome : new String[] {"Lista de senhas comuns (derivada do zxcvbn, Dropbox)", "OpenJDK (o Java que vai dentro do app)", "Ícones da interface (Feather e Lucide)", "Agente de monitoramento (lab-desktop-agente)", "FlatLaf Fonts Inter", "FlatLaf Fonts JetBrains Mono"}) {
             assertTrue(l.stream().anyMatch(x -> x.nome().equals(nome)), "sem linha de crédito: " + nome);
         }
         assertTrue(Files.readString(Path.of("licencas", "MIT-zxcvbn-Dropbox.txt")).contains("Dropbox"));
+        assertEquals("MIT", licencaDe(l, "Agente de monitoramento (lab-desktop-agente)"));
+        String mitDoAgente = Files.readString(Path.of("licencas", "MIT-lab-desktop-agente.txt"));
+        assertTrue(mitDoAgente.contains("MIT License") && mitDoAgente.contains("Copyright (c) 2026 Thiago Bezerra"), "o texto da MIT do agente que o app leva (o pacote dele não traz o arquivo)");
         assertTrue(Files.readString(Path.of("scripts", "GerarIcones.java")).contains("Gera os ícones do Lab Desktop"), "o ícone do app é gerado por um script do repositório (obra do autor)");
     }
 }

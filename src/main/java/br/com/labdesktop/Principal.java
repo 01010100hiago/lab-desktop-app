@@ -40,7 +40,7 @@ public final class Principal {
         long entrada = System.currentTimeMillis();
         // Sem janela, sem pasta de dados, sem trava: para o instalador e o CI conferirem o app empacotado (ARQUITETURA 11.4).
         if (temOpcao(args, "--versao")) {
-            System.out.println(Versao.NOME + " " + Versao.atual());
+            System.out.println(Versao.NOME + " " + Versao.completa());
             System.exit(0);
             return;
         }
@@ -114,7 +114,7 @@ public final class Principal {
         if (Boolean.getBoolean("labdesktop.dev")) {
             EdtWatchdog.emDesenvolvimento().iniciar();
         }
-        log.info("{} {} iniciando (dados em {}).", Versao.NOME, Versao.atual(), caminhos.pastaDados());
+        log.info("{} {} iniciando (dados em {}).", Versao.NOME, Versao.comCommit(), caminhos.pastaDados());
         // Só desenvolvimento: conferido aqui, fora da EDT, porque faz E/S (ver SenhaDeTeste).
         Path arquivoDaSenhaDeTeste = null;
         if (SenhaDeTeste.pedida(args) && !SenhaDeTeste.valeNesteApp()) {

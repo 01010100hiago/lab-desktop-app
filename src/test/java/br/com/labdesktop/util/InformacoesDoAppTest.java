@@ -20,14 +20,11 @@ class InformacoesDoAppTest {
         InformacoesDoApp i = InformacoesDoApp.coletar(CAMINHOS);
         assertEquals("Lab Desktop", i.nome());
         assertEquals(Versao.atual(), i.versao());
-        if (br.com.labdesktop.teste.PacoteDeTeste.temPacoteDeVerdade()) {
-            assertTrue(i.agenteVersao().matches("\\d+\\.\\d+\\.\\d+-[0-9a-f]{7}"), i.agenteVersao());
-            assertTrue(i.agenteCommit().matches("[0-9a-f]{40}"), i.agenteCommit());
-            assertTrue(i.agenteCommit().startsWith(i.agenteVersao().substring(i.agenteVersao().indexOf('-') + 1)), "a versão do agente leva os 7 primeiros do commit");
-        } else {
-            assertEquals("não incluído", i.agenteVersao(), "app compilado sem o pacote do agente");
-            assertEquals("não incluído", i.agenteCommit());
-        }
+        assertEquals(Versao.commit(), i.commit());
+        assertEquals(Versao.data(), i.dataDaCompilacao());
+        assertTrue(i.agenteVersao().matches("\\d+\\.\\d+\\.\\d+-[0-9a-f]{7}"), i.agenteVersao());
+        assertTrue(i.agenteCommit().matches("[0-9a-f]{40}"), i.agenteCommit());
+        assertTrue(i.agenteCommit().startsWith(i.agenteVersao().substring(i.agenteVersao().indexOf('-') + 1)), "a versão do agente leva os 7 primeiros do commit");
         assertEquals(System.getProperty("os.arch"), i.arquitetura());
     }
 
@@ -74,10 +71,10 @@ class InformacoesDoAppTest {
     }
 
     @Test
-    void oTextoParaCopiarTemVersaoSistemaJavaEAgenteENadaMais() {
-        InformacoesDoApp i = new InformacoesDoApp("Lab Desktop", "0.1.0", "0.1.0-abc1234", "abc1234def5678abc1234def5678abc1234def56", "21.0.12 (Homebrew)", "Mac OS X 15.6", "aarch64",
+    void oTextoParaCopiarTemVersaoCommitDataSistemaJavaEAgenteENadaMais() {
+        InformacoesDoApp i = new InformacoesDoApp("Lab Desktop", "0.1.320", "a207ad4", "2026-10-30", "0.1.0-dadf957", "dadf957f1f824b16fa1876f74848e33ab4c4a5ae", "21.0.12 (Homebrew)", "Mac OS X 15.6", "aarch64",
             "~/Library/Application Support/LabDesktop");
-        assertEquals("Lab Desktop 0.1.0\nSistema: Mac OS X 15.6 (aarch64)\nJava: 21.0.12 (Homebrew)\nAgente empacotado: 0.1.0-abc1234 (commit abc1234def5678abc1234def5678abc1234def56)",
+        assertEquals("Lab Desktop 0.1.320\nCommit: a207ad4\nCompilado em: 2026-10-30\nSistema: Mac OS X 15.6 (aarch64)\nJava: 21.0.12 (Homebrew)\nAgente empacotado: 0.1.0-dadf957 (commit dadf957f1f824b16fa1876f74848e33ab4c4a5ae)",
             i.comoTexto());
     }
 }

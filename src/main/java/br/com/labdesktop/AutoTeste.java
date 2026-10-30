@@ -74,13 +74,13 @@ public final class AutoTeste {
 
     private void rodarTudo(Path tmp) {
         AmbienteDoSistema ambiente = AmbienteDoSistema.detectar();
-        saida.println(Versao.NOME + " " + Versao.atual() + " | Java " + System.getProperty("java.version") + " | " + System.getProperty("os.name") + " "
+        saida.println(Versao.NOME + " " + Versao.completa() + " | Java " + System.getProperty("java.version") + " | " + System.getProperty("os.name") + " "
             + System.getProperty("os.arch") + " | LaF " + EstiloDeLaf.padrao());
         critica("versao", t -> {
             if (Versao.atual().equals("dev") && !Boolean.getBoolean("labdesktop.autoteste.aceitaDev")) {
                 throw new IllegalStateException("sem Implementation-Version no jar (o runtime não está lendo o manifesto)");
             }
-            return Versao.atual();
+            return Versao.completa();
         }, tmp);
         critica("locale-pt-BR", t -> {
             String v = NumberFormat.getInstance(Locale.forLanguageTag("pt-BR")).format(1234.5);

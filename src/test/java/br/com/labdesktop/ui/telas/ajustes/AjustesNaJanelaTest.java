@@ -460,13 +460,8 @@ class AjustesNaJanelaTest {
         var info = sobre.informacoes();
         assertEquals("Lab Desktop", info.nome());
         assertEquals(br.com.labdesktop.Versao.atual(), info.versao(), "a mesma versão do --versao");
-        if (br.com.labdesktop.teste.PacoteDeTeste.temPacoteDeVerdade()) {
-            assertTrue(info.agenteVersao().startsWith("0.1.0-"), info.agenteVersao());
-            assertEquals(40, info.agenteCommit().length(), "o commit do agente empacotado");
-        } else {
-            assertEquals("não incluído", info.agenteVersao(), "app compilado sem o pacote do agente");
-            assertEquals("não incluído", info.agenteCommit());
-        }
+        assertTrue(info.agenteVersao().startsWith("0.1.0-"), info.agenteVersao());
+        assertEquals(40, info.agenteCommit().length(), "o commit do agente empacotado");
         assertEquals(System.getProperty("os.arch"), info.arquitetura());
         assertTrue(info.versaoDoJava().startsWith(System.getProperty("java.version")));
         assertFalse(info.pastaDeDados().contains(System.getProperty("user.home")) && System.getProperty("user.home").length() > 1 && !info.pastaDeDados().startsWith("~"),

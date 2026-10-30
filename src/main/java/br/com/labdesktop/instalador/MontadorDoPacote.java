@@ -1,6 +1,7 @@
 package br.com.labdesktop.instalador;
 
 import br.com.labdesktop.util.Json;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.ByteArrayOutputStream;
@@ -18,11 +19,13 @@ import java.util.stream.Stream;
 import java.util.zip.GZIPOutputStream;
 
 /**
- * Monta o pacote do agente do perfil monitor ({@link PacoteDoAgente}) a partir do repositório do agente num commit FIXADO:
- * lê cada arquivo com {@code git show <commit>:<arquivo>} (nada depende do que está na pasta de trabalho do repositório), gera um
- * {@code tar.gz} DETERMINÍSTICO (entradas em ordem, data zero, dono zero) e grava
- * {@code agente-<versao>.tar.gz} mais o descritor {@code agente.json} (versão, commit, SHA-256) em
- * {@code src/main/resources/agente/}. A versão é {@code <base>-<7 primeiros dígitos do commit>}.
+ * Monta o pacote do agente ({@link PacoteDoAgente}) a partir do repositório do agente público ({@code lab-desktop-agente}) num commit
+ * FIXADO: lê o {@code package.json} do commit (o campo {@code files} é a lista do que o agente precisa para subir) e cada arquivo dela com
+ * {@code git show <commit>:<arquivo>} (nada depende do que está na pasta de trabalho do repositório), gera um {@code tar.gz}
+ * DETERMINÍSTICO (entradas em ordem, data zero, dono zero) e grava {@code agente-<versao>.tar.gz} mais o descritor {@code agente.json}
+ * (versão, commit, SHA-256) em {@code src/main/resources/agente/}. A versão é {@code <base>-<7 primeiros dígitos do commit>}. O arquivo
+ * {@code VERSAO} NÃO vem do repositório: o montador o escreve com a versão do pacote (a do repositório é só a base), e é ele que o agente
+ * devolve em {@code /api/versao} para o app oferecer "Atualizar agente".
  *
  * <p>É Java puro de propósito (o app roda também no Windows, e a CI de lá não tem bash): a tarefa Gradle
  * {@code empacotarAgente} só chama esta classe. A montagem é manual, quando se muda o commit fixado; o build normal usa o que está
@@ -30,11 +33,19 @@ import java.util.zip.GZIPOutputStream;
  */
 public final class MontadorDoPacote {
 
-    /** O que o agente do perfil monitor precisa para subir: o painel, os módulos que ele carrega e o Dockerfile mínimo. */
-    public static final List<String> ARQUIVOS = List.of("Dockerfile.monitor", "acesso.js", "docker-proxy.js", "guarda.js",
-        "historico.js", "painel.js", "precos.json", "tokens.js", "totp.js");
+    /**
+     * O mínimo sem o qual o pacote não faz sentido: o Dockerfile que o app usa no {@code docker build} e o ponto de entrada do agente. O resto
+     * da lista vem do {@code package.json} do agente ({@link #arquivosDoCommit}), para o app nunca ficar com uma lista própria que se afasta da
+     * dele.
+     */
+    public static final List<String> OBRIGATORIOS = List.of("Dockerfile.monitor", "painel.js");
+
+    /** O arquivo que o montador escreve sozinho (ver a classe). */
+    public static final String ARQUIVO_DE_VERSAO = "VERSAO";
 
     private static final Pattern COMMIT_COMPLETO = Pattern.compile("^[0-9a-f]{40}$");
+    /** Um arquivo da raiz: letras, dígitos, ponto, hífen e sublinhado, sem começar por ponto nem hífen, até 99 caracteres (o limite do nome no tar). */
+    private static final Pattern NOME_SIMPLES = Pattern.compile("^[A-Za-z0-9_][A-Za-z0-9_.-]{0,98}$");
 
     private MontadorDoPacote() { }
 
@@ -43,7 +54,7 @@ public final class MontadorDoPacote {
      */
     public static void main(String[] args) throws IOException, InterruptedException {
         if (args.length != 4) {
-            throw new IllegalArgumentException("Uso: MontadorDoPacote <pasta-do-agente> <commit> <versaoBase> <destino>");
+            throw new IllegalArgumentException("Uso: MontadorDoPacote <repositorio-do-agente> <commit> <versaoBase> <destino>");
         }
         PacoteDoAgente p = montar(Path.of(args[0]), args[1], args[2], Path.of(args[3]));
         System.out.println("Pacote do agente: " + p + " sha256 " + p.sha256());
@@ -56,8 +67,9 @@ public final class MontadorDoPacote {
         }
         String versao = versaoBase + "-" + commit.substring(0, 7);
         git(painel, "cat-file", "-e", commit + "^{commit}");
+        List<String> nomes = arquivosDoCommit(painel, commit);
         Map<String, byte[]> arquivos = new TreeMap<>();
-        for (String nome : ARQUIVOS) {
+        for (String nome : nomes) {
             arquivos.put(nome, git(painel, "show", commit + ":" + nome));
         }
         PacoteDoAgente pacote = de(arquivos, versao, commit);
@@ -75,11 +87,46 @@ public final class MontadorDoPacote {
         d.put("arquivo", pacote.nomeDoArquivo());
         d.put("sha256", pacote.sha256());
         ArrayNode lista = d.putArray("arquivos");
-        ARQUIVOS.forEach(lista::add);
-        lista.add("VERSAO");
+        nomes.forEach(lista::add);
+        lista.add(ARQUIVO_DE_VERSAO);
         Files.writeString(destino.resolve("agente.json"), Json.mapper().writerWithDefaultPrettyPrinter().writeValueAsString(d) + "\n",
             StandardCharsets.UTF_8);
         return pacote;
+    }
+
+    /**
+     * A lista de arquivos do agente naquele commit: o campo {@code files} do {@code package.json} dele, menos o {@code VERSAO} (que o
+     * montador escreve). Cada nome é conferido ANTES de ir a um comando do git ou a um tar: só um nome simples, sem pasta, sem {@code ..}, sem
+     * barra e sem começar por hífen; e os {@link #OBRIGATORIOS} têm de estar lá.
+     */
+    public static List<String> arquivosDoCommit(Path painel, String commit) throws IOException, InterruptedException {
+        byte[] bruto = git(painel, "show", commit + ":package.json");
+        JsonNode pacoteJson;
+        try {
+            pacoteJson = Json.mapper().readTree(bruto);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IOException("O package.json do agente não é um JSON válido.", e);
+        }
+        JsonNode files = pacoteJson.path("files");
+        if (!files.isArray() || files.isEmpty()) {
+            throw new IOException("O package.json do agente não tem o campo \"files\" (a lista do que vai no pacote).");
+        }
+        java.util.Set<String> nomes = new java.util.TreeSet<>();
+        for (JsonNode f : files) {
+            String nome = f.asText("");
+            if (!NOME_SIMPLES.matcher(nome).matches()) {
+                throw new IOException("O campo \"files\" do package.json tem um nome que o pacote não aceita (só arquivos na raiz, sem pastas): " + nome);
+            }
+            if (!nome.equals(ARQUIVO_DE_VERSAO)) {
+                nomes.add(nome);
+            }
+        }
+        for (String o : OBRIGATORIOS) {
+            if (!nomes.contains(o)) {
+                throw new IOException("O campo \"files\" do package.json do agente não lista " + o + ".");
+            }
+        }
+        return List.copyOf(nomes);
     }
 
     /** O pacote a partir dos arquivos (o conteúdo de cada um), sem git: é o que os testes usam. */

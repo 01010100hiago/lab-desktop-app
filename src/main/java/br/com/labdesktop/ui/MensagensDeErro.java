@@ -45,8 +45,14 @@ public final class MensagensDeErro {
                 : "O agente não reconhece o token deste computador.";
             case ErroApi.Conflito c -> c.mensagem();
             case ErroApi.NaoEncontrado n -> n.mensagem();
-            case ErroApi.ServidorErro s -> s.mensagem();
+            case ErroApi.ServidorErro s -> s.muitasTentativas() ? muitasTentativas(s) : s.mensagem();
         };
+    }
+
+    /** O agente recusou tudo por um tempo porque viu credenciais erradas demais: a frase diz para esperar e quanto, quando ele disse. */
+    private static String muitasTentativas(ErroApi.ServidorErro s) {
+        int espera = s.aguardeSegundos();
+        return "Muitas tentativas; espere um pouco" + (espera > 0 ? " (cerca de " + espera + " s)" : "") + " e tente de novo.";
     }
 
     public static String doProvisionamento(ErroProvisionamento e) {

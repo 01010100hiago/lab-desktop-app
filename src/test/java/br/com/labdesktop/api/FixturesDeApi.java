@@ -87,4 +87,20 @@ public final class FixturesDeApi {
             throw new IllegalStateException(e);
         }
     }
+
+    /**
+     * Uma resposta REAL do agente de monitoramento público, capturada de um container de verdade (Docker Desktop do Mac, agente 0.1.0, depois de uns 5 minutos no ar) e gravada em
+     * {@code src/test/resources/agente-novo}: {@code versao}, {@code servidor}, {@code detalhe}, {@code historico-10m} ou {@code historico-1h} (sem a extensão). O
+     * {@code LaboratorioLocalComDockerDeVerdadeTest} grava as respostas em {@code build/agente-capturado/} para quem quiser refazer.
+     */
+    public static String lerRespostaDoAgenteNovo(String nome) {
+        try (java.io.InputStream in = FixturesDeApi.class.getResourceAsStream("/agente-novo/" + nome + ".json")) {
+            if (in == null) {
+                throw new IllegalStateException("fixture ausente: " + nome);
+            }
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 }

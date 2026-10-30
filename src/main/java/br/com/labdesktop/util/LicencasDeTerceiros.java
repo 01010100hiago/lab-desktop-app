@@ -53,7 +53,7 @@ public final class LicencasDeTerceiros {
     public static final List<String> ARQUIVOS_DE_LICENCA = List.of(
         "Apache-2.0.txt", "NOTICE-Apache.txt", "Jackson-core-embutidos.txt", "BSD-3-Clause-RSyntaxTextArea.txt", "Bouncy-Castle-Licence.md", "MIT-JSVG.txt", "MIT-SLF4J.txt",
         "OFL-1.1-Inter.txt", "OFL-1.1-JetBrains-Mono.txt", "LGPL-3.0-JediTerm.txt", "GPL-3.0.txt", "EPL-1.0-pty4j.txt", "NOTICE-pty4j.txt", "MIT-winpty.txt",
-        "MIT-Windows-Terminal.txt", "MIT-zxcvbn-Dropbox.txt", "MIT-Feather.txt", "ISC-Lucide.txt");
+        "MIT-Windows-Terminal.txt", "MIT-zxcvbn-Dropbox.txt", "MIT-lab-desktop-agente.txt", "MIT-Feather.txt", "ISC-Lucide.txt");
 
     /** O texto de UM arquivo da pasta {@code licencas/}, como está no jar. */
     public static String textoDeLicenca(String arquivo) {

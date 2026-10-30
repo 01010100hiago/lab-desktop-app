@@ -194,7 +194,7 @@ public final class LaboratorioLocal {
         } catch (RuntimeException e) {
             throw new FalhaDePasso("A pasta dos projetos não é um caminho válido: " + TextoSeguro.limparLinha(parametros.pastaDosProjetos()));
         }
-        // ANTES de criar qualquer coisa (e de montar a pasta no container): a raiz do disco, a pasta pessoal e as do sistema são recusadas
+        // ANTES de criar qualquer coisa: a raiz do disco, a pasta pessoal e as do sistema são recusadas como pasta dos projetos
         String problema = ValidadorDaPastaDosProjetos.problema(plataforma.sistema(), plataforma.casa(), parametros.pastaDosProjetos()).orElse(null);
         if (problema != null) {
             throw new FalhaDePasso(problema);
@@ -258,12 +258,11 @@ public final class LaboratorioLocal {
                 + "Escolha outro nome nas opções avançadas.");
         }
         if (atual != null && atual.rotuloDoAgente().equals(pacote.versao()) && atual.rodando()
-            && atual.publicaNoLoopback(parametros.porta())
-            && atual.marcaDaPasta().equals(ComandosLocais.marcaDaPasta(parametros.pastaDosProjetos()))) {
-            return false; // o laboratório já está de pé, na porta e com a pasta pedidas
+            && atual.publicaNoLoopback(parametros.porta())) {
+            return false; // o laboratório já está de pé, na porta pedida
         }
         if (atual != null && atual.rotuloDoAgente().equals(pacote.versao()) && atual.rodando()) {
-            registrar("[o agente já roda, mas publicado em outra porta ou com outra pasta: o app o recria na porta " + parametros.porta() + "]");
+            registrar("[o agente já roda, mas publicado em outra porta: o app o recria na porta " + parametros.porta() + "]");
         }
         if (anterior != null) {
             if (!anterior.doApp()) {
@@ -288,18 +287,22 @@ public final class LaboratorioLocal {
                 exigirSucesso(ComandosLocais.pararContainer(parametros.containerAnterior()), ESCRITA_CURTA, "Não consegui parar o agente anterior");
             }
         }
-        String pastaNoContainer;
-        try {
-            pastaNoContainer = plataforma.noContainer(parametros.pastaDosProjetos());
-        } catch (IllegalArgumentException e) {
-            throw new FalhaDePasso(e.getMessage());
-        }
         if (!volumeExistia) {
             exigirSucesso(ComandosLocais.criarVolume(parametros), ESCRITA_CURTA, "Não consegui criar o volume dos dados do agente");
             criouVolume = true; // se o run falhar, o desfazer o apaga
         }
+        // o agente roda como usuário comum e sem capacidades: precisa do grupo do soquete e, num volume que já existia, de a pasta de dados ser dele
+        ResultadoExec g = rodar(ComandosLocais.lerGidDoSoquete(parametros, pacote), ESCRITA_CURTA);
+        String gid = g.status() == 0 ? ComandosRemotos.gidValido(g.stdout()) : null;
+        if (gid == null) {
+            throw new FalhaDePasso("Não consegui descobrir o grupo do soquete do Docker: " + saidaDeErro(g));
+        }
+        if (volumeExistia) {
+            exigirSucesso(ComandosLocais.acertarDonoDosDados(parametros, pacote), ESCRITA_CURTA,
+                "Não consegui entregar a pasta de dados do agente anterior ao usuário do agente novo");
+        }
         criouContainer = true;
-        ResultadoExec x = rodar(ComandosLocais.subirContainer(parametros, pacote, plataforma.montagemDaMaquina(), pastaNoContainer), ESCRITA_CURTA);
+        ResultadoExec x = rodar(ComandosLocais.subirContainer(parametros, pacote, plataforma.montagemDaMaquina(), gid), ESCRITA_CURTA);
         if (x.status() != 0) {
             throw new FalhaDePasso("O Docker não conseguiu subir o agente: " + saidaDeErro(x));
         }

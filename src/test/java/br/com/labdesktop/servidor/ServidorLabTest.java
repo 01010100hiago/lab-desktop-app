@@ -415,7 +415,7 @@ class ServidorLabTest {
 
         try (SegredoTotp segredo = lab.iniciarConfiguracao2fa()) {
             assertEquals(AgenteDoLab.SEGREDO, segredo.segredo());
-            assertTrue(segredo.uri().startsWith("otpauth://totp/Painel%20do%20Lab:lab?secret="));
+            assertTrue(segredo.uri().startsWith("otpauth://totp/Lab%20Desktop:lab?secret="));
             assertFalse(segredo.toString().contains(AgenteDoLab.SEGREDO));
 
             Optional<Instant> ate = lab.confirmarConfiguracao2fa("123 456");

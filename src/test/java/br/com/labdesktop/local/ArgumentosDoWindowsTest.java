@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.labdesktop.instalador.ComandosRemotos;
 import br.com.labdesktop.instalador.PacoteDoAgente;
 import java.util.ArrayList;
 import java.util.List;
@@ -72,13 +73,13 @@ class ArgumentosDoWindowsTest {
         String pasta = "C:\\Users\\João Silva\\LabLocal\\projects";
         ParametrosDoLaboratorio p = ParametrosDoLaboratorio.padrao(7070, pasta);
         PacoteDoAgente pacote = PacoteDoAgente.de("0.1.0-abc1234", "abc1234def", new byte[] {1, 2, 3});
-        String noContainer = MapeamentoDeCaminhos.doContainer(br.com.labdesktop.plataforma.SistemaOperacional.WINDOWS, pasta);
         List<List<String>> todos = new ArrayList<>(List.of(
             ComandosLocais.versaoDoDocker(), ComandosLocais.versaoDoComposeDoDocker(), ComandosLocais.versaoDoGit(), ComandosLocais.estadoDoWsl(), ComandosLocais.virtualizacaoDoWindows(),
             ComandosLocais.lerRede(p), ComandosLocais.lerContainersNaRede(p), ComandosLocais.lerContainer(p), ComandosLocais.lerVolume(p), ComandosLocais.lerImagensDoApp(p),
             ComandosLocais.lerImagem(p, "0.1.0-abc1234"), ComandosLocais.lerLogs(p), ComandosLocais.lerRegistroDoAgente(p.container()), ComandosLocais.lerEstadoDoContainer(p.container()),
             ComandosLocais.lerContainersDosProjetos(), ComandosLocais.criarRede(p), ComandosLocais.removerRede(p), ComandosLocais.construirImagem(p, pacote),
-            ComandosLocais.subirContainer(p, pacote, List.of(), noContainer), ComandosLocais.removerContainer(p.container()), ComandosLocais.renomearContainer("a", "b"),
+            ComandosLocais.subirContainer(p, pacote, List.of(), "0"), ComandosLocais.lerGidDoSoquete(p, pacote), ComandosLocais.acertarDonoDosDados(p, pacote),
+            ComandosLocais.subirContainer(p, pacote, ComandosRemotos.montagemDosArquivosDaMaquina(), "0"), ComandosLocais.removerContainer(p.container()), ComandosLocais.renomearContainer("a", "b"),
             ComandosLocais.pararContainer("a"), ComandosLocais.iniciarContainer("a"), ComandosLocais.criarVolume(p), ComandosLocais.removerVolume(p),
             ComandosLocais.removerImagem(p, "0.1.0-abc1234"), ComandosLocais.reiniciarContainerDoProjeto("meu-app-web-1")));
         for (ComandosLocais.AcaoDeProjeto acao : ComandosLocais.AcaoDeProjeto.values()) {

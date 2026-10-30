@@ -3,6 +3,7 @@ package br.com.labdesktop.servidor;
 import br.com.labdesktop.api.ClienteApi;
 import br.com.labdesktop.api.ErroApi;
 import br.com.labdesktop.api.ErroApi.RespostaInvalida;
+import br.com.labdesktop.api.ErroApi.ServidorErro;
 import br.com.labdesktop.seguranca.Redator;
 import br.com.labdesktop.util.Agendador;
 import br.com.labdesktop.util.Agendador.Cancelavel;
@@ -35,6 +36,8 @@ import org.slf4j.LoggerFactory;
  *   <li><b>Dedupe</b>: só avisa as telas se o valor mudou (os DTOs são records com igualdade por valor); quando não mudou,
  *       {@link OuvinteDeTopico#aoConfirmar} diz que a leitura foi feita mesmo assim (para o "lido às" não ficar velho).</li>
  *   <li><b>Falhas</b>: três falhas seguidas dobram o intervalo, e a cada falha seguinte dobra de novo, até 60 s.</li>
+ *   <li><b>Muitas tentativas</b>: um 429 {@code muitas_tentativas} do agente diz quantos segundos ele recusa tudo; o tópico espera pelo menos isso
+ *       (até 5 min) antes de perguntar de novo.</li>
  *   <li><b>Calor</b>: com {@code servidor.cpu.temperatura} acima de 85 °C os intervalos dobram, até cair
  *       abaixo de 80 °C (histerese, para não oscilar).</li>
  *   <li><b>Sem API</b> ({@link #definirApi} com {@code null}, quando a conexão não está {@code CONECTADO}):
@@ -50,6 +53,8 @@ public final class Sondador implements AutoCloseable {
 
     private static final int FALHAS_PARA_DOBRAR = 3;
     private static final Duration TETO_DE_FALHAS = Duration.ofSeconds(60);
+    /** O agente pode pedir mais do que isto; o app nunca fica mudo por mais de cinco minutos por causa de um pedido de espera. */
+    private static final int TETO_DA_ESPERA_PEDIDA_S = 300;
     private static final double CALOR_LIGA = 85.0;
     private static final double CALOR_DESLIGA = 80.0;
 
@@ -74,6 +79,8 @@ public final class Sondador implements AutoCloseable {
         T ultimo;
         boolean temUltimo;
         int falhasSeguidas;
+        /** A espera que o agente pediu (429 {@code muitas_tentativas}) na última falha; zero se a última consulta não foi isso. */
+        Duration esperaPedida = Duration.ZERO;
         boolean rodando;
         boolean pendente;
         Cancelavel proximo;
@@ -278,6 +285,9 @@ public final class Sondador implements AutoCloseable {
             Duration dobrado = base.multipliedBy(1L << dobras);
             d = dobrado.compareTo(teto) > 0 ? teto : dobrado;
         }
+        if (c.esperaPedida.compareTo(d) > 0) {
+            d = c.esperaPedida; // o agente disse quanto tempo recusa tudo: perguntar antes disso só gasta chamada
+        }
         return quente ? d.multipliedBy(2) : d;
     }
 
@@ -324,6 +334,8 @@ public final class Sondador implements AutoCloseable {
                 return;
             }
             destinatarios = List.copyOf(c.ouvintes);
+            c.esperaPedida = erro instanceof ServidorErro s && s.muitasTentativas()
+                ? Duration.ofSeconds(Math.min(Math.max(s.aguardeSegundos(), 1), TETO_DA_ESPERA_PEDIDA_S)) : Duration.ZERO;
             if (erro == null) {
                 c.falhasSeguidas = 0;
                 mudou = !c.temUltimo || !Objects.equals(c.ultimo, valor);

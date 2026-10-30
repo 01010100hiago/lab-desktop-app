@@ -1,0 +1,7 @@
+{
+  "versao" : "0.1.0-dadf957",
+  "commit" : "dadf957f1f824b16fa1876f74848e33ab4c4a5ae",
+  "arquivo" : "agente-0.1.0-dadf957.tar.gz",
+  "sha256" : "07a75158b70ae000457d76b2da674d437f44bba5608d47f64a81f998daf49b48",
+  "arquivos" : [ "Dockerfile.monitor", "acesso.js", "docker-proxy.js", "historico.js", "metricas.js", "painel.js", "privilegios.js", "totp.js", "VERSAO" ]
+}

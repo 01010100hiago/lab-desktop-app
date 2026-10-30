@@ -63,7 +63,7 @@ public final class SegredoTotp implements Segredo {
         return sb.toString();
     }
 
-    /** A URI {@code otpauth://totp/Painel%20do%20Lab:<servidor>?secret=...&issuer=Painel%20do%20Lab} que vira QR. */
+    /** A URI {@code otpauth://totp/Lab%20Desktop:<servidor>?secret=...&issuer=Lab%20Desktop} que vira QR. */
     public synchronized String uri() {
         conferirVivo();
         return new String(uri, StandardCharsets.UTF_8);
