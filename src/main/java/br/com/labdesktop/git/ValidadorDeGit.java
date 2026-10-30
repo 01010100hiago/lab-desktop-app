@@ -128,6 +128,21 @@ public final class ValidadorDeGit {
         return true;
     }
 
+    /**
+     * A pasta de uma subpasta do projeto: a pasta mais o caminho relativo ({@code app}, {@code servicos/api}), com a barra que a pasta usa (no Windows, {@code C:\\Users\\ana\\x} ganha barra invertida).
+     * O caminho precisa passar por {@link #caminhoRelativoValido}: nunca {@code ..}, nunca absoluto.
+     */
+    public static String juntar(String pasta, String subpasta) {
+        exigirPasta(pasta);
+        exigirCaminhoRelativo(subpasta);
+        String base = pasta;
+        while (base.length() > 1 && (base.endsWith("/") || base.endsWith("\\"))) {
+            base = base.substring(0, base.length() - 1);
+        }
+        boolean windows = pasta.indexOf('\\') >= 0;
+        return base + (windows ? "\\" : "/") + (windows ? subpasta.replace('/', '\\') : subpasta);
+    }
+
     public static String exigirPasta(String pasta) {
         if (!pastaValida(pasta)) {
             throw new IllegalArgumentException("Pasta do projeto inválida.");

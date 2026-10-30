@@ -54,6 +54,37 @@ public final class ComandosDeGit {
         return leitura(pasta, false, "rev-parse", "--show-prefix").pronto();
     }
 
+    /**
+     * Procura repositórios em SUBPASTAS de um projeto que não é repositório: UM {@code find} fixo, só de leitura, sem texto do usuário (a pasta já passou por {@link ValidadorDeGit#exigirPasta}). Até 3 níveis
+     * ({@code -mindepth 1} para a própria raiz nunca ser testada pelo nome: um projeto chamado {@code build} não some), sem entrar em {@code node_modules}, {@code vendor}, {@code .cache},
+     * {@code .venv}, {@code dist} nem {@code build}, sem seguir link ({@code find} não segue por padrão e {@code -not -type l} tira o {@code .git} que é link), e sem descer para dentro do próprio
+     * {@code .git}. Imprime um caminho por vez, terminado em NUL. {@code -H} só deixa a raiz ser um link (pasta de projeto apontada por link).
+     */
+    public static ComandoGit repositoriosAbaixo(String pasta) {
+        ValidadorDeGit.exigirPasta(pasta);
+        Montagem m = new Montagem(Natureza.LEITURA, false);
+        m.fixo("find").fixo("-H").pasta(pasta);
+        FIND_DEPOIS_DA_PASTA.forEach(m::fixo);
+        return m.pronto(Map.of("LC_ALL", "C"));
+    }
+
+    /** O que vem DEPOIS da pasta no {@code find} que procura repositórios: igual sempre, e é o que {@link #naturezaPelaForma} reconhece como leitura. */
+    static final List<String> FIND_DEPOIS_DA_PASTA = montarOFind();
+
+    private static List<String> montarOFind() {
+        List<String> l = new ArrayList<>(List.of("-mindepth", "1", "-maxdepth", String.valueOf(RepositoriosAbaixo.PROFUNDIDADE)));
+        for (String ignorada : RepositoriosAbaixo.IGNORADAS) {
+            l.addAll(List.of("-name", ignorada, "-prune", "-o"));
+        }
+        l.addAll(List.of("-name", ".git", "-not", "-type", "l", "-prune", "-print0"));
+        return List.copyOf(l);
+    }
+
+    /** O branch atual SEM precisar de commit ({@code symbolic-ref} funciona num repositório novo); sai com 1 quando a cabeça está solta. */
+    public static ComandoGit ramoAtual(String pasta) {
+        return leitura(pasta, false, "symbolic-ref", "--short", "-q", "HEAD").pronto();
+    }
+
     public static ComandoGit status(String pasta) {
         return leitura(pasta, false, "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal").pronto();
     }
@@ -208,7 +239,7 @@ public final class ComandosDeGit {
     public static ComandoGit listarNaoRastreados(String pasta, String area, String dentro, boolean colapsado) {
         ValidadorDeGit.exigirPasta(pasta);
         Montagem m = new Montagem(Natureza.LEITURA, true);
-        m.fixo("git").fixo("--no-pager").fixo("-C").fixo(pasta);
+        m.fixo("git").fixo("--no-pager").fixo("-C").pasta(pasta);
         if (area != null) {
             m.fixo("--git-dir=" + area).fixo("--work-tree=.");
         }
@@ -228,7 +259,7 @@ public final class ComandosDeGit {
     public static ComandoGit checarIgnorados(String pasta, String areaOuNula, byte[] caminhos) {
         ValidadorDeGit.exigirPasta(pasta);
         Montagem m = new Montagem(Natureza.LEITURA, false);
-        m.fixo("git").fixo("--no-pager").fixo("-C").fixo(pasta);
+        m.fixo("git").fixo("--no-pager").fixo("-C").pasta(pasta);
         if (areaOuNula != null) {
             m.fixo("--git-dir=" + areaOuNula).fixo("--work-tree=.");
         }
@@ -308,6 +339,10 @@ public final class ComandosDeGit {
             if (argumentos.size() >= 4 && argumentos.get(0).equals("rm") && argumentos.equals(List.of("rm", "-rf", "--", argumentos.get(argumentos.size() - 1))) && areaRemotaValida(argumentos.get(argumentos.size() - 1))) {
                 return Natureza.TEMPORARIO;
             }
+            if (argumentos.size() > 3 && argumentos.get(0).equals("find") && argumentos.get(1).equals("-H") && ValidadorDeGit.pastaValida(argumentos.get(2))
+                && argumentos.subList(3, argumentos.size()).equals(FIND_DEPOIS_DA_PASTA)) {
+                return Natureza.LEITURA; // SÓ o find fixo que procura repositórios (nada de -exec, -delete nem -fprint)
+            }
             if (argumentos.size() == 5 && argumentos.get(0).equals("mkdir") && argumentos.subList(1, 4).equals(List.of("-m", "700", "--")) && areaRemotaValida(argumentos.get(4))) {
                 return Natureza.TEMPORARIO;
             }
@@ -337,6 +372,9 @@ public final class ComandosDeGit {
         if (sub.equals("init") && argumentos.size() == i + 4 && argumentos.get(i + 1).equals("-q") && argumentos.get(i + 2).equals("--bare") && areaTemporariaValida(argumentos.get(i + 3))) {
             return Natureza.TEMPORARIO;
         }
+        if (sub.equals("symbolic-ref")) {
+            return argumentos.subList(i, argumentos.size()).equals(List.of("symbolic-ref", "--short", "-q", "HEAD")) ? Natureza.LEITURA : Natureza.ESCRITA; // com um destino, mudaria o HEAD
+        }
         if (sub.equals("hash-object")) {
             return argumentos.subList(i, argumentos.size()).equals(List.of("hash-object", "-t", "tree", "--stdin")) ? Natureza.LEITURA : Natureza.ESCRITA;
         }
@@ -359,7 +397,7 @@ public final class ComandosDeGit {
     private static Montagem leitura(String pasta, boolean comCaminhos, String... resto) {
         ValidadorDeGit.exigirPasta(pasta);
         Montagem m = new Montagem(Natureza.LEITURA, comCaminhos);
-        m.fixo("git").fixo("--no-pager").fixo("-C").fixo(pasta).fixo("-c").fixo("core.quotepath=off").fixo("-c").fixo("core.fsmonitor=false");
+        m.fixo("git").fixo("--no-pager").fixo("-C").pasta(pasta).fixo("-c").fixo("core.quotepath=off").fixo("-c").fixo("core.fsmonitor=false");
         if (comCaminhos) {
             m.fixo("--literal-pathspecs");
         }
@@ -373,7 +411,7 @@ public final class ComandosDeGit {
         ValidadorDeGit.exigirPasta(pasta);
         Montagem m = new Montagem(Natureza.ESCRITA, false);
         // --literal-pathspecs em TODA escrita: um arquivo chamado "*" ou ":!ok.txt" é só um nome, nunca um padrão que pegue (ou tire) outros arquivos
-        m.fixo("git").fixo("--no-pager").fixo("--literal-pathspecs").fixo("-C").fixo(pasta).fixo("-c").fixo("core.quotepath=off").fixo("-c").fixo("core.fsmonitor=false");
+        m.fixo("git").fixo("--no-pager").fixo("--literal-pathspecs").fixo("-C").pasta(pasta).fixo("-c").fixo("core.quotepath=off").fixo("-c").fixo("core.fsmonitor=false");
         for (String r : resto) {
             m.fixo(r);
         }
@@ -402,6 +440,14 @@ public final class ComandosDeGit {
             return this;
         }
 
+        /**
+         * A pasta do projeto: um argumento fixo quando só tem caracteres seguros (a linha fica como sempre foi); com espaço, acento ou aspa (a pasta de um projeto ou de um repositório de dentro com
+         * nome estranho) vai como texto livre, entre aspas simples por SSH. {@code ValidadorDeGit.exigirPasta} já recusou controle e {@code ..}.
+         */
+        Montagem pasta(String p) {
+            return br.com.labdesktop.projetos.ExecutorDeArgumentos.SEGURO.matcher(p).matches() ? fixo(p) : livre(p);
+        }
+
         Montagem comEntrada(byte[] e) {
             this.entrada = e;
             return this;
@@ -409,6 +455,10 @@ public final class ComandosDeGit {
 
         ComandoGit pronto() {
             return new ComandoGit(natureza, argumentos, livres, AMBIENTE, entrada);
+        }
+
+        ComandoGit pronto(Map<String, String> ambiente) {
+            return new ComandoGit(natureza, argumentos, livres, ambiente, entrada);
         }
     }
 }

@@ -15,8 +15,12 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
     private static final Duration PRAZO = Duration.ofSeconds(30);
     private static final int TETO_DE_ARQUIVOS = 500;
 
+    /** Quantos repositórios de subpasta têm o branch e o último commit lidos para a lista (o resto aparece só com o nome). */
+    private static final int LEITURAS_LEVES = 6;
+
     private final ExecutorDeGit executor;
     private final String pasta;
+    private final RepositoriosAbaixo.Buscador buscador;
     /** O executor com os atributos neutros (Git 2.40 ou mais novo), quando já se sabe; {@code null} num git mais antigo. */
     private volatile ExecutorDeGit neutro;
     private volatile boolean versaoLida;
@@ -26,13 +30,27 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
      * @param pastaDoProjeto a pasta do projeto como o SISTEMA a entende (já convertida no computador local)
      */
     public LeitorDeGitPorExecutor(ExecutorDeArgumentos executor, String pastaDoProjeto) {
+        this(executor, pastaDoProjeto, false);
+    }
+
+    /**
+     * @param local {@code true} em "Este computador": a procura de repositórios em subpastas é feita pelo disco ({@code java.nio}, sem {@code find} externo e sem seguir link); senão é o
+     *              {@code find} fixo pelo executor (SSH)
+     */
+    public LeitorDeGitPorExecutor(ExecutorDeArgumentos executor, String pastaDoProjeto, boolean local) {
         this.executor = ExecutorDeGit.soDeLeitura(executor);
         this.pasta = ValidadorDeGit.exigirPasta(pastaDoProjeto);
+        this.buscador = local ? RepositoriosAbaixo.local() : RepositoriosAbaixo.porFind(this.executor);
     }
 
     /** Como {@link #LeitorDeGitPorExecutor(ExecutorDeArgumentos, String)}, convertendo a pasta do app para a do sistema. */
     public static LeitorDeGitPorExecutor de(ExecutorDeArgumentos executor, UnaryOperator<String> paraOSistema, String pastaNoApp) {
         return new LeitorDeGitPorExecutor(executor, paraOSistema.apply(pastaNoApp));
+    }
+
+    /** Como {@link #de(ExecutorDeArgumentos, UnaryOperator, String)}, dizendo se é "Este computador" (a procura em subpastas é pelo disco). */
+    public static LeitorDeGitPorExecutor de(ExecutorDeArgumentos executor, UnaryOperator<String> paraOSistema, String pastaNoApp, boolean local) {
+        return new LeitorDeGitPorExecutor(executor, paraOSistema.apply(pastaNoApp), local);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -113,7 +131,7 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
             if (!repo.ok()) {
                 FalhaDoGit f = ClassificadorDeErrosDoGit.classificar(repo.status(), repo.stderr(), pasta);
                 return new ResultadoDoGit.Ok<>(switch (f.tipo()) {
-                    case NAO_E_REPOSITORIO -> ResumoDoRepositorio.semGit();
+                    case NAO_E_REPOSITORIO -> procurarEmSubpastas();
                     case GIT_NAO_INSTALADO -> ResumoDoRepositorio.de(ResumoDoRepositorio.Estado.GIT_NAO_INSTALADO, f);
                     case PROPRIEDADE_DUVIDOSA -> ResumoDoRepositorio.de(ResumoDoRepositorio.Estado.PROPRIEDADE_DUVIDOSA, f);
                     default -> ResumoDoRepositorio.de(ResumoDoRepositorio.Estado.ERRO, f);
@@ -141,6 +159,55 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
         } catch (ErroDoGit e) {
             return new ResultadoDoGit.Ok<>(ResumoDoRepositorio.de(
                 e.falha().tipo() == FalhaDoGit.Tipo.GIT_NAO_INSTALADO ? ResumoDoRepositorio.Estado.GIT_NAO_INSTALADO : ResumoDoRepositorio.Estado.ERRO, e.falha()));
+        }
+    }
+
+    /**
+     * A pasta principal não é repositório: antes de dizer "sem Git" procura repositórios em SUBPASTAS (o código de muitos projetos mora em {@code <projeto>/app/.git}). Se a procura falha (prazo,
+     * conexão), NÃO diz "sem Git": diz que não conseguiu procurar, porque oferecer criar um repositório por cima de um que existe é justamente o erro que isto evita.
+     */
+    private ResumoDoRepositorio procurarEmSubpastas() throws InterruptedException {
+        RepositoriosAbaixo.Achados achados;
+        try {
+            achados = buscador.buscar(pasta);
+        } catch (ErroDoGit e) {
+            FalhaDoGit f = e.falha();
+            return ResumoDoRepositorio.de(ResumoDoRepositorio.Estado.ERRO, new FalhaDoGit(f.tipo(), "Esta pasta não tem Git, mas não consegui procurar repositórios nas subpastas: " + f.frase(), f.comandoParaCopiar()));
+        }
+        if (achados.vazio()) {
+            return ResumoDoRepositorio.semGit();
+        }
+        List<RepositorioAbaixo> lista = new java.util.ArrayList<>();
+        int n = 0;
+        for (String caminho : achados.caminhos()) {
+            lista.add(n++ < LEITURAS_LEVES && achados.caminhos().size() > 1 ? leituraLeve(caminho) : RepositorioAbaixo.semLeitura(caminho));
+        }
+        return ResumoDoRepositorio.repositoriosAbaixo(lista, achados.cortado());
+    }
+
+    /** O branch e o último commit de um repositório de subpasta, para a lista de escolha. Qualquer falha (dono diferente, repositório vazio, prazo) só deixa o item sem esses dados. */
+    private RepositorioAbaixo leituraLeve(String caminho) throws InterruptedException {
+        String sub = ValidadorDeGit.juntar(pasta, caminho);
+        if (!ValidadorDeGit.pastaValida(sub)) {
+            return RepositorioAbaixo.semLeitura(caminho);
+        }
+        try {
+            String branch = null;
+            Saida r = executor.rodar(ComandosDeGit.ramoAtual(sub), PRAZO);
+            if (r.ok()) {
+                String b = br.com.labdesktop.seguranca.TextoSeguro.limparLinha(r.texto());
+                branch = b.isEmpty() ? null : br.com.labdesktop.seguranca.TextoSeguro.truncar(b, 80);
+            }
+            Commit ultimo = null;
+            String nonce = InterpretadorDoLog.novoNonce();
+            Saida lg = executor.rodar(ComandosDeGit.ultimoCommit(sub, nonce), PRAZO);
+            if (lg.ok()) {
+                List<Commit> l = InterpretadorDoLog.interpretar(lg.texto(), nonce);
+                ultimo = l.isEmpty() ? null : l.get(0);
+            }
+            return new RepositorioAbaixo(caminho, branch, ultimo, true);
+        } catch (ErroDoGit e) {
+            return RepositorioAbaixo.semLeitura(caminho);
         }
     }
 

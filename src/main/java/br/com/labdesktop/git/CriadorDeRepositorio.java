@@ -52,6 +52,7 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
     private final String pasta;
     private final ExecutorDeGit paraConferir;
     private final ExecutorDeGit completo;
+    private final RepositoriosAbaixo.Buscador buscador;
 
     /**
      * @param ambiente   onde o projeto mora (o servidor por SSH ou este computador)
@@ -63,6 +64,19 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
         this.pasta = ValidadorDeGit.exigirPasta(ambiente.paraOSistema().apply(pastaNoApp));
         this.paraConferir = ExecutorDeGit.paraConferir(ambiente.executor());
         this.completo = ExecutorDeGit.completo(ambiente.executor());
+        this.buscador = ambiente.local() ? RepositoriosAbaixo.local() : RepositoriosAbaixo.porFind(this.paraConferir);
+    }
+
+    /** Como a conferência e o motor falam de repositórios em subpastas: {@code app/} (e outros). */
+    public static String frasesDosRepositoriosAbaixo(List<String> caminhos) {
+        String primeiro = caminhos.get(0) + "/";
+        return caminhos.size() == 1 ? primeiro : primeiro + " (e " + (caminhos.size() - 1) + (caminhos.size() == 2 ? " outro)" : " outros)");
+    }
+
+    /** A recusa de criar na pasta principal com repositório abaixo, sem a confirmação explícita. Nada foi feito. */
+    static String recusaPorRepositorioAbaixo(List<String> caminhos) {
+        return "Já existe repositório Git dentro deste projeto, em " + frasesDosRepositoriosAbaixo(caminhos) + ". Criar um repositório na pasta principal esconderia o histórico dele: o Git trataria "
+            + "essa pasta como um repositório dentro de outro. O app só cria assim com a sua confirmação explícita. Nada foi feito.";
     }
 
     // =====================================================================================================
@@ -92,6 +106,13 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
             if (naoRepo.tipo() != FalhaDoGit.Tipo.NAO_E_REPOSITORIO) {
                 return ConferenciaDoRepositorio.parou(Situacao.NAO_CONFERI, naoRepo, versao);
             }
+            RepositoriosAbaixo.Achados abaixo;
+            try {
+                abaixo = buscador.buscar(pasta);
+            } catch (ErroDoGit e) {
+                return ConferenciaDoRepositorio.parou(Situacao.NAO_CONFERI, new FalhaDoGit(e.falha().tipo(),
+                    "Não consegui procurar repositórios nas subpastas, e criar sem saber se já há um esconderia o histórico dele. " + e.falha().frase()), versao);
+            }
             String nome = lerConfiguracao("user.name");
             String email = lerConfiguracao("user.email");
             String gitignore = lerGitignore();
@@ -105,7 +126,7 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
                 List<ArquivoGrande> grandes = medirOsGrandes(arquivos);
                 List<String> segredos = arquivos.stream().filter(SegredosDoProjeto::pareceSegredo).toList();
                 conferencia = new ConferenciaDoRepositorio(Situacao.PODE_CRIAR, null, versao, nome, email, arquivos, grandes, List.copyOf(lista.aninhados), gitignore, segredos,
-                    protecao, lista.incompleta, lista.ignoradosPorNome);
+                    protecao, lista.incompleta, lista.ignoradosPorNome, abaixo.caminhos());
             }
             return conferencia;
         } catch (ErroDoGit e) {
@@ -266,6 +287,12 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
             FalhaDoGit antes = ClassificadorDeErrosDoGit.classificar(jaTem.status(), jaTem.stderr(), pasta);
             if (antes.tipo() != FalhaDoGit.Tipo.NAO_E_REPOSITORIO) {
                 return new ResultadoDaCriacao(false, false, antes.frase() + " Nada foi feito.", List.of(), PASSOS, null, 0, "", antes);
+            }
+
+            // 0b. Repositório em subpasta: criar na pasta principal o esconderia. Conferido DE NOVO aqui (a conferência pode ter ficado velha) e só passa com a confirmação explícita.
+            RepositoriosAbaixo.Achados abaixoAgora = buscador.buscar(pasta);
+            if (!abaixoAgora.vazio() && !pedido.confirmouRepositoriosAbaixo()) {
+                return recusa(recusaPorRepositorioAbaixo(abaixoAgora.caminhos()));
             }
 
             try {

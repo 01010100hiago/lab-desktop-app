@@ -408,7 +408,7 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      */
     public br.com.labdesktop.git.LeitorDeGit leitorDeGit(String pastaDoProjetoNoApp) {
         AmbienteDeProjetos a = ambienteDeProjetos(pastaDoPai(pastaDoProjetoNoApp));
-        return br.com.labdesktop.git.LeitorDeGitPorExecutor.de(a.executor(), a.paraOSistema(), pastaDoProjetoNoApp);
+        return br.com.labdesktop.git.LeitorDeGitPorExecutor.de(a.executor(), a.paraOSistema(), pastaDoProjetoNoApp, a.local());
     }
 
     /**

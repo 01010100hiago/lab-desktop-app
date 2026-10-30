@@ -58,7 +58,79 @@ class ComandosDeGitTest {
         l.add(ComandosDeGit.adicionarDaLista(PASTA, new byte[0]));
         l.add(ComandosDeGit.limparPreparo(PASTA));
         l.add(ComandosDeGit.commitar(PASTA, "Primeiro commit"));
+        l.add(ComandosDeGit.ramoAtual(PASTA));
         return l;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // A procura de repositórios em subpastas (um find FIXO, só de leitura)
+    // ---------------------------------------------------------------------------------------------
+
+    private static final List<String> FIND_FIXO = List.of("-mindepth", "1", "-maxdepth", "3", "-name", "node_modules", "-prune", "-o", "-name", "vendor", "-prune", "-o", "-name", ".cache", "-prune",
+        "-o", "-name", ".venv", "-prune", "-o", "-name", "dist", "-prune", "-o", "-name", "build", "-prune", "-o", "-name", ".git", "-not", "-type", "l", "-prune", "-print0");
+
+    @Test
+    void oFindQueProcuraRepositoriosEFixoSoLeEIgualParaQualquerPasta() {
+        ComandoGit c = ComandosDeGit.repositoriosAbaixo(PASTA);
+        List<String> esperado = new ArrayList<>(List.of("find", "-H", PASTA));
+        esperado.addAll(FIND_FIXO);
+        assertEquals(esperado, c.argumentos(), "a lista inteira, por igualdade exata: nada além da pasta varia");
+        assertEquals(Natureza.LEITURA, c.natureza());
+        assertEquals(Natureza.LEITURA, ComandosDeGit.naturezaPelaForma(c.argumentos()));
+        assertEquals(Map.of("LC_ALL", "C"), c.ambiente());
+        assertTrue(c.livres().isEmpty(), "a pasta é segura: nenhum texto livre");
+        // a linha que vai ao servidor passa pela regra de linha remota SEM aspas
+        assertEquals("env LC_ALL=C find -H " + PASTA + " " + String.join(" ", FIND_FIXO), br.com.labdesktop.projetos.ExecutorDeArgumentos.linhaRemota(c.argumentos(), c.livres(), c.ambiente()));
+        assertEquals(RepositoriosAbaixo.IGNORADAS, List.of("node_modules", "vendor", ".cache", ".venv", "dist", "build"));
+        assertEquals(3, RepositoriosAbaixo.PROFUNDIDADE);
+        assertEquals(20, RepositoriosAbaixo.LIMITE);
+    }
+
+    @Test
+    void umaPastaComEspacoAcentoOuAspaVaiComoTextoLivreEntreAspasNoFind() {
+        String estranha = "/srv/lab/projects/loja d'ávila";
+        ComandoGit c = ComandosDeGit.repositoriosAbaixo(estranha);
+        assertEquals(Set.of(2), c.livres());
+        assertEquals("env LC_ALL=C find -H '/srv/lab/projects/loja d'\\''ávila' " + String.join(" ", FIND_FIXO),
+            br.com.labdesktop.projetos.ExecutorDeArgumentos.linhaRemota(c.argumentos(), c.livres(), c.ambiente()));
+        // o mesmo vale para as leituras de git numa pasta assim (o repositório de uma subpasta de nome estranho)
+        ComandoGit st = ComandosDeGit.status(estranha);
+        assertTrue(st.livres().contains(st.argumentos().indexOf("-C") + 1));
+        assertEquals(estranha, st.argumentos().get(st.argumentos().indexOf("-C") + 1));
+        assertEquals(Natureza.LEITURA, ComandosDeGit.naturezaPelaForma(st.argumentos()));
+    }
+
+    @Test
+    void pastaHostilNaoMontaOFind() {
+        for (String ruim : List.of("relativa/pasta", "/srv/../etc", "-exec", "/srv/lab\nx", "", "/pasta\u0000x")) {
+            assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.repositoriosAbaixo(ruim), ruim);
+        }
+    }
+
+    @Test
+    void soOFindFixoPassaComoLeituraQualquerOutroFindEEscrita() {
+        List<String> ok = new ArrayList<>(List.of("find", "-H", PASTA));
+        ok.addAll(FIND_FIXO);
+        assertEquals(Natureza.LEITURA, ComandosDeGit.naturezaPelaForma(ok));
+        for (List<String> extra : List.of(List.of("-delete"), List.of("-exec", "rm", "-rf", "{}", ";"), List.of("-fprint", "/etc/x"), List.of("-ok", "rm", "{}", ";"))) {
+            List<String> ruim = new ArrayList<>(ok);
+            ruim.addAll(extra);
+            assertEquals(Natureza.ESCRITA, ComandosDeGit.naturezaPelaForma(ruim), "find com " + extra);
+        }
+        List<String> semH = new ArrayList<>(List.of("find", PASTA));
+        semH.addAll(FIND_FIXO);
+        assertEquals(Natureza.ESCRITA, ComandosDeGit.naturezaPelaForma(semH));
+        List<String> outroTeto = new ArrayList<>(ok);
+        outroTeto.set(outroTeto.indexOf("3"), "9");
+        assertEquals(Natureza.ESCRITA, ComandosDeGit.naturezaPelaForma(outroTeto), "o fixo é exato: outro nível não é o comando do app");
+        assertEquals(Natureza.ESCRITA, ComandosDeGit.naturezaPelaForma(List.of("find", "-H", "/srv/../etc", "-delete")));
+    }
+
+    @Test
+    void oSymbolicRefSoELeituraNaFormaExata() {
+        assertEquals(Natureza.LEITURA, ComandosDeGit.naturezaPelaForma(ComandosDeGit.ramoAtual(PASTA).argumentos()));
+        assertEquals(Natureza.ESCRITA, ComandosDeGit.naturezaPelaForma(List.of("git", "-C", PASTA, "symbolic-ref", "HEAD", "refs/heads/x")), "com um destino, mudaria o HEAD");
+        assertEquals(Natureza.ESCRITA, ComandosDeGit.naturezaPelaForma(List.of("git", "-C", PASTA, "symbolic-ref", "--short", "-q", "HEAD", "refs/heads/x")));
     }
 
     @Test

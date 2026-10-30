@@ -1,7 +1,9 @@
 package br.com.labdesktop.git;
 
+import java.util.List;
+
 /**
- * O que a linha "Código" da Visão geral precisa saber de um projeto.
+ * O que a linha "Código" da Visão geral e a aba Git precisam saber de um projeto.
  *
  * @param estado      em que situação a pasta está
  * @param branch      o branch atual ({@code null} se não vale)
@@ -10,15 +12,22 @@ package br.com.labdesktop.git;
  * @param alteracoes  quantas alterações ainda não commitadas ({@code 0} se não vale)
  * @param falha       a explicação, para os estados que não são "tem Git"/"sem Git"; senão {@code null}
  * @param pastaPai    quando a pasta está DENTRO de outro repositório: o começo do caminho dentro dele (como o git informa); senão {@code null}
+ * @param subpasta    quando o Git lido é o de uma SUBPASTA do projeto ({@code app}): o caminho dela; {@code null} quando é o da pasta principal
+ * @param abaixo      os repositórios que a pasta principal (que não tem {@code .git}) tem em subpastas; vazio nos outros casos. Com {@link Estado#COM_GIT} e {@code subpasta} preenchida, é a lista
+ *                    de onde o usuário pode trocar de repositório
+ * @param abaixoCortado havia mais repositórios que o limite da lista ({@link RepositoriosAbaixo#LIMITE})
  */
-public record ResumoDoRepositorio(Estado estado, String branch, boolean cabecaSolta, Commit ultimo, int alteracoes, FalhaDoGit falha, String pastaPai) {
+public record ResumoDoRepositorio(Estado estado, String branch, boolean cabecaSolta, Commit ultimo, int alteracoes, FalhaDoGit falha, String pastaPai, String subpasta,
+                                  List<RepositorioAbaixo> abaixo, boolean abaixoCortado) {
 
     /** Os estados da linha "Código". */
     public enum Estado {
-        /** A pasta é a raiz de um repositório. */
+        /** A pasta é a raiz de um repositório (ou, com {@code subpasta}, a raiz do repositório de uma subpasta). */
         COM_GIT,
-        /** A pasta não é repositório (nem está dentro de um). */
+        /** A pasta não é repositório (nem está dentro de um) e não há repositório em subpastas. */
         SEM_GIT,
+        /** A pasta principal não tem Git, mas há repositório em subpasta(s) e nenhum foi escolhido ainda. */
+        REPOSITORIOS_ABAIXO,
         /** A pasta está DENTRO de um repositório que é de uma pasta de cima. */
         DENTRO_DE_OUTRO,
         /** Não há git nesta máquina. */
@@ -29,6 +38,15 @@ public record ResumoDoRepositorio(Estado estado, String branch, boolean cabecaSo
         ERRO
     }
 
+    public ResumoDoRepositorio {
+        abaixo = abaixo == null ? List.of() : List.copyOf(abaixo);
+    }
+
+    /** Sem repositório em subpasta: o que toda leitura da pasta principal sem subpasta devolve. */
+    public ResumoDoRepositorio(Estado estado, String branch, boolean cabecaSolta, Commit ultimo, int alteracoes, FalhaDoGit falha, String pastaPai) {
+        this(estado, branch, cabecaSolta, ultimo, alteracoes, falha, pastaPai, null, List.of(), false);
+    }
+
     public static ResumoDoRepositorio semGit() {
         return new ResumoDoRepositorio(Estado.SEM_GIT, null, false, null, 0, null, null);
     }
@@ -37,11 +55,26 @@ public record ResumoDoRepositorio(Estado estado, String branch, boolean cabecaSo
         return new ResumoDoRepositorio(estado, null, false, null, 0, falha, null);
     }
 
+    /** A pasta principal não tem Git e há repositório(s) em subpasta(s): a lista (com o que já se leu de cada um). */
+    public static ResumoDoRepositorio repositoriosAbaixo(List<RepositorioAbaixo> abaixo, boolean cortado) {
+        return new ResumoDoRepositorio(Estado.REPOSITORIOS_ABAIXO, null, false, null, 0, null, null, null, abaixo, cortado);
+    }
+
+    /** Este mesmo resumo, agora dizendo que foi lido na subpasta {@code sub} e qual é a lista de onde ela veio. */
+    public ResumoDoRepositorio naSubpasta(String sub, List<RepositorioAbaixo> todos, boolean cortado) {
+        return new ResumoDoRepositorio(estado, branch, cabecaSolta, ultimo, alteracoes, falha, pastaPai, sub, todos, cortado);
+    }
+
     public boolean temGit() {
         return estado == Estado.COM_GIT;
     }
 
     public boolean semCommits() {
         return estado == Estado.COM_GIT && ultimo == null;
+    }
+
+    /** O Git lido é o de uma subpasta do projeto. */
+    public boolean emSubpasta() {
+        return subpasta != null;
     }
 }

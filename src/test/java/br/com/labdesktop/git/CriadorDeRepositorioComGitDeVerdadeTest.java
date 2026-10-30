@@ -78,8 +78,9 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
         return p;
     }
 
+    /** O projeto de teste tem um clone de dentro: a criação só vale com a confirmação explícita (a recusa sem ela tem testes próprios). */
     private static PedidoDeCriacao pedido(ConferenciaDoRepositorio c, boolean grandes) {
-        return new PedidoDeCriacao(c, "Ana Silva", "ana@example.com", grandes);
+        return new PedidoDeCriacao(c, "Ana Silva", "ana@example.com", grandes, true);
     }
 
     private List<String> rastreados(Path p) {

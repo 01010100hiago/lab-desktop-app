@@ -22,10 +22,12 @@ import java.util.TreeMap;
  * @param protecaoConfirmada o {@code git check-ignore} confirmou que as linhas de segredo funcionam
  * @param listaIncompleta alguma pasta tem arquivos demais para o app listar: a criação fica desligada
  * @param ignoradosPorNome arquivos cujo nome o app não consegue pôr numa linha de {@code .gitignore} (controle no nome): ficam de fora do commit
+ * @param repositoriosAbaixo os repositórios Git que a PROCURA em subpastas achou ({@link RepositoriosAbaixo}: até 3 níveis, sem {@code node_modules}...): criar na pasta principal os embutiria como
+ *                        repositório dentro de repositório e esconderia o histórico deles, então a criação só segue com a confirmação explícita ({@link PedidoDeCriacao#confirmouRepositoriosAbaixo})
  */
 public record ConferenciaDoRepositorio(Situacao situacao, FalhaDoGit falha, String versaoDoGit, String nomeAtual, String emailAtual, List<String> arquivos, List<ArquivoGrande> grandes,
                                        List<String> aninhados, String gitignoreAtual, List<String> segredosQueEntrariam, boolean protecaoConfirmada,
-                                       boolean listaIncompleta, int ignoradosPorNome) {
+                                       boolean listaIncompleta, int ignoradosPorNome, List<String> repositoriosAbaixo) {
 
     /** Se dá para criar. */
     public enum Situacao {
@@ -46,14 +48,26 @@ public record ConferenciaDoRepositorio(Situacao situacao, FalhaDoGit falha, Stri
         grandes = List.copyOf(grandes);
         aninhados = List.copyOf(aninhados);
         segredosQueEntrariam = List.copyOf(segredosQueEntrariam);
+        repositoriosAbaixo = repositoriosAbaixo == null ? List.of() : List.copyOf(repositoriosAbaixo);
         versaoDoGit = versaoDoGit == null ? "" : versaoDoGit;
         nomeAtual = nomeAtual == null ? "" : nomeAtual;
         emailAtual = emailAtual == null ? "" : emailAtual;
     }
 
+    /** Sem a procura em subpastas (nenhum repositório abaixo): o que toda conferência sem procura em subpastas usa. */
+    public ConferenciaDoRepositorio(Situacao situacao, FalhaDoGit falha, String versaoDoGit, String nomeAtual, String emailAtual, List<String> arquivos, List<ArquivoGrande> grandes,
+                                    List<String> aninhados, String gitignoreAtual, List<String> segredosQueEntrariam, boolean protecaoConfirmada, boolean listaIncompleta, int ignoradosPorNome) {
+        this(situacao, falha, versaoDoGit, nomeAtual, emailAtual, arquivos, grandes, aninhados, gitignoreAtual, segredosQueEntrariam, protecaoConfirmada, listaIncompleta, ignoradosPorNome, List.of());
+    }
+
     /** Uma conferência que parou antes de listar: só a situação e a explicação. */
     public static ConferenciaDoRepositorio parou(Situacao situacao, FalhaDoGit falha, String versao) {
-        return new ConferenciaDoRepositorio(situacao, falha, versao, "", "", List.of(), List.of(), List.of(), null, List.of(), false, false, 0);
+        return new ConferenciaDoRepositorio(situacao, falha, versao, "", "", List.of(), List.of(), List.of(), null, List.of(), false, false, 0, List.of());
+    }
+
+    /** Há repositório Git em subpasta: criar um na pasta principal exige a confirmação explícita do usuário. */
+    public boolean temRepositoriosAbaixo() {
+        return !repositoriosAbaixo.isEmpty();
     }
 
     public boolean temIdentidade() {

@@ -137,7 +137,7 @@ public final class ShellDeTeste implements ProvisionadorRemoto.Executor {
 
     /** As linhas do Git do projeto sempre rodam no shell de verdade, mesmo com {@link #outrosComandos} ligado para o resto. */
     private static boolean ehDoGit(String linha) {
-        return linha.startsWith("env GIT_") || linha.startsWith("env ") && linha.contains(" git ") || linha.startsWith("git ") || linha.startsWith("mkdir -m 700 -- /tmp/lab-desktop-git-") || linha.startsWith("tee /tmp/lab-desktop-git-") || linha.startsWith("rm -rf -- /tmp/lab-desktop-git-");
+        return linha.startsWith("env GIT_") || linha.startsWith("env ") && linha.contains(" git ") || linha.startsWith("git ") || linha.startsWith("env LC_ALL=C find -H ") || linha.startsWith("mkdir -m 700 -- /tmp/lab-desktop-git-") || linha.startsWith("tee /tmp/lab-desktop-git-") || linha.startsWith("rm -rf -- /tmp/lab-desktop-git-");
     }
 
     private static byte[] lerTudo(InputStream in) throws IOException {

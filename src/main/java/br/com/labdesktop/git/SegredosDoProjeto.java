@@ -96,14 +96,17 @@ public final class SegredosDoProjeto {
 
     /** Caminhos (que podem nem existir) que o {@code .gitignore} TEM de ignorar: o app os passa ao {@code git check-ignore} depois de ajustar o arquivo. */
     public static List<String> amostrasIgnoradas() {
-        return List.of(".env", ".env.local", ".env.production", "app/.env", ".ENV", ".Env.Local", ".env ", "chave.pem", "CHAVE.PEM", "certs/servidor.key", "id_rsa", "ID_RSA", "id_rsa.pub", ".ssh/id_ed25519",
+        return List.of(".env", ".env.local", ".env.production", "pasta-de-amostra/.env", ".ENV", ".Env.Local", ".env ", "chave.pem", "CHAVE.PEM", "certs/servidor.key", "id_rsa", "ID_RSA", "id_rsa.pub", ".ssh/id_ed25519",
             "credentials.json", "Credentials.json", "aws/credentials", ".aws/config", "x/.aws/credentials", ".ssh/config", ".npmrc", "web/.npmrc", "loja.p12", "assinatura.keystore", "release.jks", ".pypirc", ".netrc",
             ".git-credentials", "secrets.json", "Secrets.YAML", "terraform.tfstate", "prod.TFSTATE", "terraform.tfstate.backup", "banco.kdbx", ".htpasswd", "service-account-prod.json", "Service-Account.json");
     }
 
-    /** Caminhos que NÃO podem ser ignorados pela regra de segredos (o modelo sem valores vai ao repositório). */
+    /**
+     * Caminhos que NÃO podem ser ignorados pela regra de segredos (o modelo sem valores vai ao repositório). A subpasta de amostra tem um nome que nenhum projeto usa: se fosse {@code app}, um
+     * repositório de subpasta chamado {@code app} (que o app põe no {@code .gitignore} quando o usuário confirma criar na pasta principal) faria a amostra parecer ignorada.
+     */
     public static List<String> amostrasLiberadas() {
-        return List.of(".env.example", "app/.env.example", ".ENV.EXAMPLE");
+        return List.of(".env.example", "pasta-de-amostra/.env.example", ".ENV.EXAMPLE");
     }
 
     /** Os padrões para o {@code git ls-files} achar, no que já está no índice, o que tem cara de segredo (sintaxe {@code :(glob,icase)} do próprio git: sem distinguir maiúscula). */

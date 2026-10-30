@@ -100,7 +100,7 @@ class GitDoProjetoSemEfeitoSozinhoTest {
 
     @Test
     void leituraNuncaImportaOQueEscreve() throws IOException {
-        for (String nome : List.of("git/LeitorDeGit.java", "git/LeitorDeGitPorExecutor.java", "ui/telas/PaginaGit.java", "ui/telas/LinhaDoCodigo.java", "ui/telas/VistaDeDiff.java", "ui/telas/TabelaDeDados.java")) {
+        for (String nome : List.of("git/LeitorDeGit.java", "git/LeitorDeGitPorExecutor.java", "git/LeitorDeGitDoProjeto.java", "git/RepositoriosAbaixo.java", "ui/telas/PaginaGit.java", "ui/telas/LinhaDoCodigo.java", "ui/telas/VistaDeDiff.java", "ui/telas/TabelaDeDados.java")) {
             String codigo = arquivo(nome);
             for (String proibido : List.of("OperacoesDeGit", "CriadorDeRepositorio", "PedidoDeCriacao", "ExecutorDeGit.completo", "ExecutorDeGit.paraConferir", "AreaTemporaria", "gravarAtomico", "ComandosDeGit.iniciar")) {
                 assertFalse(codigo.contains(proibido), nome + " não pode usar " + proibido);
@@ -108,7 +108,7 @@ class GitDoProjetoSemEfeitoSozinhoTest {
         }
         // as telas de leitura nem conhecem os comandos de escrita
         assertEquals(List.of(), quemUsa(Pattern.compile("ComandosDeGit"), Set.of("git/ComandosDeGit.java", "git/LeitorDeGitPorExecutor.java", "git/CriadorDeRepositorio.java", "git/AreaTemporaria.java",
-            "git/ExecutorDeGit.java", "git/ErroDoGit.java")), "ninguém fora do pacote git escreve uma linha de git");
+            "git/ExecutorDeGit.java", "git/ErroDoGit.java", "git/RepositoriosAbaixo.java")), "ninguém fora do pacote git escreve uma linha de git");
     }
 
     @Test
