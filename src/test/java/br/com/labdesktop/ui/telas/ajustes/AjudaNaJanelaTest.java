@@ -20,6 +20,7 @@ import br.com.labdesktop.ui.ComportamentoDaJanela;
 import br.com.labdesktop.ui.DialogosGravados;
 import br.com.labdesktop.ui.GerenciadorTema;
 import br.com.labdesktop.ui.MenuApp;
+import br.com.labdesktop.ui.MolduraDeJanela;
 import br.com.labdesktop.ui.NavegadorGravado;
 import br.com.labdesktop.ui.PainelPrincipal;
 import br.com.labdesktop.ui.PreferenciasAtuais;
@@ -61,6 +62,7 @@ class AjudaNaJanelaTest {
     Path pasta;
 
     private CenarioDeUi cenario;
+    private br.com.labdesktop.ui.galeria.ServidorDemo demo;
     private final AvisosGravados avisos = new AvisosGravados();
     private PainelPrincipal painel;
     private GerenciadorTema tema;
@@ -71,11 +73,12 @@ class AjudaNaJanelaTest {
 
     @BeforeEach
     void montar() throws Exception {
-        cenario = new CenarioDeUi();
+        cenario = new CenarioDeUi(br.com.labdesktop.api.PedidoDeCodigo2fa.NUNCA, false);
+        demo = br.com.labdesktop.ui.galeria.ServidorDemo.preparar(cenario); // servidor-demo com consumo calmo (as imagens da galeria saem daqui)
         preferencias = new PreferenciasAtuais(CaminhosApp.comPasta(pasta), Preferencias.padrao());
         tema = new GerenciadorTema(Tema.CLARO, false, false);
         Visual.naEdt(tema::instalar);
-        painel = Visual.naEdt(() -> new PainelPrincipal(cenario.gerenciador, null, avisos, new DialogosGravados(), new NavegadorGravado(avisos),
+        painel = Visual.naEdt(() -> new PainelPrincipal(demo.gerenciador(), null, avisos, new DialogosGravados(), new NavegadorGravado(avisos),
             br.com.labdesktop.arquivos.ServicosDeArquivos.descartaveis(), preferencias::get));
         Visual.naEdt(() -> painel.instalarAjustes(() -> {
             ajustes = new TelaAjustes(new AjustesDoApp(tema, preferencias, painel, new CopiadorDeTexto(() -> area), avisos, () -> menu.atalhosDoMenu()));
@@ -87,6 +90,8 @@ class AjudaNaJanelaTest {
     @AfterEach
     void desmontar() throws Exception {
         Visual.naEdt(painel::encerrar);
+        preferencias.descarregar(); // termina a gravação em segundo plano antes de a pasta temporária ser apagada
+        demo.fechar();
         cenario.close();
     }
 
@@ -230,7 +235,7 @@ class AjudaNaJanelaTest {
         assertTrue(texto.contains("Servidor > Resumo > Registro do servidor"), texto);
         assertTrue(texto.contains("Menu Arquivo") || texto.contains("Aba Projetos"), texto);
         // o botão Abrir da linha do Registro do servidor abre a aba Resumo
-        Visual.naEdt(() -> painel.navegacao().mostrarServidor(cenario.lab, TelaServidor.Aba.TERMINAL));
+        Visual.naEdt(() -> painel.navegacao().mostrarServidor(demo.lab(), TelaServidor.Aba.TERMINAL));
         Visual.naEdt(() -> painel.mostrarAjustes(Secao.AJUDA));
         AbstractButton ir = botoes(a).stream().filter(b -> "Abrir".equals(b.getText())).findFirst().orElseThrow();
         Visual.naEdt(() -> ir.doClick());
@@ -240,7 +245,7 @@ class AjudaNaJanelaTest {
     @Test
     void todoLinkDaAjudaAbreATelaQueCita() {
         for (Destino d : Destino.values()) {
-            Visual.naEdt(() -> painel.navegacao().mostrarServidor(cenario.lab));
+            Visual.naEdt(() -> painel.navegacao().mostrarServidor(demo.lab()));
             boolean ok = Visual.naEdt(() -> new AjustesDoApp(tema, preferencias, painel, new CopiadorDeTexto(() -> area), avisos, () -> menu.atalhosDoMenu()).irPara(d));
             assertTrue(ok, d + " não abriu");
             switch (d) {
@@ -490,6 +495,9 @@ class AjudaNaJanelaTest {
                         }
                     }
                     Visual.salvar(Visual.renderizar(painel, tela[0], tela[1]), "ajuda-" + id + "-" + tela[0] + "x" + tela[1] + "-" + t.name().toLowerCase());
+                    if (id.equals("conectar") && tela[0] == 1100) { // galeria do README
+                        Visual.salvarNaGaleria(Visual.renderizar(painel, tela[0], tela[1]), "ajuda-" + t.name().toLowerCase(), "Lab Desktop", t == Tema.ESCURO, MolduraDeJanela.Tipo.JANELA);
+                    }
                 }
             }
         }

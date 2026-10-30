@@ -16,6 +16,7 @@ import br.com.labdesktop.ui.CenarioDeUi;
 import br.com.labdesktop.ui.DialogosGravados;
 import br.com.labdesktop.ui.GerenciadorTema;
 import br.com.labdesktop.ui.MenuApp;
+import br.com.labdesktop.ui.MolduraDeJanela;
 import br.com.labdesktop.ui.NavegadorGravado;
 import br.com.labdesktop.ui.BarraServidores;
 import br.com.labdesktop.ui.PainelPrincipal;
@@ -57,6 +58,7 @@ class AjustesNaJanelaTest {
     Path pasta;
 
     private CenarioDeUi cenario;
+    private br.com.labdesktop.ui.galeria.ServidorDemo demo;
     private final AvisosGravados avisos = new AvisosGravados();
     private PainelPrincipal painel;
     private GerenciadorTema tema;
@@ -70,14 +72,15 @@ class AjustesNaJanelaTest {
 
     @BeforeEach
     void montar() throws Exception {
-        cenario = new CenarioDeUi();
+        cenario = new CenarioDeUi(br.com.labdesktop.api.PedidoDeCodigo2fa.NUNCA, false);
+        demo = br.com.labdesktop.ui.galeria.ServidorDemo.preparar(cenario); // servidor-demo com consumo calmo (as imagens da galeria saem daqui)
         cenario.agente.detalhes.put("app-loja", MocksDoFront.ler("projetos/app-loja.json"));
         caminhos = CaminhosApp.comPasta(pasta);
         preferencias = new PreferenciasAtuais(caminhos, Preferencias.padrao());
         // o sistema está CLARO neste teste; a escolha é a padrão das preferências (Sistema)
         tema = new GerenciadorTema(Preferencias.padrao().tema(), false, false).comConsultaDoSistema(sistemaFalsoEscuro::get);
         Visual.naEdt(tema::instalar);
-        painel = Visual.naEdt(() -> new PainelPrincipal(cenario.gerenciador, null, avisos, new DialogosGravados(), new NavegadorGravado(avisos), br.com.labdesktop.arquivos.ServicosDeArquivos.descartaveis(),
+        painel = Visual.naEdt(() -> new PainelPrincipal(demo.gerenciador(), null, avisos, new DialogosGravados(), new NavegadorGravado(avisos), br.com.labdesktop.arquivos.ServicosDeArquivos.descartaveis(),
             preferencias::get));
         Visual.naEdt(() -> painel.instalarAjustes(() -> {
             ajustes = new TelaAjustes(new AjustesDoApp(tema, preferencias, painel, new CopiadorDeTexto(() -> area), avisos));
@@ -90,6 +93,8 @@ class AjustesNaJanelaTest {
     void desmontar() throws Exception {
         Visual.naEdt(() -> Fontes.definirPercentual(100));
         Visual.naEdt(painel::encerrar);
+        preferencias.descarregar(); // termina a gravação em segundo plano antes de a pasta temporária ser apagada (senão a limpeza do JUnit corre contra ela)
+        demo.fechar();
         cenario.close();
     }
 
@@ -371,7 +376,7 @@ class AjustesNaJanelaTest {
         assertEquals(List.of("resumo"), barraDoServidor(), "só a aba aberta sobrou");
         // sem a aba aberta travando, a regra do "pelo menos uma": abre outra aba, esconde a que era a aberta... e a última visível não deixa
         Visual.naEdt(() -> blocoDoServidor().caixaDe("terminal").doClick()); // mostra o Terminal
-        Visual.naEdt(() -> painel.navegacao().mostrarServidor(cenario.lab, TelaServidor.Aba.TERMINAL));
+        Visual.naEdt(() -> painel.navegacao().mostrarServidor(demo.lab(), TelaServidor.Aba.TERMINAL));
         abrir(Secao.NAVEGACAO);
         assertTrue(Visual.naEdt(() -> blocoDoServidor().caixaDe("resumo").isEnabled()), "o Resumo deixou de ser a aba aberta");
         Visual.naEdt(() -> blocoDoServidor().caixaDe("resumo").doClick());
@@ -385,9 +390,9 @@ class AjustesNaJanelaTest {
         // a pagina está no Resumo; o usuário esconde o Terminal; depois alguém abre o Terminal por atalho de código
         Visual.naEdt(() -> blocoDoServidor().caixaDe("terminal").doClick());
         assertFalse(barraDoServidor().contains("terminal"));
-        Visual.naEdt(() -> painel.navegacao().mostrarServidor(cenario.lab, TelaServidor.Aba.TERMINAL));
+        Visual.naEdt(() -> painel.navegacao().mostrarServidor(demo.lab(), TelaServidor.Aba.TERMINAL));
         assertTrue(barraDoServidor().contains("terminal"), "aberta, a aba aparece mesmo escondida na preferência");
-        Visual.naEdt(() -> painel.navegacao().mostrarServidor(cenario.lab, TelaServidor.Aba.RESUMO));
+        Visual.naEdt(() -> painel.navegacao().mostrarServidor(demo.lab(), TelaServidor.Aba.RESUMO));
         assertFalse(barraDoServidor().contains("terminal"), "saiu dela, volta a sumir");
     }
 
@@ -415,7 +420,7 @@ class AjustesNaJanelaTest {
 
     @Test
     void aOrdemDasAbasDoProjetoVaiParaAPaginaDoProjetoAbertaENaGuardada() {
-        Visual.naEdt(() -> painel.navegacao().abrirProjeto(cenario.lab, "app-loja"));
+        Visual.naEdt(() -> painel.navegacao().abrirProjeto(demo.lab(), "app-loja"));
         TelaProjeto projeto = Visual.naEdt(() -> servidor().projetoAberto());
         assertEquals(List.of("visao-geral", "logs", "terminal", "arquivos", "git", "backups", "consumo", "internet", "processos"), Visual.naEdt(() -> projeto.abas().idsVisiveis()));
         assertEquals("visao-geral", Visual.naEdt(() -> painel.abaAbertaDoProjeto()));
@@ -428,7 +433,7 @@ class AjustesNaJanelaTest {
         assertFalse(barra.contains("backups"), "Backups saiu da barra: " + barra);
         // uma página aberta DEPOIS também nasce na ordem nova
         Visual.naEdt(() -> painel.navegacao().voltarDosAjustes());
-        Visual.naEdt(() -> painel.navegacao().abrirProjeto(cenario.lab, "app-loja"));
+        Visual.naEdt(() -> painel.navegacao().abrirProjeto(demo.lab(), "app-loja"));
         TelaProjeto de_novo = Visual.naEdt(() -> servidor().projetoAberto());
         assertFalse(Visual.naEdt(() -> de_novo.abas().idsVisiveis()).contains("backups"));
     }
@@ -542,6 +547,31 @@ class AjustesNaJanelaTest {
                     }
                 }
                 Visual.salvar(Visual.renderizar(painel, 1440, s == Secao.SOBRE ? 2100 : 860), "ajustes-" + s.id() + "-" + inicial.name().toLowerCase());
+                if (s == Secao.APARENCIA || s == Secao.NAVEGACAO) { // galeria do README: a janela inteira, com a moldura do macOS
+                    boolean escuroPeloSistema = s == Secao.APARENCIA && inicial == Tema.ESCURO;
+                    if (escuroPeloSistema) {
+                        // a imagem do tema escuro tem de bater com o texto "Agora o sistema está usando o modo ...": Sistema escolhido e o sistema em modo escuro
+                        sistemaFalsoEscuro.set(true);
+                        Visual.naEdt(() -> {
+                            tema.definirEscolha(Tema.SISTEMA);
+                            tema.definirSistemaEscuro(true);
+                            javax.swing.SwingUtilities.updateComponentTreeUI(painel);
+                        });
+                        abrir(Secao.APARENCIA);
+                        Visual.naEdt(() -> ajustes.aparencia().atualizar());
+                    }
+                    Visual.rolarParaOTopo(painel);
+                    Visual.salvarNaGaleria(Visual.renderizar(painel, 1440, 860), (s == Secao.APARENCIA ? "tema-" : "ordem-das-abas-") + inicial.name().toLowerCase(),
+                        "Lab Desktop", inicial == Tema.ESCURO, MolduraDeJanela.Tipo.JANELA);
+                    if (escuroPeloSistema) {
+                        sistemaFalsoEscuro.set(false);
+                        Visual.naEdt(() -> {
+                            tema.definirSistemaEscuro(false);
+                            tema.definirEscolha(inicial);
+                            javax.swing.SwingUtilities.updateComponentTreeUI(painel);
+                        });
+                    }
+                }
             }
         }
         assertTrue(ruins.isEmpty(), "controles dos Ajustes abaixo do limite de contraste:\n" + String.join("\n", ruins.stream().limit(15).toList()));
