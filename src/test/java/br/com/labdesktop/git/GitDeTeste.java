@@ -2,7 +2,6 @@ package br.com.labdesktop.git;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import br.com.labdesktop.arquivos.CaminhosLocais;
 import br.com.labdesktop.arquivos.ClienteSftp;
 import br.com.labdesktop.arquivos.ClienteSftpLocal;
 import br.com.labdesktop.arquivos.FabricaDeClienteSftp;
@@ -13,6 +12,7 @@ import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.projetos.AmbienteDeProjetos;
 import br.com.labdesktop.projetos.ExecutorDeArgumentos;
 import br.com.labdesktop.ssh.ResultadoExec;
+import br.com.labdesktop.teste.SistemaDoTeste;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -104,18 +104,18 @@ public final class GitDeTeste {
 
     public FabricaDeClienteSftp arquivos() {
         return () -> {
-            ClienteSftp c = new ClienteSftpLocal(new CaminhosLocais(false), casa.toString());
+            ClienteSftp c = new ClienteSftpLocal(SistemaDoTeste.caminhos(), SistemaDoTeste.app(casa));
             return c;
         };
     }
 
     /** O ambiente de projetos "Este computador" desta pasta, com o executor isolado. */
     public AmbienteDeProjetos ambiente() {
-        return new AmbienteDeProjetos(true, raiz.toString(), arquivos(), executor(), c -> c);
+        return new AmbienteDeProjetos(true, pastaNoApp(raiz), arquivos(), executor(), SistemaDoTeste.paraOSistema());
     }
 
     public AmbienteDeProjetos ambiente(ExecutorDeArgumentos executor) {
-        return new AmbienteDeProjetos(true, raiz.toString(), arquivos(), executor, c -> c);
+        return new AmbienteDeProjetos(true, pastaNoApp(raiz), arquivos(), executor, SistemaDoTeste.paraOSistema());
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -180,8 +180,8 @@ public final class GitDeTeste {
         return git(pasta, "rev-parse", "HEAD").strip();
     }
 
-    /** O app como "caminho do app" desta pasta: o mesmo texto no computador local. */
+    /** O "caminho do app" desta pasta ({@code /tmp/x} no Mac e no Linux; no Windows, {@code /D:/a/x}). */
     public String pastaNoApp(Path pasta) {
-        return pasta.toString();
+        return SistemaDoTeste.app(pasta);
     }
 }

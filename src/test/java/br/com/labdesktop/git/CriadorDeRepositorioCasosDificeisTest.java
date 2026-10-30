@@ -45,7 +45,7 @@ class CriadorDeRepositorioCasosDificeisTest {
     }
 
     private CriadorDeRepositorio criador(Path pasta) {
-        return new CriadorDeRepositorio(g.ambiente(), pasta.toString());
+        return new CriadorDeRepositorio(g.ambiente(), g.pastaNoApp(pasta));
     }
 
     private static PedidoDeCriacao pedido(ConferenciaDoRepositorio c) {
@@ -178,11 +178,19 @@ class CriadorDeRepositorioCasosDificeisTest {
     // 6. Ganchos e modelo de pasta do usuário; configuração global dele
     // ---------------------------------------------------------------------------------------------
 
+    /**
+     * O caminho como o git e o {@code sh} dele o leem num arquivo de configuração ou de gancho: com barra comum. A barra invertida do Windows ({@code D:\\a\\x}) seria uma sequência de escape no
+     * {@code .gitconfig} ("bad config line") e dentro de aspas no {@code sh}; o git do Windows aceita {@code D:/a/x}. Fora do Windows é o mesmo texto.
+     */
+    private static String paraOGit(Path p) {
+        return p.toString().replace('\\', '/');
+    }
+
     private Path ganchos(String nome, Path marcador) throws Exception {
         Path pasta = Files.createDirectories(tmp.resolve(nome));
         for (String gancho : List.of("pre-commit", "commit-msg", "post-commit", "prepare-commit-msg")) {
             Path f = pasta.resolve(gancho);
-            Files.writeString(f, "#!/bin/sh\necho " + gancho + " >> '" + marcador + "'\nexit 0\n");
+            Files.writeString(f, "#!/bin/sh\necho " + gancho + " >> '" + paraOGit(marcador) + "'\nexit 0\n");
             f.toFile().setExecutable(true);
         }
         return pasta;
@@ -195,10 +203,10 @@ class CriadorDeRepositorioCasosDificeisTest {
         Files.createDirectories(modelo.resolve("hooks"));
         for (String gancho : List.of("pre-commit", "post-commit")) {
             Path f = modelo.resolve("hooks").resolve(gancho);
-            Files.writeString(f, "#!/bin/sh\necho " + gancho + " >> '" + marcador + "'\nexit 0\n");
+            Files.writeString(f, "#!/bin/sh\necho " + gancho + " >> '" + paraOGit(marcador) + "'\nexit 0\n");
             f.toFile().setExecutable(true);
         }
-        Files.writeString(g.casa.resolve(".gitconfig"), "[init]\n\ttemplateDir = " + modelo + "\n");
+        Files.writeString(g.casa.resolve(".gitconfig"), "[init]\n\ttemplateDir = " + paraOGit(modelo) + "\n");
         // controle: um git init comum copia o gancho do modelo
         Path controle = g.projeto("controle");
         g.git(controle, "init", "-q");
@@ -217,7 +225,7 @@ class CriadorDeRepositorioCasosDificeisTest {
     void ganchosDeUmCoreHooksPathGlobalNaoRodamNoPrimeiroCommit() throws Exception {
         Path marcador = tmp.resolve("MARCADOR-GANCHO");
         Path pasta = ganchos("ganchos-globais", marcador);
-        Files.writeString(g.casa.resolve(".gitconfig"), "[core]\n\thooksPath = " + pasta + "\n");
+        Files.writeString(g.casa.resolve(".gitconfig"), "[core]\n\thooksPath = " + paraOGit(pasta) + "\n");
         // controle: um commit comum (mesmo com --no-verify) roda o post-commit
         Path controle = g.repositorio("controle");
         g.escrever(controle, "x.txt", "x");
@@ -237,7 +245,7 @@ class CriadorDeRepositorioCasosDificeisTest {
     void aConfiguracaoGlobalDoDonoComExcludesFileValeEOQueEleIgnoraNaoEntra() throws Exception {
         Path ignorar = tmp.resolve("meu-ignore-global");
         Files.writeString(ignorar, "*.log\ndocs-rascunho/\n");
-        Files.writeString(g.casa.resolve(".gitconfig"), "[core]\n\texcludesFile = " + ignorar + "\n[init]\n\tdefaultBranch = principal\n[commit]\n\tgpgsign = true\n");
+        Files.writeString(g.casa.resolve(".gitconfig"), "[core]\n\texcludesFile = " + paraOGit(ignorar) + "\n[init]\n\tdefaultBranch = principal\n[commit]\n\tgpgsign = true\n");
         Path p = g.projeto("loja-web");
         g.escrever(p, "src/app.js", "x");
         g.escrever(p, "debug.log", "ruído");
@@ -315,7 +323,7 @@ class CriadorDeRepositorioCasosDificeisTest {
     }
 
     private ResultadoDaCriacao criarComExecutor(Path p, ExecutorDeArgumentos executor) throws Exception {
-        CriadorDeRepositorio criador = new CriadorDeRepositorio(g.ambiente(executor), p.toString());
+        CriadorDeRepositorio criador = new CriadorDeRepositorio(g.ambiente(executor), g.pastaNoApp(p));
         return criador.criarRepositorio(pedido(criador.conferirCriacao()), OperacoesDeGit.Observador.NENHUM, new Cancelamento());
     }
 

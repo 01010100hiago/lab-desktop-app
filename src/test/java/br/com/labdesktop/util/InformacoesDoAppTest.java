@@ -43,7 +43,7 @@ class InformacoesDoAppTest {
     @Test
     void aPastaDoUsuarioViraTilNaPastaDeDadosENaCopia() {
         InformacoesDoApp i = InformacoesDoApp.coletar(CAMINHOS, "/Users/maria", null);
-        assertEquals("~/Library/Application Support/LabDesktop", i.pastaDeDados());
+        assertEquals(Path.of("~", "Library", "Application Support", "LabDesktop").toString(), i.pastaDeDados(), "com a barra do sistema");
         assertFalse(i.pastaDeDados().contains("maria"), "o nome da pessoa não sai do app");
         assertFalse(i.comoTexto().contains("maria"));
     }
@@ -61,13 +61,18 @@ class InformacoesDoAppTest {
         assertTrue(!fora.startsWith("~") && !fora.contains(".."), "fora da pasta do usuário: o caminho absoluto limpo: " + fora);
     }
 
+    private static String absoluto(String caminho) {
+        return Path.of(caminho).toAbsolutePath().normalize().toString();
+    }
+
     @Test
     void redigirPastaTrataOsCasosDeBorda() {
         assertEquals("~", InformacoesDoApp.redigirPasta(Path.of("/Users/maria"), "/Users/maria"));
-        assertEquals("/Users/mariana/x", InformacoesDoApp.redigirPasta(Path.of("/Users/mariana/x"), "/Users/maria"), "o prefixo tem de ser uma pasta inteira");
-        assertEquals("/srv/dados", InformacoesDoApp.redigirPasta(Path.of("/srv/dados"), "/Users/maria"));
-        assertEquals("/srv/dados", InformacoesDoApp.redigirPasta(Path.of("/srv/dados"), null));
-        assertEquals("/srv/dados", InformacoesDoApp.redigirPasta(Path.of("/srv/dados"), " "));
+        // fora da pasta do usuário o caminho sai absoluto e limpo, como o sistema o escreve (no Windows ganha o disco: D:\\srv\\dados)
+        assertEquals(absoluto("/Users/mariana/x"), InformacoesDoApp.redigirPasta(Path.of("/Users/mariana/x"), "/Users/maria"), "o prefixo tem de ser uma pasta inteira");
+        assertEquals(absoluto("/srv/dados"), InformacoesDoApp.redigirPasta(Path.of("/srv/dados"), "/Users/maria"));
+        assertEquals(absoluto("/srv/dados"), InformacoesDoApp.redigirPasta(Path.of("/srv/dados"), null));
+        assertEquals(absoluto("/srv/dados"), InformacoesDoApp.redigirPasta(Path.of("/srv/dados"), " "));
     }
 
     @Test

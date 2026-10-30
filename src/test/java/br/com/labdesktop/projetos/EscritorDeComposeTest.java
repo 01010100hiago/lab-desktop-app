@@ -262,7 +262,7 @@ class EscritorDeComposeTest {
         montar(GabaritoDoProjeto.composeVazio("demo"));
         EscritorDeCompose e = new EscritorDeCompose(a.localComConversao(p -> "C:" + p.replace('/', '\\')), RELOGIO, new SecureRandom());
         e.gravar(e.preparar("demo", bloco(Modelo.REDIS)));
-        assertEquals("C:" + projeto.toString().replace('/', '\\'), a.chamadas.get(0).argumentos().get(3));
+        assertEquals("C:" + AmbienteFalso.app(projeto).replace('/', '\\'), a.chamadas.get(0).argumentos().get(3));
     }
 
     @Test
