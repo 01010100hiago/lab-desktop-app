@@ -37,6 +37,8 @@ import org.slf4j.LoggerFactory;
  *                           servidor (a chave é o identificador dele) -> projeto -> caminho relativo
  * @param containersProtegidos por servidor (a chave é o identificador do servidor), os containers que o usuário marcou como "nunca encerrar nem reiniciar por este app";
  *                           além dos que o app já protege pelo nome
+ * @param perguntarAoSairDoProjetoComTerminal sair da página de um projeto com terminal aberto abre a pergunta "Sair do projeto?" (padrão: sim); o usuário pode marcar
+ *                           "Não perguntar de novo" na própria pergunta e desfazer em Ajustes, Terminal
  */
 public record Preferencias(
     Tema tema,
@@ -51,13 +53,14 @@ public record Preferencias(
     OrdemDeAbas abasDoServidor,
     OrdemDeAbas abasDoProjeto,
     Map<String, Set<String>> containersProtegidos,
-    Map<String, Map<String, String>> repositoriosGit) {
+    Map<String, Map<String, String>> repositoriosGit,
+    boolean perguntarAoSairDoProjetoComTerminal) {
 
     /** Sem a escolha do repositório Git por projeto (nenhuma lembrada): o que toda preferência sem repositório lembrado usa. */
     public Preferencias(Tema tema, Janela janela, int tamanhoFonteTerminal, boolean opcaoComoMeta, boolean copiarAoSelecionar, Set<Aviso> avisosAtivos, int autoBloqueioMinutos, int escalaTexto,
                         boolean donoExclusivo, OrdemDeAbas abasDoServidor, OrdemDeAbas abasDoProjeto, Map<String, Set<String>> containersProtegidos) {
         this(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos,
-            Map.of());
+            Map.of(), true);
     }
 
     /** Os fatores que o menu oferece (iguais aos de {@code ui.tema.Fontes}: este pacote não importa a interface). */
@@ -187,7 +190,7 @@ public record Preferencias(
         }
         novo.put(servidor == null ? "" : servidor.strip(), nomes);
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, novo, repositoriosGit);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, novo, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
     }
 
     /** Uma subpasta de projeto como o arquivo a guarda: relativa, sem {@code ..}, sem controle nem barra invertida, até 2 níveis (a mesma regra da procura de repositórios; este pacote não importa o de Git). */
@@ -266,7 +269,7 @@ public record Preferencias(
             novo.put(servidor.strip(), projetos);
         }
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, novo);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, novo, perguntarAoSairDoProjetoComTerminal);
     }
 
     /** Os padrões: tema do sistema, fonte 13, Option e cópia automática desligados, todos os avisos, sem auto-bloqueio. */
@@ -288,7 +291,7 @@ public record Preferencias(
 
     public Preferencias comEscalaTexto(int porcento) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos,
-            autoBloqueioMinutos, porcento, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
+            autoBloqueioMinutos, porcento, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
     }
 
     public boolean avisoAtivo(Aviso aviso) {
@@ -297,27 +300,27 @@ public record Preferencias(
 
     public Preferencias comTema(Tema novo) {
         return new Preferencias(novo, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
     }
 
     public Preferencias comJanela(Janela nova) {
         return new Preferencias(tema, nova, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
     }
 
     public Preferencias comTamanhoFonteTerminal(int pontos) {
         return new Preferencias(tema, janela, pontos, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
     }
 
     public Preferencias comOpcaoComoMeta(boolean ligada) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, ligada, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
     }
 
     public Preferencias comCopiarAoSelecionar(boolean ligada) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, ligada,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
     }
 
     public Preferencias comAviso(Aviso aviso, boolean ativo) {
@@ -328,27 +331,33 @@ public record Preferencias(
             novos.remove(aviso);
         }
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            novos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
+            novos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
     }
 
     public Preferencias comDonoExclusivo(boolean ligado) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, ligado, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, ligado, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
     }
 
     public Preferencias comAbasDoServidor(OrdemDeAbas nova) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, nova, abasDoProjeto, containersProtegidos, repositoriosGit);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, nova, abasDoProjeto, containersProtegidos, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
     }
 
     public Preferencias comAbasDoProjeto(OrdemDeAbas nova) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, nova, containersProtegidos, repositoriosGit);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, nova, containersProtegidos, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
+    }
+
+    /** Liga ou desliga a pergunta "Sair do projeto?" (a caixa "Não perguntar de novo" desliga; Ajustes, Terminal, liga de novo). */
+    public Preferencias comPerguntarAoSairDoProjetoComTerminal(boolean perguntar) {
+        return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit, perguntar);
     }
 
     public Preferencias comAutoBloqueioMinutos(int minutos) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, minutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
+            avisosAtivos, minutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit, perguntarAoSairDoProjetoComTerminal);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -402,6 +411,7 @@ public record Preferencias(
         public AbasDados abasProjeto;
         public Map<String, List<String>> containersProtegidos;
         public Map<String, Map<String, String>> repositoriosGit;
+        public Boolean perguntarAoSairDoProjetoComTerminal;
 
         /** O repositório Git escolhido por servidor e projeto, em texto simples; qualquer valor estranho é descartado na leitura. */
         static final class RepositoriosGitDados {
@@ -510,6 +520,7 @@ public record Preferencias(
             d.abasProjeto = abasDeJson(n.get("abasProjeto"));
             d.containersProtegidos = ProtegidosDados.deJson(n.get("containersProtegidos"));
             d.repositoriosGit = RepositoriosGitDados.deJson(n.get("repositoriosGit"));
+            d.perguntarAoSairDoProjetoComTerminal = booleano(n.get("perguntarAoSairDoProjetoComTerminal"));
             return d;
         }
 
@@ -584,6 +595,7 @@ public record Preferencias(
             d.abasProjeto = AbasDados.de(p.abasDoProjeto);
             d.containersProtegidos = ProtegidosDados.de(p.containersProtegidos);
             d.repositoriosGit = RepositoriosGitDados.de(p.repositoriosGit);
+            d.perguntarAoSairDoProjetoComTerminal = p.perguntarAoSairDoProjetoComTerminal;
             return d;
         }
 
@@ -620,7 +632,8 @@ public record Preferencias(
                 escalaTexto == null ? base.escalaTexto : escalaTexto,
                 donoExclusivo == null ? base.donoExclusivo : donoExclusivo,
                 AbasDados.para(abasServidor), AbasDados.para(abasProjeto), ProtegidosDados.para(containersProtegidos),
-                repositoriosGit == null ? Map.of() : repositoriosGit);
+                repositoriosGit == null ? Map.of() : repositoriosGit,
+                perguntarAoSairDoProjetoComTerminal == null ? base.perguntarAoSairDoProjetoComTerminal : perguntarAoSairDoProjetoComTerminal);
         }
     }
 }

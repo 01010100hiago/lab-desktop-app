@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 /**
  * A área de conteúdo da janela (ARQUITETURA 4.2): uma {@link TelaServidor} por servidor (com as abas Resumo, Segurança, Containers, Processos, Máquina,
@@ -44,6 +45,7 @@ public final class Navegacao extends Painel {
     private final Apresentador apresentador;
     private final ServicosDeArquivos servicosDeArquivos;
     private final Supplier<Preferencias> preferencias;
+    private final Consumer<UnaryOperator<Preferencias>> gravarPreferencias;
     private final EscolhedorLocal escolhedor = EscolhedorLocal.doSistema(() -> javax.swing.SwingUtilities.getWindowAncestor(this));
     private final CardLayout cartoes = new CardLayout();
     private final Map<String, TelaServidor> telas = new LinkedHashMap<>();
@@ -70,6 +72,13 @@ public final class Navegacao extends Painel {
     /** @param preferencias as preferências em uso: o terminal lê as dele (Option como Meta, copiar ao selecionar...) a cada anexação */
     public Navegacao(GerenciadorServidores gerenciador, AcoesDaInterface acoes, Navegador navegador, Notificacoes avisos,
                      Apresentador apresentador, ServicosDeArquivos servicosDeArquivos, Supplier<Preferencias> preferencias) {
+        this(gerenciador, acoes, navegador, avisos, apresentador, servicosDeArquivos, preferencias, null);
+    }
+
+    /** @param gravarPreferencias como mudar as preferências (a caixa "Não perguntar de novo" da pergunta de sair do projeto grava por aqui); {@code null}: só na memória da tela */
+    public Navegacao(GerenciadorServidores gerenciador, AcoesDaInterface acoes, Navegador navegador, Notificacoes avisos,
+                     Apresentador apresentador, ServicosDeArquivos servicosDeArquivos, Supplier<Preferencias> preferencias,
+                     Consumer<UnaryOperator<Preferencias>> gravarPreferencias) {
         super();
         setLayout(cartoes);
         fundo(Tokens.BG);
@@ -80,6 +89,7 @@ public final class Navegacao extends Painel {
         this.apresentador = apresentador;
         this.servicosDeArquivos = servicosDeArquivos;
         this.preferencias = preferencias;
+        this.gravarPreferencias = gravarPreferencias;
         this.telaServidores = new TelaServidores(gerenciador, acoes);
         add(telaServidores, SERVIDORES);
         cartoes.show(this, SERVIDORES);
@@ -94,7 +104,7 @@ public final class Navegacao extends Painel {
             }
             FluxosDeProjeto fluxos = new FluxosDeProjeto(lab, avisos, apresentador, FluxosDeProjeto.liberadasPorPropriedade());
             TelaProjetos projetos = new TelaProjetos(lab, fluxos, navegador, acoes);
-            TelaServidor t = new TelaServidor(lab, projetos, () -> acoes.atualizar(lab), servicosDeArquivos, escolhedor, preferencias);
+            TelaServidor t = new TelaServidor(lab, projetos, () -> acoes.atualizar(lab), servicosDeArquivos, escolhedor, preferencias, gravarPreferencias);
             t.aoInstalarAgente(() -> acoes.instalarAgente(lab));
             t.aoInstalarChave(() -> acoes.instalarChaveComSenha(lab));
             add(t, PREFIXO_DO_SERVIDOR + id);

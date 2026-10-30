@@ -13,6 +13,7 @@ import java.awt.BorderLayout;
 import br.com.labdesktop.util.Preferencias;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 /**
  * O conteúdo da janela principal: a {@link BarraServidores} à esquerda e a {@link Navegacao} no centro. Fica separado
@@ -44,12 +45,19 @@ public final class PainelPrincipal extends Painel {
     public PainelPrincipal(GerenciadorServidores gerenciador, AssistenteDeServidor assistente, Notificacoes avisos,
                            Apresentador apresentador, Navegador navegador, ServicosDeArquivos servicosDeArquivos,
                            Supplier<Preferencias> preferencias) {
+        this(gerenciador, assistente, avisos, apresentador, navegador, servicosDeArquivos, preferencias, null);
+    }
+
+    /** @param gravarPreferencias como mudar as preferências (a caixa "Não perguntar de novo" da pergunta de sair do projeto grava por aqui); {@code null}: só na memória */
+    public PainelPrincipal(GerenciadorServidores gerenciador, AssistenteDeServidor assistente, Notificacoes avisos,
+                           Apresentador apresentador, Navegador navegador, ServicosDeArquivos servicosDeArquivos,
+                           Supplier<Preferencias> preferencias, Consumer<UnaryOperator<Preferencias>> gravarPreferencias) {
         super(new BorderLayout());
         this.gerenciador = gerenciador;
         this.navegador = navegador;
         Consumer<ServidorLab> aoSelecionar = this::mostrarServidor;
         this.acoes = new AcoesDaInterface(gerenciador, assistente, avisos, apresentador, aoSelecionar, navegador, servicosDeArquivos);
-        this.navegacao = new Navegacao(gerenciador, acoes, navegador, avisos, apresentador, servicosDeArquivos, preferencias);
+        this.navegacao = new Navegacao(gerenciador, acoes, navegador, avisos, apresentador, servicosDeArquivos, preferencias, gravarPreferencias);
         acoes.usarEscolhedor(navegacao.escolhedor());
         this.barra = new BarraServidores(gerenciador, acoes, new BarraServidores.Ouvinte() {
             @Override

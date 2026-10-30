@@ -1,6 +1,6 @@
 # Como uso o terminal do servidor e do projeto?
 @rotulo: Usar o terminal
-@busca: terminal shell claude sessão comando abas novo terminal
+@busca: terminal shell claude sessão comando abas novo terminal sair projeto pergunta não perguntar de novo
 @resumo: O app abre um terminal de verdade no servidor, e outro dentro de cada projeto, sem precisar do Claude.
 @onde: Terminal do servidor | Servidor > Terminal | terminal
 @onde: Terminal de um projeto | Página do projeto > Terminal
@@ -13,3 +13,4 @@
 ## Mais detalhes
 Há um limite de abas de terminal por servidor; o app avisa quando chega nele. O Claude nunca é obrigatório: o shell abre do mesmo jeito.
 As teclas de comando do app não vão para o programa que está rodando no terminal. Copiar e colar usam as teclas do próprio terminal.
+Ao sair da página de um projeto que tem terminal aberto, o app pergunta antes, porque o terminal fecha e o que estiver rodando nele para (a conversa do Claude continua no servidor). Se você marcar "Não perguntar de novo" e confirmar, da próxima vez o app sai direto e avisa que o terminal foi fechado. Cancelar nunca grava essa escolha. Para voltar a ser perguntado, ligue "Perguntar antes de sair de um projeto com terminal aberto" em Ajustes, Terminal.

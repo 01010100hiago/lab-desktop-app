@@ -19,7 +19,9 @@ import java.awt.CardLayout;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 import javax.swing.JPanel;
 
 /**
@@ -77,6 +79,10 @@ public final class TelaServidor extends Painel {
     }
 
     private final ServidorLab servidor;
+    private final Supplier<Preferencias> lerPreferencias;
+    private final Consumer<UnaryOperator<Preferencias>> gravarPreferencias;
+    /** Sem gravador de verdade (testes): as preferências desta tela, só na memória. */
+    private Preferencias soNaMemoria;
     private final Runnable aoAtualizarProjeto;
     private final TelaProjetos projetos;
     private final PaginaResumo resumo;
@@ -136,7 +142,19 @@ public final class TelaServidor extends Painel {
      */
     public TelaServidor(ServidorLab servidor, TelaProjetos projetos, Runnable aoAtualizar, ServicosDeArquivos servicos,
                         EscolhedorLocal escolhedor, Supplier<Preferencias> preferencias) {
+        this(servidor, projetos, aoAtualizar, servicos, escolhedor, preferencias, null);
+    }
+
+    /**
+     * @param gravarPreferencias como mudar as preferências do usuário (memória na hora, disco em segundo plano): a caixa "Não perguntar de novo" da pergunta de sair do projeto grava por
+     *                           aqui. {@code null}: a escolha vale só enquanto esta tela existir (os testes sem preferências em disco)
+     */
+    public TelaServidor(ServidorLab servidor, TelaProjetos projetos, Runnable aoAtualizar, ServicosDeArquivos servicos,
+                        EscolhedorLocal escolhedor, Supplier<Preferencias> preferencias, Consumer<UnaryOperator<Preferencias>> gravarPreferencias) {
         super();
+        Supplier<Preferencias> dasPreferencias = preferencias == null ? Preferencias::padrao : preferencias;
+        this.lerPreferencias = () -> soNaMemoria != null ? soNaMemoria : dasPreferencias.get();
+        this.gravarPreferencias = gravarPreferencias == null ? this::gravarSoNaMemoria : gravarPreferencias;
         setLayout(niveis);
         paginaDoServidor.fundo(Tokens.BG);
         fundo(Tokens.BG);
@@ -273,17 +291,32 @@ public final class TelaServidor extends Painel {
         mostrarAbaSemPerguntar(aba);
     }
 
-    /** A pergunta de sair do projeto com terminal aberto: o texto é do app; Enter cancela (o terminal não volta depois de fechado). */
+    /**
+     * A pergunta de sair do projeto com terminal aberto: o texto é do app; Enter cancela (o terminal não volta depois de fechado). O usuário pode marcar "Não perguntar de novo":
+     * vale só se ele CONFIRMAR, e Ajustes, Terminal, desfaz. Com a pergunta desligada o app sai direto, mas AVISA que o terminal foi fechado.
+     */
     private void perguntarAntesDeSairDoProjeto(Runnable aoConfirmar) {
         String nome = br.com.labdesktop.seguranca.TextoSeguro.limparLinha(nomeDoProjetoAberto == null ? "" : nomeDoProjetoAberto);
-        projetos.fluxos().apresentador().mostrar(new br.com.labdesktop.ui.dialogos.DialogoConfirmar(
+        if (!lerPreferencias.get().perguntarAoSairDoProjetoComTerminal()) {
+            aoConfirmar.run();
+            projetos.fluxos().avisos().info(nome.isEmpty() ? "O terminal do projeto foi fechado." : "O terminal do projeto " + nome + " foi fechado.");
+            return;
+        }
+        projetos.fluxos().apresentador().mostrar(br.com.labdesktop.ui.dialogos.DialogoConfirmar.comNaoPerguntarDeNovo(
             "Sair de " + (nome.isEmpty() ? "este projeto" : nome) + "?", "alerta",
             "Este projeto tem um terminal aberto. Se sair da página dele agora, o terminal fecha e o que estiver rodando nele para. A conversa do Claude continua no servidor.",
-            "Sair do projeto", true, true, sim -> {
-                if (sim) {
+            "Sair do projeto", true, "Não perguntar de novo", "Para voltar a ser perguntado: Ajustes, Terminal.", decisao -> {
+                if (decisao.confirmou()) {
+                    if (decisao.naoPerguntarDeNovo()) {
+                        gravarPreferencias.accept(p -> p.comPerguntarAoSairDoProjetoComTerminal(false));
+                    }
                     aoConfirmar.run();
                 }
             }));
+    }
+
+    private void gravarSoNaMemoria(UnaryOperator<Preferencias> mudanca) {
+        soNaMemoria = mudanca.apply(lerPreferencias.get());
     }
 
     private void mostrarAbaSemPerguntar(Aba aba) {

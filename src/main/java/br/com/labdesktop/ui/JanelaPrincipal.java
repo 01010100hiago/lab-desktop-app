@@ -88,7 +88,7 @@ public final class JanelaPrincipal extends JFrame {
         this.avisos = Toasts.instalar(getRootPane());
         this.apresentador = dialogo -> dialogo.mostrar(this);
         this.painel = new PainelPrincipal(gerenciador, assistente, avisos, apresentador, new Navegador(avisos), servicosDeArquivos,
-            preferencias::get);
+            preferencias::get, preferencias::atualizar);
         painel.usarProtecaoDeContainers(ProtecaoDeContainers.dasPreferencias(preferencias));
         painel.usarRepositoriosGitLembrados(RepositoriosGitLembrados.dasPreferencias(preferencias));
         setContentPane(painel);

@@ -14,7 +14,7 @@ import javax.swing.SpinnerNumberModel;
 /**
  * Ajustes, Terminal: as preferências do terminal que o app já tinha (o arquivo de preferências as guardava e o terminal as lia, mas não havia onde mudar): tamanho da letra,
  * Option como Meta, copiar ao selecionar e tomar a sessão do Claude dos outros computadores. Cada mudança vale para os terminais que o usuário abrir daqui em diante (o que já
- * está aberto segue como estava).
+ * está aberto segue como estava). Mais um grupo, "Ao sair de um projeto": a caixa que desfaz o "Não perguntar de novo" da pergunta "Sair do projeto?" (vale na hora).
  */
 final class SecaoTerminal extends Painel {
 
@@ -25,6 +25,7 @@ final class SecaoTerminal extends Painel {
     private final JCheckBox opcaoComoMeta = new JCheckBox("Usar a tecla Option como Meta");
     private final JCheckBox copiarAoSelecionar = new JCheckBox("Copiar sozinho o que eu selecionar");
     private final JCheckBox donoExclusivo = new JCheckBox("Ao abrir a sessão do Claude, desconectar quem mais estiver nela");
+    private final JCheckBox perguntarAoSair = new JCheckBox("Perguntar antes de sair de um projeto com terminal aberto");
     private boolean atualizando;
 
     SecaoTerminal(ControleDeAjustes controle) {
@@ -42,15 +43,21 @@ final class SecaoTerminal extends Painel {
         ligar(opcaoComoMeta, v -> controle.atualizarPreferencias(x -> x.comOpcaoComoMeta(v)));
         ligar(copiarAoSelecionar, v -> controle.atualizarPreferencias(x -> x.comCopiarAoSelecionar(v)));
         ligar(donoExclusivo, v -> controle.atualizarPreferencias(x -> x.comDonoExclusivo(v)));
+        ligar(perguntarAoSair, v -> controle.atualizarPreferencias(x -> x.comPerguntarAoSairDoProjetoComTerminal(v)));
         Rotulo tamanho = new Rotulo("Tamanho da letra (pontos)");
         add(Paginas.coluna(12,
             Paginas.grupo("Terminal"),
-            Paginas.ajuda("Vale para os terminais que você abrir daqui em diante. O que já está aberto continua como estava."),
+            Paginas.ajuda("O tamanho da letra e as três opções de baixo valem para os terminais que você abrir daqui em diante. O que já está aberto continua como estava."),
             Paginas.cartao(
                 Caixa.linha(10, tamanho, tamanhoDaLetra, Caixa.mola()),
                 opcao(opcaoComoMeta, "Desligado, o Option digita os caracteres do teclado (acentos e símbolos do ABNT2). Ligado, ele manda ESC antes da letra, como o Meta dos programas de terminal."),
                 opcao(copiarAoSelecionar, "Desligado, só copia quando você pede. Ligado, tudo o que você seleciona vai para a área de transferência, e isso apaga o que estava lá."),
                 opcao(donoExclusivo, "Desligado, o Claude pode ficar aberto em vários computadores ao mesmo tempo. Ligado, abrir aqui derruba os outros.")),
+            Caixa.espacoVertical(4),
+            Paginas.grupo("Ao sair de um projeto"),
+            Paginas.cartao(
+                opcao(perguntarAoSair, "Ligado, o app pergunta antes de fechar o terminal quando você sai da página de um projeto. Desligado, ele sai direto e avisa que o terminal foi "
+                    + "fechado. Vale na hora, inclusive para o terminal que já está aberto.")),
             Caixa.espacoVertical(4)), BorderLayout.NORTH);
         atualizar();
         getAccessibleContext().setAccessibleName("Terminal");
@@ -79,6 +86,7 @@ final class SecaoTerminal extends Painel {
             opcaoComoMeta.setSelected(p.opcaoComoMeta());
             copiarAoSelecionar.setSelected(p.copiarAoSelecionar());
             donoExclusivo.setSelected(p.donoExclusivo());
+            perguntarAoSair.setSelected(p.perguntarAoSairDoProjetoComTerminal());
         } finally {
             atualizando = false;
         }
@@ -98,5 +106,9 @@ final class SecaoTerminal extends Painel {
 
     JCheckBox donoExclusivo() {
         return donoExclusivo;
+    }
+
+    JCheckBox perguntarAoSair() {
+        return perguntarAoSair;
     }
 }
