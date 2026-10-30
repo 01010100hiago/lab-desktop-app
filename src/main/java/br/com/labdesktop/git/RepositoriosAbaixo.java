@@ -248,10 +248,12 @@ public final class RepositoriosAbaixo {
         if (nivel >= 1) {
             Path g = dir.resolve(".git");
             if (!Files.isSymbolicLink(g) && Files.exists(g, LinkOption.NOFOLLOW_LINKS)) {
-                String rel = raiz.relativize(dir).toString();
-                if (java.io.File.separatorChar == '\\') {
-                    rel = rel.replace('\\', '/'); // só no Windows a barra invertida é separador
+                // os nomes das pastas juntados com "/": nada de depender do separador do sistema (no Windows ele é a barra invertida; no Linux a barra invertida é um caractere do nome)
+                StringBuilder junto = new StringBuilder();
+                for (Path parte : raiz.relativize(dir)) {
+                    junto.append(junto.length() > 0 ? "/" : "").append(parte);
                 }
+                String rel = junto.toString();
                 if (estruturaAceita(rel)) {
                     if (nomeLegivel(rel)) {
                         achados.add(rel);
