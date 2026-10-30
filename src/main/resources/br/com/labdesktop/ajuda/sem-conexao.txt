@@ -7,8 +7,8 @@
 2. Confira se o seu computador está na mesma rede do servidor (Wi-Fi, VPN) e se o servidor está ligado.
 3. Clique em "Tentar agora" para o app não esperar o próximo intervalo.
 4. Se o computador acabou de acordar do repouso, espere alguns segundos: o app reconecta sozinho.
-5. Se persistir, copie as informações do app e peça ajuda.
+5. Faz minutos? A faixa diz "Tentando de novo a cada 5 min": o servidor pode estar desligado ou apagado; use "Editar servidor" ou "Remover servidor". Persistindo, peça ajuda.
 [Ir para Servidores](ir:servidores)
 @veja: pedir-ajuda chave-recusada sem-porta-aberta
 ## Mais detalhes
-O app tenta de novo com intervalos cada vez maiores. No Mac, a primeira vez que ele fala com a rede local o sistema pergunta se pode: se você negou, libere o app nas Configurações do Sistema, em Privacidade e Segurança, na parte de Rede Local.
+O app tenta de novo com intervalos cada vez maiores (1, 2, 4, 8, 15, 30 e 60 segundos). Depois de 12 falhas seguidas, sem nenhuma conexão boa no meio, ele passa a tentar só a cada 5 minutos, para não ficar subindo o programa do túnel (aws, cloudflared) sem fim em um servidor que não volta. A faixa troca "tentativa N" por "tentando a cada 5 min" e diz a causa em palavras simples (login da AWS expirado, programa que falta, instância sem resposta, porta fechada). Voltam ao ritmo normal: "Tentar agora", o computador acordar do repouso, a rede mudar (outra rede Wi-Fi ou a VPN), o cofre ser desbloqueado ou uma conexão boa. Chave recusada, chave do servidor que mudou e token recusado não se repetem: só uma nova tentativa depois de 5 segundos, no caso da chave recusada, porque esses erros não se resolvem sozinhos. No Mac, a primeira vez que ele fala com a rede local o sistema pergunta se pode: se você negou, libere o app nas Configurações do Sistema, em Privacidade e Segurança, na parte de Rede Local.
