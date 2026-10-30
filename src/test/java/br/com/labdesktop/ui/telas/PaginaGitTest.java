@@ -598,6 +598,28 @@ class PaginaGitTest {
         Visual.tema(Tema.CLARO);
     }
 
+    @Test
+    void pngsDoSegredoProtegidoEDaPastaNovaNosDoisTemas() {
+        for (Tema t : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
+            Visual.tema(t);
+            Cena c = new Cena(true).comCommits(3);
+            c.leitor.status = new StatusDoGit("main", false, LeitorDeGitFalso.commit(3).hash(), null, -1, -1, List.of(
+                new Pendencia(".env", null, Pendencia.Tipo.NAO_RASTREADO, false, true), new Pendencia("dados-novos/", null, Pendencia.Tipo.NAO_RASTREADO, false, true),
+                new Pendencia("src/a.js", null, Pendencia.Tipo.MODIFICADO, false, true)));
+            c.leitor.diffs = chave -> new ResultadoDoGit.Ok<>(new DiffDoArquivo(List.of(new LinhaDeDiff(LinhaDeDiff.Tipo.INFORMACAO, "pasta nova: 3 arquivos"),
+                new LinhaDeDiff(LinhaDeDiff.Tipo.INFORMACAO, "dados-novos/a.csv"), new LinhaDeDiff(LinhaDeDiff.Tipo.INFORMACAO, "dados-novos/b.csv"), new LinhaDeDiff(LinhaDeDiff.Tipo.INFORMACAO, "dados-novos/sub/c.csv")),
+                false, false, false, null, false, 0, 0, false));
+            c.ler();
+            Visual.naEdt(() -> c.pagina.subAbas().selecionar("alteracoes"));
+            Visual.naEdt(() -> c.pagina.tabelaDePendencias().selecionarLinha(0));
+            Visual.salvar(Visual.renderizar(c.cena.tela, 1100 - 224, 672), "projeto-git-segredo-protegido-" + sufixo(t));
+            Visual.naEdt(() -> c.pagina.tabelaDePendencias().selecionarLinha(1));
+            esperar("pasta nova", () -> c.pagina.diffPendente().mostraDiff());
+            Visual.salvar(Visual.renderizar(c.cena.tela, 1100 - 224, 672), "projeto-git-pasta-nova-" + sufixo(t));
+        }
+        Visual.tema(Tema.CLARO);
+    }
+
     private static javax.swing.JComponent prepararLargura(javax.swing.JComponent c, int largura, int altura) {
         c.setSize(largura, altura);
         return c;

@@ -81,8 +81,7 @@ final class VistaDeDiff extends Painel {
             }
         });
         JPanel quadro = new Painel(new BorderLayout());
-        quadro.add(mensagem, BorderLayout.CENTER);
-        quadro.add(Caixa.linha(0, Caixa.mola(), mostrarMesmoAssim, Caixa.mola()), BorderLayout.SOUTH);
+        quadro.add(Caixa.coluna(0, mensagem, Caixa.linha(0, Caixa.mola(), mostrarMesmoAssim, Caixa.mola())), BorderLayout.NORTH);
         corpo.add(rolagem, CARTAO_DIFF);
         corpo.add(quadro, CARTAO_MENSAGEM);
 

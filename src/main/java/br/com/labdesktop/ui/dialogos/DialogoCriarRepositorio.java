@@ -258,7 +258,7 @@ public final class DialogoCriarRepositorio extends Dialogo {
         itens.add(paragrafo("Arquivos como .env, .env.local, chaves (.pem, .key, id_rsa) e credenciais ficam de fora, e o app confere com o próprio Git (git check-ignore) antes de adicionar qualquer arquivo. "
             + "O .env.example, que é só o modelo sem valores, pode entrar."));
         if (plano.mudaAlgo()) {
-            itens.add(dicaCorrida("O app acrescentaria estas linhas ao final do .gitignore (nada do que você já escreveu muda):"));
+            itens.add(dicaCorrida("O app acrescentaria estas linhas ao final do .gitignore (nada do que você já escreveu muda). As letras entre [ ] fazem a regra valer para maiúscula e minúscula, como .ENV e ID_RSA:"));
             AreaMonoespacada linhas = new AreaMonoespacada("Linhas que serão acrescentadas ao .gitignore", false);
             linhas.setName("linhas-do-gitignore");
             linhas.setText(String.join("\n", plano.linhasNovas()));
