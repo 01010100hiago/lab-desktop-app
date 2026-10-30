@@ -146,11 +146,12 @@ public record ModeloDoProjeto(DetalheProjeto detalhe, Boolean claudeDoServidor) 
 
     /**
      * O estado do código em palavras simples: {@code Branch main, com mudanças que ainda não foram salvas no git},
-     * {@code Branch main, tudo salvo} ou {@code Sem git}. Nunca o hash cru.
+     * {@code Branch main, tudo salvo} ou {@code Sem git na pasta principal}. Nunca o hash cru. É o que o AGENTE vê: ele só olha a pasta principal, e o repositório de muitos projetos mora numa
+     * subpasta ({@code app/.git}); por isso a frase não diz "sem git" do projeto, e a linha "Código" a troca pela leitura do próprio app assim que ela chega.
      */
     public String textoDoCodigo() {
         if (detalhe.git() == null) {
-            return "Sem git";
+            return "Sem git na pasta principal";
         }
         String branch = detalhe.git().branch() == null || detalhe.git().branch().isBlank() ? "sem nome" : detalhe.git().branch();
         return "Branch " + branch + (gitSujo() ? ", com mudanças que ainda não foram salvas no git" : ", tudo salvo");

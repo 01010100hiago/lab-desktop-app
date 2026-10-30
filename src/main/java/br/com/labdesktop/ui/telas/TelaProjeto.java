@@ -137,6 +137,14 @@ public final class TelaProjeto extends Painel {
             return null;
         }
 
+        /** A subpasta onde o usuário escolheu ler o Git deste projeto (quando a pasta principal não é repositório mas uma subpasta é), ou {@code null}. */
+        default String repositorioGitLembrado() {
+            return null;
+        }
+
+        /** Lembra a subpasta onde se lê o Git deste projeto; {@code null} esquece. */
+        default void lembrarRepositorioGit(String subpasta) { }
+
         /** O usuário pediu para remover um endereço publicado (abre o diálogo de confirmação). */
         default void removerEndereco(String hostname, Runnable depois) { }
 
@@ -155,6 +163,9 @@ public final class TelaProjeto extends Painel {
     private final transient ServidorLab servidor;
     private final String projeto;
     private final transient Saida saida;
+    /** O Git do projeto (escolha e lista de repositórios de subpasta), criado na primeira leitura; muda só se a pasta do projeto mudar. */
+    private transient br.com.labdesktop.git.LeitorDeGitDoProjeto leitorDoProjeto;
+    private String pastaDoLeitor;
     private final transient ContextoDoProjeto ctx;
     private final Botao voltar = Botoes.fantasma("‹ Projetos", null);
     private final Rotulo nome;
@@ -232,10 +243,7 @@ public final class TelaProjeto extends Painel {
         this.ctx.conectarCloudflare = saida::conectarCloudflare;
         this.ctx.criarRepositorio = saida::criarRepositorio;
         this.ctx.instalarGit = saida::instalarGit;
-        this.ctx.leitorDeGit = () -> {
-            String pasta = ctx.pastaDoProjeto.get();
-            return pasta == null ? null : saida.leitorDeGit(pasta);
-        };
+        this.ctx.leitorDeGit = () -> leitorDoProjeto(saida);
         this.ctx.recarregarGit = this::recarregarGit;
         this.ctx.removerEndereco = saida::removerEndereco;
         this.ctx.abrirEndereco = saida::abrirEndereco;
@@ -549,6 +557,33 @@ public final class TelaProjeto extends Painel {
 
     private void recarregarInternet() {
         internet().recarregar();
+    }
+
+    /**
+     * O Git deste projeto como as abas o leem: o leitor da pasta principal e, quando a pasta principal não tem {@code .git} mas uma subpasta tem, o da subpasta (escolhida ou única). É UM objeto
+     * por página (guarda a escolha e a lista para a Visão geral e a aba Git mostrarem a mesma resposta); {@code null} onde não há como ler (testes de tela sem leitor).
+     */
+    private br.com.labdesktop.git.LeitorDeGitDoProjeto leitorDoProjeto(Saida saida) {
+        String pasta = ctx.pastaDoProjeto.get();
+        if (pasta == null || saida.leitorDeGit(pasta) == null) {
+            return null;
+        }
+        if (leitorDoProjeto == null || !pasta.equals(pastaDoLeitor)) {
+            pastaDoLeitor = pasta;
+            leitorDoProjeto = new br.com.labdesktop.git.LeitorDeGitDoProjeto(() -> saida.leitorDeGit(pasta),
+                sub -> saida.leitorDeGit(pasta.replaceAll("/+$", "") + "/" + sub), new br.com.labdesktop.git.LeitorDeGitDoProjeto.Memoria() {
+                    @Override
+                    public String lembrada() {
+                        return saida.repositorioGitLembrado();
+                    }
+
+                    @Override
+                    public void lembrar(String subpasta) {
+                        saida.lembrarRepositorioGit(subpasta);
+                    }
+                });
+        }
+        return leitorDoProjeto;
     }
 
     /** Lê o Git de novo onde ele aparece: a linha "Código" da Visão geral e a aba Git (só a que está à vista lê; a outra lê quando aparecer). */

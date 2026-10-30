@@ -219,7 +219,7 @@ class PaginaGitTest {
         c.leitor.resumo = new ResultadoDoGit.Ok<>(ResumoDoRepositorio.semGit());
         c.ler();
         assertTrue(ed(c.pagina::mostraMensagem));
-        assertEquals("Este projeto ainda não é um repositório Git", ed(c.pagina::tituloDaMensagem));
+        assertEquals("Esta pasta, no servidor, não tem Git", ed(c.pagina::tituloDaMensagem));
         assertTrue(ed(() -> c.pagina.botaoCriar().isVisible() && c.pagina.botaoCriar().isEnabled()));
         Visual.naEdt(() -> c.pagina.botaoCriar().doClick(0));
         assertEquals(List.of("criar"), c.pedidos);

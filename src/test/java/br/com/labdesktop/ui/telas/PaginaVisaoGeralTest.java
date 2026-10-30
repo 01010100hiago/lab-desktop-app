@@ -101,7 +101,7 @@ class PaginaVisaoGeralTest {
         Cena c = cena(true, FixturesDeApi.de(json, DetalheProjeto.class));
         PaginaVisaoGeral p = pagina(c);
         assertEquals("Sem descrição", Visual.naEdt(p::textoDaDescricao));
-        assertTrue(Visual.naEdt(() -> p.ficha().pares()).contains(List.of("Código", "Sem git")));
+        assertTrue(Visual.naEdt(() -> p.ficha().pares()).contains(List.of("Código", "Sem git na pasta principal")));
         List<List<String>> tecnicos = Visual.naEdt(() -> p.fichaTecnica().pares());
         assertTrue(tecnicos.contains(List.of("Docker na sessão do Claude", "Sem acesso a este projeto")), tecnicos.toString());
         assertTrue(tecnicos.stream().noneMatch(par -> par.get(0).equals("Redes")), tecnicos.toString());

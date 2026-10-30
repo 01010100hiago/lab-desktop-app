@@ -136,7 +136,7 @@ class ModeloDoProjetoTest {
         assertEquals("Branch main, tudo salvo", limpo);
         String semGit = ModeloDoProjeto.de(FixturesDeApi.de(TelaProjetoTest.detalheEmUmaLinha()
             .replaceFirst("\"git\": \\{.*?\\}, \"backups\"", "\"git\": null, \"backups\""), DetalheProjeto.class)).textoDoCodigo();
-        assertEquals("Sem git", semGit);
+        assertEquals("Sem git na pasta principal", semGit);
     }
 
     @Test

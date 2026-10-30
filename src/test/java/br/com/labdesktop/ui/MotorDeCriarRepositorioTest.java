@@ -61,4 +61,19 @@ class MotorDeCriarRepositorioTest {
         assertFalse(m.criar(null, OperacoesDeGit.Observador.NENHUM, new Cancelamento()).criou());
         assertEquals(1, criacoes.get(), "a segunda vez não chegou ao domínio");
     }
+
+    @Test
+    void comRepositorioEmSubpastaOMotorTambemRecusaSemAConfirmacaoNaoSoATela() throws Exception {
+        MotorDeCriarRepositorio m = new MotorDeCriarRepositorio(operacoes, () -> true);
+        ConferenciaDoRepositorio comAbaixo = new ConferenciaDoRepositorio(ConferenciaDoRepositorio.Situacao.PODE_CRIAR, null, "git version 2.43.0", "Ana", "ana@example.com", List.of("a.txt"), List.of(),
+            List.of(), null, List.of(), true, false, 0, List.of("app"));
+        ResultadoDaCriacao recusado = m.criar(new PedidoDeCriacao(comAbaixo, null, null, false), OperacoesDeGit.Observador.NENHUM, new Cancelamento());
+        assertFalse(recusado.criou());
+        assertFalse(recusado.repositorioCriado());
+        assertTrue(recusado.mensagem().contains("Já existe repositório Git em subpasta") && recusado.mensagem().endsWith("Nada foi criado."), recusado.mensagem());
+        assertEquals(0, criacoes.get(), "nem chegou ao domínio");
+        ResultadoDaCriacao confirmado = m.criar(new PedidoDeCriacao(comAbaixo, null, null, false, true), OperacoesDeGit.Observador.NENHUM, new Cancelamento());
+        assertTrue(confirmado.criou());
+        assertEquals(1, criacoes.get());
+    }
 }

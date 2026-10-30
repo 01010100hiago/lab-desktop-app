@@ -81,6 +81,7 @@ public final class DialogoCriarRepositorio extends Dialogo {
     private final JTextField campoEmail = Campos.texto(28, "voce@example.com");
     private final TextoCorrido erroDaIdentidade = erroCorrido();
     private final JCheckBox incluirGrandes = new JCheckBox("Incluir os arquivos grandes no primeiro commit");
+    private final JCheckBox confirmarAninhado = new JCheckBox("Entendi o problema e quero criar o repositório na pasta principal mesmo assim");
     private final TextoCorrido progresso = new TextoCorrido("", LARGURA).corDoToken(Tokens.TEXTO2).tamanho(13f);
     private final AtomicInteger geracao = new AtomicInteger();
     private final Cancelamento cancelamento = new Cancelamento();
@@ -125,6 +126,9 @@ public final class DialogoCriarRepositorio extends Dialogo {
         incluirGrandes.setName("incluir-grandes");
         incluirGrandes.putClientProperty("html.disable", Boolean.TRUE);
         incluirGrandes.setOpaque(false);
+        confirmarAninhado.setName("confirmar-repositorio-abaixo");
+        confirmarAninhado.putClientProperty("html.disable", Boolean.TRUE);
+        confirmarAninhado.setOpaque(false);
         campoNome.getAccessibleContext().setAccessibleName("Seu nome, para assinar os commits");
         campoEmail.getAccessibleContext().setAccessibleName("Seu e-mail, para assinar os commits");
 
@@ -157,6 +161,7 @@ public final class DialogoCriarRepositorio extends Dialogo {
                 mostrarConferencia(conferencia); // as linhas do .gitignore e a contagem mudam com a caixa
             }
         });
+        confirmarAninhado.addActionListener(e -> conferirAIdentidade());
         mostrarLendo();
     }
 
@@ -169,6 +174,7 @@ public final class DialogoCriarRepositorio extends Dialogo {
 
     /** Lê o projeto (só leitura) e mostra a conferência. */
     public void conferir() {
+        confirmarAninhado.setSelected(false); // a confirmação vale para o que foi mostrado: uma conferência nova pede de novo
         int minha = geracao.incrementAndGet();
         mostrarLendo();
         Tarefas.rodar(motor::conferir, c -> {
@@ -231,6 +237,18 @@ public final class DialogoCriarRepositorio extends Dialogo {
         boolean grandes = incluirGrandes.isSelected();
         PlanejadorDoGitignore.Plano plano = c.planoDoGitignore(grandes);
         itens.add(dicaCorrida("Git: " + c.versaoDoGit() + ". Projeto " + projeto + " no servidor " + servidor + "."));
+
+        // repositório em subpasta: o problema do repositório dentro de repositório, e a confirmação a mais
+        if (c.temRepositoriosAbaixo()) {
+            itens.add(secao("Já existe repositório Git dentro deste projeto"));
+            TextoCorrido aviso = erroComTexto("Há repositório Git em " + CriadorDeRepositorio.frasesDosRepositoriosAbaixo(c.repositoriosAbaixo()) + ", e a pasta principal não tem .git: é assim que muitos projetos guardam o código. "
+                + "Criar um repositório aqui, na pasta principal, esconderia o histórico dele: o Git trata essa pasta como um repositório dentro de outro, o primeiro commit não leva o código dela (o app a põe "
+                + "no .gitignore) e a aba Git deixaria de mostrar o histórico de verdade.");
+            aviso.setName("aviso-repositorio-abaixo");
+            itens.add(aviso);
+            itens.add(paragrafo("Quase sempre o certo é fechar esta janela e abrir o repositório que já existe, na aba Git. Se mesmo assim você quer um repositório novo na pasta principal, marque a caixa:"));
+            itens.add(confirmarAninhado);
+        }
 
         // quem assina
         itens.add(secao("Quem assina os commits"));
@@ -361,19 +379,21 @@ public final class DialogoCriarRepositorio extends Dialogo {
             }
             dizerErro(erroDaIdentidade, aviso);
         }
-        boolean pode = liberada && identidadeOk && conferencia.liberaACriacao() && !ocupado;
+        boolean confirmado = !conferencia.temRepositoriosAbaixo() || confirmarAninhado.isSelected();
+        boolean pode = liberada && identidadeOk && conferencia.liberaACriacao() && confirmado && !ocupado;
         criar.setEnabled(pode);
         criar.setToolTipText(!liberada ? RAZAO_DA_TRAVA : !conferencia.liberaACriacao() ? "A conferência não libera criar: veja o aviso em vermelho."
+            : !confirmado ? "Já existe repositório numa subpasta: marque a caixa para confirmar que quer criar na pasta principal mesmo assim."
             : !identidadeOk ? "Diga seu nome e e-mail para assinar os commits." : "Cria o repositório depois do seu clique: git init, .gitignore, git add dos arquivos conferidos e o primeiro commit.");
         razaoDaTrava.setVisible(!liberada);
     }
 
     private void criar() {
-        if (ocupado || conferencia == null || !liberada || !conferencia.liberaACriacao()) {
+        if (ocupado || conferencia == null || !liberada || !conferencia.liberaACriacao() || (conferencia.temRepositoriosAbaixo() && !confirmarAninhado.isSelected())) {
             return;
         }
         PedidoDeCriacao pedido = new PedidoDeCriacao(conferencia, conferencia.temIdentidade() ? null : campoNome.getText(),
-            conferencia.temIdentidade() ? null : campoEmail.getText().strip(), incluirGrandes.isSelected());
+            conferencia.temIdentidade() ? null : campoEmail.getText().strip(), incluirGrandes.isSelected(), conferencia.temRepositoriosAbaixo() && confirmarAninhado.isSelected());
         ocupado = true;
         fase = Fase.CRIANDO;
         criar.setVisible(false);
@@ -502,6 +522,10 @@ public final class DialogoCriarRepositorio extends Dialogo {
 
     public JCheckBox caixaDosGrandes() {
         return incluirGrandes;
+    }
+
+    public JCheckBox caixaDoRepositorioAbaixo() {
+        return confirmarAninhado;
     }
 
     public Botao botaoCopiarComando() {

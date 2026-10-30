@@ -119,6 +119,8 @@ public final class FichaRotulada extends Painel {
             sb.append(l.getText()).append(' ');
         } else if (c instanceof javax.swing.AbstractButton b && b.getText() != null && !b.getText().isEmpty()) {
             sb.append(b.getText()).append(' ');
+        } else if (c instanceof TextoCorrido t && !t.getText().isEmpty()) {
+            sb.append(t.getText()).append(' '); // o texto que quebra em linhas (a linha "Código")
         }
         if (c instanceof java.awt.Container k) {
             for (java.awt.Component f : k.getComponents()) {

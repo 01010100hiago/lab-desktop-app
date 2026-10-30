@@ -97,6 +97,11 @@ public final class PainelPrincipal extends Painel {
         acoes.usarProtecaoDeContainers(protecao);
     }
 
+    /** Liga o repositório Git que o usuário escolheu em cada projeto (as preferências) à página do projeto. */
+    public void usarRepositoriosGitLembrados(RepositoriosGitLembrados lembrados) {
+        acoes.usarRepositoriosGitLembrados(lembrados);
+    }
+
     /** Liga a engrenagem da barra e os atalhos à tela Ajustes (montada só na primeira vez que for aberta). */
     public void instalarAjustes(Supplier<TelaAjustes> fabrica) {
         navegacao.instalarAjustes(fabrica);

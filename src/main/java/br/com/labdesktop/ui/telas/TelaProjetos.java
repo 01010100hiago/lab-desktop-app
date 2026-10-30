@@ -385,6 +385,18 @@ public final class TelaProjetos extends Painel {
         }
     }
 
+    /** A subpasta onde o usuário escolheu ler o Git deste projeto neste servidor, ou {@code null}. */
+    String repositorioGitLembradoDe(String projeto) {
+        return acoesUi == null || servidor == null ? null : acoesUi.repositoriosGitLembrados().lembrado(servidor.id(), projeto);
+    }
+
+    /** Lembra (ou, com {@code null}, esquece) a subpasta onde se lê o Git deste projeto neste servidor. */
+    void lembrarRepositorioGitDe(String projeto, String subpasta) {
+        if (acoesUi != null && servidor != null) {
+            acoesUi.repositoriosGitLembrados().lembrar(servidor.id(), projeto, subpasta);
+        }
+    }
+
     /** "Adicionar domínio" a partir do servidor (aba Cloudflare): pergunta o projeto e segue para o assistente. Só com as ações liberadas. */
     void adicionarDominioEscolhendoOProjeto(Runnable depois) {
         if (acoesUi == null || servidor == null || !fluxos.liberadas()) {

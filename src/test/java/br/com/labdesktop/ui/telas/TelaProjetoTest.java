@@ -77,6 +77,27 @@ class TelaProjetoTest {
             pedidos.add("adicionar-dominio");
         }
 
+        /** Os leitores do Git que a página pede por pasta; sem isto a página não tem como ler o Git, como sempre. */
+        java.util.function.Function<String, br.com.labdesktop.git.LeitorDeGit> leitoresDeGit;
+        /** O que o app lembra do repositório escolhido deste projeto (a preferência por servidor e projeto). */
+        String repositorioGitLembrado;
+
+        @Override
+        public br.com.labdesktop.git.LeitorDeGit leitorDeGit(String pastaDoProjetoNoApp) {
+            return leitoresDeGit == null ? null : leitoresDeGit.apply(pastaDoProjetoNoApp);
+        }
+
+        @Override
+        public String repositorioGitLembrado() {
+            return repositorioGitLembrado;
+        }
+
+        @Override
+        public void lembrarRepositorioGit(String subpasta) {
+            repositorioGitLembrado = subpasta;
+            pedidos.add("lembrar:" + subpasta);
+        }
+
         @Override
         public br.com.labdesktop.processos.Oferta avaliarProcesso(br.com.labdesktop.processos.ProcessoAlvo alvo) {
             return br.com.labdesktop.processos.AvaliadorDeProcessos.avaliar(alvo, br.com.labdesktop.processos.AmbienteDeProcessos.servidor("labuser", java.util.Set.of()));

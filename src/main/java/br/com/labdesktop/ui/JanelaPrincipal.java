@@ -90,6 +90,7 @@ public final class JanelaPrincipal extends JFrame {
         this.painel = new PainelPrincipal(gerenciador, assistente, avisos, apresentador, new Navegador(avisos), servicosDeArquivos,
             preferencias::get);
         painel.usarProtecaoDeContainers(ProtecaoDeContainers.dasPreferencias(preferencias));
+        painel.usarRepositoriosGitLembrados(RepositoriosGitLembrados.dasPreferencias(preferencias));
         setContentPane(painel);
         // Ajustes (a engrenagem da barra, Arquivo, Ajustes, Cmd+,): montada na primeira vez que o usuário a abre
         java.util.concurrent.atomic.AtomicReference<MenuApp> menuDoApp = new java.util.concurrent.atomic.AtomicReference<>();

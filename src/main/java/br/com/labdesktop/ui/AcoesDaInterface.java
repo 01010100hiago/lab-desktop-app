@@ -71,6 +71,7 @@ public final class AcoesDaInterface {
     private final Navegador navegador;
     private final ServicosDeArquivos servicosDeArquivos;
     private volatile ProtecaoDeContainers protecaoDeContainers = ProtecaoDeContainers.NENHUMA;
+    private volatile RepositoriosGitLembrados repositoriosGitLembrados = RepositoriosGitLembrados.NENHUM;
     private volatile EscolhedorLocal escolhedor = EscolhedorLocal.doSistema(() -> null);
     /**
      * A trava das ações de escrita ({@code -Dlabdesktop.acoes=true}), conferida AQUI também (defesa em profundidade): os botões já somem sem ela, mas Publicar e Remover escrevem
@@ -661,6 +662,16 @@ public final class AcoesDaInterface {
     /** De onde vêm os containers que o usuário marcou como protegidos (a janela liga às preferências ao abrir). */
     public void usarProtecaoDeContainers(ProtecaoDeContainers protecao) {
         this.protecaoDeContainers = protecao == null ? ProtecaoDeContainers.NENHUMA : protecao;
+    }
+
+    /** De onde vem o repositório Git que o usuário escolheu em cada projeto (a janela liga às preferências ao abrir). */
+    public void usarRepositoriosGitLembrados(RepositoriosGitLembrados lembrados) {
+        this.repositoriosGitLembrados = lembrados == null ? RepositoriosGitLembrados.NENHUM : lembrados;
+    }
+
+    /** O repositório Git que o usuário escolheu em cada projeto (a subpasta onde o Git é lido). */
+    public RepositoriosGitLembrados repositoriosGitLembrados() {
+        return repositoriosGitLembrados;
     }
 
     /**

@@ -439,6 +439,84 @@ class DialogoCriarRepositorioTest {
         }
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Criar na pasta principal quando já existe repositório em subpasta
+    // ---------------------------------------------------------------------------------------------
+
+    static ConferenciaDoRepositorio comRepositorioAbaixo(String nome, String email, List<String> abaixo) {
+        ConferenciaDoRepositorio base = completa(nome, email);
+        return new ConferenciaDoRepositorio(Situacao.PODE_CRIAR, null, "git version 2.43.0", nome, email, base.arquivos(), base.grandes(), List.of(abaixo.get(0)), null, List.of(), true, false, 0, abaixo);
+    }
+
+    @Test
+    void comRepositorioEmSubpastaAJanelaAvisaDoProblemaEExigeUmaConfirmacaoAMais() {
+        Visual.tema(Tema.CLARO);
+        Motor m = new Motor();
+        m.conferencia = comRepositorioAbaixo("Ana", "ana@example.com", List.of("app"));
+        DialogoCriarRepositorio d = abrir(m, true, false);
+        String t = texto(d);
+        assertTrue(t.contains("Já existe repositório Git dentro deste projeto"), t);
+        assertTrue(t.contains("Há repositório Git em app/, e a pasta principal não tem .git"), t);
+        assertTrue(t.contains("esconderia o histórico dele") && t.contains("repositório dentro de outro") && t.contains("deixaria de mostrar o histórico de verdade"), "o problema, dito claramente: " + t);
+        assertTrue(t.contains("Quase sempre o certo é fechar esta janela e abrir o repositório que já existe, na aba Git."), t);
+        assertTrue(ed(() -> d.caixaDoRepositorioAbaixo().isVisible() && !d.caixaDoRepositorioAbaixo().isSelected()));
+        assertFalse(ed(() -> d.botaoCriar().isEnabled()), "sem a confirmação o botão fica desligado");
+        assertTrue(ed(() -> d.botaoCriar().getToolTipText()).contains("marque a caixa"));
+        Visual.naEdt(() -> d.botaoCriar().doClick(0));
+        assertEquals(0, m.criacoes.get(), "desligado: o clique não cria");
+
+        Visual.naEdt(() -> d.caixaDoRepositorioAbaixo().doClick());
+        assertTrue(ed(() -> d.botaoCriar().isEnabled()));
+        Visual.naEdt(() -> d.botaoCriar().doClick(0));
+        Espera.ate(Duration.ofSeconds(10), "resultado", () -> "RESULTADO".equals(ed(d::faseAtual)));
+        PedidoDeCriacao p = m.pedido.get();
+        assertTrue(p.confirmouRepositoriosAbaixo(), "o pedido leva a confirmação explícita para o motor");
+        assertEquals(1, m.criacoes.get());
+    }
+
+    @Test
+    void semRepositorioEmSubpastaNaoHaCaixaNemAviso() {
+        Visual.tema(Tema.CLARO);
+        Motor m = new Motor();
+        m.conferencia = completa("Ana", "ana@example.com");
+        DialogoCriarRepositorio d = abrir(m, true, false);
+        assertFalse(texto(d).contains("Já existe repositório Git dentro deste projeto"));
+        assertFalse(ed(() -> d.caixaDoRepositorioAbaixo().isShowing() || d.caixaDoRepositorioAbaixo().getParent() != null));
+        assertTrue(ed(() -> d.botaoCriar().isEnabled()));
+        Visual.naEdt(() -> d.botaoCriar().doClick(0));
+        Espera.ate(Duration.ofSeconds(10), "resultado", () -> "RESULTADO".equals(ed(d::faseAtual)));
+        assertFalse(m.pedido.get().confirmouRepositoriosAbaixo());
+    }
+
+    @Test
+    void aConfirmacaoNaoSobreviveAUmaConferenciaNova() {
+        Visual.tema(Tema.CLARO);
+        Motor m = new Motor();
+        m.conferencia = comRepositorioAbaixo("Ana", "ana@example.com", List.of("app", "web"));
+        DialogoCriarRepositorio d = abrir(m, true, false);
+        Visual.naEdt(() -> d.caixaDoRepositorioAbaixo().doClick());
+        assertTrue(ed(() -> d.botaoCriar().isEnabled()));
+        Visual.naEdt(() -> d.botaoConferirDeNovo().doClick(0));
+        Espera.ate(Duration.ofSeconds(10), "outra conferência", () -> m.conferencias.get() == 2 && "CONFERENCIA".equals(ed(d::faseAtual)));
+        assertFalse(ed(() -> d.caixaDoRepositorioAbaixo().isSelected()), "a confirmação vale para o que foi mostrado: pede de novo");
+        assertFalse(ed(() -> d.botaoCriar().isEnabled()));
+        assertTrue(texto(d).contains("app/ (e 1 outro)"));
+    }
+
+    @Test
+    void aJanelaComRepositorioEmSubpastaSaiEmPngClaroEEscuro() {
+        Dialogo.definirAlturaDaTelaParaTeste(1700);
+        for (Tema t : new Tema[] {Tema.CLARO, Tema.ESCURO}) {
+            Visual.tema(t);
+            Motor m = new Motor();
+            m.conferencia = comRepositorioAbaixo("Ana", "ana@example.com", List.of("app"));
+            DialogoCriarRepositorio d = abrir(m, true, false);
+            Visual.naEdt(() -> javax.swing.SwingUtilities.updateComponentTreeUI(d.raiz()));
+            assertFalse(java.util.regex.Pattern.compile("[\\x{1F300}-\\x{1FAFF}\\x{2600}-\\x{27BF}]").matcher(texto(d)).find());
+            foto(d, "git-criar-repositorio-mesmo-assim-" + (t == Tema.CLARO ? "claro" : "escuro"));
+        }
+    }
+
     private static void foto(DialogoCriarRepositorio d, String nome) {
         int largura = Visual.naEdt(() -> d.raiz().getPreferredSize().width);
         Visual.salvar(Visual.renderizar(d.raiz(), largura, Visual.alturaPreferida(d.raiz(), largura)), nome);

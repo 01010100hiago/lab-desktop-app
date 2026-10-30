@@ -33,6 +33,8 @@ import org.slf4j.LoggerFactory;
  *                           por padrão)
  * @param abasDoServidor     a ordem e as abas escondidas da página do servidor (Ajustes, Navegação); vale para todos os servidores
  * @param abasDoProjeto      a ordem e as abas escondidas da página do projeto
+ * @param repositoriosGit    por servidor e projeto, a SUBPASTA onde o usuário escolheu ler o Git ({@code app}), quando a pasta principal do projeto não tem {@code .git} mas uma subpasta tem;
+ *                           servidor (a chave é o identificador dele) -> projeto -> caminho relativo
  * @param containersProtegidos por servidor (a chave é o identificador do servidor), os containers que o usuário marcou como "nunca encerrar nem reiniciar por este app";
  *                           além dos que o app já protege pelo nome
  */
@@ -48,7 +50,15 @@ public record Preferencias(
     boolean donoExclusivo,
     OrdemDeAbas abasDoServidor,
     OrdemDeAbas abasDoProjeto,
-    Map<String, Set<String>> containersProtegidos) {
+    Map<String, Set<String>> containersProtegidos,
+    Map<String, Map<String, String>> repositoriosGit) {
+
+    /** Sem a escolha do repositório Git por projeto (nenhuma lembrada): o que toda preferência sem repositório lembrado usa. */
+    public Preferencias(Tema tema, Janela janela, int tamanhoFonteTerminal, boolean opcaoComoMeta, boolean copiarAoSelecionar, Set<Aviso> avisosAtivos, int autoBloqueioMinutos, int escalaTexto,
+                        boolean donoExclusivo, OrdemDeAbas abasDoServidor, OrdemDeAbas abasDoProjeto, Map<String, Set<String>> containersProtegidos) {
+        this(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos,
+            Map.of());
+    }
 
     /** Os fatores que o menu oferece (iguais aos de {@code ui.tema.Fontes}: este pacote não importa a interface). */
     public static final int[] ESCALAS_DO_TEXTO = {100, 115, 130};
@@ -129,6 +139,7 @@ public record Preferencias(
         avisosAtivos = avisosAtivos == null || avisosAtivos.isEmpty()
             ? Set.of() : Set.copyOf(EnumSet.copyOf(avisosAtivos));
         containersProtegidos = limparProtegidos(containersProtegidos);
+        repositoriosGit = limparRepositoriosGit(repositoriosGit);
     }
 
     /** Nome de container que cabe na lista (a mesma regra do Docker); o que não cabe é descartado na leitura. */
@@ -176,7 +187,86 @@ public record Preferencias(
         }
         novo.put(servidor == null ? "" : servidor.strip(), nomes);
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, novo);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, novo, repositoriosGit);
+    }
+
+    /** Uma subpasta de projeto como o arquivo a guarda: relativa, sem {@code ..}, sem controle nem barra invertida, até 2 níveis (a mesma regra da procura de repositórios; este pacote não importa o de Git). */
+    static boolean subpastaValida(String s) {
+        if (s == null || s.isEmpty() || s.length() > 300 || s.startsWith("/") || s.endsWith("/") || s.contains("\\") || s.contains("//")) {
+            return false;
+        }
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c < 0x20 || c == 0x7F || (c >= 0x80 && c < 0xA0)) {
+                return false;
+            }
+        }
+        String[] partes = s.split("/", -1);
+        if (partes.length > 2) {
+            return false;
+        }
+        for (String p : partes) {
+            if (p.isEmpty() || p.equals(".") || p.equals("..") || p.equals(".git")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static final int MAXIMO_DE_PROJETOS_COM_GIT = 500;
+
+    private static Map<String, Map<String, String>> limparRepositoriosGit(Map<String, Map<String, String>> bruto) {
+        if (bruto == null || bruto.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Map<String, String>> r = new java.util.TreeMap<>();
+        for (Map.Entry<String, Map<String, String>> e : bruto.entrySet()) {
+            String servidor = e.getKey() == null ? "" : e.getKey().strip();
+            if (servidor.isEmpty() || servidor.length() > 200 || r.size() >= MAXIMO_DE_SERVIDORES || e.getValue() == null) {
+                continue;
+            }
+            Map<String, String> projetos = new java.util.TreeMap<>();
+            for (Map.Entry<String, String> p : e.getValue().entrySet()) {
+                String projeto = p.getKey() == null ? "" : p.getKey().strip();
+                if (!projeto.isEmpty() && projeto.length() <= 200 && subpastaValida(p.getValue()) && projetos.size() < MAXIMO_DE_PROJETOS_COM_GIT) {
+                    projetos.put(projeto, p.getValue());
+                }
+            }
+            if (!projetos.isEmpty()) {
+                r.put(servidor, Map.copyOf(projetos));
+            }
+        }
+        return Map.copyOf(r);
+    }
+
+    /** A subpasta onde o usuário escolheu ler o Git deste projeto neste servidor, ou {@code null} se não escolheu. */
+    public String repositorioGitDe(String servidor, String projeto) {
+        if (servidor == null || projeto == null) {
+            return null;
+        }
+        Map<String, String> m = repositoriosGit.get(servidor.strip());
+        return m == null ? null : m.get(projeto.strip());
+    }
+
+    /** Lembra (ou, com {@code subpasta} nula, esquece) a subpasta onde se lê o Git deste projeto neste servidor. Valor que não vale é ignorado. */
+    public Preferencias comRepositorioGit(String servidor, String projeto, String subpasta) {
+        if (servidor == null || servidor.isBlank() || projeto == null || projeto.isBlank() || (subpasta != null && !subpastaValida(subpasta))) {
+            return this;
+        }
+        Map<String, Map<String, String>> novo = new java.util.TreeMap<>(repositoriosGit);
+        Map<String, String> projetos = new java.util.TreeMap<>(novo.getOrDefault(servidor.strip(), Map.of()));
+        if (subpasta == null) {
+            projetos.remove(projeto.strip());
+        } else {
+            projetos.put(projeto.strip(), subpasta);
+        }
+        if (projetos.isEmpty()) {
+            novo.remove(servidor.strip());
+        } else {
+            novo.put(servidor.strip(), projetos);
+        }
+        return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, novo);
     }
 
     /** Os padrões: tema do sistema, fonte 13, Option e cópia automática desligados, todos os avisos, sem auto-bloqueio. */
@@ -198,7 +288,7 @@ public record Preferencias(
 
     public Preferencias comEscalaTexto(int porcento) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar, avisosAtivos,
-            autoBloqueioMinutos, porcento, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
+            autoBloqueioMinutos, porcento, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
     }
 
     public boolean avisoAtivo(Aviso aviso) {
@@ -207,27 +297,27 @@ public record Preferencias(
 
     public Preferencias comTema(Tema novo) {
         return new Preferencias(novo, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
     }
 
     public Preferencias comJanela(Janela nova) {
         return new Preferencias(tema, nova, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
     }
 
     public Preferencias comTamanhoFonteTerminal(int pontos) {
         return new Preferencias(tema, janela, pontos, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
     }
 
     public Preferencias comOpcaoComoMeta(boolean ligada) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, ligada, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
     }
 
     public Preferencias comCopiarAoSelecionar(boolean ligada) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, ligada,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
     }
 
     public Preferencias comAviso(Aviso aviso, boolean ativo) {
@@ -238,27 +328,27 @@ public record Preferencias(
             novos.remove(aviso);
         }
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            novos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
+            novos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
     }
 
     public Preferencias comDonoExclusivo(boolean ligado) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, ligado, abasDoServidor, abasDoProjeto, containersProtegidos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, ligado, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
     }
 
     public Preferencias comAbasDoServidor(OrdemDeAbas nova) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, nova, abasDoProjeto, containersProtegidos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, nova, abasDoProjeto, containersProtegidos, repositoriosGit);
     }
 
     public Preferencias comAbasDoProjeto(OrdemDeAbas nova) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, nova, containersProtegidos);
+            avisosAtivos, autoBloqueioMinutos, escalaTexto, donoExclusivo, abasDoServidor, nova, containersProtegidos, repositoriosGit);
     }
 
     public Preferencias comAutoBloqueioMinutos(int minutos) {
         return new Preferencias(tema, janela, tamanhoFonteTerminal, opcaoComoMeta, copiarAoSelecionar,
-            avisosAtivos, minutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos);
+            avisosAtivos, minutos, escalaTexto, donoExclusivo, abasDoServidor, abasDoProjeto, containersProtegidos, repositoriosGit);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -311,6 +401,33 @@ public record Preferencias(
         public AbasDados abasServidor;
         public AbasDados abasProjeto;
         public Map<String, List<String>> containersProtegidos;
+        public Map<String, Map<String, String>> repositoriosGit;
+
+        /** O repositório Git escolhido por servidor e projeto, em texto simples; qualquer valor estranho é descartado na leitura. */
+        static final class RepositoriosGitDados {
+            static Map<String, Map<String, String>> de(Map<String, Map<String, String>> m) {
+                return m.isEmpty() ? null : m;
+            }
+
+            static Map<String, Map<String, String>> deJson(JsonNode v) {
+                if (v == null || !v.isObject()) {
+                    return null;
+                }
+                Map<String, Map<String, String>> r = new java.util.LinkedHashMap<>();
+                v.properties().forEach(e -> {
+                    if (e.getValue() != null && e.getValue().isObject()) {
+                        Map<String, String> projetos = new java.util.LinkedHashMap<>();
+                        e.getValue().properties().forEach(p -> {
+                            if (p.getValue() != null && p.getValue().isTextual()) {
+                                projetos.put(p.getKey(), p.getValue().textValue());
+                            }
+                        });
+                        r.put(e.getKey(), projetos);
+                    }
+                });
+                return r;
+            }
+        }
 
         /** Os containers protegidos, em texto simples: servidor -> nomes; qualquer valor estranho é descartado na leitura. */
         static final class ProtegidosDados {
@@ -392,6 +509,7 @@ public record Preferencias(
             d.abasServidor = abasDeJson(n.get("abasServidor"));
             d.abasProjeto = abasDeJson(n.get("abasProjeto"));
             d.containersProtegidos = ProtegidosDados.deJson(n.get("containersProtegidos"));
+            d.repositoriosGit = RepositoriosGitDados.deJson(n.get("repositoriosGit"));
             return d;
         }
 
@@ -465,6 +583,7 @@ public record Preferencias(
             d.abasServidor = AbasDados.de(p.abasDoServidor);
             d.abasProjeto = AbasDados.de(p.abasDoProjeto);
             d.containersProtegidos = ProtegidosDados.de(p.containersProtegidos);
+            d.repositoriosGit = RepositoriosGitDados.de(p.repositoriosGit);
             return d;
         }
 
@@ -500,7 +619,8 @@ public record Preferencias(
                 autoBloqueioMinutos == null ? base.autoBloqueioMinutos : autoBloqueioMinutos,
                 escalaTexto == null ? base.escalaTexto : escalaTexto,
                 donoExclusivo == null ? base.donoExclusivo : donoExclusivo,
-                AbasDados.para(abasServidor), AbasDados.para(abasProjeto), ProtegidosDados.para(containersProtegidos));
+                AbasDados.para(abasServidor), AbasDados.para(abasProjeto), ProtegidosDados.para(containersProtegidos),
+                repositoriosGit == null ? Map.of() : repositoriosGit);
         }
     }
 }

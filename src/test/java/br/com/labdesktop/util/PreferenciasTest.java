@@ -301,4 +301,65 @@ class PreferenciasTest {
             .comAbasDoServidor(OrdemDeAbas.PADRAO).comAbasDoProjeto(OrdemDeAbas.PADRAO).comJanela(new Janela(0, 0, 1000, 700, false));
         assertEquals(java.util.Set.of("db"), p.containersProtegidosDe("s"));
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // O repositório Git que o usuário escolheu em cada projeto
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void repositorioGitViajaPorServidorEProjetoEArquivoAntigoContinuaValendo(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        Preferencias p = Preferencias.padrao().comRepositorioGit("srv-1", "app-loja", "app").comRepositorioGit("srv-1", "servico-demo", "servicos/api").comRepositorioGit("srv-2", "app-loja", "web");
+        assertEquals("app", p.repositorioGitDe("srv-1", "app-loja"));
+        assertEquals("web", p.repositorioGitDe("srv-2", "app-loja"), "o mesmo projeto em outro servidor é outra escolha");
+        assertNull(p.repositorioGitDe("srv-1", "outro-projeto"));
+        assertNull(p.repositorioGitDe("outro", "app-loja"));
+        assertNull(p.repositorioGitDe(null, "app-loja"));
+        p.salvar(c);
+        Preferencias lida = Preferencias.carregar(c);
+        assertEquals(p, lida);
+        assertEquals("servicos/api", lida.repositorioGitDe("srv-1", "servico-demo"));
+        // esquecer tira só aquela entrada, e o servidor sem entradas some do arquivo
+        Preferencias menos = lida.comRepositorioGit("srv-1", "app-loja", null);
+        assertNull(menos.repositorioGitDe("srv-1", "app-loja"));
+        assertEquals("servicos/api", menos.repositorioGitDe("srv-1", "servico-demo"));
+        Preferencias semNada = menos.comRepositorioGit("srv-1", "servico-demo", null).comRepositorioGit("srv-2", "app-loja", null);
+        assertEquals(Preferencias.padrao(), semNada);
+        Preferencias.padrao().salvar(c);
+        assertFalse(Files.readString(c.arquivoPreferencias()).contains("srv-1"), "sem escolhas, nenhum servidor nem projeto no arquivo");
+
+        Files.writeString(c.arquivoPreferencias(), "{\"versao\": 1, \"tema\": \"claro\"}");
+        assertNull(Preferencias.carregar(c).repositorioGitDe("srv-1", "app-loja"), "arquivo de antes do campo: nenhuma escolha");
+    }
+
+    @Test
+    void repositorioGitComValorRuimEDescartadoSemDerrubarALeitura(@TempDir Path tmp) throws Exception {
+        CaminhosApp c = caminhos(tmp);
+        c.prepararPastas();
+        Files.writeString(c.arquivoPreferencias(), "{\"tema\": \"escuro\", \"repositoriosGit\": {\"srv\": {\"ok\": \"app\", \"dois\": \"a/b\", \"tres\": \"a/b/c\", \"fugiu\": \"../x\", \"abs\": \"/etc\", "
+            + "\"ponto\": \".\", \"git\": \".git\", \"barra\": \"a//b\", \"fim\": \"app/\", \"inv\": \"a\\\\b\", \"ctrl\": \"a\\nb\", \"num\": 7, \"nulo\": null, \"\": \"app\"}, \"\": {\"x\": \"app\"}, \"r\": \"texto\", \"s\": [1]}}");
+        Preferencias lida = Preferencias.carregar(c);
+        assertEquals(Tema.ESCURO, lida.tema(), "o resto do arquivo continua valendo");
+        assertEquals("app", lida.repositorioGitDe("srv", "ok"));
+        assertEquals("a/b", lida.repositorioGitDe("srv", "dois"));
+        for (String ruim : java.util.List.of("tres", "fugiu", "abs", "ponto", "git", "barra", "fim", "inv", "ctrl", "num", "nulo", "")) {
+            assertNull(lida.repositorioGitDe("srv", ruim), "valor ruim descartado: " + ruim);
+        }
+        assertNull(lida.repositorioGitDe("", "x"));
+        assertNull(lida.repositorioGitDe("r", "x"));
+        assertNull(lida.repositorioGitDe("s", "x"));
+        Files.writeString(c.arquivoPreferencias(), "{\"repositoriosGit\": [\"a\"]}");
+        assertEquals(Preferencias.padrao(), Preferencias.carregar(c), "formato errado: o padrão");
+        // e na hora de gravar, um valor que não vale nem entra
+        assertEquals(Preferencias.padrao(), Preferencias.padrao().comRepositorioGit("srv", "p", "../x").comRepositorioGit("srv", "p", "a/b/c").comRepositorioGit("", "p", "app").comRepositorioGit("srv", " ", "app"));
+    }
+
+    @Test
+    void mudarOutraPreferenciaNaoPerdeORepositorioGit() {
+        Preferencias p = Preferencias.padrao().comRepositorioGit("s", "loja", "app").comContainerProtegido("s", "db", true).comTema(Tema.ESCURO).comEscalaTexto(115).comAutoBloqueioMinutos(3)
+            .comAviso(Aviso.CREDITO_75, false).comCopiarAoSelecionar(true).comTamanhoFonteTerminal(15).comDonoExclusivo(true).comOpcaoComoMeta(true)
+            .comAbasDoServidor(OrdemDeAbas.PADRAO).comAbasDoProjeto(OrdemDeAbas.PADRAO).comJanela(new Janela(0, 0, 1000, 700, false));
+        assertEquals("app", p.repositorioGitDe("s", "loja"));
+        assertEquals(java.util.Set.of("db"), p.comRepositorioGit("s", "outra", "web").containersProtegidosDe("s"), "e escolher não perde as outras preferências");
+    }
 }

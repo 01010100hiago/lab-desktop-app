@@ -97,7 +97,8 @@ class LinhaDoCodigoTest {
         Visual.tema(Tema.CLARO);
         Cena c = new Cena(true);
         c.ler(ResumoDoRepositorio.semGit());
-        assertEquals("Sem Git", ed(c.linha::textoMostrado));
+        assertEquals(LinhaDoCodigo.SEM_GIT_NO_SERVIDOR, ed(c.linha::textoMostrado));
+        assertTrue(ed(c.linha::textoMostrado).startsWith("Esta pasta, no servidor, não tem Git. Se o repositório está no seu computador ou no GitHub"), "a frase não promete o que não existe: o repositório de fora só aparece depois de clonado ou enviado");
         assertTrue(ed(() -> c.linha.botaoCriar().isVisible() && c.linha.botaoCriar().isEnabled()));
         assertEquals("Criar repositório Git", ed(() -> c.linha.botaoCriar().getText()));
         assertFalse(ed(() -> c.linha.botaoVerCommits().isVisible()));

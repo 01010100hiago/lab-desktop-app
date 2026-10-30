@@ -392,6 +392,16 @@ public final class TelaServidor extends Painel {
             }
 
             @Override
+            public String repositorioGitLembrado() {
+                return projetos.repositorioGitLembradoDe(nome);
+            }
+
+            @Override
+            public void lembrarRepositorioGit(String subpasta) {
+                projetos.lembrarRepositorioGitDe(nome, subpasta);
+            }
+
+            @Override
             public void removerEndereco(String hostname, Runnable depois) {
                 projetos.removerEnderecoDe(hostname, depois);
             }

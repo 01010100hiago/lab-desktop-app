@@ -7,10 +7,13 @@ import br.com.labdesktop.git.DetalheDoCommit;
 import br.com.labdesktop.git.DiffDoArquivo;
 import br.com.labdesktop.git.FalhaDoGit;
 import br.com.labdesktop.git.LeitorDeGit;
+import br.com.labdesktop.git.LeitorDeGitDoProjeto;
 import br.com.labdesktop.git.PaginaDeCommits;
 import br.com.labdesktop.git.Pendencia;
+import br.com.labdesktop.git.RepositorioAbaixo;
 import br.com.labdesktop.git.ResultadoDoGit;
 import br.com.labdesktop.git.SegredosDoProjeto;
+import br.com.labdesktop.git.RepositoriosAbaixo;
 import br.com.labdesktop.git.ResumoDoRepositorio;
 import br.com.labdesktop.git.StatusDoGit;
 import br.com.labdesktop.ui.MensagensDeErro;
@@ -48,6 +51,10 @@ import javax.swing.JToggleButton;
  * escolhido), os branches e as alterações que ainda não foram commitadas. Lê pelo mesmo caminho do resto da página (SSH, que já passa pelo túnel do Session Manager ou da Cloudflare, ou o
  * processo local) e só quando o usuário olha: ao abrir a aba e no botão Atualizar, nunca de tempos em tempos e nunca com a aba escondida. Não precisa do agente: funciona também com ele fora do ar.
  *
+ * <p>Quando a pasta principal do projeto não tem {@code .git} mas uma SUBPASTA tem ({@code app/}, o caso de muitos projetos), a aba NÃO oferece criar: lê o repositório da subpasta (o único, o lembrado
+ * ou o que o usuário escolhe numa lista simples) exatamente como leria o da raiz, com o rótulo "Repositório: app/" e "Trocar repositório" para voltar à lista. Criar um repositório na pasta principal
+ * vira um link discreto, com aviso e uma confirmação a mais na janela (um repositório dentro de outro esconderia o histórico do de dentro).
+ *
  * <p>Sem Git no projeto, a aba oferece "Criar repositório Git"; sem o programa git, o "Instalar o Git…" que já existe; com a pasta de outro dono, a frase e o comando do
  * {@code safe.directory} para copiar (o app nunca o executa). Nada aqui escreve no servidor.
  */
@@ -72,6 +79,9 @@ final class PaginaGit extends PaginaDoProjeto {
     private final Rotulo situacao = new Rotulo().corDoToken(Tokens.TEXTO3).tamanho(12f).truncavel();
     private final Rotulo filtroDeBranch = new Rotulo().corDoToken(Tokens.TEXTO2).tamanho(12f).truncavel();
     private final Botao voltarAoAtual = Botoes.mini("Voltar ao branch atual", "voltar");
+    private final Rotulo repositorioEmUso = new Rotulo().negrito().corDoToken(Tokens.TEXTO2).tamanho(12f).truncavel();
+    private final Botao trocarRepositorio = Botoes.mini("Trocar repositório", "lista");
+    private JPanel faixaRepositorio;
 
     // ---- o cartão de mensagem (carregando, sem Git, erro...) ----
     private final Rotulo mensagemTitulo = new Rotulo().negrito().tamanho(14f);
@@ -82,6 +92,11 @@ final class PaginaGit extends PaginaDoProjeto {
     private final Botao criar = Botoes.miniPrimario("Criar repositório Git", "mais");
     private final Botao instalar = Botoes.mini("Instalar o Git…", "baixar");
     private final Botao tentarDeNovo = Botoes.mini("Tentar de novo", "atualizar");
+    private final Botao listaDeRepositorios = Botoes.mini("Ver a lista de repositórios", "lista");
+    /** O seletor de repositório de subpasta: uma linha por repositório e o link discreto de criar na pasta principal. */
+    private final TabelaDeDados<RepositorioAbaixo> tabelaDeRepositorios;
+    private final Botao criarMesmoAssim = Botoes.link("Criar um repositório na pasta principal mesmo assim");
+    private final JPanel seletor = new Painel(new BorderLayout(0, 6));
 
     // ---- commits ----
     private final TabelaDeDados<Commit> tabelaDeCommits;
@@ -172,6 +187,11 @@ final class PaginaGit extends PaginaDoProjeto {
             new TabelaDeDados.Coluna<Pendencia>("O que mudou", 1.2, false, p -> p.tipo().rotulo()),
             new TabelaDeDados.Coluna<Pendencia>("Situação", 1.8, false, PaginaGit::situacaoDaPendencia)),
             this::aoEscolherAPendencia);
+        this.tabelaDeRepositorios = new TabelaDeDados<>("Repositórios nas subpastas do projeto", List.of(
+            new TabelaDeDados.Coluna<RepositorioAbaixo>("Repositório", 2.0, false, RepositorioAbaixo::comBarra),
+            new TabelaDeDados.Coluna<RepositorioAbaixo>("Branch", 1.4, false, r -> r.lido() ? (r.branch() == null ? "commit solto" : r.branch()) : "—"),
+            new TabelaDeDados.Coluna<RepositorioAbaixo>("Último commit", 4.0, false, r -> ultimoDaLista(r), r -> ultimoDaLista(r))),
+            this::aoEscolherORepositorio);
         this.tabelaDeBranches = new TabelaDeDados<>("Branches", List.of(
             new TabelaDeDados.Coluna<Branch>("Branch", 3.0, false, Branch::nome),
             new TabelaDeDados.Coluna<Branch>("Situação", 1.2, false, b -> b.atual() ? "atual" : ""),
@@ -234,6 +254,17 @@ final class PaginaGit extends PaginaDoProjeto {
             recarregar();
         });
         voltarAoAtual.setVisible(false);
+        repositorioEmUso.setName("repositorio-em-uso");
+        trocarRepositorio.setName("trocar-repositorio");
+        trocarRepositorio.setToolTipText("Volta à lista de repositórios das subpastas do projeto");
+        trocarRepositorio.addActionListener(e -> voltarAListaDeRepositorios());
+        repositorioEmUso.setVisible(false);
+        trocarRepositorio.setVisible(false);
+        listaDeRepositorios.setName("lista-de-repositorios");
+        listaDeRepositorios.addActionListener(e -> voltarAListaDeRepositorios());
+        criarMesmoAssim.setName("criar-mesmo-assim");
+        criarMesmoAssim.setToolTipText("Abre a conferência com o aviso: um repositório na pasta principal esconderia o histórico do que já existe numa subpasta");
+        criarMesmoAssim.addActionListener(e -> ctx.criarRepositorio.accept(ctx.recarregarGit, () -> ctx.navegar.accept(TelaProjeto.Aba.GIT)));
         carregarMais.setName("carregar-mais-commits");
         carregarMais.addActionListener(e -> carregarMaisCommits());
         carregarMais.setVisible(false);
@@ -274,12 +305,20 @@ final class PaginaGit extends PaginaDoProjeto {
         mensagem.add(Caixa.espacoVertical(8));
         mensagem.add(linhaDoComando);
         mensagem.add(Caixa.espacoVertical(12));
-        JPanel botoes = new AEsquerda(Caixa.linha(8, criar, instalar, tentarDeNovo));
+        JScrollPane rolagemDeRepositorios = tabelaDeRepositorios.emRolagem();
+        seletor.add(rolagemDeRepositorios, BorderLayout.CENTER);
+        seletor.add(new AEsquerda(criarMesmoAssim), BorderLayout.SOUTH);
+        seletor.setAlignmentX(LEFT_ALIGNMENT);
+        seletor.setVisible(false);
+        mensagem.add(seletor);
+        mensagem.add(Caixa.espacoVertical(8));
+        JPanel botoes = new AEsquerda(Caixa.linha(8, criar, instalar, tentarDeNovo, listaDeRepositorios));
         botoes.setAlignmentX(LEFT_ALIGNMENT);
         mensagem.add(botoes);
         criar.setVisible(false);
         instalar.setVisible(false);
         tentarDeNovo.setVisible(false);
+        listaDeRepositorios.setVisible(false);
         JPanel mensagemAEsquerda = new Painel(new BorderLayout());
         mensagemAEsquerda.add(mensagem, BorderLayout.NORTH);
 
@@ -358,8 +397,16 @@ final class PaginaGit extends PaginaDoProjeto {
         corpoDasSub.add(pendenciasEDiff, SUB_ALTERACOES);
         corpoDasSub.add(branches, SUB_BRANCHES);
 
+        // quando o Git lido é o de uma subpasta, uma faixa de uma linha diz qual (e leva de volta à lista) ANTES da barra: na barra não sobra largura
+        JPanel faixaDoRepositorio = new Painel(new BorderLayout(10, 0));
+        faixaDoRepositorio.add(Caixa.linha(10, repositorioEmUso, trocarRepositorio, Caixa.mola()), BorderLayout.CENTER);
+        faixaDoRepositorio.setVisible(false);
+        faixaRepositorio = faixaDoRepositorio;
+        JPanel cimaDoConteudo = new Painel(new BorderLayout(0, 8));
+        cimaDoConteudo.add(faixaDoRepositorio, BorderLayout.NORTH);
+        cimaDoConteudo.add(barra, BorderLayout.CENTER);
         JPanel conteudo = new Painel(new BorderLayout(0, 10));
-        conteudo.add(barra, BorderLayout.NORTH);
+        conteudo.add(cimaDoConteudo, BorderLayout.NORTH);
         conteudo.add(corpoDasSub, BorderLayout.CENTER);
         raiz.add(mensagemAEsquerda, CARTAO_MENSAGEM);
         raiz.add(conteudo, CARTAO_CONTEUDO);
@@ -437,9 +484,13 @@ final class PaginaGit extends PaginaDoProjeto {
         resumo = t.resumo();
         carregouAlgumaVez = true;
         switch (resumo.estado()) {
-            case SEM_GIT -> mostrarMensagem("Este projeto ainda não é um repositório Git",
-                "Com um repositório, o app mostra aqui os commits e o que mudou em cada um. O app confere a pasta antes (só leitura) e mostra o que entraria no primeiro commit: segredos como o .env nunca entram.",
+            case SEM_GIT -> mostrarMensagem(ctx.servidor != null && ctx.servidor.ehLocal() ? "Esta pasta, neste computador, não tem Git" : "Esta pasta, no servidor, não tem Git",
+                (ctx.servidor != null && ctx.servidor.ehLocal()
+                    ? "Se o repositório está em outro lugar ou no GitHub, ele só aparece aqui depois de ser clonado ou copiado para cá. "
+                    : "Se o repositório está no seu computador ou no GitHub, ele não aparece aqui até ser clonado ou enviado para o servidor. ")
+                    + "O app também pode criar um repositório novo nesta pasta: confere antes (só leitura) e mostra o que entraria no primeiro commit; segredos como o .env nunca entram.",
                 null, true, false, false);
+            case REPOSITORIOS_ABAIXO -> mostrarRepositoriosAbaixo(resumo);
             case GIT_NAO_INSTALADO -> mostrarMensagem("O Git não está instalado", ctx.estado != null && ctx.estado.protegido()
                 ? "O servidor é protegido: o app não instala nada nele. Instale o Git você mesmo (por exemplo no Terminal) e use Atualizar."
                 : "Sem o programa git o app não consegue ler nem criar o repositório. \"Instalar o Git…\" mostra os comandos exatos antes de rodar qualquer coisa.",
@@ -449,6 +500,68 @@ final class PaginaGit extends PaginaDoProjeto {
                 "O Git que vale aqui é o da pasta de cima, e o app não cria um repositório dentro de outro. Abra o Git do projeto de cima.", null, false, false, true);
             case ERRO -> mostrarMensagem("Não consegui ler o Git", resumo.falha() == null ? "Erro desconhecido." : resumo.falha().frase(), null, false, false, true);
             case COM_GIT -> aplicarComGit(t);
+        }
+        atualizarORepositorioEmUso();
+    }
+
+    /** O rótulo "Repositório: app/" e o "Trocar repositório" (barra de cima, e o botão do cartão de mensagem), só quando o Git lido é o de uma subpasta. */
+    private void atualizarORepositorioEmUso() {
+        boolean emSubpasta = resumo != null && resumo.emSubpasta();
+        repositorioEmUso.setText(emSubpasta ? "Repositório: " + resumo.subpasta() + "/" : "");
+        repositorioEmUso.setToolTipText(emSubpasta ? "O projeto não tem Git na pasta principal: o app lê o repositório da subpasta " + resumo.subpasta() + "/" : null);
+        boolean barra = emSubpasta && !modoMensagem;
+        repositorioEmUso.setVisible(barra);
+        trocarRepositorio.setVisible(barra);
+        if (faixaRepositorio != null) {
+            faixaRepositorio.setVisible(barra);
+        }
+        listaDeRepositorios.setVisible(emSubpasta && modoMensagem);
+    }
+
+    /**
+     * A pasta principal não tem {@code .git} e há repositório em subpasta, sem escolha ainda: mostra a lista (uma linha por repositório, com o branch e o último commit quando já lidos). Clicar numa
+     * linha abre aquele repositório nesta aba. Criar na pasta principal fica num link discreto, com o aviso na janela.
+     */
+    private void mostrarRepositoriosAbaixo(ResumoDoRepositorio r) {
+        List<RepositorioAbaixo> lista = r.abaixo();
+        mostrarMensagem("Este projeto não tem Git na pasta principal",
+            (lista.size() == 1 ? "Achei um repositório numa subpasta. " : "Achei repositórios em subpastas. ") + "Escolha um para ver os commits, os branches e as alterações dele, como se fosse o projeto. O app lembra a sua escolha."
+                + (r.abaixoCortado() ? " Há mais repositórios do que a lista mostra (" + RepositoriosAbaixo.LIMITE + ")." : ""),
+            null, false, false, false);
+        tabelaDeRepositorios.definir(lista);
+        tabelaDeRepositorios.clearSelection();
+        JScrollPane rolagem = (JScrollPane) tabelaDeRepositorios.getParent().getParent();
+        rolagem.setPreferredSize(new Dimension(300, 36 + 28 * Math.min(lista.size(), 6)));
+        seletor.setVisible(true);
+        criarMesmoAssim.setEnabled(ctx.acoesLiberadas());
+        revalidate();
+        repaint();
+    }
+
+    private static String ultimoDaLista(RepositorioAbaixo r) {
+        if (!r.lido()) {
+            return "ainda não lido";
+        }
+        if (r.ultimo() == null) {
+            return "sem commits";
+        }
+        return r.ultimo().curto() + " " + (r.ultimo().assunto().isEmpty() ? "(sem mensagem)" : r.ultimo().assunto());
+    }
+
+    /** O usuário clicou num repositório da lista: o leitor do projeto passa a ler aquela subpasta (e a lembra), e a aba lê de novo. */
+    private void aoEscolherORepositorio(RepositorioAbaixo r) {
+        if (ctx.leitorDeGit.get() instanceof LeitorDeGitDoProjeto p && p.escolher(r.caminho())) {
+            branchEscolhido = null;
+            recarregar();
+        }
+    }
+
+    /** "Trocar repositório": volta à lista (esquece a escolha). */
+    private void voltarAListaDeRepositorios() {
+        if (ctx.leitorDeGit.get() instanceof LeitorDeGitDoProjeto p) {
+            p.voltarALista();
+            branchEscolhido = null;
+            recarregar();
         }
     }
 
@@ -744,6 +857,7 @@ final class PaginaGit extends PaginaDoProjeto {
     // ---------------------------------------------------------------------------------------------
 
     private void mostrarMensagem(String titulo, String texto, String comandoParaCopiar, boolean comCriar, boolean comInstalar, boolean comTentar) {
+        seletor.setVisible(false);
         mensagemTitulo.setText(titulo);
         mensagemTexto.setText(texto);
         mensagemTexto.setVisible(!texto.isEmpty());
@@ -755,9 +869,20 @@ final class PaginaGit extends PaginaDoProjeto {
         atualizarConteudo();
         situacao.setText("");
         modoMensagem = true;
+        atualizarORepositorioEmUsoNaMensagem();
         cartoes.show(raiz, CARTAO_MENSAGEM);
         revalidate();
         repaint();
+    }
+
+    /** Na mensagem, o botão da lista só vale se o que está à vista veio de uma subpasta (a leitura que "Lendo…" e os erros de conexão mostram não traz resumo novo). */
+    private void atualizarORepositorioEmUsoNaMensagem() {
+        listaDeRepositorios.setVisible(false);
+        repositorioEmUso.setVisible(false);
+        trocarRepositorio.setVisible(false);
+        if (faixaRepositorio != null) {
+            faixaRepositorio.setVisible(false);
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -843,6 +968,30 @@ final class PaginaGit extends PaginaDoProjeto {
 
     Botao botaoVoltarAoAtual() {
         return voltarAoAtual;
+    }
+
+    TabelaDeDados<RepositorioAbaixo> tabelaDeRepositorios() {
+        return tabelaDeRepositorios;
+    }
+
+    Botao botaoTrocarRepositorio() {
+        return trocarRepositorio;
+    }
+
+    Botao botaoListaDeRepositorios() {
+        return listaDeRepositorios;
+    }
+
+    Botao botaoCriarMesmoAssim() {
+        return criarMesmoAssim;
+    }
+
+    boolean mostraOSeletor() {
+        return seletor.isVisible() && modoMensagem;
+    }
+
+    String textoDoRepositorioEmUso() {
+        return repositorioEmUso.isVisible() ? repositorioEmUso.getText() : "";
     }
 
     boolean mostraMensagem() {
