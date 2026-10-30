@@ -229,6 +229,9 @@ final class LinhaDoCodigo extends Painel {
     /** {@code Este projeto não tem Git na pasta principal, mas achei repositório em: app/ (e outros)}. */
     static String fraseDosRepositoriosAbaixo(ResumoDoRepositorio r) {
         List<RepositorioAbaixo> l = r.abaixo();
+        if (l.isEmpty()) {
+            return "Este projeto não tem Git na pasta principal, mas achei repositório em uma subpasta.";
+        }
         String primeiro = l.get(0).comBarra();
         int mais = l.size() - 1 + (r.abaixoCortado() ? 1 : 0);
         String outros = l.size() == 1 && !r.abaixoCortado() ? "" : r.abaixoCortado() ? " (e outros)" : mais == 1 ? " (e outro)" : " (e " + mais + " outros)";

@@ -36,7 +36,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 @ExtendWith(VerificaEdt.class)
 class RepositoriosEmSubpastaNaTelaTest {
 
-    private static final String RAIZ = "/srv/lab/projects/app-loja";
+    private static final String RAIZ = "/srv/lab/projects/loja-web";
 
     private static <T> T ed(Supplier<T> s) {
         return Visual.naEdt(s);

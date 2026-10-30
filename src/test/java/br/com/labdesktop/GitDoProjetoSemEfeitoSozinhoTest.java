@@ -151,6 +151,24 @@ class GitDoProjetoSemEfeitoSozinhoTest {
     }
 
     @Test
+    void oFindQueProcuraRepositoriosEmSubpastasSoLeENuncaTemAcaoQueEscreve() throws IOException {
+        String comandos = String.join("\n", arquivo("git/ComandosDeGit.java").lines().filter(l -> !l.contains(".equals(") && !l.contains(".contains(")).toList());
+        for (String proibida : List.of("\"-exec\"", "\"-execdir\"", "\"-delete\"", "\"-fprint\"", "\"-fprint0\"", "\"-fls\"", "\"-ok\"", "\"-okdir\"", "\"-L\"", "\"-follow\"")) {
+            assertFalse(comandos.contains(proibida), "o find do app não pode ter " + proibida);
+        }
+        assertEquals(1, Pattern.compile("\"find\"").matcher(comandos).results().count(), "uma só linha de find, montada em um só lugar");
+        assertTrue(comandos.contains("\"-print0\"") && comandos.contains("\"-prune\"") && comandos.contains("\"-not\", \"-type\", \"l\""), "só imprime, e não segue link");
+        // quem procura repositórios só lê: nenhum desses dois tem o que escreve
+        for (String nome : List.of("git/RepositoriosAbaixo.java", "git/LeitorDeGitDoProjeto.java")) {
+            String codigo = arquivo(nome);
+            for (String proibido : List.of("Files.write", "Files.delete", "Files.createDirector", "Files.move", "Files.copy", "ProcessBuilder", "ExecutorDeGit.completo", "ExecutorDeGit.paraConferir")) {
+                assertFalse(codigo.contains(proibido), nome + " não pode usar " + proibido);
+            }
+        }
+        assertEquals(List.of(), quemUsa(Pattern.compile("RepositoriosAbaixo\\.(local|porFind)\\("), Set.of("git/LeitorDeGitPorExecutor.java", "git/CriadorDeRepositorio.java")), "só o leitor e o criador montam a procura");
+    }
+
+    @Test
     void nenhumProcessoOuShellNoPacoteGit() throws IOException {
         assertEquals(List.of(), quemUsa(Pattern.compile("ProcessBuilder|Runtime\\.getRuntime|\"sh\"\\s*,\\s*\"-c\"|\"bash\""), Set.of(
             "transporte/LancadorReal.java", "local/ProcessosLocais.java", "local/ComandosLocais.java", "local/ExecutorDeLinhaFixa.java", "terminal/TransporteLocal.java", "AutoTeste.java", "plataforma/ConsultaPorProcesso.java",

@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * O caso dos projetos cujo repositório mora em {@code <projeto>/app/.git} e a pasta principal NÃO tem {@code .git} (app-loja, projeto-b, servico-demo, projeto-a), com o {@code git} e o {@code find} de
+ * O caso dos projetos cujo repositório mora em {@code <projeto>/app/.git} e a pasta principal NÃO tem {@code .git} (quatro no lab do usuário), com o {@code git} e o {@code find} de
  * VERDADE: a procura acha o repositório de subpasta pelos DOIS caminhos (o {@code find} fixo por executor e o {@code java.nio} de "Este computador"), ignora o que deve, não segue link, respeita
  * profundidade e limite, lê a subpasta como leria a raiz, lembra a escolha, e o motor RECUSA criar na pasta principal por cima de um repositório que existe, a menos que o pedido traga a confirmação.
  */
@@ -80,9 +80,9 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void raizSemGitComRepositorioEmAppNaoEMaisSemGit() throws Exception {
-        g.projeto("app-loja");
-        repoEm("app-loja", "app", "a");
-        Path projeto = g.raiz.resolve("app-loja");
+        g.projeto("loja-web");
+        repoEm("loja-web", "app", "a");
+        Path projeto = g.raiz.resolve("loja-web");
         assertFalse(Files.exists(projeto.resolve(".git")));
         igualNosDoisCaminhos(projeto, List.of("app"));
         ResumoDoRepositorio r = viaFind(projeto).resumo().valorOuNulo();
@@ -93,10 +93,10 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void doisRepositoriosVemComBranchEUltimoCommitDeCadaUm() throws Exception {
-        g.projeto("servico-demo");
-        repoEm("servico-demo", "api", "x");
-        repoEm("servico-demo", "web", "y");
-        Path projeto = g.raiz.resolve("servico-demo");
+        g.projeto("painel-api");
+        repoEm("painel-api", "api", "x");
+        repoEm("painel-api", "web", "y");
+        Path projeto = g.raiz.resolve("painel-api");
         for (LeitorDeGit l : List.of(viaFind(projeto), viaDisco(projeto))) {
             ResumoDoRepositorio r = l.resumo().valorOuNulo();
             assertEquals(List.of("api", "web"), caminhos(r));
@@ -110,20 +110,20 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void dependenciasNaoEntramLinkSimbolicoParaForaNaoSegueEProfundidadeQuatroNaoConta() throws Exception {
-        g.projeto("projeto-a");
-        Path projeto = g.raiz.resolve("projeto-a");
-        repoEm("projeto-a", "app", "a");
-        repoEm("projeto-a", "servicos/api", "b"); // .git a 3 níveis: entra
+        g.projeto("portal-docs");
+        Path projeto = g.raiz.resolve("portal-docs");
+        repoEm("portal-docs", "app", "a");
+        repoEm("portal-docs", "servicos/api", "b"); // .git a 3 níveis: entra
         for (String ignorada : List.of("node_modules/pkg", "vendor/lib", "build/gerado", "dist/sub", ".venv/lib", ".cache/x")) {
-            g.git(g.projeto("projeto-a/" + ignorada), "init", "-q", "-b", "main");
+            g.git(g.projeto("portal-docs/" + ignorada), "init", "-q", "-b", "main");
         }
-        g.git(g.projeto("projeto-a/a/b/c"), "init", "-q", "-b", "main"); // .git a 4 níveis: não entra
+        g.git(g.projeto("portal-docs/a/b/c"), "init", "-q", "-b", "main"); // .git a 4 níveis: não entra
         // um repositório FORA do projeto, apontado por um link de pasta e por um link no lugar do .git
         Path fora = g.repositorio("../fora-do-projeto/repo");
         g.escrever(fora, "x.txt", "x");
         g.commitar(fora, "de fora");
         Files.createSymbolicLink(projeto.resolve("link-para-fora"), fora);
-        Path comGitLink = g.projeto("projeto-a/com-git-link");
+        Path comGitLink = g.projeto("portal-docs/com-git-link");
         Files.createSymbolicLink(comGitLink.resolve(".git"), fora.resolve(".git"));
         igualNosDoisCaminhos(projeto, List.of("app", "servicos/api"));
     }
@@ -186,9 +186,9 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void oFindEFixoEPorListaNuncaRecebeTextoDoDono() throws Exception {
-        g.projeto("app-loja");
-        repoEm("app-loja", "app", "a");
-        Path projeto = g.raiz.resolve("app-loja");
+        g.projeto("loja-web");
+        repoEm("loja-web", "app", "a");
+        Path projeto = g.raiz.resolve("loja-web");
         viaFind(projeto).resumo();
         List<List<String>> finds = g.comandos.stream().filter(c -> c.get(0).equals("find")).toList();
         assertEquals(1, finds.size());
@@ -200,9 +200,9 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void seAProcuraFalhaOAppNaoDizSemGitNemLiberaCriar() throws Exception {
-        g.projeto("app-loja");
-        repoEm("app-loja", "app", "a");
-        Path projeto = g.raiz.resolve("app-loja");
+        g.projeto("loja-web");
+        repoEm("loja-web", "app", "a");
+        Path projeto = g.raiz.resolve("loja-web");
         ExecutorDeArgumentos semFind = new ExecutorDeArgumentos() {
             @Override
             public ResultadoExec executar(List<String> argumentos, Map<String, String> ambiente, byte[] stdin, Duration prazo) throws IOException, InterruptedException {
@@ -250,12 +250,12 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void aSubpastaLidaMostraOsCommitsOsBranchesEAsAlteracoesCertosEIgualAoDaRaiz() throws Exception {
-        g.projeto("app-loja");
-        Path app = repoEm("app-loja", "app", "a");
+        g.projeto("loja-web");
+        Path app = repoEm("loja-web", "app", "a");
         g.git(app, "branch", "feature/entrega");
         g.escrever(app, "README.md", "# mudado\n");
         g.escrever(app, "novo.txt", "n\n");
-        Path projeto = g.raiz.resolve("app-loja");
+        Path projeto = g.raiz.resolve("loja-web");
         LeitorDeGitDoProjeto lp = doProjeto(projeto, LeitorDeGitDoProjeto.Memoria.NENHUMA);
         ResumoDoRepositorio r = lp.resumo().valorOuNulo();
         assertEquals(ResumoDoRepositorio.Estado.COM_GIT, r.estado(), "com um só, abre direto nele");
@@ -284,10 +284,10 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void comDoisSemEscolhaVemALista_aEscolhaLeASubpastaCertaEFicaLembrada() throws Exception {
-        g.projeto("servico-demo");
-        repoEm("servico-demo", "api", "x");
-        repoEm("servico-demo", "web", "y");
-        Path projeto = g.raiz.resolve("servico-demo");
+        g.projeto("painel-api");
+        repoEm("painel-api", "api", "x");
+        repoEm("painel-api", "web", "y");
+        Path projeto = g.raiz.resolve("painel-api");
         MemoriaFalsa memoria = new MemoriaFalsa();
         LeitorDeGitDoProjeto lp = doProjeto(projeto, memoria);
         ResumoDoRepositorio lista = lp.resumo().valorOuNulo();
@@ -319,9 +319,9 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void umaEscolhaLembradaQueSumiuDaListaEIgnoradaEComUmSoVoltarALstaNaoReabreNele() throws Exception {
-        g.projeto("app-loja");
-        repoEm("app-loja", "app", "a");
-        Path projeto = g.raiz.resolve("app-loja");
+        g.projeto("loja-web");
+        repoEm("loja-web", "app", "a");
+        Path projeto = g.raiz.resolve("loja-web");
         MemoriaFalsa memoria = new MemoriaFalsa();
         memoria.valor.set("repositorio-que-sumiu");
         LeitorDeGitDoProjeto lp = doProjeto(projeto, memoria);
@@ -337,9 +337,9 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void seAPastaPrincipalVoltaASerRepositorioOLeitorDoProjetoLeDela() throws Exception {
-        g.projeto("app-loja");
-        repoEm("app-loja", "app", "a");
-        Path projeto = g.raiz.resolve("app-loja");
+        g.projeto("loja-web");
+        repoEm("loja-web", "app", "a");
+        Path projeto = g.raiz.resolve("loja-web");
         LeitorDeGitDoProjeto lp = doProjeto(projeto, LeitorDeGitDoProjeto.Memoria.NENHUMA);
         assertEquals("app", lp.resumo().valorOuNulo().subpasta());
         g.git(projeto, "init", "-q", "-b", "main");
@@ -360,10 +360,10 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void aConferenciaDizOsRepositoriosAbaixoEOMotorRecusaCriarSemAConfirmacao() throws Exception {
-        g.projeto("app-loja");
-        Path app = repoEm("app-loja", "app", "a");
-        g.escrever(g.raiz.resolve("app-loja"), "docker-compose.yml", "services: {}\n");
-        Path projeto = g.raiz.resolve("app-loja");
+        g.projeto("loja-web");
+        Path app = repoEm("loja-web", "app", "a");
+        g.escrever(g.raiz.resolve("loja-web"), "docker-compose.yml", "services: {}\n");
+        Path projeto = g.raiz.resolve("loja-web");
         CriadorDeRepositorio c = criador(projeto);
         ConferenciaDoRepositorio conf = c.conferirCriacao();
         assertEquals(Situacao.PODE_CRIAR, conf.situacao(), String.valueOf(conf.falha()));
@@ -392,9 +392,9 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void comAConfirmacaoExplicitaCriaPorEscolhaDoDonoEAppFicaForaDoCommit() throws Exception {
-        g.projeto("app-loja");
-        Path app = repoEm("app-loja", "app", "a");
-        Path projeto = g.raiz.resolve("app-loja");
+        g.projeto("loja-web");
+        Path app = repoEm("loja-web", "app", "a");
+        Path projeto = g.raiz.resolve("loja-web");
         g.escrever(projeto, "docker-compose.yml", "services: {}\n");
         CriadorDeRepositorio c = criador(projeto);
         ConferenciaDoRepositorio conf = c.conferirCriacao();

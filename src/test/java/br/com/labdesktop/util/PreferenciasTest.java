@@ -309,27 +309,27 @@ class PreferenciasTest {
     @Test
     void repositorioGitViajaPorServidorEProjetoEArquivoAntigoContinuaValendo(@TempDir Path tmp) throws Exception {
         CaminhosApp c = caminhos(tmp);
-        Preferencias p = Preferencias.padrao().comRepositorioGit("srv-1", "app-loja", "app").comRepositorioGit("srv-1", "servico-demo", "servicos/api").comRepositorioGit("srv-2", "app-loja", "web");
-        assertEquals("app", p.repositorioGitDe("srv-1", "app-loja"));
-        assertEquals("web", p.repositorioGitDe("srv-2", "app-loja"), "o mesmo projeto em outro servidor é outra escolha");
+        Preferencias p = Preferencias.padrao().comRepositorioGit("srv-1", "loja-web", "app").comRepositorioGit("srv-1", "painel-api", "servicos/api").comRepositorioGit("srv-2", "loja-web", "web");
+        assertEquals("app", p.repositorioGitDe("srv-1", "loja-web"));
+        assertEquals("web", p.repositorioGitDe("srv-2", "loja-web"), "o mesmo projeto em outro servidor é outra escolha");
         assertNull(p.repositorioGitDe("srv-1", "outro-projeto"));
-        assertNull(p.repositorioGitDe("outro", "app-loja"));
-        assertNull(p.repositorioGitDe(null, "app-loja"));
+        assertNull(p.repositorioGitDe("outro", "loja-web"));
+        assertNull(p.repositorioGitDe(null, "loja-web"));
         p.salvar(c);
         Preferencias lida = Preferencias.carregar(c);
         assertEquals(p, lida);
-        assertEquals("servicos/api", lida.repositorioGitDe("srv-1", "servico-demo"));
+        assertEquals("servicos/api", lida.repositorioGitDe("srv-1", "painel-api"));
         // esquecer tira só aquela entrada, e o servidor sem entradas some do arquivo
-        Preferencias menos = lida.comRepositorioGit("srv-1", "app-loja", null);
-        assertNull(menos.repositorioGitDe("srv-1", "app-loja"));
-        assertEquals("servicos/api", menos.repositorioGitDe("srv-1", "servico-demo"));
-        Preferencias semNada = menos.comRepositorioGit("srv-1", "servico-demo", null).comRepositorioGit("srv-2", "app-loja", null);
+        Preferencias menos = lida.comRepositorioGit("srv-1", "loja-web", null);
+        assertNull(menos.repositorioGitDe("srv-1", "loja-web"));
+        assertEquals("servicos/api", menos.repositorioGitDe("srv-1", "painel-api"));
+        Preferencias semNada = menos.comRepositorioGit("srv-1", "painel-api", null).comRepositorioGit("srv-2", "loja-web", null);
         assertEquals(Preferencias.padrao(), semNada);
         Preferencias.padrao().salvar(c);
         assertFalse(Files.readString(c.arquivoPreferencias()).contains("srv-1"), "sem escolhas, nenhum servidor nem projeto no arquivo");
 
         Files.writeString(c.arquivoPreferencias(), "{\"versao\": 1, \"tema\": \"claro\"}");
-        assertNull(Preferencias.carregar(c).repositorioGitDe("srv-1", "app-loja"), "arquivo de antes do campo: nenhuma escolha");
+        assertNull(Preferencias.carregar(c).repositorioGitDe("srv-1", "loja-web"), "arquivo de antes do campo: nenhuma escolha");
     }
 
     @Test

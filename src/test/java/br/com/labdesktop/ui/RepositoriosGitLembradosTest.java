@@ -17,20 +17,20 @@ class RepositoriosGitLembradosTest {
         CaminhosApp caminhos = CaminhosApp.de(tmp.resolve("dados"), tmp.resolve("logs"));
         PreferenciasAtuais prefs = new PreferenciasAtuais(caminhos, Preferencias.padrao());
         RepositoriosGitLembrados lembrados = RepositoriosGitLembrados.dasPreferencias(prefs);
-        assertNull(lembrados.lembrado("s1", "app-loja"));
-        lembrados.lembrar("s1", "app-loja", "app");
-        lembrados.lembrar("s2", "app-loja", "web");
-        assertEquals("app", lembrados.lembrado("s1", "app-loja"));
-        assertEquals("web", lembrados.lembrado("s2", "app-loja"));
-        assertNull(lembrados.lembrado("s1", "projeto-b"));
+        assertNull(lembrados.lembrado("s1", "loja-web"));
+        lembrados.lembrar("s1", "loja-web", "app");
+        lembrados.lembrar("s2", "loja-web", "web");
+        assertEquals("app", lembrados.lembrado("s1", "loja-web"));
+        assertEquals("web", lembrados.lembrado("s2", "loja-web"));
+        assertNull(lembrados.lembrado("s1", "carteira"));
         prefs.descarregar();
 
         // o app abre de novo: lê o arquivo
         RepositoriosGitLembrados depois = RepositoriosGitLembrados.dasPreferencias(new PreferenciasAtuais(caminhos, Preferencias.carregar(caminhos)));
-        assertEquals("app", depois.lembrado("s1", "app-loja"));
-        depois.lembrar("s1", "app-loja", null);
-        assertNull(depois.lembrado("s1", "app-loja"));
-        assertEquals("web", depois.lembrado("s2", "app-loja"), "esquecer um não mexe no outro");
+        assertEquals("app", depois.lembrado("s1", "loja-web"));
+        depois.lembrar("s1", "loja-web", null);
+        assertNull(depois.lembrado("s1", "loja-web"));
+        assertEquals("web", depois.lembrado("s2", "loja-web"), "esquecer um não mexe no outro");
     }
 
     @Test

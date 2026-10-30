@@ -128,16 +128,16 @@ class GitPeloSshEmbutidoTest {
     void projetoComORepositorioEmSubpastaPeloCanalExecAchaLeEORecusaCriarPorCima() throws Exception {
         assumeTrue(ShellDeTeste.temShell() && GitDeTeste.temGit());
         GitDeTeste g = new GitDeTeste(tmp);
-        Path projeto = g.projeto("app-loja");
+        Path projeto = g.projeto("loja-web");
         g.escrever(projeto, "docker-compose.yml", "services: {}\n");
-        Path app = g.repositorio("app-loja/app");
+        Path app = g.repositorio("loja-web/app");
         g.escrever(app, "README.md", "# app\n");
         g.commitar(app, "Primeiro do app");
         String estranho = "ação d'ávila \"x\" $(touch ARMADILHA) `ls` $HOME;rm";
-        Path outro = g.repositorio("app-loja/" + estranho);
+        Path outro = g.repositorio("loja-web/" + estranho);
         g.escrever(outro, "b.txt", "b\n");
         g.commitar(outro, "Primeiro do estranho");
-        g.git(g.projeto("app-loja/node_modules/pkg"), "init", "-q", "-b", "main");
+        g.git(g.projeto("loja-web/node_modules/pkg"), "init", "-q", "-b", "main");
         try (CenarioDeConexao c = CenarioDeConexao.novo()) {
             shell(c, g);
             conectar(c);

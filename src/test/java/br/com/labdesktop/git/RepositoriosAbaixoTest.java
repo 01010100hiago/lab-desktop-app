@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
  */
 class RepositoriosAbaixoTest {
 
-    private static final String RAIZ = "/srv/lab/projects/app-loja";
+    private static final String RAIZ = "/srv/lab/projects/loja-web";
 
     private static String saida(String... caminhosRelativos) {
         StringBuilder sb = new StringBuilder();
@@ -56,7 +56,7 @@ class RepositoriosAbaixoTest {
 
     @Test
     void oQueNaoComecaPelaRaizOuTemPontoPontoOuControleEDescartado() {
-        assertEquals(List.of(), RepositoriosAbaixo.interpretar(RAIZ, "/etc/outro/.git\0" + "/srv/lab/projects/app-loja-irmao/app/.git\0").caminhos(), "fora da raiz");
+        assertEquals(List.of(), RepositoriosAbaixo.interpretar(RAIZ, "/etc/outro/.git\0" + "/srv/lab/projects/loja-web-irmao/app/.git\0").caminhos(), "fora da raiz");
         assertEquals(List.of(), achar("../outro/.git", "app/../../x/.git", "a/./b/.git"), "nada de .. nem .");
         assertEquals(List.of(), achar("app\nruim/.git", "app\tx/.git", "ap\u0007p/.git"), "controle no nome: descartado em silêncio");
         assertEquals(List.of(), achar(".git", "app/.git/.git", "app/.git/config", "app/algo"), "só <subpasta>/.git, nunca o .git da raiz nem de dentro de um .git");
@@ -106,8 +106,8 @@ class RepositoriosAbaixoTest {
 
     @Test
     void juntarPastaESubpastaComABarraDaPasta() {
-        assertEquals("/srv/lab/projects/app-loja/app", ValidadorDeGit.juntar(RAIZ, "app"));
-        assertEquals("/srv/lab/projects/app-loja/app", ValidadorDeGit.juntar(RAIZ + "/", "app"));
+        assertEquals("/srv/lab/projects/loja-web/app", ValidadorDeGit.juntar(RAIZ, "app"));
+        assertEquals("/srv/lab/projects/loja-web/app", ValidadorDeGit.juntar(RAIZ + "/", "app"));
         assertEquals("C:\\Users\\ana\\x\\servicos\\api", ValidadorDeGit.juntar("C:\\Users\\ana\\x", "servicos/api"));
         for (String ruim : List.of("../x", "/etc", "a//b", "")) {
             org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> ValidadorDeGit.juntar(RAIZ, ruim), ruim);
