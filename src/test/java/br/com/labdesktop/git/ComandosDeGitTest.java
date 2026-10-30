@@ -17,6 +17,7 @@ class ComandosDeGitTest {
 
     static final String PASTA = "/srv/lab/projects/loja-web";
     static final String H = "13e9892ed683963b757ee9dc6a1581997ffead16";
+    static final String NONCE = "0123456789abcdef";
     static final String AREA = "/tmp/lab-desktop-git-0123456789abcdef";
 
     static List<ComandoGit> todos() {
@@ -24,9 +25,9 @@ class ComandosDeGitTest {
         l.add(ComandosDeGit.versao());
         l.add(ComandosDeGit.ehRepositorio(PASTA));
         l.add(ComandosDeGit.status(PASTA));
-        l.add(ComandosDeGit.ultimoCommit(PASTA));
-        l.add(ComandosDeGit.commits(PASTA, null, 0, 51));
-        l.add(ComandosDeGit.commits(PASTA, "feature/x", 50, 51));
+        l.add(ComandosDeGit.ultimoCommit(PASTA, NONCE));
+        l.add(ComandosDeGit.commits(PASTA, null, 0, 51, NONCE));
+        l.add(ComandosDeGit.commits(PASTA, "feature/x", 50, 51, NONCE));
         l.add(ComandosDeGit.cabecalhoDoCommit(PASTA, H));
         l.add(ComandosDeGit.arquivosDoCommit(PASTA, H));
         l.add(ComandosDeGit.diffDoCommit(PASTA, H, "ação x.txt", null));
@@ -44,6 +45,10 @@ class ComandosDeGitTest {
         l.add(ComandosDeGit.checarIgnorados(PASTA, null, new byte[0]));
         l.add(ComandosDeGit.rastreadosQueParecemSegredo(PASTA));
         l.add(ComandosDeGit.hashCurtoDaCabeca(PASTA));
+        l.add(ComandosDeGit.configuracaoQueExecuta(PASTA));
+        l.add(ComandosDeGit.hashDaArvoreVazia(PASTA));
+        l.add(ComandosDeGit.arquivosDeUmaPastaNova(PASTA, "dados-novos/"));
+        l.add(ComandosDeGit.criarPastaDaArea(AREA));
         l.add(ComandosDeGit.criarAreaTemporaria(AREA));
         l.add(ComandosDeGit.escreverExclusoes(AREA, new byte[0]));
         l.add(ComandosDeGit.apagarAreaTemporaria(AREA));
@@ -113,7 +118,7 @@ class ComandosDeGitTest {
                 assertTrue(a.contains("--no-gpg-sign") && a.contains("--no-verify"), "nenhuma senha de assinatura nem gancho no meio");
             }
             if (a.contains("init") && c.natureza() == Natureza.ESCRITA) {
-                assertEquals(List.of("init", "-q", "-b", "main"), a.subList(a.indexOf("init"), a.size()));
+                assertEquals(List.of("init", "-q", "-b", "main", "--template="), a.subList(a.indexOf("init"), a.size()), "sem o modelo de pasta do usuário: nenhum gancho copiado");
             }
         }
     }
@@ -143,8 +148,8 @@ class ComandosDeGitTest {
         assertTrue(a.indexOf("--") < a.indexOf("ação x.txt"), "os caminhos vêm depois do --");
         assertTrue(a.contains("--literal-pathspecs"), "um caminho com * ou : não vira padrão");
         assertFalse(c.livres().contains(a.indexOf(H)));
-        ComandoGit lg = ComandosDeGit.commits(PASTA, "feature/x", 0, 51);
-        assertTrue(lg.livres().isEmpty(), "branch e números nunca são texto livre: " + lg.livres());
+        ComandoGit lg = ComandosDeGit.commits(PASTA, "feature/x", 0, 51, NONCE);
+        assertEquals(Set.of(lg.argumentos().indexOf("feature/x")), lg.livres(), "o branch é texto livre (pode ter acento e símbolos); números e o resto não");
         assertEquals("--", lg.argumentos().get(lg.argumentos().size() - 1));
         assertTrue(lg.argumentos().indexOf("feature/x") < lg.argumentos().indexOf("--"));
         ComandoGit ident = ComandosDeGit.gravarIdentidadeLocal(PASTA, "user.name", "Ana Silva");
@@ -160,10 +165,10 @@ class ComandosDeGitTest {
         assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.arquivosDoCommit(PASTA, "--output=/tmp/x"));
         assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.diffDoCommit(PASTA, H, "../fora", null));
         assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.diffDoCommit(PASTA, H, "ok.txt", "/etc/passwd"));
-        assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.commits(PASTA, "--all", 0, 10));
-        assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.commits(PASTA, null, -1, 10));
-        assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.commits(PASTA, null, 0, 0));
-        assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.commits(PASTA, null, 0, 501));
+        assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.commits(PASTA, "--all", 0, 10, NONCE));
+        assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.commits(PASTA, null, -1, 10, NONCE));
+        assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.commits(PASTA, null, 0, 0, NONCE));
+        assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.commits(PASTA, null, 0, 501, NONCE));
         assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.status("relativa"));
         assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.status("-C/x"));
         assertThrows(IllegalArgumentException.class, () -> ComandosDeGit.diffDeNaoRastreado(PASTA, "a\nb"));

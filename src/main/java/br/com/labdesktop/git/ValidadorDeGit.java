@@ -9,11 +9,15 @@ import java.util.regex.Pattern;
  */
 public final class ValidadorDeGit {
 
-    /** Um hash de commit, abreviado ou inteiro (o git aceita de 7 a 40 em minúsculas). */
-    public static final Pattern HASH = Pattern.compile("^[0-9a-f]{7,40}$");
+    /** Um hash de commit, abreviado ou inteiro (de 7 a 64 em minúsculas: o inteiro tem 40 num repositório comum e 64 num repositório SHA-256). */
+    public static final Pattern HASH = Pattern.compile("^[0-9a-f]{7,64}$");
 
-    /** Lista branca do nome de um branch: começa por letra ou número (nunca por {@code -}, que viraria opção). */
-    private static final Pattern BRANCH = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$");
+    /** O tamanho de um hash INTEIRO: 40 (SHA-1) ou 64 (SHA-256). */
+    public static boolean hashInteiro(String hash) {
+        return hashValido(hash) && (hash.length() == 40 || hash.length() == 64);
+    }
+
+    private static final int MAXIMO_DO_BRANCH = 200;
 
     private static final int MAXIMO_DO_CAMINHO = 1024;
 
@@ -32,14 +36,21 @@ public final class ValidadorDeGit {
     }
 
     /**
-     * Um nome de branch que o app aceita pôr num comando: lista branca de caracteres, sem {@code ..}, sem {@code //}, sem segmento que começa com ponto, sem terminar em
-     * {@code /}, {@code .} ou {@code .lock} (as regras do próprio git para nomes de referência, mais a nossa: nada de começar por {@code -}).
+     * Um nome de branch que o app aceita pôr num comando: o que o PRÓPRIO git aceita ({@code git check-ref-format}: acento, {@code #}, {@code +}, {@code @} no meio, {@code ;} e o que mais ele deixa), menos o perigoso:
+     * vazio, mais de 200 caracteres, começar com {@code -} (viraria opção), espaço ou caractere de controle, {@code ~ ^ : ? * [ \\}, {@code ..}, {@code //}, {@code @{}, o nome {@code @} sozinho, terminar em {@code /},
+     * {@code .} ou {@code .lock} e segmento que começa com ponto. O nome vai SEMPRE como texto livre (entre aspas simples por SSH), então os símbolos de shell que o git deixa não viram comando.
      */
     public static boolean branchValido(String nome) {
-        if (nome == null || !BRANCH.matcher(nome).matches()) {
+        if (nome == null || nome.isEmpty() || nome.length() > MAXIMO_DO_BRANCH || nome.charAt(0) == '-' || nome.equals("@")) {
             return false;
         }
-        if (nome.contains("..") || nome.contains("//") || nome.endsWith("/") || nome.endsWith(".") || nome.endsWith(".lock")) {
+        for (int i = 0; i < nome.length(); i++) {
+            char c = nome.charAt(i);
+            if (c <= 0x20 || c == 0x7F || (c >= 0x80 && c < 0xA0) || "~^:?*[\\".indexOf(c) >= 0) {
+                return false;
+            }
+        }
+        if (nome.contains("..") || nome.contains("//") || nome.contains("@{") || nome.endsWith("/") || nome.endsWith(".") || nome.endsWith(".lock")) {
             return false;
         }
         for (String parte : nome.split("/")) {

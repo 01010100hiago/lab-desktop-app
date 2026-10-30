@@ -40,7 +40,14 @@ public final class AreaTemporaria implements AutoCloseable {
         String caminho;
         if (ambiente.local()) {
             try {
-                Path pasta = Files.createDirectory(Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath().resolve(nome));
+                Path alvo = Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath().resolve(nome);
+                Path pasta;
+                try {
+                    // só o proprietário lê (700) onde o sistema tem permissões POSIX; no Windows a pasta temporária já é do usuário
+                    pasta = Files.createDirectory(alvo, java.nio.file.attribute.PosixFilePermissions.asFileAttribute(java.nio.file.attribute.PosixFilePermissions.fromString("rwx------")));
+                } catch (UnsupportedOperationException e) {
+                    pasta = Files.createDirectory(alvo);
+                }
                 caminho = pasta.toString();
             } catch (IOException e) {
                 throw new ErroDoGit(new FalhaDoGit(FalhaDoGit.Tipo.SEM_PERMISSAO, "Não consegui criar a pasta temporária deste computador para conferir a lista de arquivos."));
@@ -50,6 +57,12 @@ public final class AreaTemporaria implements AutoCloseable {
         }
         AreaTemporaria area = new AreaTemporaria(ambiente.local(), caminho, executor);
         try {
+            if (!ambiente.local()) {
+                ExecutorDeGit.Saida pasta = executor.rodar(ComandosDeGit.criarPastaDaArea(caminho), PRAZO); // mkdir -m 700: outro usuário do servidor não lê o que o git põe ali
+                if (!pasta.ok()) {
+                    throw new ErroDoGit(ClassificadorDeErrosDoGit.classificar(pasta.status(), pasta.stderr(), null));
+                }
+            }
             ExecutorDeGit.Saida s = executor.rodar(ComandosDeGit.criarAreaTemporaria(caminho), PRAZO);
             if (!s.ok()) {
                 throw new ErroDoGit(ClassificadorDeErrosDoGit.classificar(s.status(), s.stderr(), null));
@@ -94,6 +107,8 @@ public final class AreaTemporaria implements AutoCloseable {
     /** Apaga a área. Nunca lança (é o que roda no {@code finally}); se não deu, o resto fica na pasta temporária do sistema, que se limpa sozinha. */
     @Override
     public void close() {
+        // com a thread já interrompida (o Cancelar) o executor desistiria na hora e a pasta ficaria: limpa o aviso, apaga e devolve o aviso
+        boolean interrompida = Thread.interrupted();
         try {
             if (local) {
                 apagarLocal(Path.of(caminho));
@@ -103,7 +118,11 @@ public final class AreaTemporaria implements AutoCloseable {
         } catch (ErroDoGit | IOException | RuntimeException e) {
             // melhor esforço: a pasta é pequena e fica no temporário do sistema
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            interrompida = true;
+        } finally {
+            if (interrompida) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 

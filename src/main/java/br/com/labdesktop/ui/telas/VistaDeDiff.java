@@ -4,6 +4,7 @@ import br.com.labdesktop.git.DiffDoArquivo;
 import br.com.labdesktop.git.LinhaDeDiff;
 import br.com.labdesktop.ui.componentes.Botao;
 import br.com.labdesktop.ui.componentes.BotaoCopiar;
+import br.com.labdesktop.ui.componentes.Botoes;
 import br.com.labdesktop.ui.componentes.Caixa;
 import br.com.labdesktop.ui.componentes.CopiadorDeTexto;
 import br.com.labdesktop.ui.componentes.Notificacoes;
@@ -47,6 +48,8 @@ final class VistaDeDiff extends Painel {
     private final CardLayout cartoes = new CardLayout();
     private final JPanel corpo = new Painel(cartoes);
     private final Botao copiar;
+    private final Botao mostrarMesmoAssim = Botoes.mini("Mostrar mesmo assim", "olho");
+    private Runnable aoMostrarMesmoAssim;
     private String textoParaCopiar = "";
     private DiffDoArquivo atual;
 
@@ -68,8 +71,18 @@ final class VistaDeDiff extends Painel {
         rolagem.setBorder(br.com.labdesktop.ui.componentes.Bordas.contorno(Tokens.LOGS_BORDA));
         rolagem.getViewport().setBackground(Tokens.cor(Tokens.LOGS_BG));
         mensagem.setBorder(BorderFactory.createEmptyBorder(24, 16, 24, 16));
+        mostrarMesmoAssim.setName("mostrar-mesmo-assim");
+        mostrarMesmoAssim.setVisible(false);
+        mostrarMesmoAssim.addActionListener(e -> {
+            Runnable r = aoMostrarMesmoAssim;
+            aoMostrarMesmoAssim = null;
+            if (r != null) {
+                r.run();
+            }
+        });
         JPanel quadro = new Painel(new BorderLayout());
         quadro.add(mensagem, BorderLayout.CENTER);
+        quadro.add(Caixa.linha(0, Caixa.mola(), mostrarMesmoAssim, Caixa.mola()), BorderLayout.SOUTH);
         corpo.add(rolagem, CARTAO_DIFF);
         corpo.add(quadro, CARTAO_MENSAGEM);
 
@@ -101,7 +114,18 @@ final class VistaDeDiff extends Painel {
         mostrarMensagem(caminho, "", "Não consegui ler o diff: " + frase);
     }
 
+    /**
+     * O arquivo parece conter segredos (um {@code .env}, uma chave): o conteúdo NÃO é lido nem mostrado até o usuário clicar em "Mostrar mesmo assim", que roda {@code aoMostrar}.
+     */
+    void protegido(String caminho, Runnable aoMostrar) {
+        mostrarMensagem(caminho, "", "Este arquivo parece conter segredos: o conteúdo não é exibido.");
+        aoMostrarMesmoAssim = aoMostrar;
+        mostrarMesmoAssim.setVisible(true);
+    }
+
     private void mostrarMensagem(String caminho, String conta, String frase) {
+        mostrarMesmoAssim.setVisible(false);
+        aoMostrarMesmoAssim = null;
         atual = null;
         linhas.clear();
         arquivo.setText(caminho);
@@ -131,7 +155,8 @@ final class VistaDeDiff extends Painel {
         linhas.addAll(d.linhas());
         arquivo.setText(caminho);
         arquivo.setToolTipText(caminho);
-        contagem.setText("+" + d.acrescentadas() + " acrescentadas  -" + d.tiradas() + " tiradas");
+        boolean soInformacao = d.linhas().stream().allMatch(l -> l.tipo() == LinhaDeDiff.Tipo.INFORMACAO);
+        contagem.setText(soInformacao ? "" : "+" + d.acrescentadas() + " acrescentadas  -" + d.tiradas() + " tiradas");
         StringBuilder av = new StringBuilder();
         if (d.cortado()) {
             av.append("diff cortado: o app mostra só o começo (até ").append(br.com.labdesktop.git.InterpretadorDeDiff.LINHAS_POR_ARQUIVO).append(" linhas ou o que cabe na leitura). ");
@@ -229,6 +254,10 @@ final class VistaDeDiff extends Painel {
 
     String textoParaCopiar() {
         return textoParaCopiar;
+    }
+
+    Botao botaoMostrarMesmoAssim() {
+        return mostrarMesmoAssim;
     }
 
     Botao botaoCopiar() {

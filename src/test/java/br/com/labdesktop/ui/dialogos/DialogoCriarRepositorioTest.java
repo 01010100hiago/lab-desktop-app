@@ -161,7 +161,7 @@ class DialogoCriarRepositorioTest {
         Motor m = new Motor();
         DialogoCriarRepositorio d = abrir(m, true, false);
         String linhas = Visual.naEdt(() -> primeiraAreaComNome(d, "linhas-do-gitignore"));
-        for (String esperada : List.of(".env", ".env.*", "!.env.example", "*.pem", "id_rsa*", "credentials*", ".npmrc", "node_modules/", "/clone-do-claude/", "/dados/grande.sql", "/dados/outro.bin")) {
+        for (String esperada : List.of(".[eE][nN][vV]*", br.com.labdesktop.git.SegredosDoProjeto.LINHA_DA_EXCECAO, "*.[pP][eE][mM]", "[iI][dD]_[rR][sS][aA]*", "[cC][rR][eE][dD][eE][nN][tT][iI][aA][lL][sS]*", "[sS][eE][cC][rR][eE][tT][sS]*", ".[aA][wW][sS]/", ".[sS][sS][hH]/", "node_modules/", "/clone-do-claude/", "/dados/grande.sql", "/dados/outro.bin")) {
             assertTrue(linhas.lines().anyMatch(esperada::equals), esperada + " em:\n" + linhas);
         }
         Visual.naEdt(() -> d.caixaDosGrandes().doClick());

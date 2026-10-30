@@ -17,6 +17,9 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
 
     private final ExecutorDeGit executor;
     private final String pasta;
+    /** O executor com os atributos neutros (Git 2.40 ou mais novo), quando já se sabe; {@code null} num git mais antigo. */
+    private volatile ExecutorDeGit neutro;
+    private volatile boolean versaoLida;
 
     /**
      * @param executor o executor do ambiente do projeto
@@ -30,6 +33,62 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
     /** Como {@link #LeitorDeGitPorExecutor(ExecutorDeArgumentos, String)}, convertendo a pasta do app para a do sistema. */
     public static LeitorDeGitPorExecutor de(ExecutorDeArgumentos executor, UnaryOperator<String> paraOSistema, String pastaNoApp) {
         return new LeitorDeGitPorExecutor(executor, paraOSistema.apply(pastaNoApp));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Um repositório não faz o app rodar um programa dele
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Descobre UMA vez (por leitor) se o git tem {@code --attr-source} (2.40 ou mais novo): se tem, guarda o executor que a põe em toda leitura, com o hash da árvore vazia DESTE repositório (SHA-1 ou
+     * SHA-256); se não tem (2.28 a 2.39), {@link #paraLerOConteudo} confere a configuração antes de cada leitura que poderia rodar um filtro.
+     */
+    private synchronized void descobrirOsAtributos() throws InterruptedException {
+        if (versaoLida) {
+            return;
+        }
+        try {
+            Saida v = executor.rodar(ComandosDeGit.versao(), PRAZO);
+            if (!v.ok()) {
+                return; // sem versão legível: trata como antigo (confere a configuração) e tenta de novo na próxima
+            }
+            int[] n = ClassificadorDeErrosDoGit.versao(v.texto());
+            if (n.length >= 2 && (n[0] > 2 || n[0] == 2 && n[1] >= 40)) {
+                Saida h = executor.rodar(ComandosDeGit.hashDaArvoreVazia(pasta), PRAZO);
+                String hash = h.ok() ? h.texto().strip() : "";
+                neutro = ValidadorDeGit.hashInteiro(hash) ? executor.comAtributosNeutros(hash) : null;
+            }
+            versaoLida = true;
+        } catch (ErroDoGit e) {
+            // git ausente ou conexão fora: a leitura de verdade diz o erro; aqui só não decide nada
+        }
+    }
+
+    /** O executor para ler o que passa pelo filtro do git (status e diff do que não foi commitado): com os atributos neutros, ou, num git antigo, depois de conferir que a configuração não executa nada. */
+    private ExecutorDeGit paraLerOConteudo() throws ErroDoGit, InterruptedException {
+        descobrirOsAtributos();
+        ExecutorDeGit n = neutro;
+        if (n != null) {
+            return n;
+        }
+        Saida c = executor.rodar(ComandosDeGit.configuracaoQueExecuta(pasta), PRAZO);
+        if (c.status() == 0 && !c.texto().isBlank()) {
+            List<String> chaves = java.util.Arrays.stream(c.texto().split("\n")).map(String::strip).filter(x -> !x.isEmpty()).limit(5)
+                .map(x -> br.com.labdesktop.seguranca.TextoSeguro.truncar(br.com.labdesktop.seguranca.TextoSeguro.limparLinha(x), 60)).toList();
+            throw new ErroDoGit(new FalhaDoGit(FalhaDoGit.Tipo.CONFIGURACAO_QUE_EXECUTA, "Este repositório tem configuração que executa programas (" + String.join(", ", chaves)
+                + "); o app não lê o Git dele por segurança. Confira o arquivo .git/config da pasta, no Terminal."));
+        }
+        if (c.status() > 1) {
+            throw new ErroDoGit(ClassificadorDeErrosDoGit.classificar(c.status(), c.stderr(), pasta));
+        }
+        return executor;
+    }
+
+    /** O executor para as leituras que nunca passam por um filtro (log, show, branches): o neutro se já se sabe, senão o comum. */
+    private ExecutorDeGit paraOHistorico() throws InterruptedException {
+        descobrirOsAtributos();
+        ExecutorDeGit n = neutro;
+        return n != null ? n : executor;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -64,16 +123,17 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
             if (!prefixo.isEmpty()) {
                 return new ResultadoDoGit.Ok<>(new ResumoDoRepositorio(ResumoDoRepositorio.Estado.DENTRO_DE_OUTRO, null, false, null, 0, null, prefixo));
             }
-            Saida st = executor.rodar(ComandosDeGit.status(pasta), PRAZO);
+            Saida st = paraLerOConteudo().rodar(ComandosDeGit.status(pasta), PRAZO);
             if (!st.ok()) {
                 return new ResultadoDoGit.Ok<>(ResumoDoRepositorio.de(ResumoDoRepositorio.Estado.ERRO, ClassificadorDeErrosDoGit.classificar(st.status(), st.stderr(), pasta)));
             }
             StatusDoGit status = InterpretadorDoStatus.interpretar(st.texto());
             Commit ultimo = null;
             if (!status.semCommits()) {
-                Saida lg = executor.rodar(ComandosDeGit.ultimoCommit(pasta), PRAZO);
+                String nonce = InterpretadorDoLog.novoNonce();
+                Saida lg = paraOHistorico().rodar(ComandosDeGit.ultimoCommit(pasta, nonce), PRAZO);
                 if (lg.ok()) {
-                    List<Commit> l = InterpretadorDoLog.interpretar(lg.texto());
+                    List<Commit> l = InterpretadorDoLog.interpretar(lg.texto(), nonce);
                     ultimo = l.isEmpty() ? null : l.get(0);
                 }
             }
@@ -87,7 +147,8 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
     @Override
     public ResultadoDoGit<PaginaDeCommits> commits(String branch, int pular, int quantos) throws InterruptedException {
         try {
-            Saida s = executor.rodar(ComandosDeGit.commits(pasta, branch, pular, quantos + 1), PRAZO);
+            String nonce = InterpretadorDoLog.novoNonce();
+            Saida s = paraOHistorico().rodar(ComandosDeGit.commits(pasta, branch, pular, quantos + 1, nonce), PRAZO);
             if (!s.ok()) {
                 FalhaDoGit f = ClassificadorDeErrosDoGit.classificar(s.status(), s.stderr(), pasta);
                 if (f.tipo() == FalhaDoGit.Tipo.SEM_COMMITS) {
@@ -95,7 +156,7 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
                 }
                 return new ResultadoDoGit.Falhou<>(f);
             }
-            List<Commit> todos = InterpretadorDoLog.interpretar(s.texto());
+            List<Commit> todos = InterpretadorDoLog.interpretar(s.texto(), nonce); // nenhum commit é descartado: "há mais" vale sobre o que o git devolveu
             boolean mais = todos.size() > quantos;
             return new ResultadoDoGit.Ok<>(new PaginaDeCommits(mais ? todos.subList(0, quantos) : todos, mais));
         } catch (ErroDoGit e) {
@@ -106,7 +167,7 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
     @Override
     public ResultadoDoGit<DetalheDoCommit> detalhe(String hash) throws InterruptedException {
         try {
-            Saida c = executor.rodar(ComandosDeGit.cabecalhoDoCommit(pasta, hash), PRAZO);
+            Saida c = paraOHistorico().rodar(ComandosDeGit.cabecalhoDoCommit(pasta, hash), PRAZO);
             if (!c.ok()) {
                 return falhou(c);
             }
@@ -114,7 +175,7 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
             if (cab == null) {
                 return new ResultadoDoGit.Falhou<>(new FalhaDoGit(FalhaDoGit.Tipo.OUTRO, "Não consegui ler este commit."));
             }
-            Saida a = executor.rodar(ComandosDeGit.arquivosDoCommit(pasta, hash), PRAZO);
+            Saida a = paraOHistorico().rodar(ComandosDeGit.arquivosDoCommit(pasta, hash), PRAZO);
             if (!a.ok()) {
                 return falhou(a);
             }
@@ -137,7 +198,7 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
             return new ResultadoDoGit.Ok<>(new DiffDoArquivo(List.of(), true, false, false, arquivo.antigo(), false, 0, 0, false));
         }
         try {
-            Saida s = executor.rodar(ComandosDeGit.diffDoCommit(pasta, hash, arquivo.caminho(), arquivo.antigo()), PRAZO);
+            Saida s = paraOHistorico().rodar(ComandosDeGit.diffDoCommit(pasta, hash, arquivo.caminho(), arquivo.antigo()), PRAZO);
             if (!s.ok()) {
                 return falhou(s);
             }
@@ -150,7 +211,7 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
     @Override
     public ResultadoDoGit<List<Branch>> branches() throws InterruptedException {
         try {
-            Saida s = executor.rodar(ComandosDeGit.branches(pasta), PRAZO);
+            Saida s = paraOHistorico().rodar(ComandosDeGit.branches(pasta), PRAZO);
             if (!s.ok()) {
                 return falhou(s);
             }
@@ -163,7 +224,7 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
     @Override
     public ResultadoDoGit<StatusDoGit> status() throws InterruptedException {
         try {
-            Saida s = executor.rodar(ComandosDeGit.status(pasta), PRAZO);
+            Saida s = paraLerOConteudo().rodar(ComandosDeGit.status(pasta), PRAZO);
             if (!s.ok()) {
                 return falhou(s);
             }
@@ -176,10 +237,14 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
     @Override
     public ResultadoDoGit<DiffDoArquivo> diffPendente(Pendencia p, boolean noIndice) throws InterruptedException {
         try {
+            ExecutorDeGit seguro = paraLerOConteudo();
+            if (p.tipo() == Pendencia.Tipo.NAO_RASTREADO && p.caminho().endsWith("/")) {
+                return new ResultadoDoGit.Ok<>(pastaNova(seguro, p.caminho()));
+            }
             ComandoGit c = p.tipo() == Pendencia.Tipo.NAO_RASTREADO
                 ? ComandosDeGit.diffDeNaoRastreado(pasta, p.caminho())
                 : ComandosDeGit.diffPendente(pasta, p.caminho(), p.antigo(), noIndice);
-            Saida s = executor.rodar(c, PRAZO);
+            Saida s = seguro.rodar(c, PRAZO);
             if (s.status() != 0 && !(p.tipo() == Pendencia.Tipo.NAO_RASTREADO && s.status() == 1)) {
                 return falhou(s);
             }
@@ -187,6 +252,26 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
         } catch (ErroDoGit e) {
             return new ResultadoDoGit.Falhou<>(e.falha());
         }
+    }
+
+    /** O que mostrar de uma PASTA nova (o {@code status} lista {@code dir/}): "pasta nova: N arquivos" e a lista (até 500, sem seguir link); um repositório de dentro é dito como tal. */
+    private DiffDoArquivo pastaNova(ExecutorDeGit seguro, String caminho) throws ErroDoGit, InterruptedException {
+        Saida s = seguro.rodar(ComandosDeGit.arquivosDeUmaPastaNova(pasta, caminho), PRAZO);
+        if (!s.ok()) {
+            throw new ErroDoGit(ClassificadorDeErrosDoGit.classificar(s.status(), s.stderr(), pasta));
+        }
+        List<String> itens = java.util.Arrays.stream(s.texto().split("\0")).filter(x -> !x.isEmpty()).toList();
+        List<LinhaDeDiff> linhas = new java.util.ArrayList<>();
+        boolean cortado = s.truncado() || itens.size() > TETO_DE_ARQUIVOS;
+        if (itens.size() == 1 && itens.get(0).endsWith("/")) {
+            linhas.add(new LinhaDeDiff(LinhaDeDiff.Tipo.INFORMACAO, "pasta nova com um repositório Git dentro: o app não olha lá dentro"));
+        } else {
+            linhas.add(new LinhaDeDiff(LinhaDeDiff.Tipo.INFORMACAO, "pasta nova: " + itens.size() + (itens.size() == 1 ? " arquivo" : " arquivos") + (cortado ? " ou mais" : "")));
+            for (String a : itens.stream().limit(TETO_DE_ARQUIVOS).toList()) {
+                linhas.add(new LinhaDeDiff(LinhaDeDiff.Tipo.INFORMACAO, br.com.labdesktop.seguranca.TextoSeguro.limparLinha(a)));
+            }
+        }
+        return new DiffDoArquivo(linhas, false, cortado, false, null, false, 0, 0, false);
     }
 
     private <T> ResultadoDoGit<T> falhou(Saida s) {

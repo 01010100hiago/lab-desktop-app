@@ -10,6 +10,7 @@ import br.com.labdesktop.git.LeitorDeGit;
 import br.com.labdesktop.git.PaginaDeCommits;
 import br.com.labdesktop.git.Pendencia;
 import br.com.labdesktop.git.ResultadoDoGit;
+import br.com.labdesktop.git.SegredosDoProjeto;
 import br.com.labdesktop.git.ResumoDoRepositorio;
 import br.com.labdesktop.git.StatusDoGit;
 import br.com.labdesktop.ui.MensagensDeErro;
@@ -131,6 +132,10 @@ final class PaginaGit extends PaginaDoProjeto {
             return size() > TETO_DO_CACHE;
         }
     };
+    /** Os arquivos com cara de segredo que o usuário mandou mostrar mesmo assim (até o próximo Atualizar). */
+    private final java.util.Set<String> liberados = new java.util.HashSet<>();
+    /** O hash da cabeça lido na primeira página: as páginas seguintes partem DELE, então um commit novo no meio não repete nem pula commits. */
+    private String ancora;
     private final List<Commit> commits = new ArrayList<>();
     private boolean temMais;
     private boolean carregando;
@@ -391,6 +396,7 @@ final class PaginaGit extends PaginaDoProjeto {
         carregando = true;
         cacheDeDetalhes.clear();
         cacheDeDiffs.clear();
+        liberados.clear();
         String branch = branchEscolhido;
         if (!carregouAlgumaVez) {
             mostrarMensagem("Lendo o Git do projeto…", "Só leitura: nada é escrito no servidor.", null, false, false, false);
@@ -453,6 +459,7 @@ final class PaginaGit extends PaginaDoProjeto {
         }
         commits.clear();
         commits.addAll(t.commits().valorOuNulo().commits());
+        ancora = commits.isEmpty() ? null : commits.get(0).hash();
         temMais = t.commits().valorOuNulo().temMais();
         branchesAtuais = t.branches().ok() ? t.branches().valorOuNulo() : List.of();
         statusAtual = t.status().ok() ? t.status().valorOuNulo() : null;
@@ -512,7 +519,7 @@ final class PaginaGit extends PaginaDoProjeto {
         }
         int minha = geracao.get();
         int pular = commits.size();
-        String branch = branchEscolhido;
+        String branch = ancora != null ? ancora : branchEscolhido; // a partir da cabeça da primeira página, nunca da cabeça de agora
         carregandoMais = true;
         carregarMais.setEnabled(false);
         Tarefas.rodar(() -> leitor.commits(branch, pular, COMMITS_POR_VEZ), (ResultadoDoGit<PaginaDeCommits> r) -> {
@@ -630,6 +637,18 @@ final class PaginaGit extends PaginaDoProjeto {
             diffDoCommit.mostrar(a.caminho(), pronto);
             return;
         }
+        if (SegredosDoProjeto.pareceSegredo(a.caminho()) && !liberados.contains(chave)) {
+            // o conteúdo de um arquivo com cara de segredo nem é lido até o usuário pedir (um .env commitado, por exemplo)
+            diffDoCommit.protegido(a.caminho(), () -> {
+                liberados.add(chave);
+                lerODiffDoCommit(leitor, d, a, chave, geracaoDoDiff.incrementAndGet());
+            });
+            return;
+        }
+        lerODiffDoCommit(leitor, d, a, chave, minha);
+    }
+
+    private void lerODiffDoCommit(LeitorDeGit leitor, DetalheDoCommit d, ArquivoDoCommit a, String chave, int minha) {
         diffDoCommit.carregando(a.caminho());
         Tarefas.rodar(() -> leitor.diffDoCommit(d.commit().hash(), a), (ResultadoDoGit<DiffDoArquivo> r) -> {
             if (minha != geracaoDoDiff.get()) {
@@ -678,6 +697,18 @@ final class PaginaGit extends PaginaDoProjeto {
             diffPendente.mostrar(p.caminho(), pronto);
             return;
         }
+        if (SegredosDoProjeto.pareceSegredo(p.caminho()) && !liberados.contains(chave)) {
+            // um .env que ainda não é do repositório (nem está no .gitignore) não tem o conteúdo lido nem mostrado até o usuário pedir
+            diffPendente.protegido(p.caminho(), () -> {
+                liberados.add(chave);
+                lerODiffPendente(leitor, p, noIndice, chave, geracaoDoDiff.incrementAndGet());
+            });
+            return;
+        }
+        lerODiffPendente(leitor, p, noIndice, chave, minha);
+    }
+
+    private void lerODiffPendente(LeitorDeGit leitor, Pendencia p, boolean noIndice, String chave, int minha) {
         diffPendente.carregando(p.caminho());
         Tarefas.rodar(() -> leitor.diffPendente(p, noIndice), (ResultadoDoGit<DiffDoArquivo> r) -> {
             if (minha != geracaoDoDiff.get()) {

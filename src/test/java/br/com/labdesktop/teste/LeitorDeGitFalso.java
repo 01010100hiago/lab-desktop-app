@@ -110,6 +110,16 @@ public final class LeitorDeGitFalso implements LeitorDeGit {
             return new ResultadoDoGit.Falhou<>(falhaDeCommits);
         }
         List<Commit> todos = branch == null ? commits : commitsPorBranch.getOrDefault(branch, List.of());
+        if (branch != null && br.com.labdesktop.git.ValidadorDeGit.hashInteiro(branch)) { // a âncora: a lista A PARTIR daquele commit, como o git faz
+            List<Commit> base = commits;
+            int i = -1;
+            for (int k = 0; k < base.size() && i < 0; k++) {
+                if (base.get(k).hash().equals(branch)) {
+                    i = k;
+                }
+            }
+            todos = i < 0 ? List.of() : base.subList(i, base.size());
+        }
         int de = Math.min(pular, todos.size());
         int ate = Math.min(pular + quantos, todos.size());
         return new ResultadoDoGit.Ok<>(new PaginaDeCommits(todos.subList(de, ate), todos.size() > ate));

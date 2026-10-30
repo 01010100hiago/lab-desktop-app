@@ -35,6 +35,10 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
     /** Arquivo acima disto (5 MB) fica de fora, a menos que o usuário marque a caixa. */
     public static final long LIMITE_DE_TAMANHO = 5L * 1024 * 1024;
 
+    /** O que a janela diz quando o {@code .gitignore} é um link. */
+    static final String FRASE_DO_LINK = "O .gitignore deste projeto é um link para outro arquivo. O app não grava através de link nem troca um link por um arquivo comum. "
+        + "Troque o link por um .gitignore de verdade (ou apague o link) e confira de novo.";
+
     /** A mensagem do primeiro commit. */
     public static final String MENSAGEM_DO_PRIMEIRO_COMMIT = "Primeiro commit";
 
@@ -107,7 +111,8 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
         } catch (ErroDoGit e) {
             return ConferenciaDoRepositorio.parou(e.falha().tipo() == FalhaDoGit.Tipo.GIT_NAO_INSTALADO ? Situacao.GIT_AUSENTE : Situacao.NAO_CONFERI, e.falha(), versao);
         } catch (ErroSftp e) {
-            return ConferenciaDoRepositorio.parou(Situacao.NAO_CONFERI, new FalhaDoGit(FalhaDoGit.Tipo.OUTRO, "Não consegui ler a pasta do projeto: " + e.getMessage()), versao);
+            String frase = e.getMessage().equals(FRASE_DO_LINK) ? FRASE_DO_LINK : "Não consegui ler a pasta do projeto: " + e.getMessage();
+            return ConferenciaDoRepositorio.parou(Situacao.NAO_CONFERI, new FalhaDoGit(FalhaDoGit.Tipo.OUTRO, frase), versao);
         }
     }
 
@@ -117,11 +122,15 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
         return s.ok() ? br.com.labdesktop.seguranca.TextoSeguro.limparLinha(s.texto()) : "";
     }
 
+    /** O texto do {@code .gitignore} de hoje ({@code null} se não existe); um {@code .gitignore} que é LINK é recusado: o app não grava através de um link nem troca um link por arquivo. */
     private String lerGitignore() throws ErroSftp {
         try (ClienteSftp c = ambiente.abrirArquivos()) {
             String caminho = pastaNoApp + "/.gitignore";
             if (!c.existe(caminho)) {
                 return null;
+            }
+            if (c.estatisticas(caminho).link()) {
+                throw new ErroSftp(ErroSftp.Tipo.NOME_INVALIDO, FRASE_DO_LINK);
             }
             return DecodificadorDeTexto.decodificar(c.lerArquivo(caminho, TETO_DO_GITIGNORE)).texto();
         }
@@ -259,6 +268,12 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
                 return new ResultadoDaCriacao(false, false, antes.frase() + " Nada foi feito.", List.of(), PASSOS, null, 0, "", antes);
             }
 
+            try {
+                lerGitignore(); // um .gitignore que é link barra a criação ANTES do git init
+            } catch (ErroSftp e) {
+                return new ResultadoDaCriacao(false, false, e.getMessage() + " Nada foi feito.", List.of(), PASSOS, null, 0, "", new FalhaDoGit(FalhaDoGit.Tipo.OUTRO, e.getMessage()));
+            }
+
             // 1. git init -b main
             observador.passo("Criando o repositório (git init)…");
             Saida init = completo.rodar(ComandosDeGit.iniciar(pasta), PRAZO_DA_ESCRITA);
@@ -292,7 +307,11 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
             PlanejadorDoGitignore.Plano plano;
             try (ClienteSftp c = ambiente.abrirArquivos()) {
                 String caminho = pastaNoApp + "/.gitignore";
-                String atual = c.existe(caminho) ? DecodificadorDeTexto.decodificar(c.lerArquivo(caminho, TETO_DO_GITIGNORE)).texto() : null;
+                boolean existe = c.existe(caminho);
+                if (existe && c.estatisticas(caminho).link()) {
+                    throw new ErroSftp(ErroSftp.Tipo.NOME_INVALIDO, FRASE_DO_LINK);
+                }
+                String atual = existe ? DecodificadorDeTexto.decodificar(c.lerArquivo(caminho, TETO_DO_GITIGNORE)).texto() : null;
                 plano = PlanejadorDoGitignore.planejar(atual, conf.extrasDoGitignore(pedido.incluirGrandes()));
                 if (plano.mudaAlgo()) {
                     int permissoes = 0644;
@@ -347,8 +366,8 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
             byte[] entrada = (String.join("\0", lista) + "\0").getBytes(StandardCharsets.UTF_8);
             Saida add = completo.rodar(ComandosDeGit.adicionarDaLista(pasta, entrada), PRAZO_DA_ESCRITA);
             if (!add.ok()) {
-                completo.rodar(ComandosDeGit.limparPreparo(pasta), PRAZO);
-                return parou(feito, iniciou, passo, ClassificadorDeErrosDoGit.classificar(add.status(), add.stderr(), pasta), null);
+                String desfazer = desfazerOPreparo();
+                return parou(feito, iniciou, passo, ClassificadorDeErrosDoGit.classificar(add.status(), add.stderr(), pasta), desfazer);
             }
             feito.add("Preparei " + lista.size() + " arquivo(s) (git add).");
 
@@ -358,10 +377,10 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
             Saida rastreados = completo.rodar(ComandosDeGit.rastreadosQueParecemSegredo(pasta), PRAZO);
             List<String> dentro = rastreados.ok() ? java.util.Arrays.stream(rastreados.texto().split("\0")).filter(x -> !x.isEmpty()).filter(SegredosDoProjeto::pareceSegredo).toList() : List.of();
             if (!rastreados.ok() || !dentro.isEmpty()) {
-                completo.rodar(ComandosDeGit.limparPreparo(pasta), PRAZO);
+                String desfazer = desfazerOPreparo();
                 return parou(feito, iniciou, passo, new FalhaDoGit(FalhaDoGit.Tipo.OUTRO, rastreados.ok()
-                    ? "Um arquivo com cara de segredo foi preparado (" + dentro.get(0) + "). O app desfez a preparação e não fez o commit."
-                    : "Não consegui conferir o que foi preparado. O app desfez a preparação e não fez o commit."), null);
+                    ? "Um arquivo com cara de segredo foi preparado (" + dentro.get(0) + "). O app não fez o commit."
+                    : "Não consegui conferir o que foi preparado. O app não fez o commit."), desfazer);
             }
 
             // 8. Primeiro commit
@@ -379,6 +398,21 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
         } catch (ErroDoGit e) {
             return parou(feito, iniciou, passo, e.falha(), null);
         }
+    }
+
+    /**
+     * Tira tudo da área de preparo (git reset) e DIZ a verdade sobre o resultado: se o git respondeu que desfez, a frase conta; se não, a frase diz que a preparação continua e dá o comando para o usuário rodar.
+     */
+    private String desfazerOPreparo() throws InterruptedException {
+        try {
+            Saida r = completo.rodar(ComandosDeGit.limparPreparo(pasta), PRAZO);
+            if (r.ok()) {
+                return "O app desfez a preparação dos arquivos.";
+            }
+        } catch (ErroDoGit e) {
+            // cai na frase de baixo
+        }
+        return "O app NÃO conseguiu desfazer a preparação dos arquivos: eles continuam na área de preparo. Para desfazer, rode no Terminal: git -C " + ClassificadorDeErrosDoGit.paraOShell(pasta) + " reset";
     }
 
     private static boolean cancelou(Cancelamento c) {

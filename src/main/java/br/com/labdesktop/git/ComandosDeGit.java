@@ -13,8 +13,13 @@ import java.util.regex.Pattern;
  * ou escrever no projeto. O que varia (pasta, hash, branch, caminho) passa antes por {@link ValidadorDeGit}; o único texto digitado pelo usuário (o nome de quem assina) entra como texto livre,
  * entre aspas simples por SSH. {@code GitDoProjetoSemEfeitoSozinhoTest} varre este código: nada de {@code add -f}, {@code --force}, {@code push}, {@code remote} nem {@code --global}.
  *
- * <p>A leitura leva sempre {@code --no-pager}, {@code -c core.quotepath=off} (nome com acento sai exato), {@code -c core.fsmonitor=false} (um repositório não faz o app rodar um programa dele),
+ * <p>A leitura leva sempre {@code --no-pager}, {@code -c core.quotepath=off} (nome com acento sai exato), {@code -c core.fsmonitor=false} (o fsmonitor de um repositório não roda),
  * {@code GIT_TERMINAL_PROMPT=0} (nunca espera senha), {@code GIT_OPTIONAL_LOCKS=0} (ler nunca escreve na pasta) e {@code LC_ALL=C} (as frases do git não mudam com o idioma).
+ *
+ * <p><b>Um repositório não faz o app rodar um programa dele</b> só com isso e mais as opções dos diffs ({@code --no-ext-diff}, {@code --no-textconv}) quando o Git é 2.40 ou mais novo, porque aí o
+ * {@link ExecutorDeGit#comAtributosNeutros} põe {@code --attr-source} apontando para a árvore vazia em toda leitura: o {@code .gitattributes} do projeto deixa de valer e nenhum {@code filter=} (com o
+ * {@code [filter "x"] clean = programa} do {@code .git/config}) roda no {@code status} nem no {@code diff}. Num Git mais antigo (2.28 a 2.39) essa opção não existe, então o leitor confere ANTES
+ * ({@link #configuracaoQueExecuta}) se o {@code .git/config} tem filtro, fsmonitor, ganchos, comando de SSH, pager, comando de diff ou {@code include}, e, se tem, não roda {@code status} nem {@code diff}.
  */
 public final class ComandosDeGit {
 
@@ -27,7 +32,11 @@ public final class ComandosDeGit {
     /** O ambiente de toda execução do git pelo app. */
     private static final Map<String, String> AMBIENTE = Map.of("GIT_TERMINAL_PROMPT", "0", "GIT_OPTIONAL_LOCKS", "0", "LC_ALL", "C");
 
-    private static final String FORMATO_COMPLETO = InterpretadorDoLog.FORMATO.substring(0, InterpretadorDoLog.FORMATO.lastIndexOf("%s")) + "%B";
+    /** O hash da árvore vazia num repositório SHA-1 (o padrão); num SHA-256 o leitor pergunta ao git ({@link #hashDaArvoreVazia}). */
+    public static final String ARVORE_VAZIA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+    /** O que no {@code .git/config} faz o git rodar um programa (conferido antes de ler num git que não tem {@code --attr-source}). */
+    private static final String REGEXP_DA_CONFIGURACAO_QUE_EXECUTA = "^(filter\\.|core\\.(fsmonitor|hookspath|sshcommand|pager)|diff\\..*\\.(command|textconv)|include)";
 
     private ComandosDeGit() { }
 
@@ -49,28 +58,43 @@ public final class ComandosDeGit {
         return leitura(pasta, false, "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal").pronto();
     }
 
-    /** O último commit (para a linha "Código"). */
-    public static ComandoGit ultimoCommit(String pasta) {
-        return leitura(pasta, false, "log", "--max-count=1", "--no-show-signature", "--format=" + InterpretadorDoLog.FORMATO, "--shortstat").pronto();
+    /** O hash da árvore vazia NESTE repositório (SHA-1 ou SHA-256): {@code hash-object -t tree --stdin} com a entrada vazia. Não escreve nada (sem {@code -w}). */
+    public static ComandoGit hashDaArvoreVazia(String pasta) {
+        return leitura(pasta, false, "hash-object", "-t", "tree", "--stdin").pronto();
     }
 
     /**
-     * Uma fatia do log: {@code quantos} commits depois de pular {@code pular}, a partir de {@code ref} ({@code null}: a cabeça atual).
+     * O {@code .git/config} DESTE repositório tem algo que faz o git rodar um programa? Imprime os nomes das chaves (nunca os valores); sai com 1 quando não há nenhuma. Só o leitor de um git sem
+     * {@code --attr-source} usa.
      */
-    public static ComandoGit commits(String pasta, String ref, int pular, int quantos) {
+    public static ComandoGit configuracaoQueExecuta(String pasta) {
+        Montagem m = leitura(pasta, false, "config", "--local", "--name-only", "--get-regexp");
+        return m.livre(REGEXP_DA_CONFIGURACAO_QUE_EXECUTA).pronto();
+    }
+
+    /** O último commit (para a linha "Código"). {@code nonce}: o de {@link InterpretadorDoLog#novoNonce()}, o mesmo que o parser vai receber. */
+    public static ComandoGit ultimoCommit(String pasta, String nonce) {
+        return leitura(pasta, false, "log", "--max-count=1", "--no-show-signature", "--format=" + InterpretadorDoLog.formato(nonce), "--shortstat").pronto();
+    }
+
+    /**
+     * Uma fatia do log: {@code quantos} commits depois de pular {@code pular}, a partir de {@code ref} ({@code null}: a cabeça atual; um branch; ou o HASH da cabeça lida na primeira página, que ancora as
+     * páginas seguintes: um commit novo no meio não as desloca). A ref vai como texto livre (um branch pode ter acento e símbolos).
+     */
+    public static ComandoGit commits(String pasta, String ref, int pular, int quantos, String nonce) {
         if (pular < 0 || quantos < 1 || quantos > 500) {
             throw new IllegalArgumentException("Fatia do log fora do razoável.");
         }
-        Montagem m = leitura(pasta, false, "log", "--no-show-signature", "--format=" + InterpretadorDoLog.FORMATO, "--shortstat", "--skip=" + pular, "--max-count=" + quantos);
+        Montagem m = leitura(pasta, false, "log", "--no-show-signature", "--format=" + InterpretadorDoLog.formato(nonce), "--shortstat", "--skip=" + pular, "--max-count=" + quantos);
         if (ref != null) {
-            m.fixo(ValidadorDeGit.exigirBranch(ref));
+            m.livre(ValidadorDeGit.exigirBranch(ref));
         }
         return m.fixo("--").pronto();
     }
 
     /** O cabeçalho completo de um commit (hash, autor, data, mensagem inteira). */
     public static ComandoGit cabecalhoDoCommit(String pasta, String hash) {
-        return leitura(pasta, false, "show", "-s", "--no-show-signature", "--format=" + FORMATO_COMPLETO, ValidadorDeGit.exigirHash(hash), "--").pronto();
+        return leitura(pasta, false, "show", "-s", "--no-show-signature", "--format=" + InterpretadorDoLog.FORMATO_DO_CABECALHO, ValidadorDeGit.exigirHash(hash), "--").pronto();
     }
 
     /** Os arquivos de um commit com as linhas acrescentadas e tiradas (contra o primeiro pai, se for um merge). */
@@ -117,6 +141,11 @@ public final class ComandosDeGit {
         return m.pronto();
     }
 
+    /** Os arquivos de uma PASTA nova (não rastreada), sem seguir links: {@code ls-files -o --exclude-standard}; um repositório de dentro sai como a própria pasta com barra. */
+    public static ComandoGit arquivosDeUmaPastaNova(String pasta, String pastaNova) {
+        return listarNaoRastreados(pasta, null, ValidadorDeGit.exigirCaminhoRelativo(pastaNova.endsWith("/") ? pastaNova.substring(0, pastaNova.length() - 1) : pastaNova) + "/", false);
+    }
+
     /** Lê um valor da configuração que vale na pasta (global ou local): {@code user.name} ou {@code user.email}. */
     public static ComandoGit lerConfiguracao(String pasta, String chave) {
         if (!chave.equals("user.name") && !chave.equals("user.email")) {
@@ -137,6 +166,14 @@ public final class ComandosDeGit {
     /** O nome de uma área temporária, deste computador ou do servidor (a forma que o app gera; nada além disso). */
     public static boolean areaTemporariaValida(String caminho) {
         return areaRemotaValida(caminho) || (caminho != null && AREA_LOCAL.matcher(caminho).matches());
+    }
+
+    /** Cria a pasta da área temporária só para o usuário (700): outro usuário do servidor não lê o que o git põe ali. Só no servidor por SSH (neste computador o app cria a pasta pelo Java). */
+    public static ComandoGit criarPastaDaArea(String area) {
+        if (!areaRemotaValida(area)) {
+            throw new IllegalArgumentException("Área temporária inválida.");
+        }
+        return new ComandoGit(Natureza.TEMPORARIO, List.of("mkdir", "-m", "700", "--", area), Set.of(), Map.of(), null);
     }
 
     /** Cria o repositório descartável (sem pasta de trabalho) que só serve para o git aplicar o {@code .gitignore} sem tocar no projeto. */
@@ -212,9 +249,12 @@ public final class ComandosDeGit {
     // Escrita (só pelo clique de "Criar repositório")
     // =====================================================================================================
 
-    /** {@code git init -b main}: cria o repositório (o branch inicial se chama main). */
+    /**
+     * {@code git init -b main}: cria o repositório (o branch inicial se chama main), SEM o modelo de pasta do usuário ({@code --template=} vazio): um {@code init.templateDir} global não copia ganchos para o
+     * repositório novo.
+     */
     public static ComandoGit iniciar(String pasta) {
-        return escrita(pasta, "init", "-q", "-b", "main").pronto();
+        return escrita(pasta, "init", "-q", "-b", "main", "--template=").pronto();
     }
 
     /** Grava o nome ou o e-mail de quem assina SÓ neste repositório ({@code --local}); nunca na configuração global. */
@@ -239,9 +279,13 @@ public final class ComandosDeGit {
         return escrita(pasta, "reset", "-q").pronto();
     }
 
-    /** O primeiro commit: a mensagem vai pela entrada; sem ganchos nem assinatura (nada espera uma senha). */
+    /**
+     * O primeiro commit: a mensagem vai pela entrada; sem ganchos nem assinatura (nada espera uma senha). {@code --no-verify} só pula o {@code pre-commit} e o {@code commit-msg}; o {@code post-commit} e os
+     * outros ganchos só deixam de rodar porque {@code core.hooksPath} aponta para {@code /dev/null} neste comando (a pasta não existe, então nenhum gancho vale, nem o de um {@code core.hooksPath} global).
+     * Não foi conferido num Windows de verdade.
+     */
     public static ComandoGit commitar(String pasta, String mensagem) {
-        return escrita(pasta, "commit", "-q", "--no-verify", "--no-gpg-sign", "-F", "-").comEntrada(mensagem.getBytes(java.nio.charset.StandardCharsets.UTF_8)).pronto();
+        return escrita(pasta, "-c", "core.hooksPath=/dev/null", "commit", "-q", "--no-verify", "--no-gpg-sign", "-F", "-").comEntrada(mensagem.getBytes(java.nio.charset.StandardCharsets.UTF_8)).pronto();
     }
 
     /** O hash curto da cabeça (para dizer o que foi criado). */
@@ -264,6 +308,9 @@ public final class ComandosDeGit {
             if (argumentos.size() >= 4 && argumentos.get(0).equals("rm") && argumentos.equals(List.of("rm", "-rf", "--", argumentos.get(argumentos.size() - 1))) && areaRemotaValida(argumentos.get(argumentos.size() - 1))) {
                 return Natureza.TEMPORARIO;
             }
+            if (argumentos.size() == 5 && argumentos.get(0).equals("mkdir") && argumentos.subList(1, 4).equals(List.of("-m", "700", "--")) && areaRemotaValida(argumentos.get(4))) {
+                return Natureza.TEMPORARIO;
+            }
             if (argumentos.size() == 2 && argumentos.get(0).equals("tee") && argumentos.get(1).endsWith("/info/exclude") && areaRemotaValida(argumentos.get(1).substring(0, argumentos.get(1).length() - "/info/exclude".length()))) {
                 return Natureza.TEMPORARIO;
             }
@@ -277,7 +324,7 @@ public final class ComandosDeGit {
             String a = argumentos.get(i);
             if (a.equals("-C") || a.equals("-c")) {
                 i += 2;
-            } else if (a.equals("--no-pager") || a.equals("--literal-pathspecs") || a.startsWith("--git-dir=") || a.startsWith("--work-tree=")) {
+            } else if (a.equals("--no-pager") || a.equals("--literal-pathspecs") || a.startsWith("--git-dir=") || a.startsWith("--work-tree=") || a.startsWith("--attr-source=")) {
                 i++;
             } else {
                 break;
@@ -290,7 +337,13 @@ public final class ComandosDeGit {
         if (sub.equals("init") && argumentos.size() == i + 4 && argumentos.get(i + 1).equals("-q") && argumentos.get(i + 2).equals("--bare") && areaTemporariaValida(argumentos.get(i + 3))) {
             return Natureza.TEMPORARIO;
         }
+        if (sub.equals("hash-object")) {
+            return argumentos.subList(i, argumentos.size()).equals(List.of("hash-object", "-t", "tree", "--stdin")) ? Natureza.LEITURA : Natureza.ESCRITA;
+        }
         if (sub.equals("config")) {
+            if (argumentos.size() == i + 5 && argumentos.subList(i + 1, i + 4).equals(List.of("--local", "--name-only", "--get-regexp"))) {
+                return Natureza.LEITURA; // só LISTA os nomes das chaves que fazem o git rodar programa
+            }
             return argumentos.contains("--get") && !argumentos.contains("--local") && !argumentos.contains("--global") ? Natureza.LEITURA : Natureza.ESCRITA;
         }
         if (SUBCOMANDOS_DE_LEITURA.contains(sub)) {
@@ -319,7 +372,8 @@ public final class ComandosDeGit {
     private static Montagem escrita(String pasta, String... resto) {
         ValidadorDeGit.exigirPasta(pasta);
         Montagem m = new Montagem(Natureza.ESCRITA, false);
-        m.fixo("git").fixo("--no-pager").fixo("-C").fixo(pasta).fixo("-c").fixo("core.quotepath=off").fixo("-c").fixo("core.fsmonitor=false");
+        // --literal-pathspecs em TODA escrita: um arquivo chamado "*" ou ":!ok.txt" é só um nome, nunca um padrão que pegue (ou tire) outros arquivos
+        m.fixo("git").fixo("--no-pager").fixo("--literal-pathspecs").fixo("-C").fixo(pasta).fixo("-c").fixo("core.quotepath=off").fixo("-c").fixo("core.fsmonitor=false");
         for (String r : resto) {
             m.fixo(r);
         }

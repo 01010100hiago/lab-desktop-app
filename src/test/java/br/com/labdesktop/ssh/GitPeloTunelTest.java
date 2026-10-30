@@ -99,7 +99,7 @@ class GitPeloTunelTest {
             assertTrue(criou.criou(), criou.mensagem());
             assertEquals(List.of(".gitignore", "index.js"), List.of(g.git(sem, "ls-files").strip().split("\n")), "o .env não entrou");
             assertFalse(c.ssh.comandos.isEmpty());
-            assertTrue(c.ssh.comandos.stream().allMatch(l -> l.startsWith("env ") || l.startsWith("git ") || l.startsWith("tee /tmp/lab-desktop-git-") || l.startsWith("rm -rf -- /tmp/lab-desktop-git-")),
+            assertTrue(c.ssh.comandos.stream().allMatch(l -> l.startsWith("env ") || l.startsWith("git ") || l.startsWith("mkdir -m 700 -- /tmp/lab-desktop-git-") || l.startsWith("tee /tmp/lab-desktop-git-") || l.startsWith("rm -rf -- /tmp/lab-desktop-git-")),
                 "só linhas fixas do git pelo túnel: " + c.ssh.comandos);
             assertTrue(c.ssh.comandos.stream().noneMatch(l -> l.contains("sudo") || l.contains("--global")));
         }

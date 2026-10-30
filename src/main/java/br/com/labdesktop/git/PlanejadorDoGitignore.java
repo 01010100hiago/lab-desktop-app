@@ -9,7 +9,7 @@ import java.util.Set;
  * Decide o que o app acrescenta ao {@code .gitignore} do projeto, SEM escrever nada: devolve as linhas novas (para a janela mostrar antes) e o texto final do arquivo. Nunca tira nem muda uma
  * linha do usuário: só acrescenta, no fim, as que faltam (comparadas sem espaço no fim), com um comentário na frente, e mantém o estilo de quebra de linha do arquivo (CRLF continua CRLF).
  *
- * <p>Uma regra de ordem: {@code !.env.example} (a exceção) tem de vir DEPOIS de {@code .env.*}; se o app acrescenta {@code .env.*}, repete a exceção logo depois, mesmo que o usuário já a tivesse mais acima.
+ * <p>Uma regra de ordem: {@code !.env.example} (a exceção) tem de vir DEPOIS de {@code .env*}; se o app acrescenta {@code .env*}, repete a exceção logo depois, mesmo que o usuário já a tivesse mais acima.
  */
 public final class PlanejadorDoGitignore {
 
@@ -53,8 +53,8 @@ public final class PlanejadorDoGitignore {
                 novas.add(l);
             }
         }
-        if (novas.contains(".env.*") && !novas.contains("!.env.example")) {
-            novas.add(novas.indexOf(".env.*") + 1, "!.env.example"); // a exceção tem de vir depois da regra que ela libera
+        if (novas.contains(SegredosDoProjeto.LINHA_DO_ENV) && !novas.contains(SegredosDoProjeto.LINHA_DA_EXCECAO)) {
+            novas.add(novas.indexOf(SegredosDoProjeto.LINHA_DO_ENV) + 1, SegredosDoProjeto.LINHA_DA_EXCECAO); // a exceção tem de vir depois da regra que ela libera
         }
         StringBuilder sb = new StringBuilder(base);
         if (!novas.isEmpty()) {

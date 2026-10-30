@@ -232,7 +232,7 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
         assertEquals("", g.git(p, "status", "--porcelain").strip(), "tudo o que sobrou está ignorado: o status fica limpo");
         // o .gitignore tem as linhas, inclusive as do arquivo grande e do clone
         String gi = Files.readString(p.resolve(".gitignore"));
-        assertTrue(gi.contains(".env.*") && gi.contains("!.env.example") && gi.contains("node_modules/") && gi.contains("/clone-externo/") && gi.contains("/dados/grande.sql"), gi);
+        assertTrue(gi.contains(SegredosDoProjeto.LINHA_DO_ENV) && gi.contains(SegredosDoProjeto.LINHA_DA_EXCECAO) && gi.contains("node_modules/") && gi.contains("/clone-externo/") && gi.contains("/dados/grande.sql"), gi);
         // os arquivos continuam no disco
         assertTrue(Files.exists(p.resolve(".env")) && Files.exists(p.resolve("clone-externo/.git")) && Files.exists(p.resolve("dados/grande.sql")));
         assertEquals(8, passos.size(), passos.toString());

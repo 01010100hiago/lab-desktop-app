@@ -25,6 +25,8 @@ public record FalhaDoGit(Tipo tipo, String frase, String comandoParaCopiar) {
         SEM_PERMISSAO,
         /** O git é antigo demais para o que o app pede. */
         GIT_ANTIGO,
+        /** O repositório tem configuração que faz o git rodar programas (filtro, fsmonitor, ganchos...): o app não lê por segurança. */
+        CONFIGURACAO_QUE_EXECUTA,
         /** O comando passou do prazo. */
         DEMOROU,
         /** A conexão caiu ou o servidor não deixa rodar comando. */

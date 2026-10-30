@@ -170,7 +170,9 @@ class PaginaGitTest {
         Visual.naEdt(() -> c.pagina.botaoCarregarMais().doClick(0));
         esperar("terceira fatia", () -> c.pagina.commitsCarregados() == 120);
         assertFalse(ed(() -> c.pagina.botaoCarregarMais().isVisible()), "acabaram");
-        assertEquals(List.of("commits:null:0:50", "commits:null:50:50", "commits:null:100:50"), c.leitor.chamadas.stream().filter(x -> x.startsWith("commits")).toList());
+        String cabeca = LeitorDeGitFalso.commit(120).hash();
+        assertEquals(List.of("commits:null:0:50", "commits:" + cabeca + ":50:50", "commits:" + cabeca + ":100:50"), c.leitor.chamadas.stream().filter(x -> x.startsWith("commits")).toList(),
+            "a primeira página parte da cabeça; as outras partem do HASH dela (âncora)");
         assertEquals(LeitorDeGitFalso.commit(1).curto(), ed(() -> c.pagina.tabelaDeCommits().textoDa(119, 0)));
     }
 
@@ -192,8 +194,9 @@ class PaginaGitTest {
         Cena c = new Cena(true).comCommits(1);
         // o texto passa pelo interpretador do log (que neutraliza o início html) e a célula da tabela ainda desliga o HTML do Swing
         String hash = LeitorDeGitFalso.commit(1).hash();
-        String saida = "\u001e" + hash + "\u001f" + hash.substring(0, 7) + "\u001f<html><b>Ana</b>\u001fa@example.com\u001f1793304758\u001f\u001f<html><img src='x'>oi\n";
-        Commit h = br.com.labdesktop.git.InterpretadorDoLog.interpretar(saida).get(0);
+        String nonce = "0123456789abcdef";
+        String saida = "\0" + nonce + "\0" + hash + "\0" + hash.substring(0, 7) + "\0<html><b>Ana</b>\0a@example.com\0" + "1793304758\0\0<html><img src='x'>oi\n";
+        Commit h = br.com.labdesktop.git.InterpretadorDoLog.interpretar(saida, nonce).get(0);
         c.leitor.commits = List.of(h);
         c.ler();
         TabelaDeDados<Commit> t = c.pagina.tabelaDeCommits();

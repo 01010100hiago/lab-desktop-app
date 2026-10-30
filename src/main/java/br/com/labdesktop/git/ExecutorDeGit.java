@@ -7,7 +7,10 @@ import br.com.labdesktop.ssh.ComandoDemorouException;
 import br.com.labdesktop.ssh.ResultadoExec;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -33,25 +36,57 @@ public final class ExecutorDeGit {
 
     private final ExecutorDeArgumentos executor;
     private final Set<Natureza> permitidas;
+    private final String arvoreVazia;
 
-    private ExecutorDeGit(ExecutorDeArgumentos executor, Set<Natureza> permitidas) {
+    private ExecutorDeGit(ExecutorDeArgumentos executor, Set<Natureza> permitidas, String arvoreVazia) {
         this.executor = executor;
         this.permitidas = permitidas;
+        this.arvoreVazia = arvoreVazia;
+    }
+
+    /**
+     * O mesmo executor com {@code --attr-source=<árvore vazia>} em TODA leitura de um repositório (Git 2.40 ou mais novo): o {@code .gitattributes} do projeto deixa de valer, então um {@code filter=} dele
+     * (que o {@code .git/config} ligaria a um programa) nunca roda no {@code status} nem no {@code diff}. A opção entra logo depois do {@code -C <pasta>}; as posições de texto livre depois dela andam uma casa.
+     *
+     * @param arvoreVazia o hash da árvore vazia do repositório (40 ou 64 letras hexadecimais)
+     */
+    public ExecutorDeGit comAtributosNeutros(String arvoreVazia) {
+        if (arvoreVazia == null || !ValidadorDeGit.hashInteiro(arvoreVazia)) {
+            throw new IllegalArgumentException("Hash da árvore vazia inválido.");
+        }
+        return new ExecutorDeGit(executor, permitidas, arvoreVazia);
+    }
+
+    /** O comando com a opção dos atributos neutros, quando este executor a tem e o comando é uma leitura de repositório com {@code -C}. */
+    private ComandoGit neutralizado(ComandoGit c) {
+        List<String> a = c.argumentos();
+        int i = a.indexOf("-C");
+        if (arvoreVazia == null || c.natureza() != Natureza.LEITURA || i < 0 || a.stream().anyMatch(x -> x.startsWith("--attr-source=")) || a.stream().anyMatch(x -> x.startsWith("--git-dir="))
+            || a.size() < i + 3 || a.contains("hash-object")) {
+            return c;
+        }
+        List<String> novos = new ArrayList<>(a);
+        novos.add(i + 2, "--attr-source=" + arvoreVazia);
+        Set<Integer> livres = new HashSet<>();
+        for (int p : c.livres()) {
+            livres.add(p >= i + 2 ? p + 1 : p);
+        }
+        return new ComandoGit(c.natureza(), novos, livres, c.ambiente(), c.entrada());
     }
 
     /** Só leitura: tudo o que a aba Git e a linha "Código" fazem. */
     public static ExecutorDeGit soDeLeitura(ExecutorDeArgumentos executor) {
-        return new ExecutorDeGit(executor, EnumSet.of(Natureza.LEITURA));
+        return new ExecutorDeGit(executor, EnumSet.of(Natureza.LEITURA), null);
     }
 
     /** Leitura e a área temporária fora do projeto: a conferência de "Criar repositório". */
     public static ExecutorDeGit paraConferir(ExecutorDeArgumentos executor) {
-        return new ExecutorDeGit(executor, EnumSet.of(Natureza.LEITURA, Natureza.TEMPORARIO));
+        return new ExecutorDeGit(executor, EnumSet.of(Natureza.LEITURA, Natureza.TEMPORARIO), null);
     }
 
     /** Tudo: só o criador de repositório usa, depois do clique. */
     public static ExecutorDeGit completo(ExecutorDeArgumentos executor) {
-        return new ExecutorDeGit(executor, EnumSet.allOf(Natureza.class));
+        return new ExecutorDeGit(executor, EnumSet.allOf(Natureza.class), null);
     }
 
     /**
@@ -59,7 +94,8 @@ public final class ExecutorDeGit {
      *
      * @throws ErroDoGit o programa não existe, o prazo estourou, a conexão caiu ou o comando é de uma natureza que este executor não aceita
      */
-    public Saida rodar(ComandoGit c, Duration prazo) throws ErroDoGit, InterruptedException {
+    public Saida rodar(ComandoGit original, Duration prazo) throws ErroDoGit, InterruptedException {
+        ComandoGit c = neutralizado(original);
         Natureza pelaForma = ComandosDeGit.naturezaPelaForma(c.argumentos());
         if (!permitidas.contains(c.natureza()) || !permitidas.contains(pelaForma) || pelaForma.ordinal() > c.natureza().ordinal()) {
             throw new ErroDoGit(new FalhaDoGit(FalhaDoGit.Tipo.OUTRO, "Este comando escreve no projeto e não é permitido aqui."));

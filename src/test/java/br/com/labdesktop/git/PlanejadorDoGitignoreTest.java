@@ -27,7 +27,7 @@ class PlanejadorDoGitignoreTest {
         assertEquals(SegredosDoProjeto.todasAsLinhas(), p.linhasNovas());
         assertEquals(PlanejadorDoGitignore.COMENTARIO + "\n" + String.join("\n", SegredosDoProjeto.todasAsLinhas()) + "\n", p.textoFinal());
         assertTrue(p.mudaAlgo());
-        assertTrue(p.linhasNovas().indexOf("!.env.example") > p.linhasNovas().indexOf(".env.*"), "a exceção vem depois da regra que ela libera");
+        assertTrue(p.linhasNovas().indexOf(SegredosDoProjeto.LINHA_DA_EXCECAO) > p.linhasNovas().indexOf(SegredosDoProjeto.LINHA_DO_ENV), "a exceção vem depois da regra que ela libera");
     }
 
     @Test
@@ -36,8 +36,7 @@ class PlanejadorDoGitignoreTest {
         PlanejadorDoGitignore.Plano p = PlanejadorDoGitignore.planejar(dono, List.of());
         assertFalse(p.criaArquivo());
         assertFalse(p.linhasNovas().contains("node_modules/"));
-        assertFalse(p.linhasNovas().contains(".env"));
-        assertTrue(p.linhasNovas().contains(".env.*"));
+        assertTrue(p.linhasNovas().contains(SegredosDoProjeto.LINHA_DO_ENV), "o .env do usuário é uma linha só para a caixa minúscula: o app acrescenta a que vale para as duas");
         assertTrue(p.textoFinal().startsWith(dono + "\n" + PlanejadorDoGitignore.COMENTARIO + "\n"), p.textoFinal());
         assertEquals(dono, p.textoFinal().substring(0, dono.length()), "o texto do usuário continua igual, byte a byte");
     }
@@ -52,8 +51,8 @@ class PlanejadorDoGitignoreTest {
 
     @Test
     void linhaComEspacoNoFimContaComoJaTendo() {
-        PlanejadorDoGitignore.Plano p = PlanejadorDoGitignore.planejar(".env  \nnode_modules/\t\n", List.of());
-        assertFalse(p.linhasNovas().contains(".env"));
+        PlanejadorDoGitignore.Plano p = PlanejadorDoGitignore.planejar("Thumbs.db  \nnode_modules/\t\n", List.of());
+        assertFalse(p.linhasNovas().contains("Thumbs.db"));
         assertFalse(p.linhasNovas().contains("node_modules/"));
     }
 
@@ -67,9 +66,9 @@ class PlanejadorDoGitignoreTest {
     @Test
     void aExcecaoDoEnvExampleVoltaDepoisDeEnvAsteriscoMesmoQueOdonoTivesseAMaisAcima() {
         PlanejadorDoGitignore.Plano p = PlanejadorDoGitignore.planejar("!.env.example\n", List.of());
-        int env = p.linhasNovas().indexOf(".env.*");
+        int env = p.linhasNovas().indexOf(SegredosDoProjeto.LINHA_DO_ENV);
         assertTrue(env >= 0);
-        assertEquals("!.env.example", p.linhasNovas().get(env + 1));
+        assertEquals(SegredosDoProjeto.LINHA_DA_EXCECAO, p.linhasNovas().get(env + 1));
         // e vale de verdade: .env.example não é ignorado, .env.local é
         assumeTrue(GitDeTeste.temGit());
         GitDeTeste g = new GitDeTeste(tmp);
@@ -128,10 +127,13 @@ class PlanejadorDoGitignoreTest {
         assumeTrue(GitDeTeste.temGit());
         GitDeTeste g = new GitDeTeste(tmp);
         Path repo = g.repositorio("loja-web");
-        g.escrever(repo, ".gitignore", String.join("\n", SegredosDoProjeto.PADROES) + "\n");
+        g.escrever(repo, ".gitignore", String.join("\n", SegredosDoProjeto.PADROES.stream().map(SegredosDoProjeto::semDistinguirCaixa).toList()) + "\n");
         List<String> nomes = List.of(".env", ".env.local", ".env.production", ".env.example", "app/.env", "app/.env.example", "chave.pem", "server.key", "id_rsa", "id_rsa.pub", "id_ed25519",
             "id_ecdsa", "id_dsa", "credentials.json", "credentials", "aws/credentials", ".npmrc", ".pypirc", ".netrc", "loja.p12", "loja.pfx", "x.keystore", "release.jks",
-            "README.md", "src/app.js", "environment.ts", "env.js", "keys.md", "monkey.txt", "pem.txt", "credenciais.txt", "my.envrc", "dotenv.js");
+            "README.md", "src/app.js", "environment.ts", "env.js", "keys.md", "monkey.txt", "pem.txt", "credenciais.txt", "my.envrc", "dotenv.js",
+            ".ENV", ".Env.Local", ".env ", "ID_RSA", "Credentials.json", "CHAVE.PEM", ".git-credentials", "secrets.json", "Secrets.yaml", "secret.txt", ".htpasswd", "terraform.tfstate", "terraform.tfstate.backup", "x.TFSTATE",
+            "banco.kdbx", "service-account.json", "service-account-prod.json", "Service-Account-X.JSON", "service-accounts.txt", ".ssh/id_rsa", ".ssh/config", "x/.ssh/known_hosts", ".aws/credentials", "a/.AWS/config", "ssh/config",
+            "aws.txt", ".envrc", ".environment");
         for (String n : nomes) {
             boolean ignoradoPeloGit = g.bruto(repo, "check-ignore", "-q", "--", n).status() == 0;
             assertEquals(ignoradoPeloGit, SegredosDoProjeto.pareceSegredo(n), "git x Java para " + n);

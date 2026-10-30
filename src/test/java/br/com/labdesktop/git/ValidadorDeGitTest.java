@@ -14,7 +14,10 @@ class ValidadorDeGitTest {
         assertTrue(ValidadorDeGit.hashValido("abcdef0"));
         assertTrue(ValidadorDeGit.hashValido("a".repeat(40)));
         assertFalse(ValidadorDeGit.hashValido("abcdef"), "6 é pouco");
-        assertFalse(ValidadorDeGit.hashValido("a".repeat(41)));
+        assertTrue(ValidadorDeGit.hashValido("a".repeat(64)), "o hash inteiro de um repositório SHA-256");
+        assertFalse(ValidadorDeGit.hashValido("a".repeat(65)));
+        assertTrue(ValidadorDeGit.hashInteiro("a".repeat(40)) && ValidadorDeGit.hashInteiro("a".repeat(64)));
+        assertFalse(ValidadorDeGit.hashInteiro("a".repeat(41)) || ValidadorDeGit.hashInteiro("abcdef0"));
         assertFalse(ValidadorDeGit.hashValido("ABCDEF0"), "maiúscula não");
         assertFalse(ValidadorDeGit.hashValido("abcdefg"));
         assertFalse(ValidadorDeGit.hashValido("HEAD"));
@@ -27,11 +30,11 @@ class ValidadorDeGitTest {
 
     @Test
     void branchPorListaBranca() {
-        for (String ok : new String[] {"main", "feature/entrega", "release-1.2", "hotfix_9", "a", "Feature/ABC-123"}) {
+        for (String ok : new String[] {"main", "feature/entrega", "release-1.2", "hotfix_9", "a", "Feature/ABC-123", "ação/versão", "fix#12", "feat+x", "user@host", "a;b", "a$b", "a(b)", "ok'nome"}) {
             assertTrue(ValidadorDeGit.branchValido(ok), ok);
         }
-        for (String ruim : new String[] {"", "-main", "--upload-pack=x", "a..b", "a//b", "a/", "a.", "a.lock", "x/.oculto", "x/y.lock", "com espaço", "a;b", "a$(x)", "a`b`", "ação", "a\nb",
-            "~x", "x^", "x:y", "x*", "@{u}", "a".repeat(101)}) {
+        for (String ruim : new String[] {"", "-main", "--upload-pack=x", "a..b", "a//b", "a/", "a.", "a.lock", "x/.oculto", "x/y.lock", "com espaço", "a\nb", "a\tb", "a\\b",
+            "~x", "x^", "x:y", "x?", "x[y", "x*", "@{u}", "@", "a@{b", "a".repeat(201)}) {
             assertFalse(ValidadorDeGit.branchValido(ruim), ruim);
         }
         assertThrows(IllegalArgumentException.class, () -> ValidadorDeGit.exigirBranch("--force"));

@@ -3,6 +3,7 @@ package br.com.labdesktop.git;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
@@ -15,16 +16,22 @@ class InterpretadoresDoGitTest {
 
     private static final String H1 = "13e9892ed683963b757ee9dc6a1581997ffead16";
     private static final String H2 = "252c020e112a7bee691a478 76e5c8ee5162fbbb0".replace(" ", "");
-    private static final String RS = "\u001e";
-    private static final String US = "\u001f";
 
     // -------------------------------------------------------------------------------------------- log
 
+    private static final String NONCE = "0123456789abcdef";
+    private static final String M = "\0" + NONCE + "\0";
+
+    /** Um registro no formato exato do app: marca, e os sete campos separados por NUL. */
+    private static String reg(String hash, String curto, String autor, String email, String at, String pais, String assunto, String stat) {
+        return M + hash + "\0" + curto + "\0" + autor + "\0" + email + "\0" + at + "\0" + pais + "\0" + assunto + (stat == null ? "\n" : "\n\n " + stat + "\n");
+    }
+
     @Test
     void logComDoisCommitsEOTotalDeArquivos() {
-        String saida = RS + H1 + US + "13e9892" + US + "Ana Silva" + US + "ana@example.com" + US + "1793304758" + US + H2 + US + "Segundo commit" + "\n\n 2 files changed, 2 insertions(+)\n"
-            + RS + H2 + US + "252c020" + US + "Ana Silva" + US + "ana@example.com" + US + "1793304758" + US + US + "Primeiro" + "\n\n 3 files changed, 3 insertions(+)\n";
-        List<Commit> l = InterpretadorDoLog.interpretar(saida);
+        String saida = reg(H1, "13e9892", "Ana Silva", "ana@example.com", "1793304758", H2, "Segundo commit", "2 files changed, 2 insertions(+)")
+            + reg(H2, "252c020", "Ana Silva", "ana@example.com", "1793304758", "", "Primeiro", "3 files changed, 3 insertions(+)");
+        List<Commit> l = InterpretadorDoLog.interpretar(saida, NONCE);
         assertEquals(2, l.size());
         Commit c = l.get(0);
         assertEquals(H1, c.hash());
@@ -42,9 +49,8 @@ class InterpretadoresDoGitTest {
 
     @Test
     void umArquivoSoELinhaSemPluralEMergeSemTotal() {
-        String saida = RS + H1 + US + "13e9892" + US + "Ana" + US + "a@example.com" + US + "1" + US + H2 + " " + "a".repeat(40) + US + "Mescla" + "\n"
-            + RS + H2 + US + "252c020" + US + "Ana" + US + "a@example.com" + US + "2" + US + US + "um" + "\n\n 1 file changed, 1 insertion(+)\n";
-        List<Commit> l = InterpretadorDoLog.interpretar(saida);
+        String saida = reg(H1, "13e9892", "Ana", "a@example.com", "1", H2 + " " + "a".repeat(40), "Mescla", null) + reg(H2, "252c020", "Ana", "a@example.com", "2", "", "um", "1 file changed, 1 insertion(+)");
+        List<Commit> l = InterpretadorDoLog.interpretar(saida, NONCE);
         assertTrue(l.get(0).ehMerge());
         assertEquals(-1, l.get(0).arquivos(), "merge sem diferença: sem linha de totais");
         assertEquals(1, l.get(1).arquivos());
@@ -53,8 +59,7 @@ class InterpretadoresDoGitTest {
     @Test
     void assuntoComControleEBidiSaiLimpoEHtmlSaiNeutralizado() {
         String assunto = "<html><b>oi</b>\u202Etxt.exe\u001b[31m";
-        String saida = RS + H1 + US + "13e9892" + US + "Ana\u202E" + US + "a@example.com" + US + "1" + US + US + assunto + "\n";
-        Commit c = InterpretadorDoLog.interpretar(saida).get(0);
+        Commit c = InterpretadorDoLog.interpretar(reg(H1, "13e9892", "Ana\u202E", "a@example.com", "1", "", assunto, null), NONCE).get(0);
         assertFalse(c.assunto().startsWith("<html"), "o Swing trataria como HTML");
         assertFalse(c.assunto().contains("\u202E"));
         assertFalse(c.assunto().contains("\u001b"));
@@ -62,22 +67,60 @@ class InterpretadoresDoGitTest {
     }
 
     @Test
-    void registroQuebradoSomeEAListaVaziaDaVazio() {
-        assertTrue(InterpretadorDoLog.interpretar("").isEmpty());
-        assertTrue(InterpretadorDoLog.interpretar(null).isEmpty());
-        assertTrue(InterpretadorDoLog.interpretar(RS + "lixo").isEmpty());
-        assertTrue(InterpretadorDoLog.interpretar(RS + "xyz" + US + "a" + US + "b" + US + "c" + US + "d" + US + "e" + US + "f").isEmpty(), "hash que não é hash");
-        assertTrue(InterpretadorDoLog.interpretar(RS + H1 + US + "13e9892" + US + "A" + US + "a@x" + US + "não-é-número" + US + US + "x").isEmpty());
+    void assuntoEAutorComOsSeparadoresAntigosNaoPartemARegistroNemSomem() {
+        String estranho = "um\u001edois\u001ftres";
+        String saida = reg(H1, "13e9892", "Ana\u001fSilva", "a@example.com", "1", "", estranho, "1 file changed, 1 insertion(+)") + reg(H2, "252c020", "Beto", "b@example.com", "2", "", "outro", null);
+        List<Commit> l = InterpretadorDoLog.interpretar(saida, NONCE);
+        assertEquals(2, l.size(), "nenhum commit some da lista");
+        assertEquals("umdoistres", l.get(0).assunto(), "o controle some da tela, o commit fica");
+        assertEquals("AnaSilva", l.get(0).autor());
+        assertEquals(1, l.get(0).arquivos());
+        assertEquals("outro", l.get(1).assunto());
+    }
+
+    @Test
+    void autorQueImitaAMarcaFixaNaoPartePorqueAMarcaTemUmNonceQueNinguemSabe() {
+        String saida = reg(H1, "13e9892", "LABREC", "a@example.com", "1", "", "assunto", null) + reg(H2, "252c020", "\0" + NONCE.substring(0, 15) + "x", "b@example.com", "2", "", "outro", null);
+        List<Commit> l = InterpretadorDoLog.interpretar(saida, NONCE);
+        assertEquals(2, l.size());
+        assertEquals("LABREC", l.get(0).autor());
+    }
+
+    @Test
+    void registroQueNaoDaParaLerViraCommitIlegivelComOHashENuncaSome() {
+        String saida = M + H1 + "\0pedaco" + "\n" + reg(H2, "252c020", "Ana", "a@example.com", "2", "", "bom", null);
+        List<Commit> l = InterpretadorDoLog.interpretar(saida, NONCE);
+        assertEquals(2, l.size());
+        assertEquals(H1, l.get(0).hash());
+        assertEquals(InterpretadorDoLog.ILEGIVEL, l.get(0).assunto());
+        assertEquals("bom", l.get(1).assunto());
+        Commit semHash = InterpretadorDoLog.interpretar(M + "lixo\n", NONCE).get(0);
+        assertEquals(InterpretadorDoLog.ILEGIVEL, semHash.assunto());
+        assertEquals(1, InterpretadorDoLog.interpretar(reg(H1, "13e9892", "A", "a@x", "não-é-número", "", "x", null), NONCE).size(), "a data ilegível não derruba o commit");
+    }
+
+    @Test
+    void listaVaziaDaVazioEHashDeSessentaEQuatroLetrasValeNoLog() {
+        assertTrue(InterpretadorDoLog.interpretar("", NONCE).isEmpty());
+        assertTrue(InterpretadorDoLog.interpretar(null, NONCE).isEmpty());
+        String h64 = "ab".repeat(32);
+        List<Commit> l = InterpretadorDoLog.interpretar(reg(h64, h64.substring(0, 7), "Ana", "a@x", "1", "", "num repositório SHA-256", null), NONCE);
+        assertEquals(h64, l.get(0).hash(), "o hash inteiro de um repositório SHA-256 tem 64 letras");
+        assertEquals("num repositório SHA-256", l.get(0).assunto());
+        assertThrows(IllegalArgumentException.class, () -> InterpretadorDoLog.formato("curto"));
+        assertTrue(InterpretadorDoLog.nonceValido(InterpretadorDoLog.novoNonce()));
     }
 
     @Test
     void cabecalhoComMensagemInteira() {
-        String saida = RS + H1 + US + "13e9892" + US + "Ana" + US + "a@example.com" + US + "5" + US + H2 + US + "Assunto\n\nCorpo da mensagem\ncom duas linhas.\n";
+        String saida = H1 + "\0" + "13e9892\0Ana\0a@example.com\0" + "5\0" + H2 + "\0Assunto\n\nCorpo da mensagem\ncom duas linhas.\n";
         InterpretadorDoLog.Cabecalho c = InterpretadorDoLog.interpretarCabecalho(saida);
         assertEquals("Assunto", c.commit().assunto());
         assertEquals("Assunto\n\nCorpo da mensagem\ncom duas linhas.", c.mensagem());
         assertNull(InterpretadorDoLog.interpretarCabecalho(""));
         assertNull(InterpretadorDoLog.interpretarCabecalho(null));
+        String comControle = H1 + "\0" + "13e9892\0Ana\0a@example.com\0" + "5\0\0Assunto\u001edois\n";
+        assertEquals("Assuntodois", InterpretadorDoLog.interpretarCabecalho(comControle).commit().assunto(), "o U+001E de uma mensagem não atrapalha o cabeçalho");
     }
 
     // -------------------------------------------------------------------------------------------- numstat
@@ -150,10 +193,14 @@ class InterpretadoresDoGitTest {
     // -------------------------------------------------------------------------------------------- branches
 
     @Test
-    void branchesComOAtualMarcadoEOsDeNomeEstranhoDeFora() {
-        String saida = "*" + US + "main" + US + "13e9892\n" + " " + US + "feature/entrega" + US + "252c020\n" + " " + US + "x;rm -rf" + US + "aaaaaaa\n" + " " + US + "-perigo" + US + "bbbbbbb\n" + "linha solta\n";
+    void branchesComOAtualMarcadoEOsQueOGitAceitamTodosEntramSoOPerigosoFicaDeFora() {
+        String us = "\u001f";
+        String saida = "*" + us + "main" + us + "13e9892\n" + " " + us + "feature/entrega" + us + "252c020\n" + " " + us + "ação/versão" + us + "aaaaaaa\n" + " " + us + "fix#12" + us + "bbbbbbb\n"
+            + " " + us + "feat+x" + us + "ccccccc\n" + " " + us + "user@host" + us + "ddddddd\n" + " " + us + "a;b" + us + "eeeeeee\n"
+            + " " + us + "-perigo" + us + "fffffff\n" + " " + us + "com espaço" + us + "1111111\n" + " " + us + "a..b" + us + "2222222\n" + " " + us + "@" + us + "3333333\n" + "linha solta\n";
         List<Branch> b = InterpretadorDeBranches.interpretar(saida);
-        assertEquals(List.of(new Branch("main", true, "13e9892"), new Branch("feature/entrega", false, "252c020")), b);
+        assertEquals(List.of("main", "feature/entrega", "ação/versão", "fix#12", "feat+x", "user@host", "a;b"), b.stream().map(Branch::nome).toList());
+        assertTrue(b.get(0).atual());
     }
 
     // -------------------------------------------------------------------------------------------- diff

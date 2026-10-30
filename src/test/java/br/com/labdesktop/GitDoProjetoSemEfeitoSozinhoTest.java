@@ -142,9 +142,10 @@ class GitDoProjetoSemEfeitoSozinhoTest {
             }
         }
         String comandos = String.join("\n", arquivo("git/ComandosDeGit.java").lines().filter(l -> !l.contains(".equals(") && !l.contains(".contains(")).toList());
-        assertEquals(2, Pattern.compile("\"config\"").matcher(comandos).results().count(), "git config só em dois lugares: ler user.name/user.email e gravar com --local");
+        assertEquals(3, Pattern.compile("\"config\"").matcher(comandos).results().count(), "git config só em três lugares: ler user.name/user.email, listar as chaves que executam programa (--get-regexp, só os nomes) e gravar com --local");
         assertTrue(comandos.contains("\"--local\""));
         assertTrue(comandos.contains("\"--get\""));
+        assertTrue(comandos.contains("\"--get-regexp\"") && comandos.contains("\"--name-only\""));
         assertTrue(Pattern.compile("\"add\",\\s*\"--pathspec-from-file=-\",\\s*\"--pathspec-file-nul\"").matcher(comandos).find(), "git add só da lista que vem pela entrada");
         assertFalse(Pattern.compile("\"add\"[^;]*\"\\.\"").matcher(comandos).find(), "nunca git add .");
     }
