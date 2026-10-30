@@ -158,4 +158,35 @@ class PlanejadorDoGitignoreTest {
         assertEquals(SegredosDoProjeto.PADROES.size() + SegredosDoProjeto.LIXO_COMUM.size(), SegredosDoProjeto.todasAsLinhas().size());
         assertTrue(SegredosDoProjeto.LIXO_COMUM.contains("node_modules/"));
     }
+
+    @Test
+    void asLinhasDeSegredoValemParaMaiusculaEMinusculaMesmoComOCoreIgnorecaseDesligado() throws Exception {
+        assertEquals(".[eE][nN][vV]*", SegredosDoProjeto.LINHA_DO_ENV);
+        assertEquals("!.[eE][nN][vV].[eE][xX][aA][mM][pP][lL][eE]", SegredosDoProjeto.LINHA_DA_EXCECAO);
+        assertEquals("[sS][eE][cC][rR][eE][tT][sS]*", SegredosDoProjeto.semDistinguirCaixa("secrets*"));
+        assertEquals("*.[pP][eE][mM]", SegredosDoProjeto.semDistinguirCaixa("*.pem"));
+        assertEquals(".[aA][wW][sS]/", SegredosDoProjeto.semDistinguirCaixa(".aws/"));
+        assumeTrue(GitDeTeste.temGit());
+        GitDeTeste g = new GitDeTeste(tmp);
+        Path repo = g.repositorio("loja-web");
+        g.git(repo, "config", "--local", "core.ignorecase", "false"); // como no Linux: .ENV e .env são nomes diferentes
+        List<String> nomes = List.of(".ENV", ".Env.Local", "ID_RSA", "Credentials.json", "CHAVE.PEM", "Secrets.yaml", "PROD.TFSTATE", ".SSH/config", ".Aws/credentials", ".HTPASSWD", "Service-Account-X.JSON");
+        g.escrever(repo, ".gitignore", String.join("\n", SegredosDoProjeto.todasAsLinhas()) + "\n");
+        for (String n : nomes) {
+            assertEquals(0, g.bruto(repo, "check-ignore", "-q", "--", n).status(), n + " tem de ser ignorado");
+        }
+        assertEquals(1, g.bruto(repo, "check-ignore", "-q", "--", ".ENV.EXAMPLE").status(), "o modelo sem valores continua liberado em qualquer caixa");
+        // o controle: com as linhas só em minúsculas, o git do Linux deixaria .ENV entrar (o teste pode falhar)
+        g.escrever(repo, ".gitignore", String.join("\n", SegredosDoProjeto.PADROES) + "\n");
+        assertEquals(1, g.bruto(repo, "check-ignore", "-q", "--", ".ENV").status(), "sem as letras entre colchetes, .ENV escapa");
+        assertEquals(1, g.bruto(repo, "check-ignore", "-q", "--", "ID_RSA").status());
+    }
+
+    @Test
+    void nomeComEspacoNoFimTambemEReconhecidoPeloTesteEmJava() {
+        for (String n : List.of(".env ", ".npmrc ", ".htpasswd  ", "chave.pem ", "ssl/servidor.key ", "ID_RSA ", ".git-credentials ", "x/.AWS /config")) {
+            assertTrue(SegredosDoProjeto.pareceSegredo(n), "'" + n + "'");
+        }
+        assertFalse(SegredosDoProjeto.pareceSegredo(".env.example "));
+    }
 }

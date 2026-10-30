@@ -342,4 +342,15 @@ class CriadorDeRepositorioCasosDificeisTest {
         assertEquals("", g.git(p, "diff", "--cached", "--name-only").strip(), "nada ficou preparado");
         assertNotNull(r.comandoParaDesfazer());
     }
+
+    @Test
+    void segredoComEspacoNoFimDoNomeQueOGitIgnoreNaoPegaBarraACriacaoEDizOArquivo() throws Exception {
+        Path p = g.projeto("loja-web");
+        g.escrever(p, ".npmrc ", "//registry:_authToken=xxxx");
+        g.escrever(p, "src/app.js", "x");
+        ConferenciaDoRepositorio conf = criador(p).conferirCriacao();
+        assertEquals(List.of(".npmrc "), conf.segredosQueEntrariam(), "o .gitignore ignora o espaço no fim do padrão, então o teste em Java é a segunda trava");
+        assertFalse(conf.liberaACriacao());
+        assertFalse(Files.exists(p.resolve(".git")));
+    }
 }
