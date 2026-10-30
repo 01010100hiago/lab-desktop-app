@@ -137,6 +137,11 @@ public final class TelaProjeto extends Painel {
             return null;
         }
 
+        /** O leitor do Git do repositório de uma SUBPASTA do projeto (que confere que o .git dele não leva para fora do projeto); sem isto, o de sempre da pasta somada. */
+        default br.com.labdesktop.git.LeitorDeGit leitorDeGitDeSubpasta(String pastaDoProjetoNoApp, String subpasta) {
+            return leitorDeGit(pastaDoProjetoNoApp.replaceAll("/+$", "") + "/" + subpasta);
+        }
+
         /** A subpasta onde o usuário escolheu ler o Git deste projeto (quando a pasta principal não é repositório mas uma subpasta é), ou {@code null}. */
         default String repositorioGitLembrado() {
             return null;
@@ -571,7 +576,7 @@ public final class TelaProjeto extends Painel {
         if (leitorDoProjeto == null || !pasta.equals(pastaDoLeitor)) {
             pastaDoLeitor = pasta;
             leitorDoProjeto = new br.com.labdesktop.git.LeitorDeGitDoProjeto(() -> saida.leitorDeGit(pasta),
-                sub -> saida.leitorDeGit(pasta.replaceAll("/+$", "") + "/" + sub), new br.com.labdesktop.git.LeitorDeGitDoProjeto.Memoria() {
+                sub -> saida.leitorDeGitDeSubpasta(pasta, sub), new br.com.labdesktop.git.LeitorDeGitDoProjeto.Memoria() {
                     @Override
                     public String lembrada() {
                         return saida.repositorioGitLembrado();
@@ -586,8 +591,17 @@ public final class TelaProjeto extends Painel {
         return leitorDoProjeto;
     }
 
+    /** Joga fora o que a procura de repositórios em subpastas guardou (o cache de 60 s do projeto neste servidor). */
+    private void esquecerABuscaDeRepositorios() {
+        br.com.labdesktop.git.LeitorDeGit leitor = ctx.leitorDeGit.get();
+        if (leitor != null) {
+            leitor.esquecerABusca();
+        }
+    }
+
     /** Lê o Git de novo onde ele aparece: a linha "Código" da Visão geral e a aba Git (só a que está à vista lê; a outra lê quando aparecer). */
     void recarregarGit() {
+        esquecerABuscaDeRepositorios(); // Atualizar (e o fim de criar um repositório) procuram de verdade, sem o cache de 60 s
         visaoGeral().recarregarGit();
         if (atual == Aba.GIT) {
             git().recarregar();

@@ -27,6 +27,8 @@ public record FalhaDoGit(Tipo tipo, String frase, String comandoParaCopiar) {
         GIT_ANTIGO,
         /** O repositório tem configuração que faz o git rodar programas (filtro, fsmonitor, ganchos...): o app não lê por segurança. */
         CONFIGURACAO_QUE_EXECUTA,
+        /** O {@code .git} do repositório de uma subpasta é um arquivo que leva para FORA do projeto: o app não lê. */
+        FORA_DO_PROJETO,
         /** O comando passou do prazo. */
         DEMOROU,
         /** A conexão caiu ou o servidor não deixa rodar comando. */

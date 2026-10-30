@@ -21,6 +21,10 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
     private final ExecutorDeGit executor;
     private final String pasta;
     private final RepositoriosAbaixo.Buscador buscador;
+    /** O que a procura em subpastas guardou por 60 s neste projeto e servidor ({@code null}: sem cache). */
+    private final CacheDeBusca cache;
+    /** Quando este leitor é o de uma SUBPASTA do projeto ({@code app}): o caminho dela. Aí o {@code .git} dela não pode apontar para fora do projeto. {@code null} na pasta principal. */
+    private final String subpasta;
     /** O executor com os atributos neutros (Git 2.40 ou mais novo), quando já se sabe; {@code null} num git mais antigo. */
     private volatile ExecutorDeGit neutro;
     private volatile boolean versaoLida;
@@ -38,9 +42,19 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
      *              {@code find} fixo pelo executor (SSH)
      */
     public LeitorDeGitPorExecutor(ExecutorDeArgumentos executor, String pastaDoProjeto, boolean local) {
+        this(executor, pastaDoProjeto, local, null, null);
+    }
+
+    /**
+     * @param cache    o cache da procura em subpastas deste projeto e servidor, ou {@code null}
+     * @param subpasta o caminho da subpasta quando este leitor é o dela (a pasta é a do projeto mais ele); {@code null} na pasta principal
+     */
+    public LeitorDeGitPorExecutor(ExecutorDeArgumentos executor, String pastaDoRepositorio, boolean local, CacheDeBusca cache, String subpasta) {
         this.executor = ExecutorDeGit.soDeLeitura(executor);
-        this.pasta = ValidadorDeGit.exigirPasta(pastaDoProjeto);
+        this.pasta = ValidadorDeGit.exigirPasta(pastaDoRepositorio);
         this.buscador = local ? RepositoriosAbaixo.local() : RepositoriosAbaixo.porFind(this.executor);
+        this.cache = cache;
+        this.subpasta = subpasta == null ? null : ValidadorDeGit.exigirCaminhoRelativo(subpasta);
     }
 
     /** Como {@link #LeitorDeGitPorExecutor(ExecutorDeArgumentos, String)}, convertendo a pasta do app para a do sistema. */
@@ -51,6 +65,23 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
     /** Como {@link #de(ExecutorDeArgumentos, UnaryOperator, String)}, dizendo se é "Este computador" (a procura em subpastas é pelo disco). */
     public static LeitorDeGitPorExecutor de(ExecutorDeArgumentos executor, UnaryOperator<String> paraOSistema, String pastaNoApp, boolean local) {
         return new LeitorDeGitPorExecutor(executor, paraOSistema.apply(pastaNoApp), local);
+    }
+
+    /** O leitor da pasta principal de um projeto, com o cache da procura em subpastas. */
+    public static LeitorDeGitPorExecutor de(ExecutorDeArgumentos executor, UnaryOperator<String> paraOSistema, String pastaNoApp, boolean local, CacheDeBusca cache) {
+        return new LeitorDeGitPorExecutor(executor, paraOSistema.apply(pastaNoApp), local, cache, null);
+    }
+
+    /** O leitor do repositório de uma SUBPASTA do projeto: confere que o {@code .git} dele não leva para fora do projeto. */
+    public static LeitorDeGitPorExecutor deSubpasta(ExecutorDeArgumentos executor, UnaryOperator<String> paraOSistema, String pastaDoProjetoNoApp, String subpasta, boolean local) {
+        return new LeitorDeGitPorExecutor(executor, ValidadorDeGit.juntar(paraOSistema.apply(pastaDoProjetoNoApp), subpasta), local, null, subpasta);
+    }
+
+    @Override
+    public void esquecerABusca() {
+        if (cache != null) {
+            cache.esquecer();
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -141,6 +172,10 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
             if (!prefixo.isEmpty()) {
                 return new ResultadoDoGit.Ok<>(new ResumoDoRepositorio(ResumoDoRepositorio.Estado.DENTRO_DE_OUTRO, null, false, null, 0, null, prefixo));
             }
+            FalhaDoGit fora = gitFicaForaDoProjeto(pasta, subpasta);
+            if (fora != null) {
+                return new ResultadoDoGit.Ok<>(ResumoDoRepositorio.de(ResumoDoRepositorio.Estado.ERRO, fora));
+            }
             Saida st = paraLerOConteudo().rodar(ComandosDeGit.status(pasta), PRAZO);
             if (!st.ok()) {
                 return new ResultadoDoGit.Ok<>(ResumoDoRepositorio.de(ResumoDoRepositorio.Estado.ERRO, ClassificadorDeErrosDoGit.classificar(st.status(), st.stderr(), pasta)));
@@ -169,7 +204,7 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
     private ResumoDoRepositorio procurarEmSubpastas() throws InterruptedException {
         RepositoriosAbaixo.Achados achados;
         try {
-            achados = buscador.buscar(pasta);
+            achados = cache == null ? buscador.buscar(pasta) : cache.obter(pasta, buscador);
         } catch (ErroDoGit e) {
             FalhaDoGit f = e.falha();
             return ResumoDoRepositorio.de(ResumoDoRepositorio.Estado.ERRO, new FalhaDoGit(f.tipo(), "Esta pasta não tem Git, mas não consegui procurar repositórios nas subpastas: " + f.frase(), f.comandoParaCopiar()));
@@ -177,12 +212,47 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
         if (achados.vazio()) {
             return ResumoDoRepositorio.semGit();
         }
+        if (achados.soIlegiveis()) {
+            // existe repositório, só que numa pasta de nome que o app não mostra com segurança: dizer "sem Git" levaria a criar por cima
+            return ResumoDoRepositorio.de(ResumoDoRepositorio.Estado.ERRO, new FalhaDoGit(FalhaDoGit.Tipo.OUTRO, "Esta pasta não tem Git, mas há repositório em subpasta com nome que o app não mostra com segurança ("
+                + achados.ilegiveis() + "). Por segurança o app não o lê nem oferece criar um repositório por cima. Renomeie a pasta no Terminal."));
+        }
         List<RepositorioAbaixo> lista = new java.util.ArrayList<>();
         int n = 0;
         for (String caminho : achados.caminhos()) {
             lista.add(n++ < LEITURAS_LEVES && achados.caminhos().size() > 1 ? leituraLeve(caminho) : RepositorioAbaixo.semLeitura(caminho));
         }
-        return ResumoDoRepositorio.repositoriosAbaixo(lista, achados.cortado());
+        return ResumoDoRepositorio.repositoriosAbaixo(lista, achados.cortado(), achados.ilegiveis());
+    }
+
+    /**
+     * Um {@code .git} que é ARQUIVO ({@code gitdir: ...}) pode levar para fora do projeto: o app só lê o repositório de uma subpasta se a pasta do {@code .git} de verdade, como o git a resolve, fica DENTRO
+     * do projeto (um submódulo ou um worktree legítimo guarda o dele em {@code .git/modules} ou {@code .git/worktrees} do próprio projeto). Só vale num leitor de subpasta. Se o git não responde (não é
+     * repositório, dono diferente) não decide nada: a leitura de verdade diz o erro. Se a pasta de trabalho que o git informa não é a esperada ({@code core.worktree} de fora), conta como "fora".
+     *
+     * @return a falha a mostrar, ou {@code null} se pode ler
+     */
+    private FalhaDoGit gitFicaForaDoProjeto(String pastaDoRepositorio, String sub) throws ErroDoGit, InterruptedException {
+        if (sub == null) {
+            return null;
+        }
+        Saida s = executor.rodar(ComandosDeGit.topoEGitDir(pastaDoRepositorio), PRAZO);
+        if (!s.ok()) {
+            return null;
+        }
+        String[] linhas = s.texto().strip().split("\\R");
+        if (linhas.length < 2) {
+            return null;
+        }
+        String topo = linhas[0].strip().replace('\\', '/');
+        String gitDir = linhas[1].strip().replace('\\', '/');
+        String sufixo = "/" + sub;
+        boolean dentro = topo.endsWith(sufixo);
+        if (dentro) {
+            String raiz = topo.substring(0, topo.length() - sufixo.length());
+            dentro = gitDir.equals(raiz) || gitDir.startsWith(raiz + "/");
+        }
+        return dentro ? null : new FalhaDoGit(FalhaDoGit.Tipo.FORA_DO_PROJETO, "O .git desta subpasta é um arquivo que leva para fora do projeto: " + RepositorioAbaixo.FRASE_DE_FORA + ".");
     }
 
     /** O branch e o último commit de um repositório de subpasta, para a lista de escolha. Qualquer falha (dono diferente, repositório vazio, prazo) só deixa o item sem esses dados. */
@@ -192,6 +262,9 @@ public final class LeitorDeGitPorExecutor implements LeitorDeGit {
             return RepositorioAbaixo.semLeitura(caminho);
         }
         try {
+            if (gitFicaForaDoProjeto(sub, caminho) != null) {
+                return RepositorioAbaixo.apontandoParaFora(caminho);
+            }
             String branch = null;
             Saida r = executor.rodar(ComandosDeGit.ramoAtual(sub), PRAZO);
             if (r.ok()) {

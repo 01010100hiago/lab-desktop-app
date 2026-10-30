@@ -114,6 +114,40 @@ class GitPeloServidorLabTest {
     }
 
     @Test
+    void ocacheDaProcuraEmSubpastasEPorProjetoNoServidorEASubpastaQueApontaParaForaEhRecusada() throws Exception {
+        ServidorLab lab = servidor(false);
+        Path projeto = g.projeto("loja-web");
+        Path fora = g.repositorio("../fora-do-lab/repo");
+        g.escrever(fora, "a.txt", "a");
+        g.commitar(fora, "de fora");
+        g.escrever(g.projeto("loja-web/app"), ".git", "gitdir: " + fora.resolve(".git") + "\n");
+        Path api = g.repositorio("loja-web/api");
+        g.escrever(api, "b.txt", "b");
+        g.commitar(api, "da api");
+
+        // o leitor é montado de novo a cada leitura, mas o cache da procura vive no servidor: três leituras, um find
+        for (int i = 0; i < 3; i++) {
+            ResumoDoRepositorio r = lab.leitorDeGit(projeto.toString()).resumo().valorOuNulo();
+            assertEquals(ResumoDoRepositorio.Estado.REPOSITORIOS_ABAIXO, r.estado(), String.valueOf(r.falha()));
+        }
+        assertEquals(1, ssh.comandos.stream().filter(l -> l.contains(" find ")).count(), "a procura ficou guardada: " + ssh.comandos);
+        lab.leitorDeGit(projeto.toString()).esquecerABusca(); // outro leitor, o mesmo cache
+        lab.leitorDeGit(projeto.toString()).resumo();
+        assertEquals(2, ssh.comandos.stream().filter(l -> l.contains(" find ")).count(), "Atualizar procura de verdade");
+        // outro projeto neste servidor tem o cache dele
+        Path outro = g.projeto("outro");
+        g.git(g.projeto("outro/x"), "init", "-q", "-b", "main");
+        lab.leitorDeGit(outro.toString()).resumo();
+        assertEquals(3, ssh.comandos.stream().filter(l -> l.contains(" find ")).count());
+
+        // o leitor da subpasta que aponta para fora recusa (a montagem pelo servidor leva a subpasta, que é o que liga a conferência)
+        ResumoDoRepositorio daFora = lab.leitorDeGitDeSubpasta(projeto.toString(), "app").resumo().valorOuNulo();
+        assertEquals(ResumoDoRepositorio.Estado.ERRO, daFora.estado());
+        assertEquals(br.com.labdesktop.git.FalhaDoGit.Tipo.FORA_DO_PROJETO, daFora.falha().tipo());
+        assertEquals(ResumoDoRepositorio.Estado.COM_GIT, lab.leitorDeGitDeSubpasta(projeto.toString(), "api").resumo().valorOuNulo().estado());
+    }
+
+    @Test
     void pastaInvalidaNuncaViraComando() throws Exception {
         ServidorLab lab = servidor(false);
         for (String ruim : List.of("relativa", "/srv/../etc", "-C/x", "")) {

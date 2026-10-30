@@ -113,4 +113,44 @@ class RepositoriosAbaixoTest {
             org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> ValidadorDeGit.juntar(RAIZ, ruim), ruim);
         }
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Barra invertida na raiz e nomes que o app não mostra com segurança
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void umaRaizLinuxComBarraInvertidaNoNomeNaoDescartaOsAchados() {
+        String raiz = "/srv/lab/projects/loja\\web";
+        RepositoriosAbaixo.Achados a = RepositoriosAbaixo.interpretar(raiz, raiz + "/app/.git\0" + raiz + "/api/.git\0");
+        assertEquals(List.of("api", "app"), a.caminhos(), "a barra invertida de uma raiz Linux é do NOME: trocá-la por barra fazia todo achado sumir (e o projeto virar 'sem Git')");
+        assertEquals(0, a.ilegiveis());
+        assertEquals(List.of("app"), RepositoriosAbaixo.interpretar(raiz + "/", raiz + "/app/.git\0").caminhos());
+    }
+
+    @Test
+    void caracteresBidiEDeFormatoDoUnicodeNaoPassamMasContamComoIlegiveis() {
+        for (int c : new int[] {0x202E, 0x202D, 0x202A, 0x202B, 0x202C, 0x200E, 0x200F, 0x2066, 0x2067, 0x2068, 0x2069, 0x200B, 0x200D, 0xFEFF, 0x2028, 0x2029}) {
+            String nome = "pasta" + new String(Character.toChars(c)) + "cod";
+            assertFalse(RepositoriosAbaixo.nomeLegivel(nome), "U+" + Integer.toHexString(c));
+            RepositoriosAbaixo.Achados a = RepositoriosAbaixo.interpretar(RAIZ, saida(nome + "/.git"));
+            assertEquals(List.of(), a.caminhos(), "U+" + Integer.toHexString(c) + " não aparece na lista");
+            assertEquals(1, a.ilegiveis(), "mas o repositório existe: " + Integer.toHexString(c));
+            assertTrue(a.soIlegiveis());
+            assertFalse(a.vazio());
+            assertEquals(List.of("pasta com nome ilegível (1)"), a.paraAvisos());
+        }
+        // o que é nome de verdade continua valendo: acento, espaço, outras escritas
+        for (String ok : List.of("ação", "meu app", "项目", "проект", "café-2", "app 2")) {
+            assertTrue(RepositoriosAbaixo.nomeLegivel(ok), ok);
+            assertEquals(List.of(ok), achar(ok + "/.git"));
+        }
+        // dois ilegíveis e um legível
+        RepositoriosAbaixo.Achados mistos = RepositoriosAbaixo.interpretar(RAIZ, saida("a" + (char) 0x202E + "b/.git", "app/.git", "c\\d/.git", "a" + (char) 0x202E + "b/.git"));
+        assertEquals(List.of("app"), mistos.caminhos());
+        assertEquals(2, mistos.ilegiveis(), "a barra invertida de uma subpasta também não se mostra; a repetição conta uma vez");
+        assertEquals(List.of("app", "pasta com nome ilegível (1)", "pasta com nome ilegível (2)"), mistos.paraAvisos());
+        // o que o filtro estrutural tira (..: fora da raiz, pasta ignorada, fundo demais) NÃO é ilegível: é descartado de propósito
+        assertEquals(0, RepositoriosAbaixo.interpretar(RAIZ, saida("../x/.git", "node_modules/a/.git", "a/b/c/.git")).ilegiveis());
+        assertTrue(RepositoriosAbaixo.interpretar(RAIZ, saida("../x/.git")).vazio());
+    }
 }

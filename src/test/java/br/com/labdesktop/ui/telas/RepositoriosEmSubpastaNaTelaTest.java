@@ -210,6 +210,55 @@ class RepositoriosEmSubpastaNaTelaTest {
         PaginaGitTest.esperar("a lista", () -> !c.pagina.carregando() && c.pagina.mostraOSeletor());
     }
 
+    @Test
+    void soAtualizarEOTentarDeNovoMandamEsquecerABuscaDasSubpastas() {
+        Visual.tema(Tema.CLARO);
+        Cena c = new Cena(true, Aba.GIT, "api", "web");
+        Visual.naEdt(c.pagina::assinar); // abrir a aba usa o cache de 60 s
+        PaginaGitTest.esperar("ler ao abrir", () -> !c.pagina.carregando() && c.pagina.mostraOSeletor());
+        assertEquals(0, c.raiz.esquecidas.get(), "abrir a aba NÃO joga o cache fora");
+        Visual.naEdt(() -> c.pagina.botaoAtualizar().doClick(0));
+        PaginaGitTest.esperar("ler no Atualizar", () -> !c.pagina.carregando());
+        assertEquals(1, c.raiz.esquecidas.get(), "o Atualizar da aba procura de verdade");
+        Visual.naEdt(c.cena.tela::recarregarGit); // o Atualizar da página do projeto (e o fim de criar um repositório)
+        PaginaGitTest.esperar("ler de novo", () -> !c.pagina.carregando());
+        assertEquals(2, c.raiz.esquecidas.get());
+
+        Cena v = new Cena(true, Aba.VISAO_GERAL, "api", "web");
+        v.lerOCartao();
+        assertEquals(0, v.raiz.esquecidas.get(), "a Visão geral que aparece não esquece");
+        v.raiz.resumo = new ResultadoDoGit.Ok<>(ResumoDoRepositorio.de(ResumoDoRepositorio.Estado.ERRO, new br.com.labdesktop.git.FalhaDoGit(br.com.labdesktop.git.FalhaDoGit.Tipo.OUTRO, "falhou")));
+        v.lerOCartao();
+        Visual.naEdt(() -> v.linha.botaoTentarDeNovo().doClick(0));
+        assertEquals(1, v.raiz.esquecidas.get(), "\"Tentar de novo\" procura de verdade");
+    }
+
+    @Test
+    void umRepositorioQueApontaParaForaDoProjetoApareceNaListaSemLerEAAbaRecusa() {
+        Visual.tema(Tema.CLARO);
+        Cena c = new Cena(true, Aba.GIT, "api", "web");
+        // a procura achou web com o .git levando para fora; a lista só diz isso (e a leitura leve não leu nada dele)
+        c.raiz.resumo = new ResultadoDoGit.Ok<>(ResumoDoRepositorio.repositoriosAbaixo(List.of(new RepositorioAbaixo("api", "main", c.subs.get("api").commits.get(0), true), RepositorioAbaixo.apontandoParaFora("web")), false));
+        c.lerAAba();
+        TabelaDeDados<RepositorioAbaixo> t = c.pagina.tabelaDeRepositorios();
+        assertEquals("repositório aponta para fora do projeto; não leio por segurança", ed(() -> t.textoDa(1, 2)));
+        assertEquals("—", ed(() -> t.textoDa(1, 1)));
+        assertEquals(0, c.subs.get("web").chamadas.size(), "nada foi lido de web");
+    }
+
+    @Test
+    void repositoriosDeNomeIlegivelAparecemComoNumeroNaAbaENoCartao() {
+        Visual.tema(Tema.CLARO);
+        Cena c = new Cena(true, Aba.GIT, "api", "web");
+        c.raiz.resumo = new ResultadoDoGit.Ok<>(ResumoDoRepositorio.repositoriosAbaixo(List.of(RepositorioAbaixo.semLeitura("api"), RepositorioAbaixo.semLeitura("web")), false, 2));
+        c.lerAAba();
+        assertTrue(ed(c.pagina::textoDaMensagem).contains("Há também 2 pastas com nome que o app não mostra com segurança"), ed(c.pagina::textoDaMensagem));
+        Cena v = new Cena(true, Aba.VISAO_GERAL, "api", "web");
+        v.raiz.resumo = c.raiz.resumo;
+        v.lerOCartao();
+        assertEquals("Este projeto não tem Git na pasta principal, mas achei repositório em: api/ (e 3 outros).", ed(v.linha::textoMostrado));
+    }
+
     // ---------------------------------------------------------------------------------------------
     // O cartão "Código" da Visão geral
     // ---------------------------------------------------------------------------------------------

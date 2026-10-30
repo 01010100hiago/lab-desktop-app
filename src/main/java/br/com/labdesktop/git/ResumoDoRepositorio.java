@@ -16,9 +16,10 @@ import java.util.List;
  * @param abaixo      os repositórios que a pasta principal (que não tem {@code .git}) tem em subpastas; vazio nos outros casos. Com {@link Estado#COM_GIT} e {@code subpasta} preenchida, é a lista
  *                    de onde o usuário pode trocar de repositório
  * @param abaixoCortado havia mais repositórios que o limite da lista ({@link RepositoriosAbaixo#LIMITE})
+ * @param ilegiveis   quantos repositórios de subpasta têm nome que o app não mostra com segurança (ficam fora da lista, mas existem)
  */
 public record ResumoDoRepositorio(Estado estado, String branch, boolean cabecaSolta, Commit ultimo, int alteracoes, FalhaDoGit falha, String pastaPai, String subpasta,
-                                  List<RepositorioAbaixo> abaixo, boolean abaixoCortado) {
+                                  List<RepositorioAbaixo> abaixo, boolean abaixoCortado, int ilegiveis) {
 
     /** Os estados da linha "Código". */
     public enum Estado {
@@ -42,9 +43,15 @@ public record ResumoDoRepositorio(Estado estado, String branch, boolean cabecaSo
         abaixo = abaixo == null ? List.of() : List.copyOf(abaixo);
     }
 
+    /** Sem os de nome ilegível (nenhum). */
+    public ResumoDoRepositorio(Estado estado, String branch, boolean cabecaSolta, Commit ultimo, int alteracoes, FalhaDoGit falha, String pastaPai, String subpasta, List<RepositorioAbaixo> abaixo,
+                               boolean abaixoCortado) {
+        this(estado, branch, cabecaSolta, ultimo, alteracoes, falha, pastaPai, subpasta, abaixo, abaixoCortado, 0);
+    }
+
     /** Sem repositório em subpasta: o que toda leitura da pasta principal sem subpasta devolve. */
     public ResumoDoRepositorio(Estado estado, String branch, boolean cabecaSolta, Commit ultimo, int alteracoes, FalhaDoGit falha, String pastaPai) {
-        this(estado, branch, cabecaSolta, ultimo, alteracoes, falha, pastaPai, null, List.of(), false);
+        this(estado, branch, cabecaSolta, ultimo, alteracoes, falha, pastaPai, null, List.of(), false, 0);
     }
 
     public static ResumoDoRepositorio semGit() {
@@ -57,12 +64,17 @@ public record ResumoDoRepositorio(Estado estado, String branch, boolean cabecaSo
 
     /** A pasta principal não tem Git e há repositório(s) em subpasta(s): a lista (com o que já se leu de cada um). */
     public static ResumoDoRepositorio repositoriosAbaixo(List<RepositorioAbaixo> abaixo, boolean cortado) {
-        return new ResumoDoRepositorio(Estado.REPOSITORIOS_ABAIXO, null, false, null, 0, null, null, null, abaixo, cortado);
+        return repositoriosAbaixo(abaixo, cortado, 0);
+    }
+
+    /** Como {@link #repositoriosAbaixo(List, boolean)}, dizendo também quantos repositórios de nome ilegível ficaram fora da lista. */
+    public static ResumoDoRepositorio repositoriosAbaixo(List<RepositorioAbaixo> abaixo, boolean cortado, int ilegiveis) {
+        return new ResumoDoRepositorio(Estado.REPOSITORIOS_ABAIXO, null, false, null, 0, null, null, null, abaixo, cortado, ilegiveis);
     }
 
     /** Este mesmo resumo, agora dizendo que foi lido na subpasta {@code sub} e qual é a lista de onde ela veio. */
     public ResumoDoRepositorio naSubpasta(String sub, List<RepositorioAbaixo> todos, boolean cortado) {
-        return new ResumoDoRepositorio(estado, branch, cabecaSolta, ultimo, alteracoes, falha, pastaPai, sub, todos, cortado);
+        return new ResumoDoRepositorio(estado, branch, cabecaSolta, ultimo, alteracoes, falha, pastaPai, sub, todos, cortado, ilegiveis);
     }
 
     public boolean temGit() {

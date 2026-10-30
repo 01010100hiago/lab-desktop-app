@@ -58,7 +58,8 @@ public final class ComandosDeGit {
      * Procura repositórios em SUBPASTAS de um projeto que não é repositório: UM {@code find} fixo, só de leitura, sem texto do usuário (a pasta já passou por {@link ValidadorDeGit#exigirPasta}). Até 3 níveis
      * ({@code -mindepth 1} para a própria raiz nunca ser testada pelo nome: um projeto chamado {@code build} não some), sem entrar em {@code node_modules}, {@code vendor}, {@code .cache},
      * {@code .venv}, {@code dist} nem {@code build}, sem seguir link ({@code find} não segue por padrão e {@code -not -type l} tira o {@code .git} que é link), e sem descer para dentro do próprio
-     * {@code .git}. Imprime um caminho por vez, terminado em NUL. {@code -H} só deixa a raiz ser um link (pasta de projeto apontada por link).
+     * {@code .git}, e sem atravessar PONTO DE MONTAGEM ({@code -xdev}, logo depois dos limites: é opção global, que o GNU {@code find} quer antes dos testes; um volume montado dentro do projeto, de rede
+     * por exemplo, faria a procura demorar até o prazo a cada leitura). Imprime um caminho por vez, terminado em NUL. {@code -H} só deixa a raiz ser um link (pasta de projeto apontada por link).
      */
     public static ComandoGit repositoriosAbaixo(String pasta) {
         ValidadorDeGit.exigirPasta(pasta);
@@ -72,12 +73,20 @@ public final class ComandosDeGit {
     static final List<String> FIND_DEPOIS_DA_PASTA = montarOFind();
 
     private static List<String> montarOFind() {
-        List<String> l = new ArrayList<>(List.of("-mindepth", "1", "-maxdepth", String.valueOf(RepositoriosAbaixo.PROFUNDIDADE)));
+        List<String> l = new ArrayList<>(List.of("-mindepth", "1", "-maxdepth", String.valueOf(RepositoriosAbaixo.PROFUNDIDADE), "-xdev"));
         for (String ignorada : RepositoriosAbaixo.IGNORADAS) {
             l.addAll(List.of("-name", ignorada, "-prune", "-o"));
         }
         l.addAll(List.of("-name", ".git", "-not", "-type", "l", "-prune", "-print0"));
         return List.copyOf(l);
+    }
+
+    /**
+     * Onde está a pasta de trabalho e onde está o {@code .git} DE VERDADE de um repositório (dois caminhos absolutos, um por linha, já resolvidos pelo git): um {@code .git} que é ARQUIVO
+     * ({@code gitdir: ...}) pode apontar para fora do projeto. Só leitura; não executa nada do repositório.
+     */
+    public static ComandoGit topoEGitDir(String pasta) {
+        return leitura(pasta, false, "rev-parse", "--show-toplevel", "--absolute-git-dir").pronto();
     }
 
     /** O branch atual SEM precisar de commit ({@code symbolic-ref} funciona num repositório novo); sai com 1 quando a cabeça está solta. */

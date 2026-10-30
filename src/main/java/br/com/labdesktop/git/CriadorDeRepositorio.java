@@ -69,7 +69,7 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
 
     /** Como a conferência e o motor falam de repositórios em subpastas: {@code app/} (e outros). */
     public static String frasesDosRepositoriosAbaixo(List<String> caminhos) {
-        String primeiro = caminhos.get(0) + "/";
+        String primeiro = caminhos.get(0).startsWith(RepositoriosAbaixo.TEXTO_DO_ILEGIVEL) ? caminhos.get(0) : caminhos.get(0) + "/";
         return caminhos.size() == 1 ? primeiro : primeiro + " (e " + (caminhos.size() - 1) + (caminhos.size() == 2 ? " outro)" : " outros)");
     }
 
@@ -113,6 +113,11 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
                 return ConferenciaDoRepositorio.parou(Situacao.NAO_CONFERI, new FalhaDoGit(e.falha().tipo(),
                     "Não consegui procurar repositórios nas subpastas, e criar sem saber se já há um esconderia o histórico dele. " + e.falha().frase()), versao);
             }
+            if (abaixo.soIlegiveis()) {
+                return ConferenciaDoRepositorio.parou(Situacao.NAO_CONFERI, new FalhaDoGit(FalhaDoGit.Tipo.OUTRO,
+                    "Há repositório Git em subpasta com nome que o app não mostra com segurança (" + abaixo.ilegiveis() + "). Criar um repositório na pasta principal esconderia o histórico dele, "
+                        + "e o app não consegue pedir a sua confirmação sem mostrar o nome. Renomeie a pasta no Terminal e confira de novo."), versao);
+            }
             String nome = lerConfiguracao("user.name");
             String email = lerConfiguracao("user.email");
             String gitignore = lerGitignore();
@@ -126,7 +131,7 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
                 List<ArquivoGrande> grandes = medirOsGrandes(arquivos);
                 List<String> segredos = arquivos.stream().filter(SegredosDoProjeto::pareceSegredo).toList();
                 conferencia = new ConferenciaDoRepositorio(Situacao.PODE_CRIAR, null, versao, nome, email, arquivos, grandes, List.copyOf(lista.aninhados), gitignore, segredos,
-                    protecao, lista.incompleta, lista.ignoradosPorNome, abaixo.caminhos());
+                    protecao, lista.incompleta, lista.ignoradosPorNome, abaixo.paraAvisos());
             }
             return conferencia;
         } catch (ErroDoGit e) {
@@ -292,7 +297,7 @@ public final class CriadorDeRepositorio implements OperacoesDeGit {
             // 0b. Repositório em subpasta: criar na pasta principal o esconderia. Conferido DE NOVO aqui (a conferência pode ter ficado velha) e só passa com a confirmação explícita.
             RepositoriosAbaixo.Achados abaixoAgora = buscador.buscar(pasta);
             if (!abaixoAgora.vazio() && !pedido.confirmouRepositoriosAbaixo()) {
-                return recusa(recusaPorRepositorioAbaixo(abaixoAgora.caminhos()));
+                return recusa(recusaPorRepositorioAbaixo(abaixoAgora.paraAvisos()));
             }
 
             try {

@@ -63,7 +63,13 @@ final class LinhaDoCodigo extends Painel {
         verRepositorios.addActionListener(e -> ctx.navegar.accept(TelaProjeto.Aba.GIT));
         verRepositorios.setToolTipText("Abre a aba Git, onde você escolhe o repositório que o app lê");
         instalar.addActionListener(e -> ctx.instalarGit.accept(ctx.recarregarGit));
-        tentarDeNovo.addActionListener(e -> atualizar());
+        tentarDeNovo.addActionListener(e -> {
+            LeitorDeGit leitor = ctx.leitorDeGit.get();
+            if (leitor != null) {
+                leitor.esquecerABusca(); // "Tentar de novo" procura as subpastas de verdade, sem o cache de 60 s
+            }
+            atualizar();
+        });
         verCommits.setToolTipText("Abre a aba Git, com os últimos commits e o que mudou em cada um");
         tentarDeNovo.setToolTipText("Lê o Git do projeto de novo");
 
@@ -234,7 +240,8 @@ final class LinhaDoCodigo extends Painel {
         }
         String primeiro = l.get(0).comBarra();
         int mais = l.size() - 1 + (r.abaixoCortado() ? 1 : 0);
-        String outros = l.size() == 1 && !r.abaixoCortado() ? "" : r.abaixoCortado() ? " (e outros)" : mais == 1 ? " (e outro)" : " (e " + mais + " outros)";
+        mais += r.ilegiveis();
+        String outros = mais == 0 ? "" : r.abaixoCortado() ? " (e outros)" : mais == 1 ? " (e outro)" : " (e " + mais + " outros)";
         return "Este projeto não tem Git na pasta principal, mas achei repositório em: " + primeiro + outros + ".";
     }
 

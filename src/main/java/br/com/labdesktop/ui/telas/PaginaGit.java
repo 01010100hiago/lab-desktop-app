@@ -248,7 +248,10 @@ final class PaginaGit extends PaginaDoProjeto {
         sub.aoSelecionar(id -> cartoesDasSub.show(corpoDasSub, id));
         atualizar.setName("atualizar-git");
         atualizar.setToolTipText("Lê o Git do projeto de novo (só leitura)");
-        atualizar.addActionListener(e -> recarregar());
+        atualizar.addActionListener(e -> {
+            esquecerABusca(); // Atualizar procura os repositórios das subpastas de verdade, sem o cache de 60 s
+            recarregar();
+        });
         voltarAoAtual.addActionListener(e -> {
             branchEscolhido = null;
             recarregar();
@@ -273,7 +276,10 @@ final class PaginaGit extends PaginaDoProjeto {
         instalar.setName("instalar-git-da-aba");
         instalar.addActionListener(e -> ctx.instalarGit.accept(ctx.recarregarGit));
         tentarDeNovo.setName("tentar-git-da-aba");
-        tentarDeNovo.addActionListener(e -> recarregar());
+        tentarDeNovo.addActionListener(e -> {
+            esquecerABusca();
+            recarregar();
+        });
         comando.putClientProperty("html.disable", Boolean.TRUE);
         comando.setName("comando-safe-directory-da-aba");
         verArvore.addActionListener(e -> aoTrocarAVistaDaPendencia(false));
@@ -526,7 +532,8 @@ final class PaginaGit extends PaginaDoProjeto {
         List<RepositorioAbaixo> lista = r.abaixo();
         mostrarMensagem("Este projeto não tem Git na pasta principal",
             (lista.size() == 1 ? "Achei um repositório numa subpasta. " : "Achei repositórios em subpastas. ") + "Escolha um para ver os commits, os branches e as alterações dele, como se fosse o projeto. O app lembra a sua escolha."
-                + (r.abaixoCortado() ? " Há mais repositórios do que a lista mostra (" + RepositoriosAbaixo.LIMITE + ")." : ""),
+                + (r.abaixoCortado() ? " Há mais repositórios do que a lista mostra (" + RepositoriosAbaixo.LIMITE + ")." : "")
+                + (r.ilegiveis() > 0 ? " Há também " + r.ilegiveis() + (r.ilegiveis() == 1 ? " pasta" : " pastas") + " com nome que o app não mostra com segurança (renomeie no Terminal); o app não as lê." : ""),
             null, false, false, false);
         tabelaDeRepositorios.definir(lista);
         tabelaDeRepositorios.clearSelection();
@@ -538,7 +545,17 @@ final class PaginaGit extends PaginaDoProjeto {
         repaint();
     }
 
+    private void esquecerABusca() {
+        LeitorDeGit leitor = ctx.leitorDeGit.get();
+        if (leitor != null) {
+            leitor.esquecerABusca();
+        }
+    }
+
     private static String ultimoDaLista(RepositorioAbaixo r) {
+        if (r.foraDoProjeto()) {
+            return RepositorioAbaixo.FRASE_DE_FORA;
+        }
         if (!r.lido()) {
             return "ainda não lido";
         }

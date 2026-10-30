@@ -385,6 +385,18 @@ public final class TelaProjetos extends Painel {
         }
     }
 
+    /** O leitor do Git do repositório de uma subpasta do projeto (confere que o .git dele não leva para fora do projeto), ou {@code null}. */
+    br.com.labdesktop.git.LeitorDeGit leitorDeGitDeSubpastaDe(String pastaDoProjetoNoApp, String subpasta) {
+        if (servidor == null) {
+            return null;
+        }
+        try {
+            return servidor.leitorDeGitDeSubpasta(pastaDoProjetoNoApp, subpasta);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     /** A subpasta onde o usuário escolheu ler o Git deste projeto neste servidor, ou {@code null}. */
     String repositorioGitLembradoDe(String projeto) {
         return acoesUi == null || servidor == null ? null : acoesUi.repositoriosGitLembrados().lembrado(servidor.id(), projeto);

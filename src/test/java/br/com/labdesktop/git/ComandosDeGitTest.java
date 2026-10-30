@@ -66,7 +66,7 @@ class ComandosDeGitTest {
     // A procura de repositórios em subpastas (um find FIXO, só de leitura)
     // ---------------------------------------------------------------------------------------------
 
-    private static final List<String> FIND_FIXO = List.of("-mindepth", "1", "-maxdepth", "3", "-name", "node_modules", "-prune", "-o", "-name", "vendor", "-prune", "-o", "-name", ".cache", "-prune",
+    private static final List<String> FIND_FIXO = List.of("-mindepth", "1", "-maxdepth", "3", "-xdev", "-name", "node_modules", "-prune", "-o", "-name", "vendor", "-prune", "-o", "-name", ".cache", "-prune",
         "-o", "-name", ".venv", "-prune", "-o", "-name", "dist", "-prune", "-o", "-name", "build", "-prune", "-o", "-name", ".git", "-not", "-type", "l", "-prune", "-print0");
 
     @Test

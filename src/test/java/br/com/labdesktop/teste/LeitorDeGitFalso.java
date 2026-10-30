@@ -44,6 +44,14 @@ public final class LeitorDeGitFalso implements LeitorDeGit {
     /** Se não for nulo, as leituras de commits esperam por isto (para provar o "carregando"). */
     public volatile java.util.concurrent.CountDownLatch segurar;
 
+    /** Quantas vezes pediram para esquecer o que a procura de repositórios em subpastas guardou (não entra em {@link #chamadas}). */
+    public final java.util.concurrent.atomic.AtomicInteger esquecidas = new java.util.concurrent.atomic.AtomicInteger();
+
+    @Override
+    public void esquecerABusca() {
+        esquecidas.incrementAndGet();
+    }
+
     public int quantas(String prefixo) {
         return (int) chamadas.stream().filter(c -> c.startsWith(prefixo)).count();
     }

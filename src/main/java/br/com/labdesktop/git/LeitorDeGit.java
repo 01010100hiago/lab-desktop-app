@@ -31,4 +31,7 @@ public interface LeitorDeGit {
 
     /** O diff de uma alteração ainda não commitada ({@code noIndice}: o que já está na área de preparo; senão o que ainda não está). */
     ResultadoDoGit<DiffDoArquivo> diffPendente(Pendencia pendencia, boolean noIndice) throws InterruptedException;
+
+    /** Esquece o que a procura de repositórios em subpastas guardou (o botão Atualizar e a criação de um repositório pedem). Sem efeito onde não há cache. */
+    default void esquecerABusca() { }
 }

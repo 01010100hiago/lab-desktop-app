@@ -173,6 +173,11 @@ public final class LeitorDeGitDoProjeto implements LeitorDeGit {
         return emUso().diffPendente(pendencia, noIndice);
     }
 
+    @Override
+    public void esquecerABusca() {
+        raiz.get().esquecerABusca();
+    }
+
     /** Houve mais repositórios que o limite da lista. */
     public boolean listaCortada() {
         return abaixoCortado;

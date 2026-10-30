@@ -164,7 +164,7 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
     }
 
     private LeitorDeGit subLeitor(Path projeto, String sub) {
-        return new LeitorDeGitPorExecutor(g.executorComRegraDeSsh(), ValidadorDeGit.juntar(projeto.toString(), sub));
+        return new LeitorDeGitPorExecutor(g.executorComRegraDeSsh(), ValidadorDeGit.juntar(projeto.toString(), sub), false, null, sub);
     }
 
     @Test
@@ -348,6 +348,137 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
         assertNull(r.subpasta());
         assertNull(lp.escolhida());
         assertTrue(lp.repositoriosAbaixo().isEmpty());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Casos de borda da procura em subpastas
+    // ---------------------------------------------------------------------------------------------
+
+    private static final String BIDI = String.valueOf((char) 0x202E);
+
+    @Test
+    void umGitQueEArquivoApontandoParaForaDoProjetoNaoELidoNemNaLeituraLeve() throws Exception {
+        g.projeto("loja-web");
+        Path projeto = g.raiz.resolve("loja-web");
+        Path fora = g.repositorio("../fora-do-projeto/repo");
+        g.escrever(fora, "segredo.txt", "x\n");
+        g.commitar(fora, "commit de fora");
+        Path app = g.projeto("loja-web/app");
+        g.escrever(app, ".git", "gitdir: " + fora.resolve(".git") + "\n"); // o .git é um ARQUIVO que leva para fora
+        repoEm("loja-web", "api", "x");
+        LeitorDeGitDoProjeto lp = doProjeto(projeto, LeitorDeGitDoProjeto.Memoria.NENHUMA);
+
+        ResumoDoRepositorio lista = lp.resumo().valorOuNulo();
+        assertEquals(ResumoDoRepositorio.Estado.REPOSITORIOS_ABAIXO, lista.estado());
+        RepositorioAbaixo doApp = lista.abaixo().stream().filter(a -> a.caminho().equals("app")).findFirst().orElseThrow();
+        RepositorioAbaixo daApi = lista.abaixo().stream().filter(a -> a.caminho().equals("api")).findFirst().orElseThrow();
+        assertTrue(doApp.foraDoProjeto(), "a lista diz que aponta para fora");
+        assertFalse(doApp.lido(), "e NÃO lê branch nem commit dele");
+        assertNull(doApp.ultimo());
+        assertTrue(daApi.lido() && !daApi.foraDoProjeto(), "o outro segue normal");
+        assertTrue(g.comandos.stream().noneMatch(c -> c.contains(app.toString()) && (c.contains("log") || c.contains("symbolic-ref") || c.contains("status"))),
+            "nenhum log, symbolic-ref nem status rodou no repositório que aponta para fora: " + g.comandos);
+
+        // escolher mesmo assim: a leitura recusa, com a frase
+        assertTrue(lp.escolher("app"));
+        ResumoDoRepositorio lido = lp.resumo().valorOuNulo();
+        assertEquals(ResumoDoRepositorio.Estado.ERRO, lido.estado());
+        assertEquals(FalhaDoGit.Tipo.FORA_DO_PROJETO, lido.falha().tipo());
+        assertTrue(lido.falha().frase().contains("repositório aponta para fora do projeto; não leio por segurança"), lido.falha().frase());
+        assertEquals("app", lido.subpasta(), "a tela ainda sabe de qual subpasta é e deixa voltar à lista");
+        assertTrue(g.comandos.stream().noneMatch(c -> c.contains(app.toString()) && (c.contains("log") || c.contains("status") || c.contains("--porcelain=v2"))), g.comandos.toString());
+        assertEquals(List.of("commit de fora"), List.of(g.git(fora, "log", "--format=%s").strip().split("\n")), "o repositório de fora ficou como estava");
+    }
+
+    @Test
+    void umGitQueEArquivoApontandoParaDentroDoProjetoValeComoUmWorktreeOuSubmoduloLegitimo() throws Exception {
+        g.projeto("loja-web");
+        Path projeto = g.raiz.resolve("loja-web");
+        // git init --separate-git-dir: o .git de app2 é um arquivo e o repositório de verdade fica em loja-web/.guarda/app2
+        Files.createDirectories(projeto.resolve(".guarda"));
+        g.git(projeto, "init", "-q", "-b", "main", "--separate-git-dir=" + projeto.resolve(".guarda/app2"), "app2");
+        assertTrue(Files.isRegularFile(projeto.resolve("app2/.git")));
+        g.git(projeto.resolve("app2"), "config", "--local", "user.name", "Ana");
+        g.git(projeto.resolve("app2"), "config", "--local", "user.email", "ana@example.com");
+        g.escrever(projeto.resolve("app2"), "a.txt", "a\n");
+        g.commitar(projeto.resolve("app2"), "dentro do projeto");
+        LeitorDeGitDoProjeto lp = doProjeto(projeto, LeitorDeGitDoProjeto.Memoria.NENHUMA);
+        ResumoDoRepositorio r = lp.resumo().valorOuNulo();
+        assertEquals(ResumoDoRepositorio.Estado.COM_GIT, r.estado(), String.valueOf(r.falha()));
+        assertEquals("app2", r.subpasta());
+        assertEquals("dentro do projeto", r.ultimo().assunto());
+    }
+
+    @Test
+    void umGitQueApontaParaForaTambemNaoPassaQuandoOProjetoTemUmSoRepositorio() throws Exception {
+        g.projeto("loja-web");
+        Path projeto = g.raiz.resolve("loja-web");
+        Path fora = g.repositorio("../fora-do-projeto2/repo");
+        g.escrever(fora, "a.txt", "a");
+        g.commitar(fora, "de fora");
+        g.escrever(g.projeto("loja-web/app"), ".git", "gitdir: " + fora.resolve(".git") + "\n");
+        ResumoDoRepositorio r = doProjeto(projeto, LeitorDeGitDoProjeto.Memoria.NENHUMA).resumo().valorOuNulo();
+        assertEquals(ResumoDoRepositorio.Estado.ERRO, r.estado(), "com um só, o app abre direto nele: e o abrir recusa");
+        assertEquals(FalhaDoGit.Tipo.FORA_DO_PROJETO, r.falha().tipo());
+        assertEquals(List.of("app"), caminhos(r));
+    }
+
+    @Test
+    void umNomeComCaractereBidiNaoApareceMasContaEImpedeCriarSemConfirmacao() throws Exception {
+        g.projeto("loja-web");
+        Path projeto = g.raiz.resolve("loja-web");
+        repoEm("loja-web", "app", "a");
+        String nome = "pasta" + BIDI + "cod";
+        try {
+            repoEm("loja-web", nome, "b");
+        } catch (RuntimeException | AssertionError e) {
+            assumeTrue(false, "este sistema de arquivos não aceita o nome de teste");
+        }
+        for (LeitorDeGit l : List.of(viaFind(projeto), viaDisco(projeto))) {
+            ResumoDoRepositorio r = l.resumo().valorOuNulo();
+            assertEquals(ResumoDoRepositorio.Estado.REPOSITORIOS_ABAIXO, r.estado(), String.valueOf(r.falha()));
+            assertEquals(List.of("app"), caminhos(r), l.getClass().getSimpleName());
+            assertEquals(1, r.ilegiveis());
+        }
+        CriadorDeRepositorio c = criador(projeto);
+        ConferenciaDoRepositorio conf = c.conferirCriacao();
+        assertEquals(Situacao.PODE_CRIAR, conf.situacao(), String.valueOf(conf.falha()));
+        assertEquals(List.of("app", "pasta com nome ilegível (1)"), conf.repositoriosAbaixo(), "a conferência conta o repositório que o app não mostra");
+        ResultadoDaCriacao r = c.criarRepositorio(new PedidoDeCriacao(conf, "Ana", "ana@example.com", false), OperacoesDeGit.Observador.NENHUM, new Cancelamento());
+        assertFalse(r.criou());
+        assertFalse(r.mensagem().contains(BIDI), r.mensagem());
+        assertFalse(Files.exists(projeto.resolve(".git")));
+    }
+
+    @Test
+    void repositorioSoEmPastaDeNomeIlegivelNaoViraSemGitNemLiberaCriar() throws Exception {
+        g.projeto("loja-web");
+        Path projeto = g.raiz.resolve("loja-web");
+        try {
+            repoEm("loja-web", "pasta" + BIDI + "cod", "b");
+        } catch (RuntimeException | AssertionError e) {
+            assumeTrue(false, "este sistema de arquivos não aceita o nome de teste");
+        }
+        for (LeitorDeGit l : List.of(viaFind(projeto), viaDisco(projeto))) {
+            ResumoDoRepositorio r = l.resumo().valorOuNulo();
+            assertEquals(ResumoDoRepositorio.Estado.ERRO, r.estado(), "todos descartados pela validação: erro de busca, não 'sem Git'");
+            assertTrue(r.falha().frase().contains("nome que o app não mostra com segurança (1)"), r.falha().frase());
+        }
+        ConferenciaDoRepositorio conf = criador(projeto).conferirCriacao();
+        assertEquals(Situacao.NAO_CONFERI, conf.situacao());
+        assertFalse(conf.liberaACriacao());
+    }
+
+    @Test
+    void umaRaizComBarraInvertidaNoNomeAindaAcha() throws Exception {
+        Path raiz = null;
+        try {
+            raiz = g.projeto("loja\\web");
+        } catch (RuntimeException e) {
+            assumeTrue(false, "este sistema de arquivos não aceita barra invertida no nome");
+        }
+        repoEm("loja\\web", "app", "a");
+        igualNosDoisCaminhos(raiz, List.of("app"));
     }
 
     // ---------------------------------------------------------------------------------------------

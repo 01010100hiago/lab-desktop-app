@@ -392,6 +392,11 @@ public final class TelaServidor extends Painel {
             }
 
             @Override
+            public br.com.labdesktop.git.LeitorDeGit leitorDeGitDeSubpasta(String pastaDoProjetoNoApp, String subpasta) {
+                return projetos.leitorDeGitDeSubpastaDe(pastaDoProjetoNoApp, subpasta);
+            }
+
+            @Override
             public String repositorioGitLembrado() {
                 return projetos.repositorioGitLembradoDe(nome);
             }

@@ -408,8 +408,18 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
      */
     public br.com.labdesktop.git.LeitorDeGit leitorDeGit(String pastaDoProjetoNoApp) {
         AmbienteDeProjetos a = ambienteDeProjetos(pastaDoPai(pastaDoProjetoNoApp));
-        return br.com.labdesktop.git.LeitorDeGitPorExecutor.de(a.executor(), a.paraOSistema(), pastaDoProjetoNoApp, a.local());
+        // o cache da procura de repositórios em subpastas é por projeto NESTE servidor, e vive aqui porque o leitor é montado de novo a cada leitura
+        return br.com.labdesktop.git.LeitorDeGitPorExecutor.de(a.executor(), a.paraOSistema(), pastaDoProjetoNoApp, a.local(),
+            cachesDeBusca.computeIfAbsent(pastaDoProjetoNoApp, p -> new br.com.labdesktop.git.CacheDeBusca()));
     }
+
+    /** O leitor do Git do repositório de uma SUBPASTA do projeto ({@code app}): confere que o {@code .git} dele não leva para fora do projeto. Só MONTA. */
+    public br.com.labdesktop.git.LeitorDeGit leitorDeGitDeSubpasta(String pastaDoProjetoNoApp, String subpasta) {
+        AmbienteDeProjetos a = ambienteDeProjetos(pastaDoPai(pastaDoProjetoNoApp));
+        return br.com.labdesktop.git.LeitorDeGitPorExecutor.deSubpasta(a.executor(), a.paraOSistema(), pastaDoProjetoNoApp, subpasta, a.local());
+    }
+
+    private final java.util.Map<String, br.com.labdesktop.git.CacheDeBusca> cachesDeBusca = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * O que ESCREVE no Git de um projeto. Só MONTA: conferir lê, criar só roda depois do clique de confirmar na janela, e a trava das ações
