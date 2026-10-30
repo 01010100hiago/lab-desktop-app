@@ -496,6 +496,11 @@ public final class ServidorLab implements AutoCloseable, OperacoesDe2fa {
         sondador.definirSuspenso(true);
     }
 
+    /** A rede do computador mudou: quem espera para reconectar (inclusive no ritmo lento) tenta agora e volta ao ritmo normal. */
+    public void aoMudarARede() {
+        conexao.aoMudarARede();
+    }
+
     /** O Mac acordou: a conexão reconecta e o Sondador volta quando ela estiver {@code CONECTADO}. */
     public void aoAcordar() {
         conexao.aoAcordar();

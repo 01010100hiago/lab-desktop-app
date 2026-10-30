@@ -1234,6 +1234,7 @@ public final class AcoesDaInterface {
             case DIGITAR_CODIGO -> digitarCodigo(lab);
             case CONFERIR_IMPRESSAO -> conferirImpressao(lab);
             case REGISTRAR_TOKEN -> registrarToken(lab);
+            case EDITAR_SERVIDOR -> editar(lab);
             case REMOVER_SERVIDOR -> remover(lab);
             case INSTALAR_CHAVE -> instalarChaveComSenha(lab);
             case INSTALAR_AGENTE -> instalarAgente(lab);

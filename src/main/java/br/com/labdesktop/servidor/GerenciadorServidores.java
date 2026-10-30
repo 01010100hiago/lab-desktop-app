@@ -427,6 +427,7 @@ public final class GerenciadorServidores implements AutoCloseable {
             List<Runnable> d = new ArrayList<>();
             d.add(monitor.aoDormir(lab::aoDormir));
             d.add(monitor.aoAcordar(lab::aoAcordar));
+            d.add(monitor.aoMudarARede(lab::aoMudarARede));
             synchronized (desfazer) {
                 desfazer.put(lab.id(), d);
             }

@@ -27,6 +27,7 @@ import java.time.Instant;
  * @param limites            último {@code /api/limites}; {@code null} antes da primeira leitura
  * @param situacaoDoAgente   o que a leitura por SSH disse do agente quando ele não responde (instalado ou não)
  * @param local              é o servidor "Este computador" (sem SSH): a tela fala de Docker e do laboratório local, não de SSH
+ * @param ritmoLento         a conexão caiu e muitas tentativas seguidas falharam: o app só tenta de novo de tempos em tempos (a tela diz "tentando a cada 5 min" em vez do número da tentativa)
  * @param protegido          "Servidor protegido", JÁ valendo agora: a marca do cofre, ou o agente do lab visto por fora nesta sessão (ver
  *                           {@link ProtecaoDoServidor}). Com ela o app não oferece nem faz instalar, atualizar nem remover nada neste servidor
  */
@@ -46,13 +47,22 @@ public record EstadoServidor(
     SituacaoDoAgente situacaoDoAgente,
     boolean local,
     boolean protegido,
-    Transporte transporte) {
+    Transporte transporte,
+    boolean ritmoLento) {
 
     public EstadoServidor {
         if (situacaoDoAgente == null) {
             situacaoDoAgente = SituacaoDoAgente.DESCONHECIDA;
         }
         transporte = transporte == null ? Transporte.DIRETO : transporte;
+    }
+
+    /** Sem o ritmo lento (falso): o que toda tela e todo teste que não tratam da reconexão em ritmo lento usam. */
+    public EstadoServidor(String servidorId, String nome, EstadoConexao conexao, Falha falha, int tentativa,
+                          Instant proximaTentativaEm, Instant semConexaoDesde, long geracao, Estado2fa estado2fa,
+                          String nomeDoDispositivo, VersaoAgente versao, LimitesConta limites, SituacaoDoAgente situacaoDoAgente, boolean local, boolean protegido, Transporte transporte) {
+        this(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde, geracao, estado2fa, nomeDoDispositivo, versao,
+            limites, situacaoDoAgente, local, protegido, transporte, false);
     }
 
     /** Sem o modo de conectar (direto): o que toda tela e todo teste que não tratam de conexão sem porta aberta usam. */
@@ -91,50 +101,50 @@ public record EstadoServidor(
     EstadoServidor comConexao(br.com.labdesktop.ssh.InfoConexao info) {
         return new EstadoServidor(servidorId, nome, info.estado(), info.falha(), info.tentativa(),
             info.proximaTentativaEm(), info.semConexaoDesde(), info.geracao(), estado2fa, nomeDoDispositivo, versao,
-            limites, info.estado() == EstadoConexao.SSH_OK_SEM_AGENTE ? situacaoDoAgente : SituacaoDoAgente.DESCONHECIDA, local, protegido, transporte);
+            limites, info.estado() == EstadoConexao.SSH_OK_SEM_AGENTE ? situacaoDoAgente : SituacaoDoAgente.DESCONHECIDA, local, protegido, transporte, info.ritmoLento());
     }
 
     EstadoServidor comVersao(VersaoAgente nova, Estado2fa novoEstado2fa) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, novoEstado2fa, nomeDoDispositivo, nova, limites, situacaoDoAgente, local, protegido, transporte);
+            geracao, novoEstado2fa, nomeDoDispositivo, nova, limites, situacaoDoAgente, local, protegido, transporte, ritmoLento);
     }
 
     EstadoServidor comLimites(LimitesConta novos) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, novos, situacaoDoAgente, local, protegido, transporte);
+            geracao, estado2fa, nomeDoDispositivo, versao, novos, situacaoDoAgente, local, protegido, transporte, ritmoLento);
     }
 
     EstadoServidor comEstado2fa(Estado2fa novo) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, novo, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido, transporte);
+            geracao, novo, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido, transporte, ritmoLento);
     }
 
     EstadoServidor comDispositivo(String nomeNovo) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeNovo, versao, limites, situacaoDoAgente, local, protegido, transporte);
+            geracao, estado2fa, nomeNovo, versao, limites, situacaoDoAgente, local, protegido, transporte, ritmoLento);
     }
 
     /** Copia com o nome novo (o usuário editou o servidor). */
     EstadoServidor comNome(String nomeNovo) {
         return new EstadoServidor(servidorId, nomeNovo, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido, transporte);
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido, transporte, ritmoLento);
     }
 
     EstadoServidor comSituacaoDoAgente(SituacaoDoAgente nova) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, limites, nova, local, protegido, transporte);
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, nova, local, protegido, transporte, ritmoLento);
     }
 
     /** Copia com a marca de protegido nova (o usuário mudou a caixa, ou o app viu o agente do lab de fora). */
     EstadoServidor comProtegido(boolean novo) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, novo, transporte);
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, novo, transporte, ritmoLento);
     }
 
     /** Copia com o modo de conectar novo (o usuário trocou em Editar servidor). */
     EstadoServidor comTransporte(Transporte novo) {
         return new EstadoServidor(servidorId, nome, conexao, falha, tentativa, proximaTentativaEm, semConexaoDesde,
-            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido, novo);
+            geracao, estado2fa, nomeDoDispositivo, versao, limites, situacaoDoAgente, local, protegido, novo, ritmoLento);
     }
 
     /** O servidor conecta SEM PORTA ABERTA (AWS Session Manager ou Cloudflare)? */

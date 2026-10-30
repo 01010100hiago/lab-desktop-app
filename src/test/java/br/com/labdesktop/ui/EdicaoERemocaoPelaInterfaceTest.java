@@ -496,6 +496,19 @@ class EdicaoERemocaoPelaInterfaceTest {
     }
 
     @Test
+    void oBotaoEditarServidorDaFaixaDoRitmoLentoAbreOdialogoDeEditarSemSalvarNada() throws Exception {
+        ServidorLab lab = servidor("lab", novaChave("k"), false);
+        abrirAJanela();
+        ConfigServidor antes = cofre.servidores().get(0);
+
+        Visual.naEdt(() -> painel.acoes().executar(lab, ConteudoDosAvisos.Acao.EDITAR_SERVIDOR));
+
+        DialogoEditarServidor d = dialogos.ultimoComo(DialogoEditarServidor.class);
+        assertNotNull(d, "abre o diálogo de editar, com o que já está no cofre");
+        assertEquals(antes, cofre.servidores().get(0), "abrir não muda nada: só o clique de salvar muda");
+    }
+
+    @Test
     void comChaveCompartilhadaApagarAChaveFicaDesabilitadoComAExplicacao() throws Exception {
         ChaveSsh compartilhada = novaChave("compartilhada");
         ServidorLab a = servidor("a", compartilhada, true);

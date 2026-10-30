@@ -43,6 +43,15 @@ public final class PoliticaDeBackoff {
         return Duration.ofNanos(Math.max(1, nanos));
     }
 
+    /**
+     * A espera do ritmo LENTO (depois de muitas falhas seguidas): {@code base} com o mesmo jitter de 20 %, para dois servidores caídos juntos não voltarem a bater no mesmo instante. Não avança os
+     * degraus: o ritmo normal recomeça de onde estava quando o usuário manda tentar agora.
+     */
+    public Duration lenta(Duration base) {
+        double fator = 1.0 + JITTER * (2.0 * sorteio.getAsDouble() - 1.0);
+        return Duration.ofNanos(Math.max(1, Math.round(base.toNanos() * fator)));
+    }
+
     /** Quantas esperas já foram devolvidas desde o último {@link #zerar()}. */
     public int tentativas() {
         return chamadas;

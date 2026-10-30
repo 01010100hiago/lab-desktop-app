@@ -22,6 +22,7 @@ public final class MonitorDeSono implements SystemSleepListener {
 
     private final List<Runnable> aoDormir = new CopyOnWriteArrayList<>();
     private final List<Runnable> aoAcordar = new CopyOnWriteArrayList<>();
+    private final List<Runnable> aoMudarARede = new CopyOnWriteArrayList<>();
 
     /** Chamado quando o sistema está para dormir. Devolve o que desfaz o registro. */
     public Runnable aoDormir(Runnable acao) {
@@ -35,13 +36,21 @@ public final class MonitorDeSono implements SystemSleepListener {
         return () -> aoAcordar.remove(acao);
     }
 
+    /** Chamado quando a rede do computador mudou (a {@link VigiaDeRede} viu). Devolve o que desfaz o registro. */
+    public Runnable aoMudarARede(Runnable acao) {
+        aoMudarARede.add(acao);
+        return () -> aoMudarARede.remove(acao);
+    }
+
     /** Liga uma conexão ao monitor. Devolve o que desfaz a ligação. */
     public Runnable acompanhar(ConexaoSsh conexao) {
         Runnable a = aoDormir(conexao::aoDormir);
         Runnable b = aoAcordar(conexao::aoAcordar);
+        Runnable c = aoMudarARede(conexao::aoMudarARede);
         return () -> {
             a.run();
             b.run();
+            c.run();
         };
     }
 
@@ -52,6 +61,11 @@ public final class MonitorDeSono implements SystemSleepListener {
     public void suspensaoDetectada() {
         disparar(aoDormir);
         disparar(aoAcordar);
+    }
+
+    /** A rede do computador mudou: quem está esperando para reconectar tenta agora (ver {@link ConexaoSsh#aoMudarARede}). */
+    public void redeMudou() {
+        disparar(aoMudarARede);
     }
 
     @Override

@@ -42,8 +42,9 @@ public final class ApresentacaoDoEstado {
                     : e.situacaoDoAgente() == SituacaoDoAgente.SEM_PERMISSAO_NO_DOCKER
                         ? new Apresentacao("Sem permissão no Docker", "alerta", Gravidade.ATENCAO)
                         : new Apresentacao("Agente não responde", "alerta", Gravidade.ATENCAO);
-            case RECONECTANDO -> new Apresentacao(
-                e.tentativa() > 0 ? "Reconectando (" + e.tentativa() + ")" : "Reconectando", "atualizar", Gravidade.ATENCAO);
+            case RECONECTANDO -> e.ritmoLento()
+                ? new Apresentacao("Sem conexão", "rede", Gravidade.ATENCAO) // no ritmo lento o número da tentativa não vale: cresceria sem fim
+                : new Apresentacao(e.tentativa() > 0 ? "Reconectando (" + e.tentativa() + ")" : "Reconectando", "atualizar", Gravidade.ATENCAO);
             case ERRO_AUTENTICACAO -> new Apresentacao("Chave recusada", "chave", Gravidade.PERIGO);
             case ERRO_CHAVE_HOST -> falha == Falha.Tipo.PIN_DIVERGENTE
                 ? new Apresentacao("Chave do servidor mudou", "erro", Gravidade.PERIGO)

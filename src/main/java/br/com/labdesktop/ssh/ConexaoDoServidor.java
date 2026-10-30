@@ -40,6 +40,9 @@ public interface ConexaoDoServidor extends AutoCloseable {
     /** O computador acordou. */
     void aoAcordar();
 
+    /** A rede do computador mudou: quem espera para reconectar tenta agora e volta ao ritmo normal. Sem efeito onde não há rede ("Este computador"). */
+    default void aoMudarARede() { }
+
     /** O cofre foi bloqueado: nada de rede até desbloquear. */
     void bloquear();
 

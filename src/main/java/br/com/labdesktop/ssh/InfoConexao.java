@@ -12,6 +12,7 @@ import java.time.Instant;
  * @param semConexaoDesde    desde quando não há conexão (para "sem conexão desde HH:MM"); {@code null} se há
  * @param geracao            cresce a cada túnel novo (o {@code ClienteApi} é por geração)
  * @param portaLocal         porta efêmera do túnel em 127.0.0.1; {@code null} sem túnel
+ * @param ritmoLento         depois de muitas falhas seguidas sem nenhuma conexão boa no meio, o app só tenta de novo de tempos em tempos (a cada 5 min): o número da tentativa deixa de valer
  */
 public record InfoConexao(
     EstadoConexao estado,
@@ -20,7 +21,13 @@ public record InfoConexao(
     Instant proximaTentativaEm,
     Instant semConexaoDesde,
     long geracao,
-    Integer portaLocal) {
+    Integer portaLocal,
+    boolean ritmoLento) {
+
+    /** Sem o ritmo lento (falso): o que toda conexão que não trata do ritmo lento usa. */
+    public InfoConexao(EstadoConexao estado, Falha falha, int tentativa, Instant proximaTentativaEm, Instant semConexaoDesde, long geracao, Integer portaLocal) {
+        this(estado, falha, tentativa, proximaTentativaEm, semConexaoDesde, geracao, portaLocal, false);
+    }
 
     public static InfoConexao inicial() {
         return new InfoConexao(EstadoConexao.DESCONECTADO, null, 0, null, null, 0, null);

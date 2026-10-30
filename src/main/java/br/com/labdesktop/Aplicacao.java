@@ -6,6 +6,7 @@ import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.GerenciadorServidores;
 import br.com.labdesktop.ssh.ConfigSsh;
 import br.com.labdesktop.ssh.MonitorDeSono;
+import br.com.labdesktop.ssh.VigiaDeRede;
 import br.com.labdesktop.ssh.VigiaDeRelogio;
 import br.com.labdesktop.ui.GerenciadorTema;
 import br.com.labdesktop.ui.JanelaPrincipal;
@@ -57,6 +58,7 @@ public final class Aplicacao {
     private MonitorDeSono monitorDeSono;
     private Runnable desfazerSono = () -> { };
     private VigiaDeRelogio vigiaDeRelogio;
+    private VigiaDeRede vigiaDeRede;
     private boolean encerrando;
     /** Roda UMA vez, quando a primeira janela de verdade aparece (fecha a janelinha de abertura e guarda a medida da partida). */
     private Runnable aoAparecerAPrimeiraJanela = () -> { };
@@ -172,6 +174,7 @@ public final class Aplicacao {
         monitorDeSono = new MonitorDeSono();
         desfazerSono = gerenciador.acompanhar(monitorDeSono);
         registrarSono();
+        vigiaDeRede = VigiaDeRede.iniciar(monitorDeSono); // outra rede ou a VPN: quem espera no ritmo lento tenta logo
 
         gerenciador.iniciarTodos();
         janela.setVisible(true);
@@ -213,6 +216,10 @@ public final class Aplicacao {
         cofre = null;
         desfazerSono.run();
         desfazerSono = () -> { };
+        if (vigiaDeRede != null) {
+            vigiaDeRede.close();
+            vigiaDeRede = null;
+        }
         if (vigiaDeRelogio != null) {
             vigiaDeRelogio.close();
             vigiaDeRelogio = null;

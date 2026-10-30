@@ -136,6 +136,13 @@ public final class ConexaoSsh implements ConexaoDoServidor {
     private EstadoConexao estado = EstadoConexao.DESCONECTADO;
     private Falha falha;
     private int tentativa;
+    /**
+     * Falhas SEGUIDAS, sem nenhuma conexão boa no meio. Zera quando o SSH autentica de novo, e quando o usuário manda tentar agora, o Mac acorda, a rede muda, o cofre desbloqueia ou o servidor é
+     * editado. Ao chegar a {@link ConfigSsh#falhasAteORitmoLento()}, o app passa ao ritmo lento.
+     */
+    private int falhasSeguidas;
+    /** Ritmo lento: o servidor não volta (apagado, desligado, login da AWS expirado, túnel que não sobe), então o app só tenta de novo a cada {@link ConfigSsh#esperaNoRitmoLento()}. */
+    private boolean ritmoLento;
     private Instant proximaEm;
     private Instant semConexaoDesde;
     private long idTentativa;
@@ -195,6 +202,7 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         post(() -> {
             if (estado == EstadoConexao.DESCONECTADO || estado == EstadoConexao.BLOQUEADO_COFRE) {
                 backoff.zerar();
+                zerarAsFalhas();
                 retentouAutenticacao = false;
                 tentativa = 0;
                 iniciarTentativa();
@@ -237,6 +245,19 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             }
             tentativa = 0;
             reiniciarDoZero();
+        });
+    }
+
+    /**
+     * A rede do computador mudou (outra rede Wi-Fi, a VPN subiu, o cabo voltou): quem está esperando para reconectar, inclusive no ritmo lento, tenta agora e volta ao ritmo normal. Com a conexão de pé
+     * ou parada por outro motivo (cofre, chave, sono) não faz nada: o heartbeat cuida da primeira, e as outras esperam uma ação do usuário.
+     */
+    @Override
+    public void aoMudarARede() {
+        post(() -> {
+            if (!encerrado && estado == EstadoConexao.RECONECTANDO) {
+                reiniciarDoZero();
+            }
         });
     }
 
@@ -321,6 +342,7 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             cancelarTimer();
             descartarSessaoAtual();
             tentativa = 0;
+            zerarAsFalhas();
             mudar(EstadoConexao.BLOQUEADO_COFRE, null, null);
         });
     }
@@ -553,8 +575,15 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         cancelarTimer();
         descartarSessaoAtual();
         backoff.zerar();
+        zerarAsFalhas();
         retentouAutenticacao = false;
         iniciarTentativa();
+    }
+
+    /** Volta ao ritmo normal: nenhuma falha seguida, e o backoff recomeça no primeiro degrau (quem chama zera o {@link PoliticaDeBackoff} junto, quando é o caso). */
+    private void zerarAsFalhas() {
+        falhasSeguidas = 0;
+        ritmoLento = false;
     }
 
     private void iniciarTentativa() {
@@ -640,6 +669,7 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         destinoAtual = destino;
         sessaoViva = s;
         tunelAtual = t;
+        zerarAsFalhas(); // o servidor foi alcançado e autenticou: uma conexão boa no meio zera a contagem das falhas seguidas
         s.addCloseFutureListener(f -> post(() -> aoSessaoFechada(id)));
         mudar(EstadoConexao.CONECTANDO, null, null); // publica a porta local; o teste do agente vem agora
         iniciarSonda(id);
@@ -826,7 +856,20 @@ public final class ConexaoSsh implements ConexaoDoServidor {
     private void reconectarComBackoff(Falha motivo) {
         cancelarTimer();
         cancelarTimerEstavel();
-        Duration espera = backoff.proximo();
+        falhasSeguidas++;
+        Duration espera;
+        if (falhasSeguidas >= cfg.falhasAteORitmoLento()) {
+            // um servidor que não volta (instância apagada ou parada, login da AWS expirado, túnel que não sobe, desligado): martelar a cada minuto, subindo um programa externo a cada
+            // tentativa, não ajuda ninguém. Passa a uma tentativa a cada 5 minutos (com jitter) e a tela diz isso, com a causa e os botões que resolvem.
+            if (!ritmoLento) {
+                LOG.info("{} falhas seguidas em {}: passa ao ritmo lento (uma tentativa a cada {}).", falhasSeguidas, servidorId, cfg.esperaNoRitmoLento());
+            }
+            ritmoLento = true;
+            espera = backoff.lenta(cfg.esperaNoRitmoLento());
+        } else {
+            ritmoLento = false;
+            espera = backoff.proximo();
+        }
         Instant quando = agendador.agora().plus(espera);
         mudar(EstadoConexao.RECONECTANDO, motivo, quando);
         long epoca = idTentativa;
@@ -913,7 +956,7 @@ public final class ConexaoSsh implements ConexaoDoServidor {
     private void publicar() {
         TunelSsh t = tunel;
         InfoConexao nova = new InfoConexao(estado, falha, tentativa, proximaEm, semConexaoDesde,
-            t == null ? 0 : t.geracao(), t == null ? null : t.portaLocal());
+            t == null ? 0 : t.geracao(), t == null ? null : t.portaLocal(), ritmoLento && estado == EstadoConexao.RECONECTANDO);
         if (nova.equals(info)) {
             return;
         }

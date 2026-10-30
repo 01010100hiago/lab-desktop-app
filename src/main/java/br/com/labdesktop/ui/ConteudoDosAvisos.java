@@ -34,6 +34,8 @@ public final class ConteudoDosAvisos {
         INSTALAR_AGENTE("Instalar agente"),
         /** "Este computador": abre "Preparar este computador" (que só confere e pergunta; nada se instala sem a confirmação). */
         PREPARAR_COMPUTADOR("Preparar este computador"),
+        /** Abre o diálogo "Editar servidor" (endereço, porta, usuário, modo de conectar): para quem mudou o servidor de lugar. Só abre o diálogo; nada muda sem o clique de salvar. */
+        EDITAR_SERVIDOR("Editar servidor"),
         /** Abre o diálogo "Remover servidor" (que pede confirmação): o caminho para quem reinstalou o servidor. */
         REMOVER_SERVIDOR("Remover servidor"),
         /** "Chave recusada": abre "Instalar a chave com a senha" (o app só usa a senha uma vez, depois do clique, e prova a chave numa conexão nova). */
@@ -171,6 +173,9 @@ public final class ConteudoDosAvisos {
             case DESCONECTADO -> new AvisoDeConexao(Gravidade.NEUTRO, "rede", nome + " está desconectado",
                 "O app não está conectado a este servidor.", List.of(Acao.CONECTAR));
             case RECONECTANDO -> {
+                if (e.ritmoLento()) {
+                    yield deRitmoLento(e, nome, falha, agora, fuso);
+                }
                 if (falha != null && falha.ehDoTransporte()) {
                     yield deTransporte(e, nome, falha, agora);
                 }
@@ -225,6 +230,38 @@ public final class ConteudoDosAvisos {
             case SUSPENSO -> new AvisoDeConexao(Gravidade.NEUTRO, "pausa", "O computador está em repouso",
                 "A conexão com " + nome + " volta quando ele acordar.", List.of());
         };
+    }
+
+    /**
+     * O servidor não volta (muitas tentativas seguidas falharam): o app só tenta de novo a cada 5 minutos, e a faixa diz isso, desde quando está sem conexão, a CAUSA em palavras simples e os botões
+     * que resolvem (tentar agora, editar o servidor, remover o servidor). Nada de número de tentativa, que cresceria sem fim. Grafite quando a causa é do túnel (uma situação do dia a dia), atenção nas outras.
+     */
+    private static AvisoDeConexao deRitmoLento(EstadoServidor e, String nome, Falha falha, Instant agora, ZoneId fuso) {
+        String desde = e.semConexaoDesde() == null ? "" : " desde " + Formato.fmtHora(e.semConexaoDesde(), fuso).substring(0, 5);
+        String causa = falha == null ? "" : " " + falha.mensagem();
+        String dica = falha == null ? "" : switch (falha.tipo()) {
+            case REDE -> " O servidor pode estar desligado, sem rede, ou com o endereço ou a porta trocados.";
+            case TRANSPORTE_OUTRO -> " A instância pode estar parada ou apagada.";
+            default -> "";
+        };
+        String proxima = e.proximaTentativaEm() == null ? "" : " (a próxima " + emMinutos(Duration.between(agora, e.proximaTentativaEm())) + ")";
+        // o título e a primeira frase do texto formam "Sem conexão com X desde HH:MM. Tentando de novo a cada 5 min."
+        String texto = "Tentando de novo a cada " + MINUTOS_DO_RITMO_LENTO + " min" + proxima + "." + causa + dica
+            + " Se o servidor não existe mais, use Remover servidor; se mudou de lugar, Editar servidor.";
+        boolean doTunel = falha != null && falha.ehDoTransporte();
+        return new AvisoDeConexao(doTunel ? Gravidade.NEUTRO : Gravidade.ATENCAO, doTunel ? "alerta" : "rede", "Sem conexão com " + nome + desde,
+            texto, List.of(Acao.TENTAR_AGORA, Acao.EDITAR_SERVIDOR, Acao.REMOVER_SERVIDOR), falha == null ? null : falha.textoCopiavel());
+    }
+
+    /** No ritmo lento a faixa fala em minutos (mudar a cada segundo refaria a faixa à toa). */
+    static final int MINUTOS_DO_RITMO_LENTO = (int) br.com.labdesktop.ssh.ConfigSsh.ESPERA_NO_RITMO_LENTO.toMinutes();
+
+    private static String emMinutos(Duration d) {
+        long s = Math.max(0, d.toSeconds());
+        if (s < 60) {
+            return "em menos de 1 min";
+        }
+        return "em cerca de " + (s + 59) / 60 + " min";
     }
 
     /**
