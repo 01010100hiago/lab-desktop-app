@@ -70,11 +70,12 @@ class PlataformaLocalTest {
 
     @Test
     void oLocalizadorAchaNoPathENasPastasConhecidas() {
-        java.util.Set<String> existentes = java.util.Set.of("/usr/local/bin/docker", "/opt/homebrew/bin/brew");
+        // comparados como Path: o Windows escreve esses caminhos com barra invertida, e o que vale é o mesmo caminho nos dois
+        java.util.Set<java.nio.file.Path> existentes = java.util.Set.of(java.nio.file.Path.of("/usr/local/bin/docker"), java.nio.file.Path.of("/opt/homebrew/bin/brew"));
         LocalizadorDeProgramas l = new LocalizadorDeProgramas(SistemaOperacional.MAC, List.of("/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"),
-            p -> existentes.contains(p.toString()));
-        assertEquals("/usr/local/bin/docker", l.localizar("docker").orElseThrow().toString());
-        assertEquals("/opt/homebrew/bin/brew", l.localizar("brew").orElseThrow().toString());
+            existentes::contains);
+        assertEquals(java.nio.file.Path.of("/usr/local/bin/docker"), l.localizar("docker").orElseThrow());
+        assertEquals(java.nio.file.Path.of("/opt/homebrew/bin/brew"), l.localizar("brew").orElseThrow());
         assertTrue(l.localizar("git").isEmpty());
         assertTrue(l.localizar("../docker").isEmpty(), "só nome de programa, nunca caminho");
         assertTrue(l.localizar("/usr/local/bin/docker").isEmpty());

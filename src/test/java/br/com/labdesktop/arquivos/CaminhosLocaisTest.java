@@ -32,7 +32,7 @@ class CaminhosLocaisTest {
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Valores conhecidos (pacote X): o resultado esperado em cada SISTEMA, com o sistema injetado (nada depende de onde o teste roda)
+    // Valores conhecidos: o resultado esperado em cada SISTEMA, com o sistema injetado (nada depende de onde o teste roda)
     // ---------------------------------------------------------------------------------------------
 
     @Test

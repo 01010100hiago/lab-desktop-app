@@ -105,7 +105,8 @@ class ClienteSftpLocalTest {
     void erroDeLeituraVemEmPortuguesComOTipoCerto() {
         assertEquals(ErroSftp.Tipo.NAO_EXISTE, tipoDe(() -> c.listar(t("nao-existe"), 10)));
         assertEquals(ErroSftp.Tipo.NOME_INVALIDO, tipoDe(() -> c.listar("relativo", 10)));
-        assertEquals(ErroSftp.Tipo.NOME_INVALIDO, tipoDe(() -> c.listar(t("a\nb"), 10)));
+        assertEquals(ErroSftp.Tipo.NOME_INVALIDO, tipoDe(() -> c.listar(app(raiz) + "/a\nb", 10)),
+            "o nome com quebra de linha é montado como texto: o NTFS nem deixa criar um Path assim");
         assertEquals(ErroSftp.Tipo.NAO_EXISTE, tipoDe(() -> c.lerArquivo(t("nao-existe"), 10)));
     }
 
@@ -299,6 +300,22 @@ class ClienteSftpLocalTest {
         assertTrue(l.entradas().stream().anyMatch(e -> e.nome().equals("README.md")));
         assertEquals(ErroSftp.Tipo.FORA_DA_RAIZ, tipoDe(() -> s.listar(app(raiz.resolve("projeto/escapa")), 100, n -> true)),
             "a cerca resolve o link e recusa o que sai da pasta do projeto: igual ao remoto");
+    }
+
+    @Test
+    void noWindowsUmLinkRelativoComBarraInvertidaParaForaDaPastaDoProjetoERecusado() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(SistemaDoTeste.windows(), "o alvo de link com barra invertida só existe no Windows");
+        Path projeto = Files.createDirectories(raiz.resolve("projeto"));
+        Path fora = Files.createDirectories(tmp.resolve("fora"));
+        Files.writeString(fora.resolve("segredo.txt"), "x");
+        // o alvo relativo, escrito como o Windows o escreve (barra invertida): de projeto/escapa sobe duas pastas e cai em fora/
+        Files.createSymbolicLink(projeto.resolve("escapa"), Path.of("..\\..\\fora"));
+        assertEquals("../../fora", c.lerLink(t("projeto/escapa")), "o alvo chega à cerca em caminho do app, com barra comum");
+        ServicoDeArquivos s = new ServicoDeArquivos(c, Escopo.projeto(app(raiz), "projeto", app(tmp.toRealPath())));
+        assertEquals(ErroSftp.Tipo.FORA_DA_RAIZ, tipoDe(() -> s.listar(app(projeto.resolve("escapa")), 100, n -> true)),
+            "a cerca resolve o link relativo e vê que ele sai da pasta do projeto");
+        assertEquals(ErroSftp.Tipo.FORA_DA_RAIZ, tipoDe(() -> s.estatisticas(app(projeto.resolve("escapa")) + "/segredo.txt")),
+            "nem o arquivo que está do outro lado do link");
     }
 
     /** Os atributos de uma JUNÇÃO do Windows como o Java a vê: pasta comum, mas "outra coisa" (ponto de reparse), e não link simbólico. */
