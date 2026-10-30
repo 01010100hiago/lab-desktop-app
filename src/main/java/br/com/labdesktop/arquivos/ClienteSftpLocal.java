@@ -68,10 +68,6 @@ public final class ClienteSftpLocal implements ClienteSftp {
         if (caminho == null || caminho.isEmpty() || !CaminhoRemoto.semControle(caminho) || caminho.charAt(0) != '/') {
             throw ErroSftp.nomeInvalido("O caminho tem caracteres que não posso usar.");
         }
-        if (caminhos.windows() && caminho.indexOf('\\') >= 0) {
-            // no Windows a barra invertida separa pastas: "a\..\..\fora" seria UM nome para a cerca do gerenciador (que só conhece a barra comum) e saltaria para fora dela
-            throw ErroSftp.nomeInvalido("O caminho tem caracteres que não posso usar.");
-        }
         try {
             Path r = caminhos.path(caminho);
             if (r == null) {
@@ -89,8 +85,7 @@ public final class ClienteSftpLocal implements ClienteSftp {
 
     /** O alvo de um link no texto do app (no Windows, {@code ..\\x} vira {@code ../x} e {@code D:\\x} vira {@code /D:/x}); {@code null} se não dá para dizer. */
     private String alvoDoLink(Path link, String destinoDoSistema) {
-        Path pasta = link.getParent();
-        return caminhos.alvoDoLink(pasta == null ? null : texto(pasta), destinoDoSistema);
+        return destinoDoSistema; // CONTROLE NEGATIVO: o comportamento de antes (o alvo como o sistema o escreve)
     }
 
     // ---------------------------------------------------------------------------------------------
