@@ -234,8 +234,8 @@ class GaleriaProjetoDialogosTest {
     // ---------------------------------------------------------------------------------------------
 
     @Test
-    void instalarOAgenteNaConfirmacaoComandoPorComando() {
-        PacoteDoAgente pacote = PacoteDoAgente.de("0.1.0-8a948b9", "8a948b9302d0092c2b8dc42b2701cfebe95b4f86", new byte[2048]);
+    void instalarOAgenteNaConfirmacaoComandoPorComando() throws Exception {
+        PacoteDoAgente pacote = PacoteDoAgente.doClasspath(); // o agente de verdade que o app leva
         ParametrosDaInstalacao padrao = ParametrosDaInstalacao.padrao(7000);
         ServidorSimulado servidor = new ServidorSimulado(padrao, pacote);
         servidor.noGrupoDocker = true;
@@ -255,6 +255,32 @@ class GaleriaProjetoDialogosTest {
         ImagemDeDialogo.gerarComLoopbackDoTexto(d, "instalar-agente-confirmacao", "1. Enviar o pacote do agente", "4. Conferir que o agente responde e registrar o token", "equivale a ser administrador (root)");
         assertTrue(servidor.escritas().isEmpty(), "sem o clique de confirmar nada roda: " + servidor.escritas());
         assertTrue(ganchos.chamadas.isEmpty(), "o instalador não registrou nenhum token");
+    }
+
+    /** A confirmação de "Atualizar agente": diz o que o agente recebe e avisa que o histórico dos gráficos do agente anterior não é levado. */
+    @Test
+    void atualizarOAgenteNaConfirmacaoAvisaQueOsGraficosRecomecam() throws Exception {
+        PacoteDoAgente pacote = PacoteDoAgente.doClasspath();
+        ParametrosDaInstalacao padrao = ParametrosDaInstalacao.padrao(7000);
+        String anterior = "0.1.0-3b7e9d1";
+        ServidorSimulado servidor = new ServidorSimulado(padrao, pacote);
+        servidor.noGrupoDocker = true;
+        servidor.containerNome = padrao.container();
+        servidor.rotuloDoContainer = anterior;
+        servidor.volumeExiste = true;
+        servidor.pastaExiste = true;
+        GanchosFalsos ganchos = new GanchosFalsos();
+        ganchos.tokenJaValia = true;
+        DialogoDoAgente.definirPrazoDaTravaDaConfirmacaoParaTeste(0);
+        Visual.tema(Tema.CLARO);
+        DialogoDoAgente d = Visual.naEdt(() -> new DialogoDoAgente(DialogoDoAgente.Acao.ATUALIZAR, new DialogoDoAgente.Alvo("servidor-demo", 7000, anterior), pacote,
+            p -> new InstaladorDeAgente(servidor, p, pacote, ganchos).comSonda(Duration.ofMillis(300), Duration.ofMillis(10)), () -> { }, () -> { }, avisos,
+            new CopiadorDeTexto(() -> area)));
+        Visual.naEdt(d::iniciarConferencia);
+        Espera.ate(PRAZO, () -> "página=" + ed(d::paginaAtual), () -> "confirmar".equals(ed(d::paginaAtual)));
+        ImagemDeDialogo.gerarComLoopbackDoTexto(d, "atualizar-agente-confirmacao", "Versão instalada: " + anterior, "Os dados e o token deste computador ficam como estão",
+            "O histórico dos gráficos que o agente anterior guardou não é levado", "O agente só lê", "Não recebe o disco");
+        assertTrue(servidor.escritas().isEmpty(), "sem o clique de confirmar nada roda: " + servidor.escritas());
     }
 
     // ---------------------------------------------------------------------------------------------

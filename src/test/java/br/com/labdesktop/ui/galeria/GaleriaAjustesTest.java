@@ -31,13 +31,14 @@ import org.junit.jupiter.api.io.TempDir;
 class GaleriaAjustesTest {
 
     static final String PASTA_DE_DADOS = "~/Library/Application Support/LabDesktop";
-    static final String VERSAO_DO_APP = "0.1.0";
+    /** A versão, o commit e a data da imagem são de exemplo no formato real (versão = base e número de commits): a imagem não mostra os do computador de teste. */
+    static final String VERSAO_DO_APP = "0.1.64";
+    static final String COMMIT_DE_EXEMPLO = "5c1d9e2";
+    static final String DATA_DE_EXEMPLO = "2026-10-30";
     /** O Java, o sistema e a arquitetura da imagem são de exemplo (a imagem não mostra os do computador de teste). */
     static final String JAVA_DE_EXEMPLO = "21.0.5 (Temurin)";
     static final String SISTEMA_DE_EXEMPLO = "macOS 15.1";
     static final String ARQUITETURA_DE_EXEMPLO = "aarch64";
-    static final String AGENTE_VERSAO = "0.1.0-8a948b9";
-    static final String AGENTE_COMMIT = "8a948b9302d0092c2b8dc42b2701cfebe95b4f86";
 
     @TempDir
     Path tmp;
@@ -51,10 +52,10 @@ class GaleriaAjustesTest {
             try {
                 ControleDeAjustes real = new AjustesDoApp(tema, preferencias, c.painel, new CopiadorDeTexto(() -> new Clipboard("teste")), c.avisos);
                 InformacoesDoApp lida = real.informacoes();
-                // o teste roda sem o jar do app (versão "dev", agente "não incluído") e com a pasta de dados temporária: a imagem mostra um app instalado, com a versão do
-                // build.gradle.kts, um agente empacotado de exemplo (versão e commit inventados) e a pasta de dados de um Mac comum
-                InformacoesDoApp informacoes = new InformacoesDoApp(lida.nome(), VERSAO_DO_APP, AGENTE_VERSAO, AGENTE_COMMIT, JAVA_DE_EXEMPLO, SISTEMA_DE_EXEMPLO,
-                    ARQUITETURA_DE_EXEMPLO, PASTA_DE_DADOS);
+                // o teste roda sem o jar do app (versão "dev") e com a pasta de dados temporária: a imagem mostra um app instalado (versão, commit e data de exemplo),
+                // o agente empacotado de verdade (o que o jar leva) e a pasta de dados de um Mac comum
+                InformacoesDoApp informacoes = new InformacoesDoApp(lida.nome(), VERSAO_DO_APP, COMMIT_DE_EXEMPLO, DATA_DE_EXEMPLO, lida.agenteVersao(), lida.agenteCommit(),
+                    JAVA_DE_EXEMPLO, SISTEMA_DE_EXEMPLO, ARQUITETURA_DE_EXEMPLO, PASTA_DE_DADOS);
                 ControleDeAjustes controle = (ControleDeAjustes) Proxy.newProxyInstance(ControleDeAjustes.class.getClassLoader(), new Class<?>[] {ControleDeAjustes.class},
                     (proxy, metodo, args) -> {
                         if (metodo.getName().equals("informacoes")) {
@@ -72,7 +73,7 @@ class GaleriaAjustesTest {
                 String t = c.textos();
                 assertTrue(t.contains("Versão do app") && t.contains("Java") && t.contains("Sistema") && t.contains("Pasta de dados"), t);
                 assertTrue(t.contains(PASTA_DE_DADOS) && t.contains("Copiar informações") && t.contains("Software livre e gratuito"), t);
-                assertTrue(t.contains(AGENTE_VERSAO) && t.contains(VERSAO_DO_APP), t);
+                assertTrue(t.contains(lida.agenteVersao()) && t.contains(VERSAO_DO_APP) && t.contains(COMMIT_DE_EXEMPLO) && t.contains(DATA_DE_EXEMPLO), t);
                 assertFalse(t.contains(tmp.toString()), "a pasta temporária do teste não pode aparecer: " + t);
                 c.fotografar("ajustes-sobre", 960);
             } finally {

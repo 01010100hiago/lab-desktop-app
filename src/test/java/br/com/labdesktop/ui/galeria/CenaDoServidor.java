@@ -90,6 +90,14 @@ final class CenaDoServidor implements AutoCloseable {
         String nome = NOME;
         ConfigSsh ssh = ConfigSsh.rapida();
         boolean viaSsm;
+        /** O agente de monitoramento que o app instala: só lê a máquina, sem sessões do Claude nem projetos (o que o app esconde). */
+        boolean agenteDeLeitura;
+
+        Opcoes agenteDeLeitura() {
+            this.perfil = "monitor";
+            this.agenteDeLeitura = true;
+            return this;
+        }
 
         Opcoes perfil(String novo) {
             this.perfil = novo;
@@ -129,6 +137,7 @@ final class CenaDoServidor implements AutoCloseable {
         }
     }
 
+    private final boolean agenteDeLeitura;
     private final LancadorAlternavel lancador;
     private final RegistroDeTuneis registro = new RegistroDeTuneis(false);
 
@@ -141,6 +150,7 @@ final class CenaDoServidor implements AutoCloseable {
     }
 
     CenaDoServidor(Path tmp, Opcoes o) throws Exception {
+        agenteDeLeitura = o.agenteDeLeitura;
         acoesAntes = System.getProperty(FluxosDeProjeto.PROPRIEDADE_ACOES);
         System.setProperty(FluxosDeProjeto.PROPRIEDADE_ACOES, "true"); // os botões que escrevem no servidor aparecem ligados, como na janela de verdade
         Visual.tema(Tema.CLARO);
@@ -199,10 +209,27 @@ final class CenaDoServidor implements AutoCloseable {
         return switch (p.caminho()) {
             case "/api/projetos" -> Resposta.json(200, texto(projetosNo()));
             case "/api/limites" -> Resposta.json(200, texto(limitesNo()));
-            case "/api/servidor" -> Resposta.json(200, texto(servidorNo()));
-            case "/api/servidor/detalhe" -> Resposta.json(200, texto(detalheNo()));
+            case "/api/servidor" -> Resposta.json(200, texto(agenteDeLeitura ? semClaude(servidorNo()) : servidorNo()));
+            case "/api/servidor/detalhe" -> Resposta.json(200, texto(agenteDeLeitura ? semClaude(detalheNo()) : detalheNo()));
             default -> null;
         };
+    }
+
+    /** O que o agente de leitura responde: a mesma máquina, sem sessões do Claude, sem consumo por projeto e com os processos de container sem projeto associado. */
+    private static ObjectNode semClaude(ObjectNode raiz) {
+        raiz.putArray("sessoes");
+        if (raiz.path("node") instanceof ObjectNode node) {
+            node.putNull("imagemSessao"); // não há imagem das sessões do Claude neste servidor
+        }
+        if (raiz.has("consumo")) {
+            raiz.putArray("consumo");
+        }
+        for (var processo : raiz.withArray("processos")) {
+            if (processo.hasNonNull("container") && processo.has("projeto")) {
+                ((ObjectNode) processo).putNull("projeto");
+            }
+        }
+        return raiz;
     }
 
     /** Troca os nomes dos mocks (que ainda lembram os de um projeto real) por nomes genéricos. */
