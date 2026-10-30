@@ -80,9 +80,13 @@ public final class MenuApp {
         return barra;
     }
 
-    /** A tecla de comando do sistema (Cmd no Mac, Ctrl nos outros): {@link Teclas#comando()}, decidida pelo sistema e não pelo Toolkit. */
-    private static int atalho() {
-        return Teclas.comando();
+    /**
+     * A tecla de comando do sistema DESTE menu (Cmd no Mac, Ctrl nos outros): {@link Teclas#comando(br.com.labdesktop.plataforma.SistemaOperacional)}, decidida pelo sistema do
+     * {@link ComportamentoDaJanela} e não pelo Toolkit nem pelo sistema onde o programa roda. No app é o mesmo; num teste que monta o menu "de outro sistema" o menu inteiro (a tecla
+     * de comando e o texto da tecla) diz o mesmo, em qualquer máquina.
+     */
+    private int atalho() {
+        return Teclas.comando(comportamento.sistema());
     }
 
     /** Todo item do menu pelo nome estável (a Ajuda cita os atalhos por estas chaves), na ordem em que foram criados. */

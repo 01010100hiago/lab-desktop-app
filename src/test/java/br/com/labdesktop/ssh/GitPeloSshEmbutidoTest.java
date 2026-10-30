@@ -47,7 +47,8 @@ class GitPeloSshEmbutidoTest {
     }
 
     private ShellDeTeste shell(CenarioDeConexao c, GitDeTeste g) {
-        return new ShellDeTeste(g.casa, c.ssh).comAmbiente("GIT_CEILING_DIRECTORIES", tmp.toAbsolutePath().toString());
+        return new ShellDeTeste(g.casa, c.ssh).comAmbiente("GIT_CEILING_DIRECTORIES", tmp.toAbsolutePath().toString())
+            .comAmbiente("GIT_CONFIG_NOSYSTEM", "1"); // isolado do gitconfig do SISTEMA: um safe.directory=* lá (há máquinas assim) apagaria o "dono diferente" que o teste provoca
     }
 
     private static void conectar(CenarioDeConexao c) {

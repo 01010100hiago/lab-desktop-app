@@ -26,11 +26,18 @@ class RepositoriosGitLembradosTest {
         prefs.descarregar();
 
         // o app abre de novo: lê o arquivo
-        RepositoriosGitLembrados depois = RepositoriosGitLembrados.dasPreferencias(new PreferenciasAtuais(caminhos, Preferencias.carregar(caminhos)));
-        assertEquals("app", depois.lembrado("s1", "loja-web"));
-        depois.lembrar("s1", "loja-web", null);
-        assertNull(depois.lembrado("s1", "loja-web"));
-        assertEquals("web", depois.lembrado("s2", "loja-web"), "esquecer um não mexe no outro");
+        PreferenciasAtuais prefsDepois = new PreferenciasAtuais(caminhos, Preferencias.carregar(caminhos));
+        RepositoriosGitLembrados depois = RepositoriosGitLembrados.dasPreferencias(prefsDepois);
+        try {
+            assertEquals("app", depois.lembrado("s1", "loja-web"));
+            depois.lembrar("s1", "loja-web", null);
+            assertNull(depois.lembrado("s1", "loja-web"));
+            assertEquals("web", depois.lembrado("s2", "loja-web"), "esquecer um não mexe no outro");
+        } finally {
+            // o app grava as preferências numa thread de fundo e, ao sair, chama descarregar(): o teste faz o mesmo, para nenhuma gravação ficar viva quando a pasta temporária for apagada
+            // (no Linux do CI a gravação de fundo criava um arquivo no meio da limpeza e a pasta não saía: "Failed to delete temp directory")
+            prefsDepois.descarregar();
+        }
     }
 
     @Test

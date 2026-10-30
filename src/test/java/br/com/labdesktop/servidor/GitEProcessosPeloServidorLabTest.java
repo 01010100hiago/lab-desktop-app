@@ -12,6 +12,7 @@ import br.com.labdesktop.arquivos.Cancelamento;
 import br.com.labdesktop.cofre.CofreDeChaves;
 import br.com.labdesktop.cofre.InfoChave;
 import br.com.labdesktop.cofre.ParametrosKdf;
+import br.com.labdesktop.instalador.ComandosRemotos;
 import br.com.labdesktop.instalador.InstaladorDeGit;
 import br.com.labdesktop.processos.ControleDeProcessos;
 import br.com.labdesktop.processos.ControleRemoto;
@@ -77,6 +78,16 @@ class GitEProcessosPeloServidorLabTest {
         ssh.close();
     }
 
+    /**
+     * Os comandos que chegaram ao servidor, SEM a leitura de fundo do monitor da conexão (a situação do agente: {@code command -v docker}...{@code docker inspect painel-lab}). Ela é só
+     * leitura, fixa e do próprio {@code ServidorLab}, e chega a qualquer hora (quando a conexão sobe e de tempos em tempos): num computador lento ela cai no meio do que o teste mede.
+     * Tudo o mais, e em especial o que o fluxo do Git manda, continua exigido exatamente.
+     */
+    private java.util.List<String> comandosDoFluxo() {
+        java.util.Set<String> sondas = java.util.Set.of(ComandosRemotos.lerSituacaoDoAgente("painel-lab"), ComandosRemotos.lerSituacaoDoAgente("painel-lab", ComandosRemotos.DOCKER_COM_SUDO));
+        return ssh.comandos.stream().filter(c -> !sondas.contains(c)).toList();
+    }
+
     private void servidorDeGit() {
         ssh.comandoRemoto((linha, stdin, saida) -> {
             if (linha.equals("git --version")) {
@@ -134,7 +145,7 @@ class GitEProcessosPeloServidorLabTest {
         InstaladorDeGit.Resultado r = instalador.instalar(p, InstaladorDeGit.Observador.NENHUM, new Cancelamento());
         assertTrue(r.instalou(), r.mensagem());
         assertEquals(java.util.List.of("sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=60 update", "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=60 install -y git", "git --version"),
-            ssh.comandos.stream().toList(), "exatamente o que a confirmação mostrou, e depois a conferência");
+            comandosDoFluxo(), "exatamente o que a confirmação mostrou, e depois a conferência");
         assertTrue(ssh.comandos.stream().noneMatch(c -> c.contains("git config")));
     }
 
@@ -148,7 +159,7 @@ class GitEProcessosPeloServidorLabTest {
         assertEquals("sudo env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=60 install -y git", p.comandosParaODono().get(1));
         ssh.comandos.clear();
         assertFalse(instalador.instalar(p, InstaladorDeGit.Observador.NENHUM, new Cancelamento()).instalou());
-        assertTrue(ssh.comandos.isEmpty(), "nada foi enviado ao servidor");
+        assertTrue(comandosDoFluxo().isEmpty(), "nada foi enviado ao servidor: " + ssh.comandos);
         gitInstalado = true; // o usuário instalou no Terminal
         assertTrue(instalador.conferirOGit().instalado());
     }

@@ -86,10 +86,19 @@ class ChaveRecusadaNaJanelaTest {
         if (painel != null) {
             Visual.naEdt(() -> painel.encerrar());
         }
-        gerenciador.fechar().join();
-        cofre.close();
-        agente.close();
-        ssh.close();
+        // sem /bin/sh (Windows) o montar() é pulado pela suposição antes de criar qualquer coisa: o teste fica PULADO, e não reprovado por um NPE aqui
+        if (gerenciador != null) {
+            gerenciador.fechar().join();
+        }
+        if (cofre != null) {
+            cofre.close();
+        }
+        if (agente != null) {
+            agente.close();
+        }
+        if (ssh != null) {
+            ssh.close();
+        }
         Visual.tema(Tema.CLARO);
     }
 

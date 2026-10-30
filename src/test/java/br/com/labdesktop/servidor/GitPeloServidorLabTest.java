@@ -61,7 +61,8 @@ class GitPeloServidorLabTest {
         g = new GitDeTeste(tmp);
         agente = new AgenteDoLab();
         ssh = ServidorSshDeTeste.ed25519().comSftp(Path.of("/")); // o SFTP do SSH embutido enxerga o mesmo disco que o shell de teste: o .gitignore é lido e gravado pelo SFTP de verdade
-        new ShellDeTeste(g.casa, ssh).outrosComandos(agente.comandosPorSsh()).comAmbiente("GIT_CEILING_DIRECTORIES", tmp.toAbsolutePath().toString());
+        new ShellDeTeste(g.casa, ssh).outrosComandos(agente.comandosPorSsh()).comAmbiente("GIT_CEILING_DIRECTORIES", tmp.toAbsolutePath().toString())
+            .comAmbiente("GIT_CONFIG_NOSYSTEM", "1"); // isolado do gitconfig do SISTEMA: um safe.directory=* lá (há máquinas assim) apagaria o "dono diferente" que o teste provoca
         cofre = CofreDeChaves.criar(CaminhosApp.de(tmp.resolve("dados"), tmp.resolve("logs")), SENHA.clone(), ParametrosKdf.MINIMO);
         gerenciador = new GerenciadorServidores(cofre, PedidoDeCodigo2fa.NUNCA, ConfigSsh.rapida());
     }

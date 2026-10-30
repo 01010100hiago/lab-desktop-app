@@ -165,6 +165,55 @@ class TunelDeTransporteTest {
         t.close();
     }
 
+    @Test
+    void sessaoPerdidaComOSocketFechadoUmInstanteAntesDoProcessoMorrerEsperaACausaEAchaOLoginDaAws() throws Exception {
+        // a corrida real: o sistema fecha os sockets do túnel (e a sessão SSH cai) ANTES de o processo ser dado como morto e de a saída ser lida
+        LancadorFalso lancador = LancadorFalso.queSobe(portas);
+        TunelDeTransporte t = TunelDeTransporte.abrir(SSM, deps(lancador), f -> { });
+        LancadorFalso.Lancamento l = lancador.lancamentos.get(0);
+        assertTrue(t.vivo()); // o socket já fechou e a sessão SSH caiu, mas o processo ainda consta como vivo
+        assertTrue(t.falhaDoTunel().isEmpty(), "na hora ainda não há causa: é a janela da corrida");
+        Thread morre = Thread.ofVirtual().start(() -> {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                return;
+            }
+            l.processo.escrever("An error occurred (ExpiredToken) when calling the StartSession operation");
+            l.cair(255);
+        });
+        long inicio = System.nanoTime();
+        FalhaDoTunel f = t.falhaDoTunelAposPerderASessao().orElseThrow();
+        assertEquals(FalhaDoTunel.Tipo.LOGIN_AWS_EXPIRADO, f.tipo(), "a causa chegou durante a espera curta, e não 'conexão caiu'");
+        assertTrue(Duration.ofNanos(System.nanoTime() - inicio).toMillis() < 1_400, "espera só o que precisa");
+        morre.join();
+        t.close();
+    }
+
+    @Test
+    void sessaoPerdidaComOTunelDeVoltaDePeEsperaSoOPrazoCurtoESemCausaDeTunel() throws Exception {
+        LancadorFalso lancador = LancadorFalso.queSobe(portas);
+        TunelDeTransporte t = TunelDeTransporte.abrir(CLOUD, deps(lancador), f -> { });
+        long inicio = System.nanoTime();
+        assertTrue(t.falhaDoTunelAposPerderASessao().isEmpty(), "o túnel segue de pé: a sessão caiu por outro motivo, sem causa de túnel");
+        long ms = Duration.ofNanos(System.nanoTime() - inicio).toMillis();
+        assertTrue(ms >= 250 && ms < 3_000, "espera o prazo curto da configuração (300 ms) e não mais: " + ms);
+        assertTrue(t.vivo(), "e não encerra nada");
+        t.close();
+    }
+
+    @Test
+    void sessaoPerdidaComACausaJaConhecidaNaoEsperaNada() throws Exception {
+        LancadorFalso lancador = LancadorFalso.queSobe(portas);
+        TunelDeTransporte t = TunelDeTransporte.abrir(SSM, deps(lancador), f -> { });
+        lancador.lancamentos.get(0).processo.escrever("An error occurred (ExpiredToken) when calling the StartSession operation");
+        lancador.lancamentos.get(0).cair(255);
+        long inicio = System.nanoTime();
+        assertEquals(FalhaDoTunel.Tipo.LOGIN_AWS_EXPIRADO, t.falhaDoTunelAposPerderASessao().orElseThrow().tipo());
+        assertTrue(Duration.ofNanos(System.nanoTime() - inicio).toMillis() < 250, "o processo já morreu: responde na hora");
+        t.close();
+    }
+
     // ----- não sobe -----
 
     @Test

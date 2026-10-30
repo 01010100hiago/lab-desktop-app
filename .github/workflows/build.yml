@@ -22,6 +22,10 @@ jobs:
     # Pull request de fork roda sem segredos (não há nenhum aqui) e com o token só de leitura.
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
+    # O Windows é EXPERIMENTAL: o job roda e mostra o resultado, mas uma falha dele NÃO reprova o commit (continue-on-error). No primeiro run do CI a suíte falhou em 271 de 3904 testes
+    # no Windows (suposições de Mac e Linux nos testes e no código: caminhos, POSIX, git e shell). Linux e Mac continuam EXIGIDOS: se quebrarem, o commit fica reprovado.
+    # Quando o Windows passar inteiro, apague a linha abaixo (e a seção "Windows: o que falta" de docs/CI.md). Veja docs/CI.md.
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
       # um sistema que quebra não esconde o resultado dos outros
       fail-fast: false

@@ -17,6 +17,14 @@ public interface DestinoSsh extends AutoCloseable {
         return Optional.empty();
     }
 
+    /**
+     * Como {@link #falhaDoTunel()}, para quem acabou de PERDER a sessão SSH que andava pelo túnel: o socket do processo que morreu fecha um instante antes de ele ser dado como morto,
+     * então espera um pouco pela causa em vez de dizer "sem causa". Bloqueia por até {@code esperaPelaCausa} (ConfigDoTunel): nunca na EDT nem no ator da conexão.
+     */
+    default Optional<FalhaDoTunel> falhaDoTunelAposPerderASessao() {
+        return falhaDoTunel();
+    }
+
     /** O fim do que o programa do túnel escreveu até agora (texto sem confiança, para quem passa pelo {@code Redator}); vazio no direto. */
     default String saidaRecente() {
         return "";

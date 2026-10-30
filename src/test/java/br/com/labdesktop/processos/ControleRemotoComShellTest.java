@@ -156,7 +156,9 @@ class ControleRemotoComShellTest {
     @Test
     void processoDeOutroUsuarioDaSemPermissaoComOComandoParaODono() throws Exception {
         assumeFalse("root".equals(eu), "como root o kill valeria de verdade");
-        Process ps = new ProcessBuilder("/bin/sh", "-c", "ps -axo pid=,uid=,comm= | awk '$2==0 && $1>100 {print $1; exit}'").start();
+        // um processo de root com nome "comum" (letras, números, ponto, traço, sublinhado) e de root DE VERDADE (uid e ruid 0: o `sudo` aparece com uid efetivo 0 mas é do usuário, e o kill passaria): o app SÓ monta o comando para o dono com um nome assim (ComandoParaODono.NOME). Num Linux
+        // os primeiros processos de root acima de 100 são threads do kernel ("kworker/R-charg"), com barra no nome: para elas o app recusa montar o comando (e é o certo), então não servem aqui.
+        Process ps = new ProcessBuilder("/bin/sh", "-c", "ps -axo pid=,uid=,ruid=,comm= | awk '$2==0 && $3==0 && $1>100 && $4 ~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/ {print $1; exit}'").start();
         String achado = new String(ps.getInputStream().readAllBytes()).strip();
         ps.waitFor();
         assumeTrue(!achado.isEmpty(), "não há processo de root para provar a recusa");

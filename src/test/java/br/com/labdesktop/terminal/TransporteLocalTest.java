@@ -54,7 +54,9 @@ class TransporteLocalTest {
     @AfterEach
     void desmontar() {
         abertos.forEach(CanalDeTerminal::abortar);
-        conexao.fechar().join();
+        if (conexao != null) { // sem /bin/sh (Windows) o montar() é pulado pela suposição e não criou nada: o teste fica PULADO, e não reprovado por um NPE aqui
+            conexao.fechar().join();
+        }
     }
 
     private CanalDeTerminal abrir(ComandoDeTerminal c, TamanhoDeTerminal t) throws IOException {

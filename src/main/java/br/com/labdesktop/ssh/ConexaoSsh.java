@@ -11,6 +11,7 @@ import br.com.labdesktop.transporte.AbridorDeDestino;
 import br.com.labdesktop.transporte.DestinoSsh;
 import br.com.labdesktop.transporte.FalhaDoTunel;
 import br.com.labdesktop.transporte.FalhaDoTunelException;
+import br.com.labdesktop.transporte.TunelDeTransporte;
 import br.com.labdesktop.util.Agendador;
 import br.com.labdesktop.util.Agendador.Cancelavel;
 import br.com.labdesktop.util.Fundo;
@@ -171,6 +172,8 @@ public final class ConexaoSsh implements ConexaoDoServidor {
     private SshClient cliente; // criado sob demanda, guardado por "this"
     /** A thread que está abrindo o túnel externo desta tentativa (para interromper ao descartá-la: um túnel que demora não segura o fechamento). */
     private volatile Thread threadAbrindoOTunel;
+    /** Só no ator: o id da tentativa cuja queda de sessão está esperando a causa do túnel (fora do ator); 0 se nenhuma. */
+    private long esperandoACausaDoId;
 
     public ConexaoSsh(String servidorId, AcessoAoCofre cofre, ConfigSsh cfg, SondaDoAgente sonda) {
         this(servidorId, cofre, cfg, sonda, Agendador.doFundo(),
@@ -854,10 +857,36 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         if (id != idTentativa || encerrado) {
             return; // a sessão foi descartada por nós (bloqueio, sono, nova tentativa)
         }
+        if (esperandoACausaDoId == id) {
+            return; // já está esperando a causa desta mesma queda; quem esperar conclui
+        }
         Throwable motivo = sessao == null ? null : sessao.getAttribute(ERRO_DA_SESSAO);
         FalhaDoTunel doTunel = sessao == null ? null : sessao.getAttribute(FALHA_DO_TUNEL);
         if (doTunel == null && destinoAtual != null) {
             doTunel = destinoAtual.falhaDoTunel().orElse(null); // o aviso da queda pode ainda não ter chegado: confere na hora
+        }
+        if (doTunel == null && destinoAtual instanceof TunelDeTransporte tunelDeTransporte) {
+            // O socket do túnel que morreu fecha um instante ANTES de o processo ser dado como morto e de a saída ser lida: sem esta espera curta a causa ("seu login da AWS expirou") se
+            // perdia e a tela dizia só "conexão caiu". Espera FORA do ator (até ConfigDoTunel.esperaPelaCausa); o que mudar nesse meio tempo (bloquear, dormir, fechar, nova tentativa)
+            // invalida o id e a conclusão é descartada.
+            esperandoACausaDoId = id;
+            Fundo.ioVirtual().execute(() -> {
+                FalhaDoTunel causa = tunelDeTransporte.falhaDoTunelAposPerderASessao().orElse(null);
+                post(() -> {
+                    if (esperandoACausaDoId == id) {
+                        esperandoACausaDoId = 0;
+                    }
+                    concluirSessaoFechada(id, motivo, causa);
+                });
+            });
+            return;
+        }
+        concluirSessaoFechada(id, motivo, doTunel);
+    }
+
+    private void concluirSessaoFechada(long id, Throwable motivo, FalhaDoTunel doTunel) {
+        if (id != idTentativa || encerrado) {
+            return; // mudou durante a espera: já foi tratado
         }
         descartarSessaoAtual();
         tentativa++;

@@ -77,7 +77,8 @@ class GitPeloTunelTest {
         ConexaoPeloTunelTest.LancadorDeFerramentaFalsaAdiado lancador = new ConexaoPeloTunelTest.LancadorDeFerramentaFalsaAdiado(portaDoSsh, Map.of());
         try (CenarioDeConexao c = CenarioDeConexao.pelaTunel(transporte, abridor(lancador), ConfigSsh.rapida(), null).sondaPorHttp()) {
             portaDoSsh.set(c.ssh.porta());
-            new ShellDeTeste(g.casa, c.ssh).comAmbiente("GIT_CEILING_DIRECTORIES", tmp.toAbsolutePath().toString());
+            new ShellDeTeste(g.casa, c.ssh).comAmbiente("GIT_CEILING_DIRECTORIES", tmp.toAbsolutePath().toString())
+            .comAmbiente("GIT_CONFIG_NOSYSTEM", "1"); // isolado do gitconfig do SISTEMA: um safe.directory=* lá (há máquinas assim) apagaria o "dono diferente" que o teste provoca
             c.conexao.iniciar();
             Espera.ate(PRAZO, () -> "estado=" + c.info() + " falha=" + c.info().falha(), () -> c.estado() == EstadoConexao.CONECTADO);
             assertEquals(programa, lancador.real().lancados.get(0).argumentosDoApp().get(0), "o túnel do transporte está de pé");

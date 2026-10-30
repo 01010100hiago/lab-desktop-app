@@ -199,6 +199,24 @@ public final class TunelDeTransporte implements DestinoSsh {
         return Optional.empty();
     }
 
+    @Override
+    public Optional<FalhaDoTunel> falhaDoTunelAposPerderASessao() {
+        Optional<FalhaDoTunel> agora = falhaDoTunel();
+        if (agora.isPresent() || fechado.get()) {
+            return agora; // já se sabe a causa, ou fomos nós que fechamos
+        }
+        // O sistema fecha os sockets de um processo que morre (e a sessão SSH cai) um instante ANTES de o Java dá-lo como morto e de a saída ser lida: sem esperar um pouco, a causa se
+        // perdia. Se o programa continua de pé depois da espera (a sessão caiu por outro motivo, com o túnel bom), não há causa de túnel. Quem chama NÃO está na EDT nem no ator da conexão.
+        try {
+            processo.aoSair().get(dependencias.config().esperaPelaCausa().toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+            LOG.debug("A sessão caiu e o programa do túnel seguiu de pé depois da espera: {}", e.toString());
+        }
+        return falhaDoTunel();
+    }
+
     /** O programa do túnel ainda está de pé? */
     public boolean vivo() {
         return !fechado.get() && processo.vivo();
