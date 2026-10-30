@@ -56,8 +56,7 @@ final class SecaoTerminal extends Painel {
             Caixa.espacoVertical(4),
             Paginas.grupo("Ao sair de um projeto"),
             Paginas.cartao(
-                opcao(perguntarAoSair, "Ligado, o app pergunta antes de fechar o terminal quando você sai da página de um projeto. Desligado, ele sai direto e avisa que o terminal foi "
-                    + "fechado. Vale na hora, inclusive para o terminal que já está aberto.")),
+                opcao(perguntarAoSair, "Desligado, o app sai direto e só avisa que o terminal foi fechado. Vale já, também para o terminal aberto.")),
             Caixa.espacoVertical(4)), BorderLayout.NORTH);
         atualizar();
         getAccessibleContext().setAccessibleName("Terminal");
