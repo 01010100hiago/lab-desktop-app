@@ -173,4 +173,140 @@ class LicencasDeTerceirosTest {
         assertTrue(java.nio.file.Files.readString(pasta.resolve("LGPL-3.0-JediTerm.txt")).length() > 7000, "a LGPL-3.0 inteira");
         assertTrue(java.nio.file.Files.readString(pasta.resolve("EPL-1.0-pty4j.txt")).contains("7. GENERAL"), "a EPL-1.0 inteira, até a seção 7");
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Conferência mecânica de créditos: jars de execução, avisos NOTICE, código embutido e programas nativos
+    // ---------------------------------------------------------------------------------------------
+
+    /** Os arquivos da pasta licencas/ (menos o LEIAME) são exatamente os que o app leva no jar e mostra na tela Sobre, e todos estão descritos no LEIAME. */
+    @Test
+    void cadaArquivoDaPastaLicencasVaiNoJarEEstaDescritoNoLeiame() throws IOException {
+        List<String> naPasta;
+        try (var f = Files.list(Path.of("licencas"))) {
+            naPasta = f.map(x -> x.getFileName().toString()).filter(n -> !n.equals("LEIAME.md")).sorted().toList();
+        }
+        assertEquals(naPasta, LicencasDeTerceiros.ARQUIVOS_DE_LICENCA.stream().sorted().toList(), "a lista do app tem de ser a da pasta licencas/");
+        String leiame = Files.readString(Path.of("licencas", "LEIAME.md"));
+        for (String arquivo : naPasta) {
+            assertTrue(leiame.contains("`" + arquivo + "`"), arquivo + " não está descrito em licencas/LEIAME.md");
+            assertEquals(Files.readString(Path.of("licencas", arquivo)).strip(), LicencasDeTerceiros.textoDeLicenca(arquivo).strip(), arquivo + ": o jar leva o texto da pasta");
+        }
+        assertTrue(LicencasDeTerceiros.textosCompletos().contains("GNU GENERAL PUBLIC LICENSE") && LicencasDeTerceiros.textosCompletos().contains("Eclipse Public License"));
+    }
+
+    /** Cada família de licença que a tabela cita tem o texto na pasta licencas/ (ou, para o Java embutido, na pasta legal/ do próprio runtime). */
+    @Test
+    void cadaLicencaDaTabelaTemOTextoNaPasta() throws IOException {
+        java.util.Map<String, String> texto = java.util.Map.ofEntries(
+            java.util.Map.entry("Apache-2.0", "Apache-2.0.txt"), java.util.Map.entry("MIT", "MIT-SLF4J.txt"), java.util.Map.entry("BSD-3-Clause", "BSD-3-Clause-RSyntaxTextArea.txt"),
+            java.util.Map.entry("EPL-1.0", "EPL-1.0-pty4j.txt"), java.util.Map.entry("LGPL-3.0", "LGPL-3.0-JediTerm.txt"), java.util.Map.entry("SIL OFL 1.1", "OFL-1.1-Inter.txt"),
+            java.util.Map.entry("Bouncy Castle Licence", "Bouncy-Castle-Licence.md"), java.util.Map.entry("ISC", "ISC-Lucide.txt"), java.util.Map.entry("Boost Software License", "Jackson-core-embutidos.txt"));
+        for (Licenca x : LicencasDeTerceiros.doJar()) {
+            if (x.licenca().contains("Classpath")) {
+                continue; // o OpenJDK leva a pasta legal/ com os textos dentro do runtime
+            }
+            boolean coberta = texto.entrySet().stream().anyMatch(e -> x.licenca().contains(e.getKey()) && Files.exists(Path.of("licencas", e.getValue())));
+            assertTrue(coberta, "sem texto em licencas/ para a licença \"" + x.licenca() + "\" de " + x.nome());
+        }
+    }
+
+    /** Os componentes que só servem para construir e testar estão listados como tais (sem texto completo: não vão no app). */
+    @Test
+    void asFerramentasSoDeDesenvolvimentoEstaoListadas() throws IOException {
+        String avisos = Files.readString(Path.of("THIRD-PARTY-NOTICES.md"));
+        for (String ferramenta : new String[] {"Gradle", "JUnit", "opentest4j", "apiguardian-api", "WiX Toolset"}) {
+            assertTrue(avisos.contains("| " + ferramenta), "ferramenta de desenvolvimento sem linha: " + ferramenta);
+        }
+    }
+
+    /** Os jars de execução que estão no classpath do teste (os 28 do app). */
+    private static List<Path> jarsDeExecucao() {
+        List<Path> jars = new ArrayList<>();
+        for (String entrada : System.getProperty("java.class.path").split(java.io.File.pathSeparator)) {
+            Path p = Path.of(entrada);
+            String nome = p.getFileName().toString();
+            if (nome.endsWith(".jar") && NOME_NA_TABELA.keySet().stream().anyMatch(a -> nome.startsWith(a + "-") && nome.substring(a.length() + 1).matches("\\d.*"))) {
+                jars.add(p);
+            }
+        }
+        return jars;
+    }
+
+    /** O texto de cada META-INF/NOTICE dos jars de execução está em licencas/NOTICE-Apache.txt (a Apache-2.0 pede a reprodução). */
+    @Test
+    void osAvisosNoticeDosJarsDeExecucaoEstaoReproduzidos() throws IOException {
+        String reproduzido = Files.readString(Path.of("licencas", "NOTICE-Apache.txt"));
+        int conferidos = 0;
+        for (Path jar : jarsDeExecucao()) {
+            try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(jar.toFile())) {
+                var notice = z.getEntry("META-INF/NOTICE");
+                if (notice != null) {
+                    String texto = new String(z.getInputStream(notice).readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).strip();
+                    assertTrue(reproduzido.contains(texto), "o NOTICE de " + jar.getFileName() + " não está em licencas/NOTICE-Apache.txt");
+                    conferidos++;
+                }
+            }
+        }
+        assertTrue(conferidos >= 7, "esperava ao menos 7 NOTICE (sshd x3, jackson x4); achei " + conferidos);
+    }
+
+    /** Qualquer arquivo de licença que um jar de execução traga em META-INF além dos já tratados faz o teste falhar: é um crédito novo a registrar. */
+    @Test
+    void jarDeExecucaoComArquivoDeLicencaNovoPedeCredito() throws IOException {
+        Set<String> tratados = Set.of("META-INF/LICENSE", "META-INF/LICENSE.md", "META-INF/LICENSE.txt", "META-INF/NOTICE", "META-INF/AL2.0", "META-INF/LGPL2.1",
+            "META-INF/FastDoubleParser-LICENSE", "META-INF/FastDoubleParser-ThirdParty-LICENSE", "META-INF/Schubfach-LICENSE", "com/formdev/flatlaf/fonts/inter/LICENSE.txt");
+        List<String> novos = new ArrayList<>();
+        for (Path jar : jarsDeExecucao()) {
+            try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(jar.toFile())) {
+                z.stream().map(java.util.zip.ZipEntry::getName).filter(n -> !n.endsWith("/") && !n.endsWith(".class"))
+                    .filter(n -> n.toLowerCase(java.util.Locale.ROOT).matches(".*(licen[cs]e|notice|copying|third.?party).*")).filter(n -> !tratados.contains(n))
+                    .forEach(n -> novos.add(jar.getFileName() + ":" + n));
+            }
+        }
+        assertEquals(List.of(), novos, "arquivo de licença novo dentro de um jar: registre o crédito em THIRD-PARTY-NOTICES.md e licencas/");
+    }
+
+    /** O Jackson Core leva código de terceiros com licença própria: cada arquivo de licença dele está reproduzido, e os três projetos têm linha na tabela. */
+    @Test
+    void oCodigoDeTerceirosDentroDoJacksonCoreTemCredito() throws IOException {
+        String reproduzido = Files.readString(Path.of("licencas", "Jackson-core-embutidos.txt"));
+        Path jar = jarsDeExecucao().stream().filter(j -> j.getFileName().toString().startsWith("jackson-core-")).findFirst().orElseThrow();
+        try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(jar.toFile())) {
+            for (String nome : new String[] {"META-INF/FastDoubleParser-LICENSE", "META-INF/FastDoubleParser-ThirdParty-LICENSE", "META-INF/Schubfach-LICENSE"}) {
+                String texto = new String(z.getInputStream(z.getEntry(nome)).readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).strip();
+                assertTrue(reproduzido.contains(texto), nome + " não está em licencas/Jackson-core-embutidos.txt");
+            }
+        }
+        String avisos = Files.readString(Path.of("THIRD-PARTY-NOTICES.md"));
+        for (String nome : new String[] {"FastDoubleParser", "fast_float", "Schubfach"}) {
+            assertTrue(avisos.contains("| " + nome), "sem linha na tabela: " + nome);
+        }
+    }
+
+    /** O pty4j leva programas e bibliotecas nativas: cada família está creditada; um arquivo nativo novo faz o teste falhar. */
+    @Test
+    void osProgramasNativosDentroDoPty4jTemCredito() throws IOException {
+        Path jar = jarsDeExecucao().stream().filter(j -> j.getFileName().toString().startsWith("pty4j-")).findFirst().orElseThrow();
+        Set<String> conhecidos = Set.of("winpty-agent.exe", "winpty.dll", "conpty.dll", "OpenConsole.exe", "win-helper.dll", "cyglaunch.exe", "libpty.so", "libpty.dylib", "pty4j-unix-spawn-helper");
+        List<String> desconhecidos = new ArrayList<>();
+        try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(jar.toFile())) {
+            z.stream().map(java.util.zip.ZipEntry::getName).filter(n -> n.startsWith("resources/com/pty4j/native/") && !n.endsWith("/"))
+                .map(n -> n.substring(n.lastIndexOf('/') + 1)).filter(n -> !conhecidos.contains(n)).forEach(desconhecidos::add);
+        }
+        assertEquals(List.of(), desconhecidos, "programa nativo novo dentro do pty4j: confira a origem e registre o crédito");
+        String avisos = Files.readString(Path.of("THIRD-PARTY-NOTICES.md"));
+        assertTrue(avisos.contains("| winpty, de Ryan Prichard") && avisos.contains("| OpenConsole e conpty, do Windows Terminal") && avisos.contains("| elt e JPty (o código"), "créditos dos componentes do pty4j");
+        assertTrue(Files.readString(Path.of("licencas", "NOTICE-pty4j.txt")).contains("JPty"));
+    }
+
+    /** A origem da lista de senhas, os ícones e o Java embutido têm linha de crédito (nenhum "a confirmar"). */
+    @Test
+    void dadosEmbutidosTemCredito() throws IOException {
+        List<Licenca> l = LicencasDeTerceiros.doJar();
+        for (String nome : new String[] {"Lista de senhas comuns (derivada do zxcvbn, Dropbox)", "OpenJDK (o Java que vai dentro do app)", "Ícones da interface (Feather e Lucide)", "FlatLaf Fonts Inter", "FlatLaf Fonts JetBrains Mono"}) {
+            assertTrue(l.stream().anyMatch(x -> x.nome().equals(nome)), "sem linha de crédito: " + nome);
+        }
+        assertTrue(Files.readString(Path.of("licencas", "MIT-zxcvbn-Dropbox.txt")).contains("Dropbox"));
+        assertTrue(Files.readString(Path.of("scripts", "GerarIcones.java")).contains("Gera os ícones do Lab Desktop"), "o ícone do app é gerado por um script do repositório (obra do autor)");
+    }
 }

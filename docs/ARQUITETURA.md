@@ -1132,7 +1132,7 @@ JUnit 5.14.4. Sem Mockito e sem AssertJ: o `SshServer` embutido do `sshd-core` e
 | Sleep e wake derrubam o TCP sem avisar | heartbeat de 10 s, `MonitorDeSono`, verificação ativa no `ErroRede` |
 | Processos `docker exec` órfãos e dois clientes tmux | `attach -d` opcional; teste de contagem de clientes (`tmux list-clients`) depois de 10 quedas abruptas |
 | Conteúdo hostil vindo do servidor (prompt injection em README, branch, texto de tela, URL de login) | `TextoSeguro`, `ListaPermitidaDeUrls`, Jackson sem default typing, tetos de tamanho |
-| Injeção de comando nos `exec` | nome de projeto e de container só entram na linha depois da regex do agente; dados do registro da credencial são gerados e validados pelo app; payload por stdin (inclusive o código e o nome do 2FA) |
+| Injeção de comando nos `exec` | nome de projeto e de container só entram na linha depois da regex do agente; hash, nome e data do registro do token são gerados e validados pelo app; payload por stdin (inclusive o código e o nome do 2FA) |
 | JediTerm: fora do Maven Central, API muda entre versões, Kotlin stdlib transitivo, mantido sobretudo para o IntelliJ | versão fixada em 3.76; adaptador estreito no pacote `terminal`; `exclusiveContent` + verification-metadata; testado antes de investir nas telas. Licença: o POM declara LGPL 3.0 e o README do projeto declara dupla licença (LGPLv3 ou Apache 2.0, à escolha); sem impacto para uso pessoal sem distribuição. |
 | MINA 2.20.0: Ed25519 só com BouncyCastle; o `3.0.0-M6` é marco, não release | usar 2.20.0; testes (gerar, instalar, autenticar) com `SshServer` embutido |
 | HttpClient em h2c quebra no upgrade do agente | HTTP/1.1 explícito com teste (o agente falso fecha o socket se vier `Upgrade`) |

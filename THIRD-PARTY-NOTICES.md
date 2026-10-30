@@ -38,6 +38,12 @@ A tabela é o que o app MOSTRA ao usuário (colunas que quebram linha, sem texto
 | JCL over SLF4J | 1.7.36 | Apache-2.0 | registro (log) das bibliotecas |
 | Kotlin Stdlib | 2.4.0 | Apache-2.0 | usada pelo JediTerm |
 | JetBrains Annotations | 24.0.1 | Apache-2.0 | usada pelo JediTerm e pelo Kotlin |
+| FastDoubleParser (dentro do Jackson Core) | o do Jackson Core 2.22.3 | MIT | leitura rápida de números no JSON |
+| fast_float, de Daniel Lemire (dentro do FastDoubleParser) | o do Jackson Core 2.22.3 | Boost Software License 1.0 | leitura rápida de números no JSON |
+| Schubfach, de Raffaello Giulietti (dentro do Jackson Core) | o do Jackson Core 2.22.3 | MIT | escrita rápida de números no JSON |
+| winpty, de Ryan Prichard (dentro do pty4j, para o Windows) | o do pty4j 0.13.13 | MIT | terminal do computador local no Windows |
+| OpenConsole e conpty, do Windows Terminal da Microsoft (dentro do pty4j, para o Windows) | o do pty4j 0.13.13 | MIT | terminal do computador local no Windows |
+| elt e JPty (o código em que o pty4j se baseia) | o do pty4j 0.13.13 | EPL-1.0 (elt) e Apache-2.0 (JPty) | origem do código do pty4j |
 | Lista de senhas comuns (derivada do zxcvbn, Dropbox) | 1.9.0 | MIT | recusa senha de dicionário na senha-mestra; vem das listas do zxcvbn, mais um complemento em português escrito pelo autor |
 | OpenJDK (o Java que vai dentro do app) | o do pacote | GPL-2.0 com a exceção Classpath | roda o app |
 | Ícones da interface (Feather e Lucide) | o do app | MIT (Feather) e ISC (Lucide) | ícones desenhados pelo autor; parte das formas é muito próxima das desses dois conjuntos |
@@ -56,6 +62,12 @@ Os endereços são os dos projetos de origem (código ou página oficial); as ve
 | Bouncy Castle | https://www.bouncycastle.org/ |
 | JediTerm | https://github.com/JetBrains/jediterm |
 | pty4j | https://github.com/JetBrains/pty4j |
+| elt e JPty (base do pty4j) | https://github.com/jawi/JPty (JPty); o elt era o Local Terminal Plug-In for Eclipse |
+| winpty | https://github.com/rprichard/winpty |
+| OpenConsole e conpty (Windows Terminal) | https://github.com/microsoft/terminal |
+| FastDoubleParser | https://github.com/wrandelshofer/FastDoubleParser |
+| fast_float | https://github.com/fastfloat/fast_float |
+| Schubfach | o artigo e o código de Raffaello Giulietti, citados no jackson-core (`licencas/Jackson-core-embutidos.txt`) |
 | JNA e JNA Platform | https://github.com/java-native-access/jna |
 | RSyntaxTextArea | https://github.com/bobbylight/RSyntaxTextArea |
 | ZXing | https://github.com/zxing/zxing |
@@ -72,21 +84,27 @@ Os endereços são os dos projetos de origem (código ou página oficial); as ve
 | Ferramenta | Versão | Licença | Para que serve | Endereço oficial |
 |---|---|---|---|---|
 | Gradle (wrapper) | 9.8.0 | Apache-2.0 | compila, testa e empacota | https://gradle.org/ |
-| JUnit | 5.14.4 | EPL-2.0 | testes automáticos | https://junit.org/ |
+| JUnit Jupiter e JUnit Platform | 5.14.4 e 1.14.4 | EPL-2.0 | testes automáticos | https://junit.org/ |
+| opentest4j | 1.3.0 | Apache-2.0 | usada pelo JUnit | https://github.com/ota4j-team/opentest4j |
+| apiguardian-api | 1.1.2 | Apache-2.0 | usada pelo JUnit | https://github.com/apiguardian-team/apiguardian |
 | WiX Toolset | 3.x | MS-RL | gera o instalador `.msi` no Windows (`jpackage`) | https://wixtoolset.org/ |
 | Temurin (OpenJDK 21) | 21 | GPL-2.0 com a exceção Classpath | Java usado no CI e para compilar | https://adoptium.net/ |
 
+Critério da conferência: entram na primeira tabela tudo o que vai DENTRO do app e do instalador (os jars de `runtimeClasspath`, o Java embutido, as fontes, os ícones, a lista de senhas e o código de terceiros que vem dentro de um desses jars). Esta segunda tabela lista o que só é usado para construir e testar; não vai no app e por isso não leva o texto completo da licença.
+
 ## Notas técnicas (só neste arquivo; o app não as mostra)
 
-- Lista de senhas comuns: derivada das listas do zxcvbn (Dropbox, licença MIT; o copyright das listas é da Dropbox) do jar `com.nulab-inc:zxcvbn:1.9.0`, mais um complemento em português escrito pelo autor (`scripts/senhas-ptbr.txt`). O texto completo da licença MIT do zxcvbn ainda não foi copiado para `licencas/`: o jar não está no cache do Gradle deste build (não é dependência do app, só a origem da lista).
+- Lista de senhas comuns: derivada das listas de dados do zxcvbn (Dropbox) do jar `com.nulab-inc:zxcvbn:1.9.0` (sha256 `38efaebab09144eb1f4d4c9ff650e79df875a8d6c4539c105b079a606bb7db34`; o jar não traz arquivo de licença, e o POM dele declara MIT), mais um complemento em português escrito pelo autor (`scripts/senhas-ptbr.txt`). O texto da licença MIT do zxcvbn, com o copyright de Dan Wheeler e da Dropbox, é o do repositório oficial dropbox/zxcvbn e está em `licencas/MIT-zxcvbn-Dropbox.txt`. Do jar só entram as listas de dados, não o código Java (da Nulab).
 - OpenJDK: o runtime que o `jpackage` leva é o do JDK usado na compilação e vem com a pasta `legal/` de cada módulo (os textos da GPL-2.0, da exceção Classpath e das licenças de componentes como ICU, ASM e CLDR); a licença é GPL-2.0 com a exceção Classpath.
 - Ícones SVG: ver o último parágrafo deste arquivo.
 
 Os textos das licenças, de forma honesta:
 
-- **Estão neste repositório**, na pasta `licencas/`: Apache-2.0, SIL OFL 1.1 (Inter e JetBrains Mono), MIT (SLF4J, JSVG e Feather), BSD-3-Clause (RSyntaxTextArea), a licença do Bouncy Castle, LGPL-3.0 (JediTerm), EPL-1.0 (pty4j) e ISC (Lucide). Os cinco primeiros grupos foram copiados dos próprios `.jar`, sem alteração; os de LGPL-3.0, EPL-1.0, MIT do Feather e ISC do Lucide vêm dos endereços oficiais (a EPL-1.0 foi convertida de HTML para texto puro, sem mudar as palavras). Veja `licencas/LEIAME.md`.
+- **Estão neste repositório**, na pasta `licencas/` (e, por isso, também dentro do jar do app, que a tela Ajustes > Sobre mostra em "Ver os textos completos das licenças"): Apache-2.0 e os avisos NOTICE das bibliotecas Apache (`NOTICE-Apache.txt`: Apache MINA SSHD e Jackson), as licenças do código que o Jackson Core leva dentro (`Jackson-core-embutidos.txt`: FastDoubleParser, fast_float e Schubfach), SIL OFL 1.1 (Inter e JetBrains Mono), MIT (SLF4J, JSVG, Feather, zxcvbn, winpty e Windows Terminal), BSD-3-Clause (RSyntaxTextArea), a licença do Bouncy Castle, LGPL-3.0 e GPL-3.0 (JediTerm), EPL-1.0 e o aviso do pty4j (`NOTICE-pty4j.txt`) e ISC (Lucide). Os textos de Apache-2.0, OFL, SLF4J, JSVG, RSyntaxTextArea, Bouncy Castle, NOTICE e Jackson embutido foram copiados dos próprios `.jar`, sem alteração; os de LGPL-3.0, GPL-3.0, EPL-1.0 (convertida de HTML para texto puro, sem mudar as palavras), Feather, Lucide, zxcvbn, winpty, Windows Terminal e o aviso do pty4j vêm dos endereços oficiais. Veja `licencas/LEIAME.md`.
 - **Vêm também dentro do `.jar`** (arquivos `META-INF/LICENSE*`): FlatLaf, FlatLaf Extras, os pacotes de fontes do FlatLaf, JSVG, Apache MINA SSHD, Bouncy Castle, JNA, JNA Platform, RSyntaxTextArea, Jackson e SLF4J (API e Simple).
 - **NÃO vêm dentro do `.jar`**: JediTerm (LGPL-3.0), pty4j (EPL-1.0), ZXing (`core` e `javase`), Kotlin Stdlib, JetBrains Annotations e JCL over SLF4J (as quatro últimas são Apache-2.0, cujo texto está em `licencas/Apache-2.0.txt`).
+- **JNA** é licenciada em duas opções, LGPL-2.1 ou Apache-2.0; o app usa a opção Apache-2.0.
+- **Dentro do pty4j** vão programas e bibliotecas nativas (winpty, OpenConsole e conpty para o Windows, e a `libpty` para Mac, Linux e FreeBSD); as de terceiros estão na primeira tabela e em `licencas/`.
 - **Oferta do código-fonte (LGPL-3.0, JediTerm):** o JediTerm é usado sem alteração, como um `.jar` separado dentro da pasta do app, e o código-fonte da versão usada (3.76) é público em https://github.com/JetBrains/jediterm; quem quiser pode trocar o `.jar` por outra versão compatível.
 
 As fontes Inter e JetBrains Mono seguem a SIL Open Font License 1.1 (permite usar e redistribuir, inclusive embutidas em programa, sem vender a fonte sozinha).

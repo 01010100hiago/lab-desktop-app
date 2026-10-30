@@ -49,6 +49,26 @@ public final class LicencasDeTerceiros {
         return ler("THIRD-PARTY-NOTICES.md");
     }
 
+    /** Os arquivos da pasta {@code licencas/} que vão no jar, na ordem em que a tela Sobre os mostra (um teste confere que a lista é a da pasta). */
+    public static final List<String> ARQUIVOS_DE_LICENCA = List.of(
+        "Apache-2.0.txt", "NOTICE-Apache.txt", "Jackson-core-embutidos.txt", "BSD-3-Clause-RSyntaxTextArea.txt", "Bouncy-Castle-Licence.md", "MIT-JSVG.txt", "MIT-SLF4J.txt",
+        "OFL-1.1-Inter.txt", "OFL-1.1-JetBrains-Mono.txt", "LGPL-3.0-JediTerm.txt", "GPL-3.0.txt", "EPL-1.0-pty4j.txt", "NOTICE-pty4j.txt", "MIT-winpty.txt",
+        "MIT-Windows-Terminal.txt", "MIT-zxcvbn-Dropbox.txt", "MIT-Feather.txt", "ISC-Lucide.txt");
+
+    /** O texto de UM arquivo da pasta {@code licencas/}, como está no jar. */
+    public static String textoDeLicenca(String arquivo) {
+        return ler("licencas/" + arquivo);
+    }
+
+    /** Todos os textos de licença juntos, cada um com o nome do arquivo num cabeçalho (o que a seção "textos completos" da tela Sobre mostra). */
+    public static String textosCompletos() {
+        StringBuilder sb = new StringBuilder();
+        for (String arquivo : ARQUIVOS_DE_LICENCA) {
+            sb.append("==================== ").append(arquivo).append(" ====================\n\n").append(textoDeLicenca(arquivo).strip()).append("\n\n");
+        }
+        return sb.toString().strip();
+    }
+
     /** A tabela de terceiros do jar. */
     public static List<Licenca> doJar() {
         return interpretar(avisosDeTerceiros());

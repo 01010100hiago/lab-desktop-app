@@ -76,6 +76,8 @@ dependencies {
 tasks.processResources {
     from(layout.projectDirectory.file("LICENSE")) { into("br/com/labdesktop/sobre") }
     from(layout.projectDirectory.file("THIRD-PARTY-NOTICES.md")) { into("br/com/labdesktop/sobre") }
+    // os textos completos das licenças de terceiros (pasta licencas/) também vão no jar, e portanto no instalador: quem recebe o app recebe os textos
+    from(layout.projectDirectory.dir("licencas")) { into("br/com/labdesktop/sobre/licencas"); exclude("LEIAME.md") }
 }
 
 application {

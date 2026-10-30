@@ -38,6 +38,7 @@ public final class PainelSobre extends Painel {
     private final Botao copiarPasta;
     private final SecaoRecolhivel textoDaLicenca;
     private final SecaoRecolhivel terceiros;
+    private final SecaoRecolhivel textosCompletos;
     private final List<Licenca> licencas;
 
     public PainelSobre(InformacoesDoApp info, CopiadorDeTexto copiador, Notificacoes avisos) {
@@ -70,6 +71,11 @@ public final class PainelSobre extends Painel {
         licenca.setRows(18);
         textoDaLicenca = new SecaoRecolhivel("Ver o texto da licença MIT", "Esconder o texto da licença", AreaMonoespacada.emRolagem(licenca), this::refazer);
         terceiros = new SecaoRecolhivel("Ver as licenças de terceiros (" + licencas.size() + ")", "Esconder as licenças de terceiros", tabelaDeTerceiros(), this::refazer);
+        AreaMonoespacada textos = new AreaMonoespacada("Textos completos das licenças de terceiros", true);
+        textos.setText(LicencasDeTerceiros.textosCompletos());
+        textos.setRows(18);
+        textos.setCaretPosition(0);
+        textosCompletos = new SecaoRecolhivel("Ver os textos completos das licenças", "Esconder os textos das licenças", AreaMonoespacada.emRolagem(textos), this::refazer);
 
         add(Paginas.coluna(12,
             cabecalho,
@@ -78,7 +84,7 @@ public final class PainelSobre extends Painel {
             Paginas.cartao(resumo, new Rotulo("Copyright (c) 2026 Thiago Bezerra").corDoToken(Tokens.TEXTO2).tamanho(12.5f), textoDaLicenca),
             Paginas.grupo("Licenças de terceiros"),
             Paginas.ajuda("O app usa estas bibliotecas livres. Cada uma segue a licença dela."),
-            Paginas.cartao(terceiros)), BorderLayout.NORTH);
+            Paginas.cartao(terceiros, textosCompletos)), BorderLayout.NORTH);
         getAccessibleContext().setAccessibleName("Sobre o " + info.nome());
     }
 
@@ -157,6 +163,10 @@ public final class PainelSobre extends Painel {
 
     public SecaoRecolhivel secaoDaLicenca() {
         return textoDaLicenca;
+    }
+
+    public SecaoRecolhivel secaoDosTextosCompletos() {
+        return textosCompletos;
     }
 
     public SecaoRecolhivel secaoDeTerceiros() {
