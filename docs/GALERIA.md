@@ -1,0 +1,236 @@
+# Galeria de telas
+
+Clique numa miniatura para ver a tela inteira. Cada tela aparece nos dois temas, claro e escuro, lado a lado. São telas do app, com dados de exemplo (servidor, projetos, endereços, commits e números inventados, gerados pelos testes do app), dentro de uma moldura de janela desenhada por código: não são capturas da janela do sistema. No Windows e no Linux o app tem o mesmo desenho (com o visual genérico do sistema); a moldura aqui é só um enquadramento.
+
+O app público não traz o pacote do agente de monitoramento; por isso, "Instalar agente…" avisa que esta versão foi compilada sem o agente, em vez de instalar (o terminal, os arquivos e a segurança continuam funcionando).
+
+## Ver como está o servidor
+
+As abas da página de um servidor.
+
+<table>
+  <tr>
+    <td align="center" valign="top"><a href="img/resumo-claro.png"><img src="img/mini/resumo-claro.webp" alt="Resumo: saúde, seis gráficos de tendência, registro do servidor e o que pede atenção. (tema claro)" width="205" /></a> <a href="img/resumo-escuro.png"><img src="img/mini/resumo-escuro.webp" alt="Resumo: saúde, seis gráficos de tendência, registro do servidor e o que pede atenção. (tema escuro)" width="205" /></a><br /><sub>Resumo: saúde, seis gráficos de tendência, registro do servidor e o que pede atenção.</sub></td>
+    <td align="center" valign="top"><a href="img/relatorio-claro.png"><img src="img/mini/relatorio-claro.webp" alt="Relatório de tendências da última semana: mínimo, média, máximo, P95 e hora do pico. (tema claro)" width="205" /></a> <a href="img/relatorio-escuro.png"><img src="img/mini/relatorio-escuro.webp" alt="Relatório de tendências da última semana: mínimo, média, máximo, P95 e hora do pico. (tema escuro)" width="205" /></a><br /><sub>Relatório de tendências da última semana: mínimo, média, máximo, P95 e hora do pico.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/servidor-containers-claro.png"><img src="img/mini/servidor-containers-claro.webp" alt="Containers: quantos rodam e as sessões do Claude abertas (se o servidor tem Claude). (tema claro)" width="205" /></a> <a href="img/servidor-containers-escuro.png"><img src="img/mini/servidor-containers-escuro.webp" alt="Containers: quantos rodam e as sessões do Claude abertas (se o servidor tem Claude). (tema escuro)" width="205" /></a><br /><sub>Containers: quantos rodam e as sessões do Claude abertas (se o servidor tem Claude).</sub></td>
+    <td align="center" valign="top"><a href="img/servidor-seguranca-claro.png"><img src="img/mini/servidor-seguranca-claro.webp" alt="Segurança: SSH e bloqueio, com o login por senha ligado e o botão para desligá-lo. (tema claro)" width="205" /></a> <a href="img/servidor-seguranca-escuro.png"><img src="img/mini/servidor-seguranca-escuro.webp" alt="Segurança: SSH e bloqueio, com o login por senha ligado e o botão para desligá-lo. (tema escuro)" width="205" /></a><br /><sub>Segurança: SSH e bloqueio, com o login por senha ligado e o botão para desligá-lo.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/servidor-maquina-claro.png"><img src="img/mini/servidor-maquina-claro.webp" alt="Máquina: versões, discos, temperatura, CPU por núcleo, rede, memória e o bloco do Git, que diz se ele está instalado. (tema claro)" width="205" /></a> <a href="img/servidor-maquina-escuro.png"><img src="img/mini/servidor-maquina-escuro.webp" alt="Máquina: versões, discos, temperatura, CPU por núcleo, rede, memória e o bloco do Git, que diz se ele está instalado. (tema escuro)" width="205" /></a><br /><sub>Máquina: versões, discos, temperatura, CPU por núcleo, rede, memória e o bloco do Git, que diz se ele está instalado.</sub></td>
+    <td align="center" valign="top"><a href="img/processos-claro.png"><img src="img/mini/processos-claro.webp" alt="Processos: os que mais gastam, com Parar e Reiniciar para containers e Protegido para o resto. (tema claro)" width="205" /></a> <a href="img/processos-escuro.png"><img src="img/mini/processos-escuro.webp" alt="Processos: os que mais gastam, com Parar e Reiniciar para containers e Protegido para o resto. (tema escuro)" width="205" /></a><br /><sub>Processos: os que mais gastam, com Parar e Reiniciar para containers e Protegido para o resto.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/servidor-projetos-claro.png"><img src="img/mini/servidor-projetos-claro.webp" alt="Projetos: a lista com consumo, código, endereço e o botão Novo projeto. (tema claro)" width="205" /></a> <a href="img/servidor-projetos-escuro.png"><img src="img/mini/servidor-projetos-escuro.webp" alt="Projetos: a lista com consumo, código, endereço e o botão Novo projeto. (tema escuro)" width="205" /></a><br /><sub>Projetos: a lista com consumo, código, endereço e o botão Novo projeto.</sub></td>
+    <td align="center" valign="top"><a href="img/servidor-arquivos-claro.png"><img src="img/mini/servidor-arquivos-claro.webp" alt="Arquivos: o gerenciador por SFTP, com árvore de pastas, Enviar e Baixar. (tema claro)" width="205" /></a> <a href="img/servidor-arquivos-escuro.png"><img src="img/mini/servidor-arquivos-escuro.webp" alt="Arquivos: o gerenciador por SFTP, com árvore de pastas, Enviar e Baixar. (tema escuro)" width="205" /></a><br /><sub>Arquivos: o gerenciador por SFTP, com árvore de pastas, Enviar e Baixar.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/servidor-terminal-claro.png"><img src="img/mini/servidor-terminal-claro.webp" alt="Terminal: um terminal de verdade no servidor, com várias abas. (tema claro)" width="205" /></a> <a href="img/servidor-terminal-escuro.png"><img src="img/mini/servidor-terminal-escuro.webp" alt="Terminal: um terminal de verdade no servidor, com várias abas. (tema escuro)" width="205" /></a><br /><sub>Terminal: um terminal de verdade no servidor, com várias abas.</sub></td>
+    <td></td>
+  </tr>
+</table>
+
+## Projetos
+
+A página de cada projeto.
+
+<table>
+  <tr>
+    <td align="center" valign="top"><a href="img/projeto-visao-geral-claro.png"><img src="img/mini/projeto-visao-geral-claro.webp" alt="Visão geral: a linha Código (branch, último commit, alterações), endereços, containers e o consumo. (tema claro)" width="205" /></a> <a href="img/projeto-visao-geral-escuro.png"><img src="img/mini/projeto-visao-geral-escuro.webp" alt="Visão geral: a linha Código (branch, último commit, alterações), endereços, containers e o consumo. (tema escuro)" width="205" /></a><br /><sub>Visão geral: a linha Código (branch, último commit, alterações), endereços, containers e o consumo.</sub></td>
+    <td align="center" valign="top"><a href="img/projeto-logs-claro.png"><img src="img/mini/projeto-logs-claro.webp" alt="Logs: as linhas de um container, com filtro e atualização a cada 5 segundos se você quiser. (tema claro)" width="205" /></a> <a href="img/projeto-logs-escuro.png"><img src="img/mini/projeto-logs-escuro.webp" alt="Logs: as linhas de um container, com filtro e atualização a cada 5 segundos se você quiser. (tema escuro)" width="205" /></a><br /><sub>Logs: as linhas de um container, com filtro e atualização a cada 5 segundos se você quiser.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/projeto-terminal-claro.png"><img src="img/mini/projeto-terminal-claro.webp" alt="Terminal: um shell já na pasta do projeto. (tema claro)" width="205" /></a> <a href="img/projeto-terminal-escuro.png"><img src="img/mini/projeto-terminal-escuro.webp" alt="Terminal: um shell já na pasta do projeto. (tema escuro)" width="205" /></a><br /><sub>Terminal: um shell já na pasta do projeto.</sub></td>
+    <td align="center" valign="top"><a href="img/projeto-arquivos-claro.png"><img src="img/mini/projeto-arquivos-claro.webp" alt="Arquivos: só a pasta do projeto. (tema claro)" width="205" /></a> <a href="img/projeto-arquivos-escuro.png"><img src="img/mini/projeto-arquivos-escuro.webp" alt="Arquivos: só a pasta do projeto. (tema escuro)" width="205" /></a><br /><sub>Arquivos: só a pasta do projeto.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/projeto-processos-claro.png"><img src="img/mini/projeto-processos-claro.webp" alt="Processos do projeto: Parar e Reiniciar cada container. (tema claro)" width="205" /></a> <a href="img/projeto-processos-escuro.png"><img src="img/mini/projeto-processos-escuro.webp" alt="Processos do projeto: Parar e Reiniciar cada container. (tema escuro)" width="205" /></a><br /><sub>Processos do projeto: Parar e Reiniciar cada container.</sub></td>
+    <td align="center" valign="top"><a href="img/projeto-backups-claro.png"><img src="img/mini/projeto-backups-claro.webp" alt="Backups: a lista dos arquivos de backup e Baixar, um a um ou vários. (tema claro)" width="205" /></a> <a href="img/projeto-backups-escuro.png"><img src="img/mini/projeto-backups-escuro.webp" alt="Backups: a lista dos arquivos de backup e Baixar, um a um ou vários. (tema escuro)" width="205" /></a><br /><sub>Backups: a lista dos arquivos de backup e Baixar, um a um ou vários.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/projeto-internet-claro.png"><img src="img/mini/projeto-internet-claro.webp" alt="Internet: os endereços do projeto, Adicionar domínio e Publicar na internet. (tema claro)" width="205" /></a> <a href="img/projeto-internet-escuro.png"><img src="img/mini/projeto-internet-escuro.webp" alt="Internet: os endereços do projeto, Adicionar domínio e Publicar na internet. (tema escuro)" width="205" /></a><br /><sub>Internet: os endereços do projeto, Adicionar domínio e Publicar na internet.</sub></td>
+    <td></td>
+  </tr>
+</table>
+
+## Git do projeto
+
+Ler os commits, achar o repositório e criar um repositório novo. O app não faz push, não liga a remoto e não aprova nem mescla nada.
+
+<table>
+  <tr>
+    <td align="center" valign="top"><a href="img/projeto-git-commits-claro.png"><img src="img/mini/projeto-git-commits-claro.webp" alt="Aba Git, Commits: a lista, o commit escolhido, os arquivos que ele mudou e o diff com + e -. (tema claro)" width="205" /></a> <a href="img/projeto-git-commits-escuro.png"><img src="img/mini/projeto-git-commits-escuro.webp" alt="Aba Git, Commits: a lista, o commit escolhido, os arquivos que ele mudou e o diff com + e -. (tema escuro)" width="205" /></a><br /><sub>Aba Git, Commits: a lista, o commit escolhido, os arquivos que ele mudou e o diff com + e -.</sub></td>
+    <td align="center" valign="top"><a href="img/projeto-git-alteracoes-claro.png"><img src="img/mini/projeto-git-alteracoes-claro.webp" alt="Alterações: o que ainda não foi commitado, com o diff de cada arquivo. (tema claro)" width="205" /></a> <a href="img/projeto-git-alteracoes-escuro.png"><img src="img/mini/projeto-git-alteracoes-escuro.webp" alt="Alterações: o que ainda não foi commitado, com o diff de cada arquivo. (tema escuro)" width="205" /></a><br /><sub>Alterações: o que ainda não foi commitado, com o diff de cada arquivo.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/projeto-git-branches-claro.png"><img src="img/mini/projeto-git-branches-claro.webp" alt="Branches: os branches do repositório, com o atual marcado. (tema claro)" width="205" /></a> <a href="img/projeto-git-branches-escuro.png"><img src="img/mini/projeto-git-branches-escuro.webp" alt="Branches: os branches do repositório, com o atual marcado. (tema escuro)" width="205" /></a><br /><sub>Branches: os branches do repositório, com o atual marcado.</sub></td>
+    <td align="center" valign="top"><a href="img/projeto-git-subpasta-claro.png"><img src="img/mini/projeto-git-subpasta-claro.webp" alt="Repositório em subpasta: o app lê o app/ e mostra Trocar repositório. (tema claro)" width="205" /></a> <a href="img/projeto-git-subpasta-escuro.png"><img src="img/mini/projeto-git-subpasta-escuro.webp" alt="Repositório em subpasta: o app lê o app/ e mostra Trocar repositório. (tema escuro)" width="205" /></a><br /><sub>Repositório em subpasta: o app lê o app/ e mostra Trocar repositório.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/projeto-git-escolher-claro.png"><img src="img/mini/projeto-git-escolher-claro.webp" alt="Vários repositórios em subpastas: você escolhe um, e o app lembra a escolha. (tema claro)" width="205" /></a> <a href="img/projeto-git-escolher-escuro.png"><img src="img/mini/projeto-git-escolher-escuro.webp" alt="Vários repositórios em subpastas: você escolhe um, e o app lembra a escolha. (tema escuro)" width="205" /></a><br /><sub>Vários repositórios em subpastas: você escolhe um, e o app lembra a escolha.</sub></td>
+    <td align="center" valign="top"><a href="img/projeto-git-segredo-claro.png"><img src="img/mini/projeto-git-segredo-claro.webp" alt="Arquivo com cara de segredo (.env): o conteúdo não aparece até você clicar em Mostrar mesmo assim. (tema claro)" width="205" /></a> <a href="img/projeto-git-segredo-escuro.png"><img src="img/mini/projeto-git-segredo-escuro.webp" alt="Arquivo com cara de segredo (.env): o conteúdo não aparece até você clicar em Mostrar mesmo assim. (tema escuro)" width="205" /></a><br /><sub>Arquivo com cara de segredo (.env): o conteúdo não aparece até você clicar em Mostrar mesmo assim.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/projeto-git-sem-git-claro.png"><img src="img/mini/projeto-git-sem-git-claro.webp" alt="Pasta sem Git: a linha Código diz isso e oferece Criar repositório Git. (tema claro)" width="205" /></a> <a href="img/projeto-git-sem-git-escuro.png"><img src="img/mini/projeto-git-sem-git-escuro.webp" alt="Pasta sem Git: a linha Código diz isso e oferece Criar repositório Git. (tema escuro)" width="205" /></a><br /><sub>Pasta sem Git: a linha Código diz isso e oferece Criar repositório Git.</sub></td>
+    <td align="center" valign="top"><a href="img/projeto-git-nao-instalado-claro.png"><img src="img/mini/projeto-git-nao-instalado-claro.webp" alt="Git não instalado no servidor: a linha Código oferece Instalar o Git. (tema claro)" width="205" /></a> <a href="img/projeto-git-nao-instalado-escuro.png"><img src="img/mini/projeto-git-nao-instalado-escuro.webp" alt="Git não instalado no servidor: a linha Código oferece Instalar o Git. (tema escuro)" width="205" /></a><br /><sub>Git não instalado no servidor: a linha Código oferece Instalar o Git.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/projeto-git-outro-usuario-claro.png"><img src="img/mini/projeto-git-outro-usuario-claro.webp" alt="Pasta de outro usuário: o Git recusa e o app mostra o comando para você copiar (ele nunca o executa). (tema claro)" width="205" /></a> <a href="img/projeto-git-outro-usuario-escuro.png"><img src="img/mini/projeto-git-outro-usuario-escuro.webp" alt="Pasta de outro usuário: o Git recusa e o app mostra o comando para você copiar (ele nunca o executa). (tema escuro)" width="205" /></a><br /><sub>Pasta de outro usuário: o Git recusa e o app mostra o comando para você copiar (ele nunca o executa).</sub></td>
+    <td align="center" valign="top"><a href="img/git-criar-repositorio-claro.png"><img src="img/mini/git-criar-repositorio-claro.webp" alt="Criar repositório Git: a conferência só de leitura, com o que entra, o que fica de fora e os arquivos grandes. (tema claro)" width="205" /></a> <a href="img/git-criar-repositorio-escuro.png"><img src="img/mini/git-criar-repositorio-escuro.webp" alt="Criar repositório Git: a conferência só de leitura, com o que entra, o que fica de fora e os arquivos grandes. (tema escuro)" width="205" /></a><br /><sub>Criar repositório Git: a conferência só de leitura, com o que entra, o que fica de fora e os arquivos grandes.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/git-criar-segredo-claro.png"><img src="img/mini/git-criar-segredo-claro.webp" alt="Criar repositório numa pasta que já tem .gitignore: o app completa com as regras de segredos (.env, chaves) e mostra as linhas. (tema claro)" width="205" /></a> <a href="img/git-criar-segredo-escuro.png"><img src="img/mini/git-criar-segredo-escuro.webp" alt="Criar repositório numa pasta que já tem .gitignore: o app completa com as regras de segredos (.env, chaves) e mostra as linhas. (tema escuro)" width="205" /></a><br /><sub>Criar repositório numa pasta que já tem .gitignore: o app completa com as regras de segredos (.env, chaves) e mostra as linhas.</sub></td>
+    <td align="center" valign="top"><a href="img/git-criar-identidade-claro.png"><img src="img/mini/git-criar-identidade-claro.webp" alt="Criar repositório quando o Git não sabe quem você é: nome e e-mail gravados só neste repositório. (tema claro)" width="205" /></a> <a href="img/git-criar-identidade-escuro.png"><img src="img/mini/git-criar-identidade-escuro.webp" alt="Criar repositório quando o Git não sabe quem você é: nome e e-mail gravados só neste repositório. (tema escuro)" width="205" /></a><br /><sub>Criar repositório quando o Git não sabe quem você é: nome e e-mail gravados só neste repositório.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/git-criar-mesmo-assim-claro.png"><img src="img/mini/git-criar-mesmo-assim-claro.webp" alt="Já existe repositório numa subpasta: criar na pasta principal exige marcar uma caixa de confirmação. (tema claro)" width="205" /></a> <a href="img/git-criar-mesmo-assim-escuro.png"><img src="img/mini/git-criar-mesmo-assim-escuro.webp" alt="Já existe repositório numa subpasta: criar na pasta principal exige marcar uma caixa de confirmação. (tema escuro)" width="205" /></a><br /><sub>Já existe repositório numa subpasta: criar na pasta principal exige marcar uma caixa de confirmação.</sub></td>
+    <td align="center" valign="top"><a href="img/git-instalar-claro.png"><img src="img/mini/git-instalar-claro.webp" alt="Instalar o Git: os comandos exatos aparecem antes, e você pode só copiá-los. (tema claro)" width="205" /></a> <a href="img/git-instalar-escuro.png"><img src="img/mini/git-instalar-escuro.webp" alt="Instalar o Git: os comandos exatos aparecem antes, e você pode só copiá-los. (tema escuro)" width="205" /></a><br /><sub>Instalar o Git: os comandos exatos aparecem antes, e você pode só copiá-los.</sub></td>
+  </tr>
+</table>
+
+## Encerrar e reiniciar processos
+
+Sempre com uma confirmação, e o app nunca força sozinho.
+
+<table>
+  <tr>
+    <td align="center" valign="top"><a href="img/processo-encerrar-claro.png"><img src="img/mini/processo-encerrar-claro.webp" alt="Confirmação de Encerrar: nome, número, usuário, projeto ou container e hora de início; pede ao programa para fechar (SIGTERM). (tema claro)" width="205" /></a> <a href="img/processo-encerrar-escuro.png"><img src="img/mini/processo-encerrar-escuro.webp" alt="Confirmação de Encerrar: nome, número, usuário, projeto ou container e hora de início; pede ao programa para fechar (SIGTERM). (tema escuro)" width="205" /></a><br /><sub>Confirmação de Encerrar: nome, número, usuário, projeto ou container e hora de início; pede ao programa para fechar (SIGTERM).</sub></td>
+    <td></td>
+  </tr>
+</table>
+
+## Cloudflare
+
+Endereços na internet para os projetos, pela sua conta da Cloudflare.
+
+<table>
+  <tr>
+    <td align="center" valign="top"><a href="img/servidor-cloudflare-claro.png"><img src="img/mini/servidor-cloudflare-claro.webp" alt="Aba Cloudflare: conta conectada, domínio, túnel e os endereços que o app criou. (tema claro)" width="205" /></a> <a href="img/servidor-cloudflare-escuro.png"><img src="img/mini/servidor-cloudflare-escuro.webp" alt="Aba Cloudflare: conta conectada, domínio, túnel e os endereços que o app criou. (tema escuro)" width="205" /></a><br /><sub>Aba Cloudflare: conta conectada, domínio, túnel e os endereços que o app criou.</sub></td>
+    <td align="center" valign="top"><a href="img/cloudflare-conectar-claro.png"><img src="img/mini/cloudflare-conectar-claro.webp" alt="Conectar a Cloudflare: o token fica escondido e só no cofre; a janela lista as permissões mínimas. (tema claro)" width="205" /></a> <a href="img/cloudflare-conectar-escuro.png"><img src="img/mini/cloudflare-conectar-escuro.webp" alt="Conectar a Cloudflare: o token fica escondido e só no cofre; a janela lista as permissões mínimas. (tema escuro)" width="205" /></a><br /><sub>Conectar a Cloudflare: o token fica escondido e só no cofre; a janela lista as permissões mínimas.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/cloudflare-tunel-configuracao-claro.png"><img src="img/mini/cloudflare-tunel-configuracao-claro.webp" alt="Escolher o domínio e o túnel (aqui gerido por arquivo no servidor) e conferir. (tema claro)" width="205" /></a> <a href="img/cloudflare-tunel-configuracao-escuro.png"><img src="img/mini/cloudflare-tunel-configuracao-escuro.webp" alt="Escolher o domínio e o túnel (aqui gerido por arquivo no servidor) e conferir. (tema escuro)" width="205" /></a><br /><sub>Escolher o domínio e o túnel (aqui gerido por arquivo no servidor) e conferir.</sub></td>
+    <td align="center" valign="top"><a href="img/cloudflare-adicionar-dominio-passo-1-claro.png"><img src="img/mini/cloudflare-adicionar-dominio-passo-1-claro.webp" alt="Adicionar domínio, passo 1 de 5: a conta. (tema claro)" width="205" /></a> <a href="img/cloudflare-adicionar-dominio-passo-1-escuro.png"><img src="img/mini/cloudflare-adicionar-dominio-passo-1-escuro.webp" alt="Adicionar domínio, passo 1 de 5: a conta. (tema escuro)" width="205" /></a><br /><sub>Adicionar domínio, passo 1 de 5: a conta.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/cloudflare-adicionar-dominio-claro.png"><img src="img/mini/cloudflare-adicionar-dominio-claro.webp" alt="Adicionar domínio, passo 3: o nome do endereço. (tema claro)" width="205" /></a> <a href="img/cloudflare-adicionar-dominio-escuro.png"><img src="img/mini/cloudflare-adicionar-dominio-escuro.webp" alt="Adicionar domínio, passo 3: o nome do endereço. (tema escuro)" width="205" /></a><br /><sub>Adicionar domínio, passo 3: o nome do endereço.</sub></td>
+    <td align="center" valign="top"><a href="img/cloudflare-adicionar-dominio-servico-claro.png"><img src="img/mini/cloudflare-adicionar-dominio-servico-claro.webp" alt="Adicionar domínio, passo 4: qual serviço e porta vão para a internet. (tema claro)" width="205" /></a> <a href="img/cloudflare-adicionar-dominio-servico-escuro.png"><img src="img/mini/cloudflare-adicionar-dominio-servico-escuro.webp" alt="Adicionar domínio, passo 4: qual serviço e porta vão para a internet. (tema escuro)" width="205" /></a><br /><sub>Adicionar domínio, passo 4: qual serviço e porta vão para a internet.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/cloudflare-publicar-claro.png"><img src="img/mini/cloudflare-publicar-claro.webp" alt="Publicar na internet: a prévia de tudo o que muda (compose, túnel e DNS) antes do clique. (tema claro)" width="205" /></a> <a href="img/cloudflare-publicar-escuro.png"><img src="img/mini/cloudflare-publicar-escuro.webp" alt="Publicar na internet: a prévia de tudo o que muda (compose, túnel e DNS) antes do clique. (tema escuro)" width="205" /></a><br /><sub>Publicar na internet: a prévia de tudo o que muda (compose, túnel e DNS) antes do clique.</sub></td>
+    <td></td>
+  </tr>
+</table>
+
+## Conectar a um servidor
+
+Direto por SSH, pelo AWS Session Manager ou pelo túnel da Cloudflare, sem abrir a porta do SSH.
+
+<table>
+  <tr>
+    <td align="center" valign="top"><a href="img/servidores-lista-claro.png"><img src="img/mini/servidores-lista-claro.webp" alt="Lista de servidores: conectado direto, com o selo Sem porta aberta (SSM) e Protegido. (tema claro)" width="205" /></a> <a href="img/servidores-lista-escuro.png"><img src="img/mini/servidores-lista-escuro.webp" alt="Lista de servidores: conectado direto, com o selo Sem porta aberta (SSM) e Protegido. (tema escuro)" width="205" /></a><br /><sub>Lista de servidores: conectado direto, com o selo Sem porta aberta (SSM) e Protegido.</sub></td>
+    <td align="center" valign="top"><a href="img/servidor-adicionar-passo-1-claro.png"><img src="img/mini/servidor-adicionar-passo-1-claro.webp" alt="Adicionar servidor, passo 1: nome, usuário, Como conectar (Direto), endereço e Servidor protegido. (tema claro)" width="205" /></a> <a href="img/servidor-adicionar-passo-1-escuro.png"><img src="img/mini/servidor-adicionar-passo-1-escuro.webp" alt="Adicionar servidor, passo 1: nome, usuário, Como conectar (Direto), endereço e Servidor protegido. (tema escuro)" width="205" /></a><br /><sub>Adicionar servidor, passo 1: nome, usuário, Como conectar (Direto), endereço e Servidor protegido.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/como-conectar-direto-claro.png"><img src="img/mini/como-conectar-direto-claro.webp" alt="Como conectar, Direto (SSH), o padrão: só o endereço e a porta; nada de túnel. (tema claro)" width="205" /></a> <a href="img/como-conectar-direto-escuro.png"><img src="img/mini/como-conectar-direto-escuro.webp" alt="Como conectar, Direto (SSH), o padrão: só o endereço e a porta; nada de túnel. (tema escuro)" width="205" /></a><br /><sub>Como conectar, Direto (SSH), o padrão: só o endereço e a porta; nada de túnel.</sub></td>
+    <td align="center" valign="top"><a href="img/como-conectar-ssm-claro.png"><img src="img/mini/como-conectar-ssm-claro.webp" alt="Como conectar pelo AWS Session Manager: instância, região, perfil e porta. (tema claro)" width="205" /></a> <a href="img/como-conectar-ssm-escuro.png"><img src="img/mini/como-conectar-ssm-escuro.webp" alt="Como conectar pelo AWS Session Manager: instância, região, perfil e porta. (tema escuro)" width="205" /></a><br /><sub>Como conectar pelo AWS Session Manager: instância, região, perfil e porta.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/como-conectar-ssm-config-claro.png"><img src="img/mini/como-conectar-ssm-config-claro.webp" alt="Conferir as ferramentas neste computador: o aws foi achado, o plugin falta e o passo de instalar aparece como texto. (tema claro)" width="205" /></a> <a href="img/como-conectar-ssm-config-escuro.png"><img src="img/mini/como-conectar-ssm-config-escuro.webp" alt="Conferir as ferramentas neste computador: o aws foi achado, o plugin falta e o passo de instalar aparece como texto. (tema escuro)" width="205" /></a><br /><sub>Conferir as ferramentas neste computador: o aws foi achado, o plugin falta e o passo de instalar aparece como texto.</sub></td>
+    <td align="center" valign="top"><a href="img/como-conectar-editar-ssm-claro.png"><img src="img/mini/como-conectar-editar-ssm-claro.webp" alt="Editar um servidor que usa o Session Manager. (tema claro)" width="205" /></a> <a href="img/como-conectar-editar-ssm-escuro.png"><img src="img/mini/como-conectar-editar-ssm-escuro.webp" alt="Editar um servidor que usa o Session Manager. (tema escuro)" width="205" /></a><br /><sub>Editar um servidor que usa o Session Manager.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/como-conectar-cloudflare-claro.png"><img src="img/mini/como-conectar-cloudflare-claro.webp" alt="Como conectar pelo túnel da Cloudflare: o endereço do túnel. (tema claro)" width="205" /></a> <a href="img/como-conectar-cloudflare-escuro.png"><img src="img/mini/como-conectar-cloudflare-escuro.webp" alt="Como conectar pelo túnel da Cloudflare: o endereço do túnel. (tema escuro)" width="205" /></a><br /><sub>Como conectar pelo túnel da Cloudflare: o endereço do túnel.</sub></td>
+    <td align="center" valign="top"><a href="img/como-conectar-cloudflare-config-claro.png"><img src="img/mini/como-conectar-cloudflare-config-claro.webp" alt="Conferir as ferramentas: o cloudflared foi achado neste computador. (tema claro)" width="205" /></a> <a href="img/como-conectar-cloudflare-config-escuro.png"><img src="img/mini/como-conectar-cloudflare-config-escuro.webp" alt="Conferir as ferramentas: o cloudflared foi achado neste computador. (tema escuro)" width="205" /></a><br /><sub>Conferir as ferramentas: o cloudflared foi achado neste computador.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/como-conectar-editar-cloudflare-claro.png"><img src="img/mini/como-conectar-editar-cloudflare-claro.webp" alt="Editar um servidor que usa a Cloudflare. (tema claro)" width="205" /></a> <a href="img/como-conectar-editar-cloudflare-escuro.png"><img src="img/mini/como-conectar-editar-cloudflare-escuro.webp" alt="Editar um servidor que usa a Cloudflare. (tema escuro)" width="205" /></a><br /><sub>Editar um servidor que usa a Cloudflare.</sub></td>
+    <td align="center" valign="top"><a href="img/sem-porta-aberta-claro.png"><img src="img/mini/sem-porta-aberta-claro.webp" alt="O selo Sem porta aberta no cartão de cada servidor. (tema claro)" width="205" /></a> <a href="img/sem-porta-aberta-escuro.png"><img src="img/mini/sem-porta-aberta-escuro.webp" alt="O selo Sem porta aberta no cartão de cada servidor. (tema escuro)" width="205" /></a><br /><sub>O selo Sem porta aberta no cartão de cada servidor.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/servidor-confiar-impressao-claro.png"><img src="img/mini/servidor-confiar-impressao-claro.webp" alt="Confiar no servidor: a impressão digital e o comando para conferi-la no próprio servidor. (tema claro)" width="205" /></a> <a href="img/servidor-confiar-impressao-escuro.png"><img src="img/mini/servidor-confiar-impressao-escuro.webp" alt="Confiar no servidor: a impressão digital e o comando para conferi-la no próprio servidor. (tema escuro)" width="205" /></a><br /><sub>Confiar no servidor: a impressão digital e o comando para conferi-la no próprio servidor.</sub></td>
+    <td align="center" valign="top"><a href="img/servidor-adicionar-senha-claro.png"><img src="img/mini/servidor-adicionar-senha-claro.webp" alt="Primeira conexão: a senha vale uma vez, fica escondida e não é guardada. (tema claro)" width="205" /></a> <a href="img/servidor-adicionar-senha-escuro.png"><img src="img/mini/servidor-adicionar-senha-escuro.webp" alt="Primeira conexão: a senha vale uma vez, fica escondida e não é guardada. (tema escuro)" width="205" /></a><br /><sub>Primeira conexão: a senha vale uma vez, fica escondida e não é guardada.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/servidor-adicionar-pergunta-agente-claro.png"><img src="img/mini/servidor-adicionar-pergunta-agente-claro.webp" alt="No fim, o app pergunta se você quer desligar o login por senha (o padrão é manter). (tema claro)" width="205" /></a> <a href="img/servidor-adicionar-pergunta-agente-escuro.png"><img src="img/mini/servidor-adicionar-pergunta-agente-escuro.webp" alt="No fim, o app pergunta se você quer desligar o login por senha (o padrão é manter). (tema escuro)" width="205" /></a><br /><sub>No fim, o app pergunta se você quer desligar o login por senha (o padrão é manter).</sub></td>
+    <td align="center" valign="top"><a href="img/servidor-instalar-chave-claro.png"><img src="img/mini/servidor-instalar-chave-claro.webp" alt="Consertar Chave recusada: instalar a chave com a senha, só se o servidor for o que você confirmou. (tema claro)" width="205" /></a> <a href="img/servidor-instalar-chave-escuro.png"><img src="img/mini/servidor-instalar-chave-escuro.webp" alt="Consertar Chave recusada: instalar a chave com a senha, só se o servidor for o que você confirmou. (tema escuro)" width="205" /></a><br /><sub>Consertar Chave recusada: instalar a chave com a senha, só se o servidor for o que você confirmou.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/seguranca-desligar-senha-claro.png"><img src="img/mini/seguranca-desligar-senha-claro.webp" alt="Desligar o login por senha: o que será feito, os riscos, o comando para reverter e o nome do servidor para confirmar. (tema claro)" width="205" /></a> <a href="img/seguranca-desligar-senha-escuro.png"><img src="img/mini/seguranca-desligar-senha-escuro.webp" alt="Desligar o login por senha: o que será feito, os riscos, o comando para reverter e o nome do servidor para confirmar. (tema escuro)" width="205" /></a><br /><sub>Desligar o login por senha: o que será feito, os riscos, o comando para reverter e o nome do servidor para confirmar.</sub></td>
+    <td align="center" valign="top"><a href="img/servidor-editar-claro.png"><img src="img/mini/servidor-editar-claro.webp" alt="Editar servidor: nome, endereço, modo de conexão e acesso. (tema claro)" width="205" /></a> <a href="img/servidor-editar-escuro.png"><img src="img/mini/servidor-editar-escuro.webp" alt="Editar servidor: nome, endereço, modo de conexão e acesso. (tema escuro)" width="205" /></a><br /><sub>Editar servidor: nome, endereço, modo de conexão e acesso.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/servidor-editar-protegido-claro.png"><img src="img/mini/servidor-editar-protegido-claro.webp" alt="Editar servidor com a caixa Servidor protegido marcada. (tema claro)" width="205" /></a> <a href="img/servidor-editar-protegido-escuro.png"><img src="img/mini/servidor-editar-protegido-escuro.webp" alt="Editar servidor com a caixa Servidor protegido marcada. (tema escuro)" width="205" /></a><br /><sub>Editar servidor com a caixa Servidor protegido marcada.</sub></td>
+    <td align="center" valign="top"><a href="img/servidor-remover-claro.png"><img src="img/mini/servidor-remover-claro.webp" alt="Remover servidor: tira da lista e, se você quiser, apaga a chave e revoga o acesso. (tema claro)" width="205" /></a> <a href="img/servidor-remover-escuro.png"><img src="img/mini/servidor-remover-escuro.webp" alt="Remover servidor: tira da lista e, se você quiser, apaga a chave e revoga o acesso. (tema escuro)" width="205" /></a><br /><sub>Remover servidor: tira da lista e, se você quiser, apaga a chave e revoga o acesso.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/servidor-protegido-claro.png"><img src="img/mini/servidor-protegido-claro.webp" alt="O selo Protegido no cartão: o app só lê e conecta nesse servidor. (tema claro)" width="205" /></a> <a href="img/servidor-protegido-escuro.png"><img src="img/mini/servidor-protegido-escuro.webp" alt="O selo Protegido no cartão: o app só lê e conecta nesse servidor. (tema escuro)" width="205" /></a><br /><sub>O selo Protegido no cartão: o app só lê e conecta nesse servidor.</sub></td>
+    <td align="center" valign="top"><a href="img/faixa-ritmo-lento-claro.png"><img src="img/mini/faixa-ritmo-lento-claro.webp" alt="Servidor que não volta: depois de 12 falhas seguidas, tentativas a cada 5 minutos, com desde quando e a causa. (tema claro)" width="205" /></a> <a href="img/faixa-ritmo-lento-escuro.png"><img src="img/mini/faixa-ritmo-lento-escuro.webp" alt="Servidor que não volta: depois de 12 falhas seguidas, tentativas a cada 5 minutos, com desde quando e a causa. (tema escuro)" width="205" /></a><br /><sub>Servidor que não volta: depois de 12 falhas seguidas, tentativas a cada 5 minutos, com desde quando e a causa.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/faixa-ritmo-lento-aws-claro.png"><img src="img/mini/faixa-ritmo-lento-aws-claro.webp" alt="A mesma faixa quando o login da AWS expirou: o app mostra o comando para você copiar e rodar. (tema claro)" width="205" /></a> <a href="img/faixa-ritmo-lento-aws-escuro.png"><img src="img/mini/faixa-ritmo-lento-aws-escuro.webp" alt="A mesma faixa quando o login da AWS expirou: o app mostra o comando para você copiar e rodar. (tema escuro)" width="205" /></a><br /><sub>A mesma faixa quando o login da AWS expirou: o app mostra o comando para você copiar e rodar.</sub></td>
+    <td></td>
+  </tr>
+</table>
+
+## Agente e este computador
+
+O agente de monitoramento é opcional e só é instalado depois da sua confirmação.
+
+<table>
+  <tr>
+    <td align="center" valign="top"><a href="img/o-que-instalar-claro.png"><img src="img/mini/o-que-instalar-claro.webp" alt="O que instalar neste servidor: completo, escolher os itens ou só SSH. (tema claro)" width="205" /></a> <a href="img/o-que-instalar-escuro.png"><img src="img/mini/o-que-instalar-escuro.webp" alt="O que instalar neste servidor: completo, escolher os itens ou só SSH. (tema escuro)" width="205" /></a><br /><sub>O que instalar neste servidor: completo, escolher os itens ou só SSH.</sub></td>
+    <td align="center" valign="top"><a href="img/instalar-agente-confirmacao-claro.png"><img src="img/mini/instalar-agente-confirmacao-claro.webp" alt="Confirmação de instalar o agente: tudo o que foi conferido, os passos e os avisos de segurança. (tema claro)" width="205" /></a> <a href="img/instalar-agente-confirmacao-escuro.png"><img src="img/mini/instalar-agente-confirmacao-escuro.webp" alt="Confirmação de instalar o agente: tudo o que foi conferido, os passos e os avisos de segurança. (tema escuro)" width="205" /></a><br /><sub>Confirmação de instalar o agente: tudo o que foi conferido, os passos e os avisos de segurança.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/este-computador-claro.png"><img src="img/mini/este-computador-claro.webp" alt="Este computador: o laboratório rodando no Docker local, sem servidor e sem SSH. (tema claro)" width="205" /></a> <a href="img/este-computador-escuro.png"><img src="img/mini/este-computador-escuro.webp" alt="Este computador: o laboratório rodando no Docker local, sem servidor e sem SSH. (tema escuro)" width="205" /></a><br /><sub>Este computador: o laboratório rodando no Docker local, sem servidor e sem SSH.</sub></td>
+    <td align="center" valign="top"><a href="img/preparar-este-computador-claro.png"><img src="img/mini/preparar-este-computador-claro.webp" alt="Preparar este computador: o app só confere o que falta e mostra o que vai fazer antes de criar o laboratório. (tema claro)" width="205" /></a> <a href="img/preparar-este-computador-escuro.png"><img src="img/mini/preparar-este-computador-escuro.webp" alt="Preparar este computador: o app só confere o que falta e mostra o que vai fazer antes de criar o laboratório. (tema escuro)" width="205" /></a><br /><sub>Preparar este computador: o app só confere o que falta e mostra o que vai fazer antes de criar o laboratório.</sub></td>
+  </tr>
+</table>
+
+## Novo projeto
+
+Criar do zero, importar ou adicionar um container.
+
+<table>
+  <tr>
+    <td align="center" valign="top"><a href="img/novo-projeto-claro.png"><img src="img/mini/novo-projeto-claro.webp" alt="Novo projeto: criar do zero, importar ou adicionar um container. (tema claro)" width="205" /></a> <a href="img/novo-projeto-escuro.png"><img src="img/mini/novo-projeto-escuro.webp" alt="Novo projeto: criar do zero, importar ou adicionar um container. (tema escuro)" width="205" /></a><br /><sub>Novo projeto: criar do zero, importar ou adicionar um container.</sub></td>
+    <td align="center" valign="top"><a href="img/novo-projeto-criar-claro.png"><img src="img/mini/novo-projeto-criar-claro.webp" alt="Criar do zero: o nome, onde a pasta fica e o que vem pronto. (tema claro)" width="205" /></a> <a href="img/novo-projeto-criar-escuro.png"><img src="img/mini/novo-projeto-criar-escuro.webp" alt="Criar do zero: o nome, onde a pasta fica e o que vem pronto. (tema escuro)" width="205" /></a><br /><sub>Criar do zero: o nome, onde a pasta fica e o que vem pronto.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/novo-projeto-importar-claro.png"><img src="img/mini/novo-projeto-importar-claro.webp" alt="Importar por Git: o endereço do repositório e o que vai acontecer. (tema claro)" width="205" /></a> <a href="img/novo-projeto-importar-escuro.png"><img src="img/mini/novo-projeto-importar-escuro.webp" alt="Importar por Git: o endereço do repositório e o que vai acontecer. (tema escuro)" width="205" /></a><br /><sub>Importar por Git: o endereço do repositório e o que vai acontecer.</sub></td>
+    <td align="center" valign="top"><a href="img/novo-projeto-importar-pasta-claro.png"><img src="img/mini/novo-projeto-importar-pasta-claro.webp" alt="Importar uma pasta do seu computador: sem node_modules, sem .git e sem arquivos de segredo, a menos que você marque. (tema claro)" width="205" /></a> <a href="img/novo-projeto-importar-pasta-escuro.png"><img src="img/mini/novo-projeto-importar-pasta-escuro.webp" alt="Importar uma pasta do seu computador: sem node_modules, sem .git e sem arquivos de segredo, a menos que você marque. (tema escuro)" width="205" /></a><br /><sub>Importar uma pasta do seu computador: sem node_modules, sem .git e sem arquivos de segredo, a menos que você marque.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/novo-projeto-container-claro.png"><img src="img/mini/novo-projeto-container-claro.webp" alt="Adicionar container (Redis): a diferença no docker-compose.yml aparece antes de gravar. (tema claro)" width="205" /></a> <a href="img/novo-projeto-container-escuro.png"><img src="img/mini/novo-projeto-container-escuro.webp" alt="Adicionar container (Redis): a diferença no docker-compose.yml aparece antes de gravar. (tema escuro)" width="205" /></a><br /><sub>Adicionar container (Redis): a diferença no docker-compose.yml aparece antes de gravar.</sub></td>
+    <td></td>
+  </tr>
+</table>
+
+## Ajustes, Sobre e Ajuda
+
+Tema, abas, informações do app e a Ajuda que vem dentro dele.
+
+<table>
+  <tr>
+    <td align="center" valign="top"><a href="img/tema-claro.png"><img src="img/mini/tema-claro.webp" alt="Tema claro, escuro ou o do sistema, e o tamanho do texto. (tema claro)" width="205" /></a> <a href="img/tema-escuro.png"><img src="img/mini/tema-escuro.webp" alt="Tema claro, escuro ou o do sistema, e o tamanho do texto. (tema escuro)" width="205" /></a><br /><sub>Tema claro, escuro ou o do sistema, e o tamanho do texto.</sub></td>
+    <td align="center" valign="top"><a href="img/ordem-das-abas-claro.png"><img src="img/mini/ordem-das-abas-claro.webp" alt="Ordem e visibilidade das abas do servidor e do projeto. (tema claro)" width="205" /></a> <a href="img/ordem-das-abas-escuro.png"><img src="img/mini/ordem-das-abas-escuro.webp" alt="Ordem e visibilidade das abas do servidor e do projeto. (tema escuro)" width="205" /></a><br /><sub>Ordem e visibilidade das abas do servidor e do projeto.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/ajustes-terminal-claro.png"><img src="img/mini/ajustes-terminal-claro.webp" alt="Ajustes, Terminal: as preferências do terminal e, em &quot;Ao sair de um projeto&quot;, a caixa que volta a perguntar. (tema claro)" width="205" /></a> <a href="img/ajustes-terminal-escuro.png"><img src="img/mini/ajustes-terminal-escuro.webp" alt="Ajustes, Terminal: as preferências do terminal e, em &quot;Ao sair de um projeto&quot;, a caixa que volta a perguntar. (tema escuro)" width="205" /></a><br /><sub>Ajustes, Terminal: as preferências do terminal e, em "Ao sair de um projeto", a caixa que volta a perguntar.</sub></td>
+    <td align="center" valign="top"><a href="img/sair-do-projeto-claro.png"><img src="img/mini/sair-do-projeto-claro.webp" alt="Sair de um projeto com terminal aberto: o app pergunta, e a caixa &quot;Não perguntar de novo&quot; vem desmarcada. (tema claro)" width="205" /></a> <a href="img/sair-do-projeto-escuro.png"><img src="img/mini/sair-do-projeto-escuro.webp" alt="Sair de um projeto com terminal aberto: o app pergunta, e a caixa &quot;Não perguntar de novo&quot; vem desmarcada. (tema escuro)" width="205" /></a><br /><sub>Sair de um projeto com terminal aberto: o app pergunta, e a caixa "Não perguntar de novo" vem desmarcada.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/sair-do-projeto-marcada-claro.png"><img src="img/mini/sair-do-projeto-marcada-claro.webp" alt="A mesma pergunta com a caixa marcada: só vale se você confirmar a saída (Cancelar ignora a marca). (tema claro)" width="205" /></a> <a href="img/sair-do-projeto-marcada-escuro.png"><img src="img/mini/sair-do-projeto-marcada-escuro.webp" alt="A mesma pergunta com a caixa marcada: só vale se você confirmar a saída (Cancelar ignora a marca). (tema escuro)" width="205" /></a><br /><sub>A mesma pergunta com a caixa marcada: só vale se você confirmar a saída (Cancelar ignora a marca).</sub></td>
+    <td align="center" valign="top"><a href="img/ajustes-sobre-claro.png"><img src="img/mini/ajustes-sobre-claro.webp" alt="Sobre: versão, Java, sistema, pasta de dados, licença MIT e licenças de terceiros. (tema claro)" width="205" /></a> <a href="img/ajustes-sobre-escuro.png"><img src="img/mini/ajustes-sobre-escuro.webp" alt="Sobre: versão, Java, sistema, pasta de dados, licença MIT e licenças de terceiros. (tema escuro)" width="205" /></a><br /><sub>Sobre: versão, Java, sistema, pasta de dados, licença MIT e licenças de terceiros.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/ajuda-claro.png"><img src="img/mini/ajuda-claro.webp" alt="Ajuda no app: como conectar a um servidor. (tema claro)" width="205" /></a> <a href="img/ajuda-escuro.png"><img src="img/mini/ajuda-escuro.webp" alt="Ajuda no app: como conectar a um servidor. (tema escuro)" width="205" /></a><br /><sub>Ajuda no app: como conectar a um servidor.</sub></td>
+    <td align="center" valign="top"><a href="img/ajuda-git-claro.png"><img src="img/mini/ajuda-git-claro.webp" alt="Ajuda no app: Git do projeto. (tema claro)" width="205" /></a> <a href="img/ajuda-git-escuro.png"><img src="img/mini/ajuda-git-escuro.webp" alt="Ajuda no app: Git do projeto. (tema escuro)" width="205" /></a><br /><sub>Ajuda no app: Git do projeto.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="img/ajuda-ritmo-lento-claro.png"><img src="img/mini/ajuda-ritmo-lento-claro.webp" alt="Ajuda no app: o que fazer quando aparece Sem conexão. (tema claro)" width="205" /></a> <a href="img/ajuda-ritmo-lento-escuro.png"><img src="img/mini/ajuda-ritmo-lento-escuro.webp" alt="Ajuda no app: o que fazer quando aparece Sem conexão. (tema escuro)" width="205" /></a><br /><sub>Ajuda no app: o que fazer quando aparece Sem conexão.</sub></td>
+    <td></td>
+  </tr>
+</table>

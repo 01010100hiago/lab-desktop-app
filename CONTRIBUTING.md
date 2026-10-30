@@ -2,7 +2,7 @@
 
 Obrigado por querer ajudar. O essencial:
 
-1. **Ambiente**: JDK 21 completo (`JAVA_HOME` apontando para ele) e o `./gradlew` do repositório. Veja o README, seção "Desenvolvimento".
+1. **Ambiente**: JDK 21 completo (`JAVA_HOME` apontando para ele) e o `./gradlew` do repositório. Veja [docs/DESENVOLVIMENTO.md](docs/DESENVOLVIMENTO.md).
 2. **Antes de abrir um pull request**: `./gradlew build` verde (compila, roda a suíte inteira e confere as dependências). Os testes de interface desenham as telas sem abrir janela e gravam PNGs em `build/telas/`.
 3. **Convenções** (`docs/ARQUITETURA.md`): identificadores em português sem acento, interface em pt-BR, sem emoji (use os ícones SVG), paleta neutra (sem azul nem ciano), nada de rede, disco pesado ou `sleep` na thread da interface, todo texto vindo do servidor tratado como não confiável (`TextoSeguro`).
 4. **Tela ou botão novo** atualiza, no mesmo commit, o tópico correspondente da Ajuda (`src/main/resources/br/com/labdesktop/ajuda/`).
