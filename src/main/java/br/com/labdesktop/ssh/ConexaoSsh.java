@@ -86,6 +86,12 @@ public final class ConexaoSsh implements ConexaoDoServidor {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConexaoSsh.class);
 
+    /**
+     * Uma VPN ou o Docker que sobem e descem a cada poucos segundos mudam a rede toda hora: com um servidor morto isso reiniciaria a conexão (e o aws ou o cloudflared) várias vezes por minuto.
+     * A mudança de rede só vale se a última tentativa começou há pelo menos isto; várias mudanças dentro dele valem UMA tentativa.
+     */
+    static final Duration INTERVALO_MINIMO_PELA_REDE = Duration.ofSeconds(30);
+
     private enum Fase { CONECTANDO, AUTENTICANDO, TUNEL }
 
     private final String servidorId;
@@ -143,6 +149,8 @@ public final class ConexaoSsh implements ConexaoDoServidor {
     private int falhasSeguidas;
     /** Ritmo lento: o servidor não volta (apagado, desligado, login da AWS expirado, túnel que não sobe), então o app só tenta de novo a cada {@link ConfigSsh#esperaNoRitmoLento()}. */
     private boolean ritmoLento;
+    /** Quando a última tentativa de conectar COMEÇOU (relógio do app): a mudança de rede só antecipa a espera se ela já tem {@link #INTERVALO_MINIMO_PELA_REDE}. */
+    private Instant inicioDaUltimaTentativa;
     private Instant proximaEm;
     private Instant semConexaoDesde;
     private long idTentativa;
@@ -249,13 +257,15 @@ public final class ConexaoSsh implements ConexaoDoServidor {
     }
 
     /**
-     * A rede do computador mudou (outra rede Wi-Fi, a VPN subiu, o cabo voltou): quem está esperando para reconectar, inclusive no ritmo lento, tenta agora e volta ao ritmo normal. Com a conexão de pé
+     * A rede do computador mudou (outra rede Wi-Fi, a VPN subiu, o cabo voltou): quem está esperando para reconectar, inclusive no ritmo lento, tenta agora e volta ao ritmo normal, desde que a
+     * última tentativa tenha começado há 30 s ou mais (várias mudanças seguidas valem uma tentativa só). Com a conexão de pé
      * ou parada por outro motivo (cofre, chave, sono) não faz nada: o heartbeat cuida da primeira, e as outras esperam uma ação do usuário.
      */
     @Override
     public void aoMudarARede() {
         post(() -> {
-            if (!encerrado && estado == EstadoConexao.RECONECTANDO) {
+            if (!encerrado && estado == EstadoConexao.RECONECTANDO
+                && (inicioDaUltimaTentativa == null || !agendador.agora().isBefore(inicioDaUltimaTentativa.plus(INTERVALO_MINIMO_PELA_REDE)))) {
                 reiniciarDoZero();
             }
         });
@@ -605,6 +615,7 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             return;
         }
         long id = ++idTentativa;
+        inicioDaUltimaTentativa = agendador.agora();
         mudar(EstadoConexao.CONECTANDO, falha, null);
         Fundo.ioVirtual().execute(() -> conectarEmFundo(id, servidor));
     }

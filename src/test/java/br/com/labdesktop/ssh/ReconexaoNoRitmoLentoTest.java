@@ -221,7 +221,10 @@ class ReconexaoNoRitmoLentoTest {
                         Espera.ate(PRAZO, () -> "espera de acordar " + m.relogio.pendentes(), () -> m.relogio.pendentes() == 1);
                         m.relogio.avancar(ConfigSsh.padrao().esperaAposAcordar());
                     }
-                    case "rede" -> m.conexao.aoMudarARede();
+                    case "rede" -> {
+                        m.relogio.avancar(ConexaoSsh.INTERVALO_MINIMO_PELA_REDE.plusSeconds(1)); // a última tentativa já tem mais de 30 s
+                        m.conexao.aoMudarARede();
+                    }
                     case "desbloquear" -> {
                         m.conexao.bloquear();
                         Espera.ate(PRAZO, () -> "bloqueado " + m.info(), () -> m.info().estado() == EstadoConexao.BLOQUEADO_COFRE);
@@ -251,6 +254,37 @@ class ReconexaoNoRitmoLentoTest {
             Thread.sleep(100);
             assertEquals(0, m.tentativasDeAbrir.get(), "rede que muda não desbloqueia o cofre");
             assertEquals(EstadoConexao.BLOQUEADO_COFRE, m.info().estado());
+        }
+    }
+
+    @Test
+    void variasMudancasDeRedeEm30sValemUmaTentativaSo() throws Exception {
+        try (Mundo m = new Mundo(false)) {
+            m.conexao.iniciar();
+            for (int n = 1; n <= 12; n++) {
+                m.chegarAFalha(n);
+            }
+            assertTrue(m.info().ritmoLento());
+            // uma VPN que sobe e desce: 6 mudanças de rede logo depois da última tentativa (que acabou de falhar) não reiniciam nada
+            for (int i = 0; i < 6; i++) {
+                m.conexao.aoMudarARede();
+                m.relogio.avancar(Duration.ofSeconds(4)); // a espera lenta é de 5 min: nenhum timer vence aqui
+            }
+            Thread.sleep(200);
+            assertEquals(12, m.tentativasDeAbrir.get(), "menos de 30 s depois da última tentativa: a mudança de rede é ignorada");
+            assertTrue(m.info().ritmoLento());
+
+            // passados 30 s, a mudança vale UMA tentativa
+            m.relogio.avancar(Duration.ofSeconds(10));
+            m.conexao.aoMudarARede();
+            m.esperarAFalha(13);
+            assertFalse(m.info().ritmoLento(), "e volta ao ritmo normal");
+            // outras mudanças logo em seguida (o relógio não andou: menos de 30 s da tentativa 13) não somam nada
+            for (int i = 0; i < 5; i++) {
+                m.conexao.aoMudarARede();
+            }
+            Thread.sleep(200);
+            assertEquals(13, m.tentativasDeAbrir.get(), "várias mudanças em 30 s valem UMA tentativa");
         }
     }
 

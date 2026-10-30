@@ -61,6 +61,8 @@ public final class ConexaoLocal implements ConexaoDoServidor {
     private Cancelavel timer;
     private boolean verificando;
     private boolean encerrado;
+    /** Respostas "agente fora" SEGUIDAS: depois de {@link ConfigLocal#falhasAteOIntervaloLento()}, o app insiste só a cada {@link ConfigLocal#intervaloLento()}. Zera com qualquer outra resposta, "Tentar agora" e computador que acorda. */
+    private int foraSeguidas;
 
     private volatile InfoConexao info = InfoConexao.inicial();
     private volatile PontaDoAgente pontaAtual;
@@ -99,6 +101,7 @@ public final class ConexaoLocal implements ConexaoDoServidor {
             switch (estado) {
                 case SSH_OK_SEM_AGENTE, TOKEN_RECUSADO, AGUARDANDO_2FA -> {
                     cancelarTimer();
+                    foraSeguidas = 0;
                     if (ponta != null) {
                         iniciarSonda(idTentativa);
                     } else {
@@ -128,6 +131,7 @@ public final class ConexaoLocal implements ConexaoDoServidor {
                 return;
             }
             verificando = true;
+            foraSeguidas = 0; // quem pede para conferir (o computador que acordou, por exemplo) quer o ritmo normal de novo
             long id = idTentativa;
             PontaDoAgente p = ponta;
             Fundo.ioVirtual().execute(() -> {
@@ -264,6 +268,7 @@ public final class ConexaoLocal implements ConexaoDoServidor {
 
     private void reiniciarDoZero() {
         cancelarTimer();
+        foraSeguidas = 0;
         descartarPonta();
         iniciarTentativa();
     }
@@ -319,13 +324,18 @@ public final class ConexaoLocal implements ConexaoDoServidor {
             return;
         }
         cancelarTimer();
+        if (r != SondaDoAgente.Resultado.AGENTE_FORA && r != SondaDoAgente.Resultado.AGENTE_DESATUALIZADO) {
+            foraSeguidas = 0;
+        }
         switch (r) {
             case OK -> mudar(EstadoConexao.CONECTADO, null, null);
             case AGENTE_FORA, AGENTE_DESATUALIZADO -> {
+                foraSeguidas++;
+                java.time.Duration espera = foraSeguidas >= cfg.falhasAteOIntervaloLento() ? cfg.intervaloLento() : cfg.intervaloSemAgente();
                 mudar(EstadoConexao.SSH_OK_SEM_AGENTE, r == SondaDoAgente.Resultado.AGENTE_FORA
                     ? new Falha(Falha.Tipo.LOCAL_AGENTE_FORA, "O agente do laboratório local não responde (o Docker pode estar parado ou o agente reiniciando).")
                     : new Falha(Falha.Tipo.LOCAL_AGENTE_DESATUALIZADO, "O agente local é anterior a este app (não tem GET /api/versao). Atualize o agente."), null);
-                timer = agendador.agendar(cfg.intervaloSemAgente(), () -> post(() -> {
+                timer = agendador.agendar(espera, () -> post(() -> {
                     if (id == idTentativa && estado == EstadoConexao.SSH_OK_SEM_AGENTE) {
                         iniciarSonda(id);
                     }

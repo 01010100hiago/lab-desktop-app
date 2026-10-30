@@ -312,7 +312,7 @@ public final class ConteudoDosAvisos {
             case LOCAL_CONTAINER_PARADO -> new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente do laboratório local está parado",
                 TEXTO_DO_LOCAL_CONTAINER_PARADO, List.of(Acao.PREPARAR_COMPUTADOR, Acao.TENTAR_AGORA));
             default -> new AvisoDeConexao(Gravidade.ATENCAO, "alerta", "O agente do laboratório local não responde",
-                "O Docker está rodando e o agente existe, mas não responde. O app insiste a cada poucos segundos (ele pode estar reiniciando); se não "
+                "O Docker está rodando e o agente existe, mas não responde. O app insiste a cada poucos segundos e, depois de cerca de um minuto sem resposta, a cada 30 s (ele pode estar reiniciando); se não "
                     + "voltar, clique em Preparar este computador: ele confere tudo e recria o agente se for preciso." + detalhe,
                 List.of(Acao.PREPARAR_COMPUTADOR, Acao.TENTAR_AGORA));
         };

@@ -83,4 +83,49 @@ class VigiaDeRedeTest {
             assertFalse(e.contains("127.0.0.1") || e.contains("=::1") || e.contains("=fe80"), "sem loopback nem link-local: " + e);
         }
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Nenhuma exceção ao olhar a rede
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void listaNulaOuErroAoListarAsInterfacesValemSemEnderecosENuncaLancam() {
+        assertEquals(Set.of(), VigiaDeRede.enderecos(() -> null), "alguns JDK devolvem null quando não há interface nenhuma (era um NPE em Aplicacao.montar, na EDT)");
+        assertEquals(Set.of(), VigiaDeRede.enderecos(() -> {
+            throw new java.net.SocketException("sem interfaces");
+        }));
+        assertEquals(Set.of(), VigiaDeRede.enderecos(() -> {
+            throw new IllegalStateException("o JDK falhou");
+        }));
+        assertEquals(Set.of(), VigiaDeRede.enderecos(() -> java.util.Collections.enumeration(java.util.Arrays.asList((java.net.NetworkInterface) null))), "uma interface nula não conta");
+        assertEquals(Set.of(), VigiaDeRede.enderecos(() -> java.util.Collections.emptyEnumeration()));
+        // e a de verdade, de novo, sem lançar
+        VigiaDeRede.enderecosDasInterfaces();
+    }
+
+    @Test
+    void oConstrutorNuncaLancaEUmRetratoQueFalhouNaoViraAvisoDeMudanca() {
+        List<String> avisos = new ArrayList<>();
+        MonitorDeSono m = new MonitorDeSono();
+        m.aoMudarARede(() -> avisos.add("rede"));
+        AtomicReference<Object> modo = new AtomicReference<>("lança");
+        AtomicReference<Set<String>> atual = new AtomicReference<>(Set.of("en0=192.0.2.10"));
+        VigiaDeRede v = new VigiaDeRede(m, () -> {
+            if (modo.get().equals("lança")) {
+                throw new IllegalStateException("sem leitura");
+            }
+            return modo.get().equals("nulo") ? null : atual.get();
+        });
+        v.conferir();
+        assertEquals(List.of(), avisos, "ainda sem leitura");
+        modo.set("ok");
+        v.conferir();
+        assertEquals(List.of(), avisos, "a primeira leitura que deu certo é só a referência: não é mudança de rede");
+        atual.set(Set.of("en0=198.51.100.7"));
+        v.conferir();
+        assertEquals(List.of("rede"), avisos);
+        modo.set("nulo");
+        v.conferir(); // um retrato nulo vale "sem endereços" (e não quebra)
+        assertEquals(List.of("rede", "rede"), avisos);
+    }
 }

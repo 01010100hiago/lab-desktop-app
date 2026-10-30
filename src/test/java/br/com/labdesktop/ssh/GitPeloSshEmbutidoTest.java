@@ -150,7 +150,7 @@ class GitPeloSshEmbutidoTest {
 
             // a linha do find: fixa, sem texto do dono, e é a ÚNICA que não é git
             String find = c.ssh.comandos.stream().filter(l -> l.contains(" find ")).findFirst().orElseThrow();
-            assertEquals("env LC_ALL=C find -H " + projeto + " -mindepth 1 -maxdepth 3 -name node_modules -prune -o -name vendor -prune -o -name .cache -prune -o -name .venv -prune -o -name dist -prune -o "
+            assertEquals("env LC_ALL=C find -H " + projeto + " -mindepth 1 -maxdepth 3 -xdev -name node_modules -prune -o -name vendor -prune -o -name .cache -prune -o -name .venv -prune -o -name dist -prune -o "
                 + "-name build -prune -o -name .git -not -type l -prune -print0", find);
             assertTrue(c.ssh.comandos.stream().filter(l -> !l.contains(" find ")).allMatch(l -> l.startsWith("env GIT_OPTIONAL_LOCKS=0") || l.startsWith("git ") || l.startsWith("env ")), c.ssh.comandos.toString());
 
