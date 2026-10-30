@@ -40,14 +40,8 @@ public final class AreaTemporaria implements AutoCloseable {
         String caminho;
         if (ambiente.local()) {
             try {
-                Path alvo = Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath().resolve(nome);
-                Path pasta;
-                try {
-                    // só o proprietário lê (700) onde o sistema tem permissões POSIX; no Windows a pasta temporária já é do usuário
-                    pasta = Files.createDirectory(alvo, java.nio.file.attribute.PosixFilePermissions.asFileAttribute(java.nio.file.attribute.PosixFilePermissions.fromString("rwx------")));
-                } catch (UnsupportedOperationException e) {
-                    pasta = Files.createDirectory(alvo);
-                }
+                Path pasta = Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath().resolve(nome);
+                br.com.labdesktop.util.Permissoes.criarPastaPrivada(pasta); // só o dono (700 no POSIX, ACL no Windows): a peça própria do app para isso
                 caminho = pasta.toString();
             } catch (IOException e) {
                 throw new ErroDoGit(new FalhaDoGit(FalhaDoGit.Tipo.SEM_PERMISSAO, "Não consegui criar a pasta temporária deste computador para conferir a lista de arquivos."));
