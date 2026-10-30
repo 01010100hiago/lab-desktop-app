@@ -1,4 +1,9 @@
+import br.com.labdesktop.construcao.VersaoDaCompilacao
+import br.com.labdesktop.construcao.VersaoDoPacote
 import java.security.MessageDigest
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.util.Optional
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
@@ -8,7 +13,27 @@ plugins {
 }
 
 group = "br.com.labdesktop"
-version = "0.1.0"
+
+// A versão muda sozinha a cada build: <base>.<n>, com a base (MAJOR.MINOR) em gradle.properties (labdesktop.versaoBase) e <n> o número de commits do git.
+// O commit curto e a data (UTC) da compilação vão no manifesto do jar. Sem git ou com histórico raso: <base>.0 e commit "desconhecido", sem falhar o build.
+// O cálculo (e o mapeamento da versão para o jpackage de cada sistema) é Java puro e testado, em buildSrc/. Veja ARQUITETURA, "Versão e id da compilação".
+val rodarGit = VersaoDaCompilacao.Git { argumentos ->
+    try {
+        val saida = providers.exec {
+            commandLine(listOf("git", "-C", projectDir.absolutePath) + argumentos)
+            environment("GIT_OPTIONAL_LOCKS", "0") // `git status` não grava no índice do usuário
+            isIgnoreExitValue = true
+        }
+        saida.standardError.asText.get()
+        if (saida.result.get().exitValue == 0) Optional.of(saida.standardOutput.asText.get().trim()) else Optional.empty()
+    } catch (e: Exception) {
+        Optional.empty() // git fora do PATH (ou qualquer falha ao rodá-lo): vale a versão de reserva
+    }
+}
+val versaoBase = providers.gradleProperty("labdesktop.versaoBase").orNull
+    ?: throw GradleException("Falta labdesktop.versaoBase (MAJOR.MINOR, por exemplo 0.1) em gradle.properties")
+val compilacao: VersaoDaCompilacao = VersaoDaCompilacao.calcular(versaoBase, rodarGit, LocalDate.now(ZoneOffset.UTC))
+version = compilacao.versao()
 
 repositories {
     mavenCentral()
@@ -99,6 +124,9 @@ tasks.named<JavaExec>("run") {
     // Só no `./gradlew run`: liga o vigia de latência da EDT (ARQUITETURA 6.6), que registra no log a pilha da EDT se ela
     // passar de 500 ms sem responder. O app empacotado não leva esta propriedade.
     systemProperty("labdesktop.dev", "true")
+    // Rodando solto não há manifesto: o app diz "dev" e, pelo menos, de que commit (e quando) saiu o código que está rodando.
+    systemProperty("labdesktop.build.commit", compilacao.commit())
+    systemProperty("labdesktop.build.data", compilacao.data())
     // `./gradlew run --args="--pasta cofre-dev"`: o caminho relativo vale a partir daqui, a raiz do projeto.
     workingDir = projectDir
     // Chaves de desenvolvimento repassadas à JVM do app quando passadas ao Gradle com -P:
@@ -118,10 +146,15 @@ tasks.jar {
     manifest {
         attributes(
             "Implementation-Title" to "Lab Desktop",
-            "Implementation-Version" to project.version.toString()
+            "Implementation-Version" to compilacao.versao(),
+            "Build-Commit" to compilacao.commit(),
+            "Build-Date" to compilacao.data()
         )
     }
 }
+
+// O cálculo da versão mora em buildSrc/ (o build.gradle.kts o usa) e os testes dele compilam com ele.
+sourceSets.test { java.srcDir("buildSrc/src/main/java") }
 
 tasks.test {
     // as provas que só fazem sentido num Windows de verdade ficam de fora; rodam com `./gradlew provaWindows` (job do Windows do CI, sem bloquear)
@@ -136,6 +169,11 @@ tasks.test {
     // `./gradlew test -Plabdesktop.dockerReal=true --tests '*DockerDeVerdade*'`: o build normal nunca toca no Docker de quem o roda.
     if (project.hasProperty("labdesktop.dockerReal")) {
         systemProperty("labdesktop.dockerReal", project.property("labdesktop.dockerReal").toString())
+    }
+    // GabaritoIgualAoDoAgenteTest compara o esqueleto do projeto novo com o do agente do lab (que o app não empacota): aponte o painel.js dele com
+    // `./gradlew test -Plabdesktop.painelDoLab=/caminho/do/painel.js --tests '*GabaritoIgualAoDoAgente*'`. Sem isso o teste pula.
+    if (project.hasProperty("labdesktop.painelDoLab")) {
+        systemProperty("labdesktop.painelDoLab", project.property("labdesktop.painelDoLab").toString())
     }
     // `./gradlew test -Plabdesktop.laf=generico` roda a suíte inteira com o LaF do Windows e do Linux (FlatLightLaf/FlatDarkLaf) num Mac (ou `mac`, o contrário): os PNGs saem em build/telas-generico/.
     if (project.hasProperty("labdesktop.laf")) {
@@ -189,15 +227,15 @@ val sistemaNoNome = if (ehMac) "mac" else if (ehWindows) "windows" else "linux"
 val arquiteturaNoNome = System.getProperty("os.arch").lowercase().let { if (it == "aarch64" || it == "arm64") "arm64" else "x64" }
 val nomeDoApp = "Lab Desktop"
 val versaoDoApp = project.version.toString()
-// O macOS não aceita um pacote cuja primeira parte da versão é 0 (o jpackage recusa: "The first number in an app-version cannot be zero"). No Mac a versão do BUNDLE é a do app com o
-// primeiro número SOMADO DE 1, SEMPRE (0.1.0 -> 1.1.0; a futura 1.0.0 -> 2.0.0): assim a versão do bundle nunca recua (se só o 0.x fosse mapeado, a 1.0.0 de verdade ficaria MENOR que a
-// 1.1.0 do bundle de 0.1.0 e o macOS trataria a atualização como retrocesso). No Windows (.msi) a versão do app vale como está. O nome dos arquivos e `--versao` do app dizem a versão de verdade.
-fun versaoDoBundleDoMac(versao: String): String {
-    val partes = versao.split(".")
-    val primeiro = partes.first().toIntOrNull() ?: throw GradleException("A versão do app precisa começar com um número: $versao")
-    return (listOf((primeiro + 1).toString()) + partes.drop(1)).joinToString(".")
+// O --app-version do jpackage tem regra própria em cada sistema (macOS: três números e o primeiro maior que zero, por isso o primeiro número é SOMADO DE 1, sempre: 0.1.320 -> 1.1.320, e a futura
+// 1.0.0 -> 2.0.0, para a versão do bundle nunca recuar; Windows .msi: maior e menor até 255 e compilação até 65535; Linux: números como estão). A regra está em VersaoDoPacote (buildSrc, testada).
+// O nome dos arquivos, o --versao e a tela Sobre dizem a versão de verdade do app. No Mac o CFBundleVersion é o número de commits (ajustado no plist depois do jpackage).
+val sistemaDoPacote = if (ehMac) VersaoDoPacote.Sistema.MAC else if (ehWindows) VersaoDoPacote.Sistema.WINDOWS else VersaoDoPacote.Sistema.LINUX
+val versaoDoPacote: String = try {
+    VersaoDoPacote.appVersion(sistemaDoPacote, compilacao)
+} catch (e: IllegalArgumentException) {
+    throw GradleException(e.message ?: "versão inválida para o instalador", e)
 }
-val versaoDoPacote: String = if (ehMac) versaoDoBundleDoMac(versaoDoApp) else versaoDoApp
 
 // Os módulos do runtime. Os de `jdeps` mais o que o `jdeps` não vê (carregado por nome ou serviço): java.logging (JUL das bibliotecas), java.management e jdk.management (memória total em "Este
 // computador"), jdk.crypto.ec (ECDH/ECDSA do SSH, por ServiceLoader), jdk.unsupported (sun.misc.Unsafe de bibliotecas), jdk.localedata (pt-BR) e jdk.accessibility (leitor de tela).
@@ -271,6 +309,7 @@ val jpackageImagem = tasks.register<Exec>("jpackageImagem") {
     inputs.dir(lib)
     inputs.dir(pastaDeEmpacotamento.map { it.dir("runtime") })
     inputs.property("versaoDoPacote", versaoDoPacote)
+    inputs.property("numeroDaCompilacao", compilacao.numero())
     inputs.property("opcoesDaJvm", opcoesDaJvm().joinToString(" "))
     outputs.dir(destino)
     doFirst {
@@ -311,6 +350,8 @@ val jpackageImagem = tasks.register<Exec>("jpackageImagem") {
             // o app não usa o microfone: o texto de permissão que o jpackage deixa no plist faria o macOS poder perguntar por ele; o Java 21 pede o macOS 11 ou mais novo
             ProcessBuilder("plutil", "-remove", "NSMicrophoneUsageDescription", plist).redirectErrorStream(true).start().also { it.inputStream.readBytes(); it.waitFor() } // sem a chave: sem problema
             plutil("-replace", "LSMinimumSystemVersion", "-string", "11.0", plist)
+            // CFBundleShortVersionString fica com a versão do pacote (1.1.320); CFBundleVersion é o número de commits (320), o que cresce a cada compilação
+            plutil("-replace", "CFBundleVersion", "-string", VersaoDoPacote.cfBundleVersion(compilacao), plist)
             // assinatura ad-hoc depois de mexer no Info.plist (sem Developer ID; o Gatekeeper avisa na primeira abertura: docs/INSTALAR.md)
             val app = destino.get().asFile.resolve("$nomeDoApp.app").absolutePath
             val p = ProcessBuilder("codesign", "--force", "--deep", "--sign", "-", app).redirectErrorStream(true).start()
@@ -418,21 +459,34 @@ tasks.register<Exec>("conferirImagem") {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Pacote do agente do perfil monitor (o que o instalador envia ao servidor). Montagem MANUAL, só quando se muda o commit fixado:
-//   ./gradlew empacotarAgente -PpainelDir=<pasta do repositório do agente> -PagenteCommit=<hash de 40 dígitos>
-//   (usa agenteVersaoBase de gradle.properties). O repositório do agente é opcional e fica fora deste repositório: sem ele o app compila e roda sem o pacote.
-// Lê cada arquivo com `git show <commit>:<arquivo>` (nunca a pasta de trabalho), grava src/main/resources/agente/ e o build normal só
-// CONFERE o que está lá (PacoteDoAgenteTest). É Java, não bash: a CI do Windows monta igual. Veja ARQUITETURA, "Instalador do agente".
+// Pacote do agente (o que o instalador envia ao servidor). Montagem MANUAL, só quando se muda o commit fixado:
+//   ./gradlew empacotarAgente -PagenteCommit=<40 dígitos do commit do agente>      (usa ../lab-desktop-agente)
+//   ./gradlew empacotarAgente -PpainelDir=/caminho/do/lab-desktop-agente -PagenteCommit=<40 dígitos>
+//   ./gradlew empacotarAgente            (usa o agenteCommit que já está em gradle.properties)
+// Lê o package.json do commit (campo "files") e cada arquivo dele com `git show <commit>:<arquivo>` (nunca a pasta de trabalho), grava
+// src/main/resources/agente/ e, se o commit veio pela linha de comando, REPINA agenteCommit em gradle.properties. O build normal só CONFERE o que
+// está lá (PacoteDoAgenteTest). É Java, não bash: a CI do Windows monta igual. Veja ARQUITETURA, "Instalador do agente".
 // ---------------------------------------------------------------------------------------------
 tasks.register<JavaExec>("empacotarAgente") {
     group = "empacotamento"
-    description = "Monta src/main/resources/agente/agente-<versao>.tar.gz a partir do repositório do agente no commit indicado em -PagenteCommit."
+    description = "Monta src/main/resources/agente/agente-<versao>.tar.gz a partir do repositório do agente no commit fixado (agenteCommit) e repina gradle.properties."
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass = "br.com.labdesktop.instalador.MontadorDoPacote"
+    val propriedades = layout.projectDirectory.file("gradle.properties").asFile
     doFirst {
-        val painel = providers.gradleProperty("painelDir").orNull ?: throw GradleException("Falta a pasta do repositório do agente: passe -PpainelDir=<pasta>")
-        val commit = providers.gradleProperty("agenteCommit").orNull ?: throw GradleException("Falta o commit do agente: passe -PagenteCommit=<hash de 40 dígitos do repositório do agente>")
+        val painel = providers.gradleProperty("painelDir").orElse(layout.projectDirectory.dir("../lab-desktop-agente").asFile.absolutePath).get()
+        val commit = providers.gradleProperty("agenteCommit").orNull ?: throw GradleException("Falta agenteCommit em gradle.properties")
         val base = providers.gradleProperty("agenteVersaoBase").orNull ?: throw GradleException("Falta agenteVersaoBase em gradle.properties")
         args(painel, commit, base, layout.projectDirectory.dir("src/main/resources/agente").asFile.absolutePath)
+    }
+    doLast {
+        // repina: o commit que acabou de entrar no pacote passa a ser o de gradle.properties (o montador já recusou o que não tem 40 dígitos)
+        val commit = providers.gradleProperty("agenteCommit").orNull ?: return@doLast
+        val texto = propriedades.readText()
+        val novo = texto.replace(Regex("(?m)^agenteCommit=.*$"), "agenteCommit=$commit")
+        if (novo != texto) {
+            propriedades.writeText(novo)
+            println("gradle.properties: agenteCommit=$commit")
+        }
     }
 }

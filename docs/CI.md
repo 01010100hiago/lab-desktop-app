@@ -39,9 +39,9 @@ Três jobs: `build (ubuntu-latest)`, `build (windows-latest)` e `build (macos-la
 | `jdeps` acha um módulo que o runtime não leva (`verificarModulos` falha) | uma biblioteca nova pediu um módulo do Java | acrescentar o módulo em `modulosDoRuntime` no `build.gradle.kts` |
 | `conferirImagem` falha com `FALHA ...` | o runtime enxuto não tem algo (módulo ou nativo) | a linha `FALHA nome: motivo` diz qual verificação; módulo faltando = acima; PTY (aviso) = nativo do pty4j |
 | Mac: `codesign` ou `hdiutil` falha | runner sem sessão gráfica para o estilo do `.dmg` | repetir o run; se persistir, o `jpackage` pode ser chamado com `--type pkg`, ou o app-image zipado com `ditto -c -k --keepParent` |
-| a execução da tag `v*` não aparece | o workflow só dispara em tag que começa com `v` | `git tag v0.1.0 && git push origin v0.1.0` |
+| a execução da tag `v*` não aparece | o workflow só dispara em tag que começa com `v` | `git tag v0.1.0 && git push origin v0.1.0` (a tag é só um nome; a versão do app vem da contagem de commits) |
 
-Versão do app: a de `build.gradle.kts` (`version = "0.1.0"`). O `.msi` exige três números (`x.y.z`). O **UUID de atualização** do Windows é fixo (`--win-upgrade-uuid` em `build.gradle.kts`): **nunca o troque**, ou a versão nova não substitui a antiga.
+Versão do app: `<base>.<n>` (a base `labdesktop.versaoBase` em `gradle.properties`, `n` = número de commits do git; ARQUITETURA 11.5), por isso os workflows fazem o checkout COMPLETO (`fetch-depth: 0`): num clone raso a versão cai em `<base>.0`. O `.msi` exige três números (`x.y.z`, os dois primeiros até 255 e o terceiro até 65535). O **UUID de atualização** do Windows é fixo (`--win-upgrade-uuid` em `build.gradle.kts`): **nunca o troque**, ou a versão nova não substitui a antiga.
 
 ## Como gerar o instalador na sua máquina
 

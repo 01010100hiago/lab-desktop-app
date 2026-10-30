@@ -71,7 +71,7 @@ class DependenciasTest {
     void qrDeIdaEVoltaSemOsTransitivosExcluidos() throws Exception {
         // O mesmo caminho do "Configurar 2FA" (ARQUITETURA 10.1): QRCodeWriter com correção M e margem 4,
         // MatrixToImageWriter em grafite sobre branco, lido de volta com MultiFormatReader.
-        String uri = "otpauth://totp/Painel%20do%20Lab:lab?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=Painel%20do%20Lab";
+        String uri = "otpauth://totp/Lab%20Desktop:lab?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=Lab%20Desktop";
         BitMatrix matriz = new QRCodeWriter().encode(uri, BarcodeFormat.QR_CODE, 280, 280,
             Map.of(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M, EncodeHintType.MARGIN, 4));
         BufferedImage imagem = MatrixToImageWriter.toBufferedImage(matriz, new MatrixToImageConfig(0xFF1C1A16, 0xFFFFFFFF));
