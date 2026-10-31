@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import br.com.labdesktop.arquivos.Cancelamento;
@@ -11,6 +12,7 @@ import br.com.labdesktop.git.ConferenciaDoRepositorio.Situacao;
 import br.com.labdesktop.projetos.AmbienteDeProjetos;
 import br.com.labdesktop.projetos.ExecutorDeArgumentos;
 import br.com.labdesktop.ssh.ResultadoExec;
+import br.com.labdesktop.teste.SistemaDoTeste;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -67,6 +69,7 @@ class CriadorDeRepositorioCasosDificeisTest {
 
     @Test
     void arquivoChamadoAsteriscoENomeComDoisPontosEExclamacaoNaoViramPadraoNoGitAdd() throws Exception {
+        assumeFalse(SistemaDoTeste.windows(), "o NTFS não aceita nome com * nem com : (o equivalente do Windows é o teste dos colchetes, logo abaixo)");
         Path p = g.projeto("loja-web");
         g.escrever(p, "ok.txt", "ok");
         g.escrever(p, "*", "um arquivo chamado asterisco");
@@ -81,6 +84,25 @@ class CriadorDeRepositorioCasosDificeisTest {
         assertEquals(List.of("*", ".gitignore", ":!ok.txt", "b.txt", "ok.txt"), rastreados(p),
             "só o que foi conferido, e todos os quatro: um '*' pegaria o arquivo novo e um ':!ok.txt' tiraria o ok.txt");
         assertTrue(r.mensagem().contains("1 arquivo(s) apareceram depois da conferência e ficaram de fora"), r.mensagem());
+    }
+
+    /** O equivalente do teste do asterisco com nomes que o NTFS aceita (e roda em todo sistema): {@code [ok].txt} seria um padrão que casa {@code o.txt} e {@code k.txt}. */
+    @Test
+    void arquivoComColchetesEChavesNaoViraPadraoNoGitAdd() throws Exception {
+        Path p = g.projeto("loja-web");
+        g.escrever(p, "ok.txt", "ok");
+        g.escrever(p, "[ok].txt", "um nome que parece conjunto de letras");
+        g.escrever(p, "{a,b}.txt", "um nome que parece alternativa");
+        g.escrever(p, "!ok2.txt", "um nome que começa com exclamação");
+        CriadorDeRepositorio criador = criador(p);
+        ConferenciaDoRepositorio conf = criador.conferirCriacao();
+        assertEquals(Set.of("ok.txt", "[ok].txt", "{a,b}.txt", "!ok2.txt"), Set.copyOf(conf.arquivos()));
+        g.escrever(p, "o.txt", "chega depois: o padrão [ok].txt o pegaria");
+        g.escrever(p, "a.txt", "chega depois: o padrão {a,b}.txt o pegaria");
+        ResultadoDaCriacao r = criador.criarRepositorio(pedido(conf), OperacoesDeGit.Observador.NENHUM, new Cancelamento());
+        assertTrue(r.criou(), r.mensagem());
+        assertEquals(List.of("!ok2.txt", ".gitignore", "[ok].txt", "ok.txt", "{a,b}.txt"), rastreados(p), "só o que foi conferido: nenhum nome vira padrão");
+        assertTrue(r.mensagem().contains("2 arquivo(s) apareceram depois da conferência e ficaram de fora"), r.mensagem());
     }
 
     @Test
@@ -101,6 +123,9 @@ class CriadorDeRepositorioCasosDificeisTest {
         Path p = g.projeto("loja-web");
         for (String segredo : List.of(".git-credentials", "secrets.json", "ID_RSA", "Credentials.json", ".ENV.local", ".htpasswd", "terraform.tfstate", "terraform.tfstate.backup", "prod.TFSTATE", "banco.kdbx",
             "service-account-prod.json", "Service-Account.JSON", ".aws/credentials", "web/.aws/config", ".ssh/id_ed25519", ".ssh/known_hosts", "Secrets.YAML", ".env ", "CHAVE.PEM", "ssl/Servidor.KEY")) {
+            if (!SistemaDoTeste.nomeValidoNoDisco(segredo)) {
+                continue; // ".env " (espaço no fim): o NTFS não o cria; os outros 19 nomes continuam valendo no Windows
+            }
             g.escrever(p, segredo, "SEGREDO");
         }
         g.escrever(p, "README.md", "leia");
@@ -136,6 +161,7 @@ class CriadorDeRepositorioCasosDificeisTest {
 
     @Test
     void arquivoComEspacoNoFimDoNomeNaoEscapa() throws Exception {
+        assumeFalse(SistemaDoTeste.windows(), "o NTFS não aceita nome com espaço no fim (o Windows o apaga na criação); a regra em texto continua provada em PlanejadorDoGitignoreTest.nomeComEspacoNoFimTambemEReconhecidoPeloTesteEmJava");
         Path p = g.projeto("loja-web");
         g.escrever(p, ".env ", "SENHA=1\n");
         g.escrever(p, "src/app.js", "x");
@@ -271,12 +297,15 @@ class CriadorDeRepositorioCasosDificeisTest {
 
     @Test
     void aAreaTemporariaEPastaSoDoDonoNoLocalENoServidor() throws Exception {
-        for (boolean local : new boolean[] {true, false}) {
+        // o servidor de teste é um Unix de mentira (/tmp, mkdir -m, tee): no Windows só vale o lado do computador local, e a pasta tem ACL, não rwx------
+        for (boolean local : SistemaDoTeste.posix() ? new boolean[] {true, false} : new boolean[] {true}) {
             AmbienteDeProjetos amb = local ? g.ambiente() : comoServidor();
             try (AreaTemporaria area = AreaTemporaria.abrir(amb, ExecutorDeGit.paraConferir(amb.executor()))) {
                 Path pasta = Path.of(area.caminho());
                 assertTrue(Files.isDirectory(pasta));
-                assertEquals(PosixFilePermissions.fromString("rwx------"), Files.getPosixFilePermissions(pasta), (local ? "local" : "servidor") + ": só o dono lê o que o git põe ali");
+                if (SistemaDoTeste.posix()) {
+                    assertEquals(PosixFilePermissions.fromString("rwx------"), Files.getPosixFilePermissions(pasta), (local ? "local" : "servidor") + ": só o dono lê o que o git põe ali");
+                }
                 assertTrue(area.caminho().contains("lab-desktop-git-"));
             }
         }
@@ -284,6 +313,7 @@ class CriadorDeRepositorioCasosDificeisTest {
 
     @Test
     void fecharAAreaComAThreadInterrompidaApagaMesmoAssimEDevolveOAviso() throws Exception {
+        assumeTrue(SistemaDoTeste.posix(), "o servidor de teste é um Unix de mentira (/tmp, mkdir -m 700, tee, rm); no Windows o mkdir do shell não muda permissões no NTFS");
         AmbienteDeProjetos amb = comoServidor();
         AreaTemporaria area = AreaTemporaria.abrir(amb, ExecutorDeGit.paraConferir(amb.executor()));
         Path pasta = Path.of(area.caminho());
@@ -353,6 +383,7 @@ class CriadorDeRepositorioCasosDificeisTest {
 
     @Test
     void segredoComEspacoNoFimDoNomeQueOGitIgnoreNaoPegaBarraACriacaoEDizOArquivo() throws Exception {
+        assumeFalse(SistemaDoTeste.windows(), "o NTFS não aceita nome com espaço no fim (o Windows o apaga na criação)");
         Path p = g.projeto("loja-web");
         g.escrever(p, ".npmrc ", "//registry:_authToken=xxxx");
         g.escrever(p, "src/app.js", "x");

@@ -35,8 +35,10 @@ class TravaDeInstanciaTest {
     void criaOArquivoDeTravaPrivadoNaPastaPrivada(@TempDir Path tmp) throws Exception {
         CaminhosApp c = Fixtures.caminhos(tmp);
         try (TravaDeInstancia ignorada = TravaDeInstancia.adquirir(c)) {
-            assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(c.arquivoTrava())));
-            assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(c.pastaDados())));
+            assertTrue(Files.exists(c.arquivoTrava()));
+            // no Windows quem protege é a ACL (ProtecaoAcl): a conferência por sistema está em SistemaDoTeste.conferirPrivado
+            br.com.labdesktop.teste.SistemaDoTeste.conferirPrivado("rw-------", br.com.labdesktop.util.Permissoes.comoTexto(c.arquivoTrava()));
+            br.com.labdesktop.teste.SistemaDoTeste.conferirPrivado("rwx------", br.com.labdesktop.util.Permissoes.comoTexto(c.pastaDados()));
         }
     }
 

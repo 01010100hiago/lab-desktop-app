@@ -19,7 +19,8 @@ class ArquivoPrivadoTest {
         ArquivoPrivado.gravarAtomico(alvo, "um".getBytes());
         ArquivoPrivado.gravarAtomico(alvo, "dois".getBytes());
         assertArrayEquals("dois".getBytes(), Files.readAllBytes(alvo));
-        assertEquals("rw-------", Permissoes.comoTexto(alvo));
+        // no Windows quem protege é a ACL (ProtecaoAcl): a conferência por sistema está em SistemaDoTeste.conferirPrivado
+        br.com.labdesktop.teste.SistemaDoTeste.conferirPrivado("rw-------", Permissoes.comoTexto(alvo));
         assertFalse(Files.exists(tmp.resolve("estado.json.tmp")));
     }
 

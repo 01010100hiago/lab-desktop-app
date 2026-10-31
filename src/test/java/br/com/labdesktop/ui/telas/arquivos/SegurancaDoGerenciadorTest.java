@@ -4,12 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 import br.com.labdesktop.Espera;
 import br.com.labdesktop.arquivos.CenarioDeSftp;
 import br.com.labdesktop.arquivos.EntradaRemota;
 import br.com.labdesktop.ui.VerificaEdt;
 import br.com.labdesktop.ui.Visual;
+import br.com.labdesktop.teste.SistemaDoTeste;
 import br.com.labdesktop.ui.tema.Tokens;
 import br.com.labdesktop.util.Preferencias.Tema;
 import java.awt.Color;
@@ -38,6 +40,7 @@ class SegurancaDoGerenciadorTest {
 
     @Test
     void nomeComHtmlOuDirecaoDeTextoTrocadaViraTextoNaTabelaENaDica(@TempDir Path tmp) throws Exception {
+        assumeFalse(SistemaDoTeste.windows(), "o NTFS não aceita < nem > no nome (o servidor de teste grava num disco do Windows); o nome com HTML só existe num servidor Unix");
         try (CenaDeArquivos c = cena(tmp, s -> {
             s.escrever(O + "/<html><h1>GRANDE</h1>.txt", "x");
             s.escrever(O + "/relatorio‮txt.exe", "x"); // U+202E esconde a extensão de verdade
@@ -64,6 +67,7 @@ class SegurancaDoGerenciadorTest {
 
     @Test
     void nomeComQuebraDeLinhaApareceMasNaoSePodeAbrirRenomearNemApagar(@TempDir Path tmp) throws Exception {
+        assumeFalse(SistemaDoTeste.windows(), "o NTFS não aceita quebra de linha no nome (o servidor de teste grava num disco do Windows); o nome com quebra de linha só existe num servidor Unix");
         try (CenaDeArquivos c = cena(tmp, s -> s.escrever(O + "/a\nb.txt", "x"))) {
             assertTrue(c.nomes().stream().anyMatch(n -> n.contains("\n")), "aparece na lista (o usuário precisa saber que existe)");
             String exibido = Visual.naEdt(() -> c.g.tabela().textoDaCelula(c.g.tabela().itens().stream().filter(e -> e.nome().contains("\n")).findFirst().orElseThrow(), 0));
@@ -80,9 +84,11 @@ class SegurancaDoGerenciadorTest {
 
     @Test
     void oConteudoDoArquivoNuncaViraHtmlNemExecuta(@TempDir Path tmp) throws Exception {
-        try (CenaDeArquivos c = cena(tmp, s -> s.escrever(O + "/<b>perigo.html",
+        // o nome com "<b>" só existe num servidor Unix (o NTFS o recusa): no Windows o conteúdo é o mesmo, num arquivo de nome comum
+        String nome = SistemaDoTeste.nomeValidoNoDisco("<b>perigo.html") ? "<b>perigo.html" : "perigo.html";
+        try (CenaDeArquivos c = cena(tmp, s -> s.escrever(O + "/" + nome,
             "<html><body><script>alert(1)</script><img src=\"http://exemplo.invalid/x.png\"></body></html>\n"))) {
-            c.duploClique("<b>perigo.html");
+            c.duploClique(nome);
             c.esperarQue("aberto", () -> !c.g.editoresAbertos().isEmpty());
             EditorDeTexto e = Visual.naEdt(() -> c.g.editoresAbertos().values().iterator().next());
             assertTrue(Visual.naEdt(() -> e.area().getText()).startsWith("<html><body><script>"), "o conteúdo é texto cru");

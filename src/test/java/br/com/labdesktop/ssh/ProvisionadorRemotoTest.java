@@ -173,6 +173,7 @@ class ProvisionadorRemotoTest {
      * Roda o comando FIXO de verdade num shell, com a casa apontando para uma pasta temporária (nunca a do usuário): tira só a
      * linha da chave, preserva as outras e as permissões, é idempotente e recusa deixar o arquivo vazio.
      */
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "depende de permissões POSIX ou do shell do Unix; no Windows valem ProtecaoAcl e as provas do Windows")
     @Test
     void oComandoDeRemoverAChaveFuncionaDeVerdadeNumShellComUmaCasaTemporaria(@org.junit.jupiter.api.io.TempDir java.nio.file.Path casa)
         throws Exception {

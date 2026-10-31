@@ -398,9 +398,11 @@ class VerificacoesDoComputadorTest {
         assertTrue(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.WINDOWS, alias));
         assertFalse(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.WINDOWS, tmp), "uma pasta nunca é programa");
         assertFalse(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.WINDOWS, tmp.resolve("nao-existe.exe")));
-        assertFalse(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.MAC, alias), "no Mac e no Linux precisa ser executável");
-        assertTrue(alias.toFile().setExecutable(true));
-        assertTrue(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.MAC, alias));
+        if (br.com.labdesktop.teste.SistemaDoTeste.posix()) { // o bit de execução só existe em disco POSIX: no NTFS todo arquivo "é executável"
+            assertFalse(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.MAC, alias), "no Mac e no Linux precisa ser executável");
+            assertTrue(alias.toFile().setExecutable(true));
+            assertTrue(LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.MAC, alias));
+        }
         LocalizadorDeProgramas l = new LocalizadorDeProgramas(SistemaOperacional.WINDOWS, List.of(tmp.toString()), p -> LocalizadorDeProgramas.ehProgramaDeVerdade(SistemaOperacional.WINDOWS, p));
         assertEquals(alias, l.localizar("winget").orElseThrow());
     }

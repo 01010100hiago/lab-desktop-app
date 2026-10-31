@@ -63,8 +63,9 @@ class PreferenciasTest {
     void arquivoFicaComZeroSeisZeroZeroEPastaComZeroSeteZeroZeroESemTemporario(@TempDir Path tmp) throws Exception {
         CaminhosApp c = caminhos(tmp);
         Preferencias.padrao().salvar(c);
-        assertEquals("rw-------", Permissoes.comoTexto(c.arquivoPreferencias()));
-        assertEquals("rwx------", Permissoes.comoTexto(c.pastaDados()));
+        // no Windows quem protege é a ACL (ProtecaoAcl): a conferência por sistema está em SistemaDoTeste.conferirPrivado
+        br.com.labdesktop.teste.SistemaDoTeste.conferirPrivado("rw-------", Permissoes.comoTexto(c.arquivoPreferencias()));
+        br.com.labdesktop.teste.SistemaDoTeste.conferirPrivado("rwx------", Permissoes.comoTexto(c.pastaDados()));
         assertFalse(Files.exists(c.pastaDados().resolve("preferencias.json.tmp")));
     }
 

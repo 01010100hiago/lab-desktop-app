@@ -30,7 +30,9 @@ final class HomeFalso {
         try (OutputStream out = Files.newOutputStream(privada)) {
             OpenSSHKeyPairResourceWriter.INSTANCE.writePrivateKey(chaveDoDono, "usuario@mac", null, out);
         }
-        Files.setPosixFilePermissions(privada, PosixFilePermissions.fromString("rw-------"));
+        if (br.com.labdesktop.teste.SistemaDoTeste.posix()) { // no NTFS não há rw-------: o arquivo do HOME falso só precisa existir para o MINA o achar
+            Files.setPosixFilePermissions(privada, PosixFilePermissions.fromString("rw-------"));
+        }
         Files.writeString(ssh.resolve("config"), "Host *\n  IdentityFile ~/.ssh/id_ed25519\n");
         return casa;
     }
