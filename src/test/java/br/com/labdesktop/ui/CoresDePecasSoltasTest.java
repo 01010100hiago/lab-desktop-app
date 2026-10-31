@@ -2,6 +2,7 @@ package br.com.labdesktop.ui;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.labdesktop.teste.SistemaDoTeste;
 import br.com.labdesktop.ui.AuditoriaDeCores.Medida;
 import br.com.labdesktop.ui.componentes.Campos;
 import br.com.labdesktop.ui.componentes.ItemDeMenuPerigo;
@@ -81,7 +82,10 @@ class CoresDePecasSoltasTest {
                 medidas.addAll(Visual.naEdt(() -> AuditoriaDeCores.auditar(menu, 260, Visual.naEdt(() -> menu.getPreferredSize().height), true)));
                 medidas.addAll(Visual.naEdt(() -> AuditoriaDeCores.auditar(Visual.naEdt(() -> registro.menuDeContexto()), 320, 70, true)));
                 medidas.add(Visual.naEdt(() -> AuditoriaDeCores.medirPeca("dica de ferramenta", dica, dica.getPreferredSize().width + 4, dica.getPreferredSize().height + 4, AuditoriaDeCores.MINIMO_DE_TEXTO)));
-                medidas.addAll(Visual.naEdt(() -> AuditoriaDeCores.auditar(seletor, 720, 480, true)));
+                // No Windows o seletor de arquivos tem o painel de atalhos do FlatLaf (Documentos, Desktop...): o ícone de cada atalho é do shell do Windows (azulado, e o app não o desenha nem o recolore).
+                // Só o contraste DESSES ícones (no estado apertado) fica de fora; o resto do seletor (nomes, tabela, botões, campos) continua medido, e no Mac e no Linux o painel nem existe.
+                List<Medida> doSeletor = Visual.naEdt(() -> AuditoriaDeCores.auditar(seletor, 720, 480, true));
+                medidas.addAll(doSeletor.stream().filter(m -> !(SistemaDoTeste.windows() && m.quem().contains("@FlatShortcutsPanel") && m.quem().endsWith("(icone)"))).toList());
                 medidas.add(Visual.naEdt(() -> AuditoriaDeCores.medirPeca("campo vazio com dica (placeholder)", vazio, vazio.getPreferredSize().width, vazio.getPreferredSize().height, AuditoriaDeCores.MINIMO_DE_TEXTO)));
                 medidas.add(Visual.naEdt(() -> AuditoriaDeCores.medirPeca("campo de busca vazio com dica", busca, busca.getPreferredSize().width, busca.getPreferredSize().height, AuditoriaDeCores.MINIMO_DE_TEXTO)));
                 for (Medida m : medidas) {

@@ -35,8 +35,10 @@ class TravaDeInstanciaTest {
     void criaOArquivoDeTravaPrivadoNaPastaPrivada(@TempDir Path tmp) throws Exception {
         CaminhosApp c = Fixtures.caminhos(tmp);
         try (TravaDeInstancia ignorada = TravaDeInstancia.adquirir(c)) {
-            assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(c.arquivoTrava())));
-            assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(c.pastaDados())));
+            assertTrue(Files.exists(c.arquivoTrava()));
+            // no Windows quem protege é a ACL (ProtecaoAcl): a conferência por sistema está em SistemaDoTeste.conferirPrivado
+            br.com.labdesktop.teste.SistemaDoTeste.conferirPrivado("rw-------", br.com.labdesktop.util.Permissoes.comoTexto(c.arquivoTrava()));
+            br.com.labdesktop.teste.SistemaDoTeste.conferirPrivado("rwx------", br.com.labdesktop.util.Permissoes.comoTexto(c.pastaDados()));
         }
     }
 
@@ -95,9 +97,23 @@ class TravaDeInstanciaTest {
         assertEquals("TRAVADO", saida.readLine());
         filho.destroyForcibly(); // kill -9: sem finally, sem hook
         assertTrue(filho.waitFor(20, TimeUnit.SECONDS));
-        // Sem arquivo de PID para ficar velho: o lock morre com o processo.
-        try (TravaDeInstancia depois = TravaDeInstancia.adquirir(c)) {
-            assertNotNull(depois);
+        // Sem arquivo de PID para ficar velho: o lock morre com o processo. No Windows o sistema fecha os handles do processo morto um instante DEPOIS de o waitFor voltar (o CI viu a trava ainda
+        // presa uma vez em três rodadas): tenta de novo até soltar, em vez de contar uma vez só. A regra provada é a mesma (a trava solta sozinha); só não vale morrer de corrida do sistema.
+        long limite = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        TravaDeInstancia depois = null;
+        while (depois == null) {
+            try {
+                depois = TravaDeInstancia.adquirir(c);
+            } catch (CofreEmUsoException ainda) {
+                if (System.nanoTime() > limite) {
+                    throw ainda;
+                }
+                Thread.sleep(50);
+            }
+        }
+        TravaDeInstancia pegou = depois;
+        try (pegou) {
+            assertNotNull(pegou);
         }
     }
 

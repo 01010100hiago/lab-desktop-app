@@ -356,11 +356,19 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
     void arquivoComNomeEstranhoNaoQuebraAConferenciaEFicaDeFora() throws Exception {
         Path p = g.projeto("loja-web");
         g.escrever(p, "bom.txt", "a");
-        Files.writeString(p.resolve("duas\nlinhas.txt"), "x");
+        // duas quebras de linha e um controle do bloco C1 (U+0085): o NTFS recusa a quebra de linha, mas aceita o U+0085, então no Windows vale este caso
+        int criados = 0;
+        for (String estranho : List.of("duas\nlinhas.txt", "controle\u0085c1.txt")) {
+            if (SistemaDoTeste.nomeValidoNoDisco(estranho)) {
+                Files.writeString(p.resolve(estranho), "x");
+                criados++;
+            }
+        }
+        assertTrue(criados >= 1);
         ConferenciaDoRepositorio c = criador(p).conferirCriacao();
         assertEquals(Situacao.PODE_CRIAR, c.situacao());
         assertEquals(List.of("bom.txt"), c.arquivos());
-        assertEquals(1, c.ignoradosPorNome());
+        assertEquals(criados, c.ignoradosPorNome());
     }
 
     // ---------------------------------------------------------------------------------------------

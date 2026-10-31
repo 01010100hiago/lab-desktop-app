@@ -1179,6 +1179,14 @@ Três decisões que saíram das quebras de tempo que o CI mostrou no Linux e no 
 
 Regra dos testes que vieram junto: o que se espera é uma CONDIÇÃO observável (um arquivo-gatilho, um túnel novo lançado, a transferência parada no meio pelo servidor de teste), nunca um número de segundos; e o auxiliar `GitDeTeste` passa a mensagem do commit pela entrada padrão (`-F -`) e o autor pelo ambiente, porque o app recusa, certo, argumento com quebra de linha ou caractere de controle no Windows.
 
+### 11.9 O Windows no CI: escala, nomes e permissões (2026-10-31)
+
+O CI do Windows foi de 51 falhas para 0 a 2 por rodada (corridas de tempo de outros testes; 3986 testes, 245 pulados) sem afrouxar nenhuma regra de tela (`docs/CI.md`, "Windows: o que falta"). Decisões que ficam:
+
+1. **Os testes de tela são de 100 %.** No runner do Windows o FlatLaf recebe, sem janela, a escala de 125 % da tela; todo controle sai 25 % maior e o contorno de 1 px vira duas linhas de meia cobertura. Por isso `tasks.test` passa `-Dflatlaf.uiScale=1 -Dsun.java2d.uiScale=1` SÓ no Windows. Para ver o que o runner viu num Mac: `./gradlew test -Plabdesktop.laf=generico` com `JAVA_TOOL_OPTIONS=-Dflatlaf.uiScale=1.25` reproduz as mesmas falhas. As fontes continuam as embutidas (Inter e JetBrains Mono) no texto; os títulos (`h1`/`h2`/`h3`, `semibold.font`) vêm do sistema (Segoe UI Semibold no Windows, Helvetica Neue no Mac, Lato/Ubuntu no Linux se existirem): não mudou, só ficou documentado.
+2. **Teste que cria arquivo usa nome que o disco aceita.** `SistemaDoTeste.nomeValidoNoDisco` diz se o NTFS cria o nome (sem espaço ou ponto no fim, sem `< > : " | ? *`, sem controle, sem `CON`/`NUL`...); o caso com nome impossível pula só no Windows e tem um equivalente que o NTFS aceita. `SistemaDoTeste.posix()` e `conferirPrivado` fazem o mesmo para permissões (no NTFS a proteção é a ACL, que o app descreve como "só o ...").
+3. **A frase de uma falha de conexão leva a FASE** (`FrasesDoCaminho.traduzir(rota, destino, causa, aoConectar)`): é o que separa "recusou a conexão" de "não consegui obter a chave" quando o sistema só entrega um `IOException` comum (Windows). O passo da senha (`SessaoComSenha`) agora diz a fase, como `ConexaoSsh` e `SondagemDeHost` já diziam.
+
 ## 12. Testes
 
 JUnit 5.14.4. Sem Mockito e sem AssertJ: o `SshServer` embutido do `sshd-core` e o `com.sun.net.httpserver.HttpServer` do JDK bastam, e os fakes são escritos à mão (como o `guarda.test.js`).

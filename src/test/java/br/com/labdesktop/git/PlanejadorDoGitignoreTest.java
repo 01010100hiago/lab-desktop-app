@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import br.com.labdesktop.teste.SistemaDoTeste;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -103,9 +104,13 @@ class PlanejadorDoGitignoreTest {
         assumeTrue(GitDeTeste.temGit());
         GitDeTeste g = new GitDeTeste(tmp);
         Path repo = g.repositorio("loja-web");
+        // "a*b.bin" e "p?.log" o NTFS não cria: no Windows ficam de fora (o "dados[1].sql" e o "#frio.txt" já provam o mesmo, e o "a*b" segue provado no Mac e no Linux)
         List<String> nomes = new ArrayList<>(List.of("dados.sql", "dados[1].sql", "dados1.sql", "a*b.bin", "aXb.bin", "#frio.txt", "!quente.txt", "com espaço.dat", "ação.bin", "pasta/sub/x.bin", "p?.log", "pa.log"));
+        nomes.removeIf(n -> !SistemaDoTeste.nomeValidoNoDisco(n));
+        List<String> ignorados = new ArrayList<>(List.of("dados[1].sql", "a*b.bin", "#frio.txt", "!quente.txt", "com espaço.dat", "ação.bin", "pasta/sub/x.bin", "p?.log"));
+        ignorados.removeIf(n -> !SistemaDoTeste.nomeValidoNoDisco(n));
         StringBuilder gi = new StringBuilder();
-        for (String n : List.of("dados[1].sql", "a*b.bin", "#frio.txt", "!quente.txt", "com espaço.dat", "ação.bin", "pasta/sub/x.bin", "p?.log")) {
+        for (String n : ignorados) {
             gi.append(PlanejadorDoGitignore.linhaParaCaminho(n, false)).append('\n');
             g.escrever(repo, n, "x");
         }
@@ -116,7 +121,7 @@ class PlanejadorDoGitignoreTest {
         String listados = g.git(repo, "-c", "core.quotepath=off", "ls-files", "-o", "--exclude-standard", "-z").replace("\0", "\n");
         List<String> entram = List.of(listados.split("\n"));
         assertTrue(entram.containsAll(List.of("dados.sql", "dados1.sql", "aXb.bin", "pa.log", ".gitignore")), entram.toString());
-        for (String fora : List.of("dados[1].sql", "a*b.bin", "#frio.txt", "!quente.txt", "com espaço.dat", "ação.bin", "pasta/sub/x.bin", "p?.log")) {
+        for (String fora : ignorados) {
             assertFalse(entram.contains(fora), "ficou de fora: " + fora + " em " + entram);
         }
         assertNotEquals(nomes.size(), entram.size());

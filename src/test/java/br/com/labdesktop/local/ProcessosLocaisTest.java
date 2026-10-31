@@ -54,7 +54,7 @@ class ProcessosLocaisTest {
         String estranho = WINDOWS ? "a b c $HOME ; rm -rf / `x` *" : "a b \"c\" $HOME ; rm -rf / `x` *";
         ResultadoExec x = processos.executar(List.of(JAVA, f.toString(), estranho, "dois"), Duration.ofSeconds(60));
         assertEquals(0, x.status(), x.stderr());
-        assertEquals("[" + estranho + "]\n[dois]\n", x.stdout());
+        assertEquals("[" + estranho + "]\n[dois]\n", x.stdout().replace("\r\n", "\n")); // o println do Windows termina a linha com CRLF
     }
 
     @Test
@@ -63,7 +63,7 @@ class ProcessosLocaisTest {
         ResultadoExec x = processos.executar(List.of(JAVA, f.toString()), Map.of("GIT_TERMINAL_PROMPT", "0", "GIT_ALLOW_PROTOCOL", "https:ssh"), new byte[0],
             Duration.ofSeconds(60));
         assertEquals(0, x.status(), x.stderr());
-        assertEquals("0|https:ssh\n", x.stdout());
+        assertEquals("0|https:ssh\n", x.stdout().replace("\r\n", "\n")); // o println do Windows termina a linha com CRLF
         for (String ruim : List.of("minuscula", "COM ESPACO", "A=B", "")) {
             assertThrows(IllegalArgumentException.class, () -> processos.executar(List.of(JAVA, "-version"), Map.of(ruim, "x"), new byte[0], Duration.ofSeconds(30)), ruim);
         }

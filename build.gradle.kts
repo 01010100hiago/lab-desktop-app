@@ -179,6 +179,14 @@ tasks.test {
     if (project.hasProperty("labdesktop.laf")) {
         systemProperty("labdesktop.laf", project.property("labdesktop.laf").toString())
     }
+    // Os testes de tela pintam componentes soltos numa imagem, sem janela. No runner do Windows do CI o FlatLaf recebe, sem janela de verdade, a escala de 125 % da tela dele: todo
+    // controle (contorno, margem, ícone, arco) sai 25 % maior e o contorno de 1 px vira duas linhas de meia cobertura (contraste 1,7, mínimo 3,0), e 25 telas passam de 672 px ou
+    // transbordam (reproduzido num Mac com -Dflatlaf.uiScale=1.25). Os limites das telas (nada abaixo de 12 px, sem rolagem em 1100x700) são DE 100 %, como no Mac e no Linux:
+    // no Windows os testes pintam a 100 % também. Só neste sistema; o Mac e o Linux ficam como estão.
+    if (System.getProperty("os.name").lowercase().contains("windows")) {
+        systemProperty("flatlaf.uiScale", "1")
+        systemProperty("sun.java2d.uiScale", "1")
+    }
     // Os testes de tela pintam componentes soltos numa imagem: sem janela, sem ícone saltando no Dock do Mac.
     systemProperty("java.awt.headless", "true")
     doFirst { tmpDosTestes.mkdirs() }

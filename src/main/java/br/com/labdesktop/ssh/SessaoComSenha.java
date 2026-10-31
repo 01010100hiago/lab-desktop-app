@@ -109,7 +109,7 @@ public final class SessaoComSenha implements AutoCloseable {
             if (verificador == null) {
                 throw new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, "Não consegui preparar a conexão com o servidor.", e);
             }
-            throw traduzir(e, verificador, relato, rota, destino);
+            throw traduzir(e, verificador, relato, rota, destino, s == null); // s só existe depois de a conexão abrir
         } finally {
             if (!entregue) {
                 destino.close();
@@ -145,7 +145,7 @@ public final class SessaoComSenha implements AutoCloseable {
 
     /** Do que o MINA lançou e do que o relato da tentativa sabe para a frase que o usuário lê. Nada daqui carrega a senha. */
     private static FalhaDeEntradaPorSenha traduzir(Throwable causa, VerificadorDeChaveDoServidor verificador, EntradaPorSenha.Relato relato,
-                                                   RotaDoSsh rota, DestinoSsh destino) {
+                                                   RotaDoSsh rota, DestinoSsh destino, boolean aoConectar) {
         LOG.info("Entrada com senha em {} não deu certo (senha enviada={}, recusada={}): {}", rota.descricao(), relato.senhaEnviada.get(),
             relato.recusada.get(), Redator.redigir(causa));
         VerificadorDeChaveDoServidor.Resultado conferencia = verificador.ultimo();
@@ -173,7 +173,7 @@ public final class SessaoComSenha implements AutoCloseable {
                 "Este servidor não aceita entrar com senha (só com chave). Instale a chave pública nele pelas opções avançadas: o app "
                     + "mostra a chave e o comando.");
         }
-        return new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, FrasesDoCaminho.traduzir(rota, destino, causa), causa);
+        return new FalhaDeEntradaPorSenha(FalhaDeEntradaPorSenha.Motivo.SEM_CONEXAO, FrasesDoCaminho.traduzir(rota, destino, causa, aoConectar), causa);
     }
 
     private static boolean semMetodoDeAutenticacao(Throwable causa) {

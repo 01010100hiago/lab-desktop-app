@@ -419,6 +419,8 @@ class NavegacaoDoProjetoTest {
     void sessaoQueFechaNoServidorDeixaDeConsultarATela() {
         cenario.agente.telas.put("orbita", FixturesDeApi.lerRecursoDoProjeto("tela-executando.json"));
         TelaProjeto t = abrirPeloLab("orbita");
+        // a aba escolhe o modo (Claude ou shell) pelo que o servidor diz NA HORA de aparecer pela primeira vez: sem esperar o detalhe, num runner lento ela abria no shell e a tela nunca era assinada
+        esperarDetalhe(t);
         Visual.naEdt(() -> t.abas().botao("terminal").doClick());
         Visual.naEdt(() -> t.terminal().assinar());
         telaEmTexto(t);

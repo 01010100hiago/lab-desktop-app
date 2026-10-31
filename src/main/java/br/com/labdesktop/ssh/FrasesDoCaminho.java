@@ -22,8 +22,13 @@ public final class FrasesDoCaminho {
             + (transporte.tipo() == Transporte.Tipo.SSM ? " e se a porta SSH da instância está certa" : "") + ".";
     }
 
-    /** A frase de uma falha qualquer pela rota: direta (endereço e porta) ou por túnel. */
+    /** A frase de uma falha qualquer pela rota: direta (endereço e porta) ou por túnel. Sem saber a fase, a regra da {@code IOException} comum do Windows não vale ({@link CausaDeRede}). */
     public static String traduzir(RotaDoSsh rota, DestinoSsh destino, Throwable causa) {
-        return rota.ehTunel() ? semSshPeloTunel(rota.transporte(), destino) : SondagemDeHost.traduzirFalha(rota.host(), rota.porta(), causa);
+        return traduzir(rota, destino, causa, false);
+    }
+
+    /** Como {@link #traduzir(RotaDoSsh, DestinoSsh, Throwable)}, dizendo se a falha veio de ABRIR a conexão (ainda sem sessão): só então uma {@code IOException} comum (a recusa do Windows) vale "recusou". */
+    public static String traduzir(RotaDoSsh rota, DestinoSsh destino, Throwable causa, boolean aoConectar) {
+        return rota.ehTunel() ? semSshPeloTunel(rota.transporte(), destino) : SondagemDeHost.traduzirFalha(rota.host(), rota.porta(), causa, aoConectar);
     }
 }

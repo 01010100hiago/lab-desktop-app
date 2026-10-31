@@ -268,7 +268,8 @@ class LeitorDeGitComGitDeVerdadeTest {
         ResumoDoRepositorio r = leitor(p).resumo().valorOuNulo();
         assertEquals(ResumoDoRepositorio.Estado.PROPRIEDADE_DUVIDOSA, r.estado());
         assertEquals(FalhaDoGit.Tipo.PROPRIEDADE_DUVIDOSA, r.falha().tipo());
-        assertEquals("git config --global --add safe.directory " + p, r.falha().comandoParaCopiar());
+        // o git do Windows quer a pasta com barras (D:/a/x): é o texto que o app dá para copiar, e o que o git aceita no safe.directory
+        assertEquals("git config --global --add safe.directory " + p.toString().replace('\\', '/'), r.falha().comandoParaCopiar());
         assertTrue(r.falha().frase().contains("outro usuário"));
         assertTrue(g.comandos.stream().noneMatch(c -> c.contains("--global")), "o app nunca roda o safe.directory: " + g.comandos);
         assertTrue(g.comandos.stream().noneMatch(c -> c.contains("safe.directory")));

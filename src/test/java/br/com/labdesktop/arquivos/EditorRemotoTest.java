@@ -45,7 +45,7 @@ class EditorRemotoTest {
             assertEquals("README.md", a.nome());
             assertEquals(O + "/README.md", a.caminhoReal());
             assertEquals(Files.size(c.orbita().resolve("README.md")), a.tamanho());
-            assertEquals(0644, a.permissoes());
+            assertEquals(br.com.labdesktop.teste.SistemaDoTeste.posix() ? 0644 : 0666, a.permissoes(), "no NTFS o servidor SFTP local não tem bits de permissão: devolve 0666");
             assertEquals("\n", a.quebraDeLinha());
         }
     }

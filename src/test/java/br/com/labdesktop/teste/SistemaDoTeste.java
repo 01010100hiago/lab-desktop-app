@@ -25,6 +25,49 @@ public final class SistemaDoTeste {
         return SistemaOperacional.detectar() == SistemaOperacional.WINDOWS;
     }
 
+    /** O disco onde o teste grava tem permissões POSIX ({@code rwx------})? Mac e Linux sim; o NTFS não (lá valem as ACLs, de {@code ProtecaoAcl} e das provas do Windows). */
+    public static boolean posix() {
+        return java.nio.file.FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
+    }
+
+    /**
+     * Confere a permissão de um arquivo ou pasta que o app protege: num disco POSIX é o texto exato ({@code rw-------}, {@code rwx------}); no NTFS quem protege é a ACL
+     * ({@code ProtecaoAcl}), que o app descreve como "só o ..." (a entrada do proprietário e mais ninguém), nunca como "... e mais N".
+     */
+    public static void conferirPrivado(String esperadoNoPosix, String descritoPeloApp) {
+        if (posix()) {
+            org.junit.jupiter.api.Assertions.assertEquals(esperadoNoPosix, descritoPeloApp);
+        } else {
+            org.junit.jupiter.api.Assertions.assertTrue(descritoPeloApp.startsWith("só o "), "a ACL deixa só o proprietário: " + descritoPeloApp);
+        }
+    }
+
+    private static final java.util.regex.Pattern NOME_RESERVADO_DO_WINDOWS =
+        java.util.regex.Pattern.compile("(?i)(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\\..*)?");
+
+    /**
+     * Este caminho relativo ({@code a/b/c.txt}) pode ser criado no disco onde o teste roda? No Mac e no Linux tudo pode (só a barra e o byte nulo não, e nem o teste os usa). No NTFS
+     * não: um segmento com {@code < > : " | ? *} ou caractere de controle (quebra de linha), com espaço ou ponto no fim, ou nome reservado ({@code CON}, {@code NUL}, {@code COM1}...) é
+     * recusado pelo Java ({@code InvalidPathException}) ou pelo próprio Windows. O teste que cria esse nome de propósito o pula SÓ no Windows, e a regra do app que ele prova continua
+     * provada no Mac e no Linux (e em texto, sem tocar no disco, pelos testes de unidade).
+     */
+    public static boolean nomeValidoNoDisco(String relativo) {
+        if (!windows()) {
+            return true;
+        }
+        for (String segmento : relativo.split("/")) {
+            if (segmento.isEmpty() || segmento.endsWith(" ") || segmento.endsWith(".") || NOME_RESERVADO_DO_WINDOWS.matcher(segmento).matches()) {
+                return false;
+            }
+            for (char c : segmento.toCharArray()) {
+                if (c < 32 || "<>:\"|?*\\".indexOf(c) >= 0) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     /** O sistema que o teste de "Este computador" simula: o Windows no Windows (a pasta de teste é do Windows) e o Mac nos outros (a escolha de sempre dos testes). */
     public static SistemaOperacional sistema() {
         return windows() ? SistemaOperacional.WINDOWS : SistemaOperacional.MAC;
