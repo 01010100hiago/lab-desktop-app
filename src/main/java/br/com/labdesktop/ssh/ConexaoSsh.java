@@ -17,9 +17,7 @@ import br.com.labdesktop.util.Agendador.Cancelavel;
 import br.com.labdesktop.util.Fundo;
 import java.io.IOException;
 import java.net.ConnectException;
-import java.net.NoRouteToHostException;
 import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.security.KeyPair;
 import java.time.Duration;
 import java.time.Instant;
@@ -127,11 +125,11 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         static final Autopsia VAZIA = new Autopsia(null, false, null, false, false, null);
 
         /** Lê os atributos; {@code s} é {@code null} quando nem a sessão chegou a existir (TCP não conectou). */
-        static Autopsia de(ClientSession s) {
+        static Autopsia de(ClientSession s, VerificadorDeChaveDoServidor verificador) {
             if (s == null) {
                 return VAZIA;
             }
-            return new Autopsia(s.getAttribute(VerificadorDeChaveDoServidor.VEREDITO_DA_SESSAO),
+            return new Autopsia(verificador.vereditoDa(s),
                 Boolean.TRUE.equals(s.getAttribute(CHAVE_RECUSADA)), s.getAttribute(ERRO_DA_SESSAO), Boolean.TRUE.equals(s.getAttribute(SERVIDOR_RECUSOU)),
                 Boolean.TRUE.equals(s.getAttribute(CHAVE_OFERECIDA)), s.getAttribute(IMPRESSAO_DA_CHAVE));
         }
@@ -661,10 +659,17 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            Autopsia autopsia = Autopsia.de(s); // antes de fechar: o que esta sessão aprendeu
+            Autopsia autopsia = Autopsia.de(s, verificador); // antes de fechar: o que esta sessão aprendeu
             // a causa do túnel (o programa saiu: login da AWS expirado, instância sem SSM...) vale mais que o erro de rede que veio dela
-            FalhaDoTunel doTunel = e instanceof FalhaDoTunelException x ? x.falha()
+            FalhaDoTunel causaJaConhecida = e instanceof FalhaDoTunelException x ? x.falha()
                 : destino == null ? null : destino.falhaDoTunel().or(destino::causaPelaSaida).orElse(null); // túnel de pé e SSH falhando: a saída pode trazer o login que falta
+            if (causaJaConhecida == null && destino != null && e instanceof java.io.IOException && !autopsia.chaveRecusada() && !recusouOHost(autopsia.veredito())) {
+                // O socket do túnel que morre fecha um instante ANTES de o processo ser dado como morto e de a saída ser lida (a mesma corrida do aoSessaoFechada, só que ainda conectando):
+                // sem esta espera curta a causa ("seu login da AWS expirou") se perdia e a tela dizia só "conexão caiu". Roda na thread de fundo, nunca no ator; sem túnel externo
+                // devolve na hora. Falha de chave do host ou de autenticação não é queda de túnel e não espera.
+                causaJaConhecida = destino.falhaDoTunelAposPerderASessao().orElse(null);
+            }
+            FalhaDoTunel doTunel = causaJaConhecida;
             boolean tunelDeTransporte = servidor.transporte().ehTunel();
             fecharQuieto(s, t, destino);
             Fase onde = fase;
@@ -756,6 +761,10 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         }
     }
 
+    private static boolean recusouOHost(VerificadorDeChaveDoServidor.Veredito v) {
+        return v != null && v.resultado() != VerificadorDeChaveDoServidor.Resultado.OK;
+    }
+
     private void aoFalharConexao(long id, Fase fase, Throwable erro, Autopsia autopsia, FalhaDoTunel doTunel, boolean tunelDeTransporte) {
         if (id != idTentativa || encerrado || estado != EstadoConexao.CONECTANDO) {
             return;
@@ -810,8 +819,8 @@ public final class ConexaoSsh implements ConexaoDoServidor {
         }
         tentativa++;
         reconectarComBackoff(tunelDeTransporte
-            ? MensagensDeFalha.sshPeloTunel(erro, autopsia.erroDaSessao())
-            : MensagensDeFalha.rede(erro, autopsia.erroDaSessao()));
+            ? MensagensDeFalha.sshPeloTunel(erro, autopsia.erroDaSessao(), fase == Fase.CONECTANDO)
+            : MensagensDeFalha.rede(erro, autopsia.erroDaSessao(), fase == Fase.CONECTANDO));
     }
 
     /** O túnel externo terminou sozinho depois de pronto: derruba a sessão que andava por ele, com a causa na mensagem. */
@@ -1234,21 +1243,21 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             return new Falha(Falha.Tipo.AGENTE_FORA, "O agente do painel não responde (reiniciando?).");
         }
 
-        static Falha rede(Throwable erro, Throwable daSessao) {
-            return new Falha(Falha.Tipo.REDE, "Não consegui conectar: " + descrever(erro, daSessao) + ".");
+        static Falha rede(Throwable erro, Throwable daSessao, boolean aoConectar) {
+            return new Falha(Falha.Tipo.REDE, "Não consegui conectar: " + descrever(erro, daSessao, aoConectar) + ".");
         }
 
         /** O túnel externo abriu, mas o SSH não deu certo por ele (a causa de rede, em palavras simples, e para onde olhar). */
-        static Falha sshPeloTunel(Throwable erro, Throwable daSessao) {
-            return new Falha(Falha.Tipo.TRANSPORTE_OUTRO, "O túnel abriu, mas não consegui falar SSH por ele: " + descrever(erro, daSessao)
+        static Falha sshPeloTunel(Throwable erro, Throwable daSessao, boolean aoConectar) {
+            return new Falha(Falha.Tipo.TRANSPORTE_OUTRO, "O túnel abriu, mas não consegui falar SSH por ele: " + descrever(erro, daSessao, aoConectar)
                 + ". Confira se o SSH está ligado no servidor (e, no SSM, a porta SSH da instância).");
         }
 
         static Falha sessaoPerdida(Throwable motivo) {
-            return new Falha(Falha.Tipo.REDE, "A conexão SSH caiu" + (motivo == null ? "" : " (" + descrever(motivo, null) + ")") + ".");
+            return new Falha(Falha.Tipo.REDE, "A conexão SSH caiu" + (motivo == null ? "" : " (" + descrever(motivo, null, false) + ")") + ".");
         }
 
-        private static String descrever(Throwable erro, Throwable daSessao) {
+        private static String descrever(Throwable erro, Throwable daSessao, boolean aoConectar) {
             Throwable t = erro != null ? erro : daSessao;
             if (t == null) {
                 return "motivo desconhecido";
@@ -1257,21 +1266,25 @@ public final class ConexaoSsh implements ConexaoDoServidor {
             while (raiz.getCause() != null && raiz.getCause() != raiz) {
                 raiz = raiz.getCause();
             }
-            if (raiz instanceof ConnectException) {
-                return "conexão recusada";
-            }
-            if (raiz instanceof NoRouteToHostException) {
-                return "sem rota até o servidor";
-            }
-            if (raiz instanceof UnknownHostException) {
-                return "servidor desconhecido";
-            }
-            if (raiz instanceof SocketTimeoutException || raiz instanceof TimeoutException) {
-                return "tempo esgotado";
-            }
             String m = raiz.getMessage();
             if (m != null && m.contains("heartbeat requests without reply")) {
                 return "o servidor parou de responder";
+            }
+            // quem decide é o TIPO da exceção, nunca o texto: o texto é do sistema e do idioma (ver CausaDeRede)
+            switch (CausaDeRede.de(t, aoConectar)) {
+                case RECUSOU -> {
+                    return "conexão recusada";
+                }
+                case SEM_ROTA -> {
+                    return "sem rota até o servidor";
+                }
+                case NOME_NAO_ENCONTRADO -> {
+                    return "servidor desconhecido";
+                }
+                case TEMPO_ESGOTADO -> {
+                    return "tempo esgotado";
+                }
+                case OUTRA -> { }
             }
             return m == null || m.isBlank() ? raiz.getClass().getSimpleName() : Redator.redigir(m);
         }

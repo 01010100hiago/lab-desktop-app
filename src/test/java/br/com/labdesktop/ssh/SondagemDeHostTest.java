@@ -98,6 +98,17 @@ class SondagemDeHostTest {
     }
 
     @Test
+    void noWindowsARecusaChegaComoIoExceptionComumEAindaDizRecusouSoNaFaseDeConectar() {
+        var recusaDoWindows = new java.io.IOException("The remote computer refused the network connection.");
+        String aoConectar = SondagemDeHost.traduzirFalha("192.0.2.9", 22, recusaDoWindows, true);
+        assertTrue(aoConectar.startsWith("O servidor em 192.0.2.9:22 recusou a conexão."), aoConectar);
+        assertTrue(SondagemDeHost.traduzirFalha("192.0.2.9", 22, new java.io.IOException("O computador remoto recusou a conexão de rede."), true).contains("recusou a conexão"));
+        // depois de a conexão existir (ou sem saber a fase), a mesma exceção é só "não consegui obter a chave"
+        assertTrue(SondagemDeHost.traduzirFalha("192.0.2.9", 22, recusaDoWindows, false).startsWith("Não consegui obter a chave do servidor em 192.0.2.9:22."));
+        assertTrue(SondagemDeHost.traduzirFalha("192.0.2.9", 22, recusaDoWindows).startsWith("Não consegui obter a chave do servidor em 192.0.2.9:22."));
+    }
+
+    @Test
     void comandosDeConferenciaPorAlgoritmo() {
         assertEquals("ssh-keygen -lf /etc/ssh/ssh_host_rsa_key.pub", AlgoritmosDeHost.comandoDeConferencia("ssh-rsa"));
         assertEquals("ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub",

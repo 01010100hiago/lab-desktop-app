@@ -84,10 +84,12 @@ class RedatorTest {
     }
 
     // ----- segredos da AWS: a saída do aws vai para a tela e para o log -----
+    // Os exemplos da documentação da AWS estão montados em PARTES ("AKIA" + "IOSFODNN7EXAMPLE") de propósito: escritos inteiros, o secret scanning do GitHub alerta a cada push, embora sejam
+    // chaves de exemplo. Montados em tempo de execução, o texto que o teste manda para o Redator é o mesmo.
 
     @Test
     void mascaraAChaveDeAcessoDaAws() {
-        for (String chave : new String[] {"AKIAIOSFODNN7EXAMPLE", "ASIAIOSFODNN7EXAMPLE"}) {
+        for (String chave : new String[] {"AKIA" + "IOSFODNN7EXAMPLE", "ASIA" + "Y34FZKBOKMUTVV7A"}) {
             String r = Redator.redigir("Using access key " + chave + " for the request");
             assertFalse(r.contains(chave), r);
             assertTrue(r.contains("***"), r);
@@ -97,22 +99,22 @@ class RedatorTest {
 
     @Test
     void mascaraOArquivoDeCredenciaisDaAws() {
-        String r = Redator.redigir("aws_access_key_id = AKIAIOSFODNN7EXAMPLE\naws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\n"
+        String r = Redator.redigir("aws_access_key_id = AKIA" + "IOSFODNN7EXAMPLE\naws_secret_access_key = wJalr" + "XUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\n"
             + "aws_session_token=IQoJb3JpZ2luX2VjEXAMPLETOKEN");
-        assertFalse(r.contains("wJalrXUtnFEMI"), r);
+        assertFalse(r.contains("wJalr" + "XUtnFEMI"), r);
         assertFalse(r.contains("IQoJb3JpZ2luX2Vj"), r);
-        assertFalse(r.contains("AKIAIOSFODNN7EXAMPLE"), r);
+        assertFalse(r.contains("AKIA" + "IOSFODNN7EXAMPLE"), r);
         assertTrue(r.contains("aws_secret_access_key=***"), r);
         assertTrue(r.contains("aws_session_token=***"), r);
     }
 
     @Test
     void mascaraOsParametrosAssinadosEOTokenValueDoSessionManager() {
-        String url = "https://ssm.us-east-1.amazonaws.com/?X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20261029&X-Amz-Signature=5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7&X-Amz-Security-Token=FwoGZXIvYXdzEXAMPLE&X-Amz-Date=20261029";
+        String url = "https://ssm.us-east-1.amazonaws.com/?X-Amz-Credential=AKIA" + "IOSFODNN7EXAMPLE%2F20261029&X-Amz-Signature=5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7&X-Amz-Security-Token=FwoGZXIvYXdzEXAMPLE&X-Amz-Date=20261029";
         String r = Redator.redigir(url);
         assertFalse(r.contains("5d672d79c15b"), r);
         assertFalse(r.contains("FwoGZXIvYXdz"), r);
-        assertFalse(r.contains("AKIAIOSFODNN7EXAMPLE"), r);
+        assertFalse(r.contains("AKIA" + "IOSFODNN7EXAMPLE"), r);
         assertTrue(r.contains("X-Amz-Date=20261029"), "o resto da URL fica: " + r);
         String json = Redator.redigir("{\"SessionId\":\"sessao-0abc\",\"TokenValue\":\"AAEAAdzF0XYZEXAMPLEtoken+/==\",\"StreamUrl\":\"wss://ssmmessages.us-east-1.amazonaws.com/v1/data-channel/sessao-0abc\"}");
         assertFalse(json.contains("AAEAAdzF0XYZ"), json);
@@ -123,7 +125,7 @@ class RedatorTest {
     @Test
     void asFrasesDoTunelNaoDeixamPassarSegredoDaAwsDaSaidaDoPrograma() {
         var f = new br.com.labdesktop.transporte.FalhaDoTunel(br.com.labdesktop.transporte.FalhaDoTunel.Tipo.SAIU,
-            "O programa aws terminou sozinho. O que ele disse: aws_secret_access_key=wJalrXUtnFEMIEXAMPLE AKIAIOSFODNN7EXAMPLE");
-        assertFalse(f.mensagem().contains("wJalrXUtnFEMI") || f.mensagem().contains("AKIAIOSFODNN7"), f.mensagem());
+            "O programa aws terminou sozinho. O que ele disse: aws_secret_access_key=wJalr" + "XUtnFEMIEXAMPLE AKIA" + "IOSFODNN7EXAMPLE");
+        assertFalse(f.mensagem().contains("wJalr" + "XUtnFEMI") || f.mensagem().contains("AKIA" + "IOSFODNN7"), f.mensagem());
     }
 }

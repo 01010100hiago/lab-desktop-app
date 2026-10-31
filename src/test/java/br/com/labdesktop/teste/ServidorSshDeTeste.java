@@ -62,6 +62,7 @@ public final class ServidorSshDeTeste implements AutoCloseable {
 
     private volatile List<PublicKey> aceitas;
     private volatile Manipulador manipulador = (c, in, out) -> 0;
+    private org.apache.sshd.sftp.server.SftpSubsystemFactory sftp;
 
     private ServidorSshDeTeste(KeyPair chaveDoHost, List<PublicKey> aceitas) throws IOException {
         this.chaveDoHost = chaveDoHost;
@@ -178,9 +179,36 @@ public final class ServidorSshDeTeste implements AutoCloseable {
      * servidor não aceita SFTP, que é justamente o caso "este servidor não aceita transferência de arquivos".
      */
     public ServidorSshDeTeste comSftp(java.nio.file.Path raiz) {
-        sshd.setSubsystemFactories(List.of(new org.apache.sshd.sftp.server.SftpSubsystemFactory()));
+        sftp = new org.apache.sshd.sftp.server.SftpSubsystemFactory();
+        sshd.setSubsystemFactories(List.of(sftp));
         sshd.setFileSystemFactory(new org.apache.sshd.common.file.virtualfs.VirtualFileSystemFactory(raiz));
         return this;
+    }
+
+    /**
+     * Faz o servidor SFTP PARAR de responder às leituras que passam de {@code offset} bytes de um arquivo, até alguém chamar o que este método devolve (ou o teste acabar: a espera
+     * tem teto). É o que deixa um teste de "cancelar no meio de um download" determinístico: sem isso o arquivo local termina de baixar antes do clique, em máquina rápida.
+     * Precisa de {@link #comSftp} antes.
+     *
+     * @return o que libera as leituras presas (idempotente)
+     */
+    public Runnable segurarLeiturasAPartirDe(long offset) {
+        java.util.concurrent.CountDownLatch liberar = new java.util.concurrent.CountDownLatch(1);
+        sftp.addSftpEventListener(new org.apache.sshd.sftp.server.AbstractSftpEventListenerAdapter() {
+            @Override
+            public void reading(org.apache.sshd.server.session.ServerSession sessao, String handle, org.apache.sshd.sftp.server.FileHandle local, long deslocamento,
+                                byte[] dados, int inicio, int tamanho) {
+                if (deslocamento < offset) {
+                    return;
+                }
+                try {
+                    liberar.await(60, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        });
+        return liberar::countDown;
     }
 
     /** Só aceita encaminhar para 127.0.0.1:{@code porta} (o que o {@code permitopen} do authorized_keys faz). */

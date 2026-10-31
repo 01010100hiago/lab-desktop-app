@@ -58,8 +58,13 @@ public final class SondagemDeHost {
      * @param causa o que a conexão lançou, ou {@code null} se o servidor respondeu sem apresentar chave
      */
     public static String traduzirFalha(String host, int porta, Throwable causa) {
+        return traduzirFalha(host, porta, causa, false); // sem saber a fase, a regra da IOException comum (Windows) não vale
+    }
+
+    /** @param aoConectar {@code true} se a falha veio de abrir a conexão (ainda sem sessão); ver {@link CausaDeRede} */
+    static String traduzirFalha(String host, int porta, Throwable causa, boolean aoConectar) {
         String onde = host + ":" + porta;
-        Tipo tipo = classificar(causa);
+        CausaDeRede tipo = CausaDeRede.de(causa, aoConectar);
         return switch (tipo) {
             case RECUSOU -> "O servidor em " + onde + " recusou a conexão. Confira a porta e se o SSH está ligado nele "
                 + "(botão Voltar para mudar o endereço ou a porta).";
@@ -70,51 +75,9 @@ public final class SondagemDeHost {
                 + "(botão Voltar).";
             case SEM_ROTA -> "Este computador não achou caminho até " + host + ". Confira o endereço (botão Voltar) e se o computador está "
                 + "na mesma rede do servidor.";
-            case OUTRO -> "Não consegui obter a chave do servidor em " + onde + ". Confira o endereço e a porta (botão "
+            case OUTRA -> "Não consegui obter a chave do servidor em " + onde + ". Confira o endereço e a porta (botão "
                 + "Voltar) e se o servidor está ligado; também pode ser que essa porta não seja a do SSH.";
         };
-    }
-
-    private enum Tipo { RECUSOU, TEMPO_ESGOTADO, NOME_NAO_ENCONTRADO, SEM_ROTA, OUTRO }
-
-    /** Percorre a cadeia de causas: o MINA embrulha o erro de rede em {@code SshException} e {@code IOException}. */
-    private static Tipo classificar(Throwable causa) {
-        Throwable atual = causa;
-        for (int fundo = 0; atual != null && fundo < 10; fundo++, atual = atual.getCause() == atual ? null : atual.getCause()) {
-            if (atual instanceof java.net.ConnectException) {
-                String texto = minusculas(atual);
-                return texto.contains("timed out") || texto.contains("timeout") ? Tipo.TEMPO_ESGOTADO : Tipo.RECUSOU;
-            }
-            if (atual instanceof java.net.UnknownHostException || atual instanceof java.nio.channels.UnresolvedAddressException) {
-                return Tipo.NOME_NAO_ENCONTRADO;
-            }
-            if (atual instanceof java.net.NoRouteToHostException) {
-                return Tipo.SEM_ROTA;
-            }
-            if (atual instanceof java.net.SocketTimeoutException || atual instanceof java.util.concurrent.TimeoutException) {
-                return Tipo.TEMPO_ESGOTADO;
-            }
-            String texto = minusculas(atual);
-            if (texto.contains("connection refused")) {
-                return Tipo.RECUSOU;
-            }
-            if (texto.contains("no route to host") || texto.contains("network is unreachable") || texto.contains("host is down")
-                || texto.contains("network is down")) {
-                return Tipo.SEM_ROTA;
-            }
-            if (texto.contains("timed out") || texto.contains("specified timeout") || texto.contains("timeout")) {
-                return Tipo.TEMPO_ESGOTADO;
-            }
-            if (texto.contains("unknownhost") || texto.contains("unresolved") || texto.contains("name or service not known")
-                || texto.contains("nodename nor servname")) {
-                return Tipo.NOME_NAO_ENCONTRADO;
-            }
-        }
-        return Tipo.OUTRO;
-    }
-
-    private static String minusculas(Throwable t) {
-        return String.valueOf(t.getMessage()).toLowerCase(java.util.Locale.ROOT);
     }
 
     /**
@@ -162,8 +125,10 @@ public final class SondagemDeHost {
         SshClient cliente = ClienteSshFactory.criar(captura, cfg, AlgoritmosDeHost.PARA_SONDAGEM);
         cliente.start();
         Throwable causa = null;
+        boolean aoConectar = true;
         try (ClientSession sessao = cliente.connect(USUARIO_DA_SONDAGEM, host, porta)
             .verify(cfg.conectar()).getSession()) {
+            aoConectar = false; // a conexão existe: o que falhar daqui em diante não é "recusou"
             // auth() só serve para esperar o key exchange terminar (ou ser recusado pelo verificador).
             sessao.auth().verify(cfg.autenticar());
         } catch (Exception e) {
@@ -176,7 +141,7 @@ public final class SondagemDeHost {
             // O texto técnico (em inglês, do Java ou do MINA) fica só no log; o usuário lê a frase traduzida.
             String motivo = causa == null ? "o servidor não apresentou chave" : Redator.redigir(causa);
             LOG.info("Sondagem de {}:{} sem chave: {}", host, porta, motivo);
-            throw new SondagemException(traduzirFalha(host, porta, causa), causa);
+            throw new SondagemException(traduzirFalha(host, porta, causa, aoConectar), causa);
         }
         String algoritmo = KeyUtils.getKeyType(chave);
         return new Resultado(algoritmo, KeyUtils.getFingerPrint(chave), chave,

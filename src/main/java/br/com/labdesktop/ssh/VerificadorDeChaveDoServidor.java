@@ -3,7 +3,10 @@ package br.com.labdesktop.ssh;
 import br.com.labdesktop.cofre.Pin;
 import java.net.SocketAddress;
 import java.security.PublicKey;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.function.Supplier;
 import org.apache.sshd.client.keyverifier.ServerKeyVerifier;
 import org.apache.sshd.client.session.ClientSession;
@@ -24,6 +27,10 @@ import org.apache.sshd.common.config.keys.KeyUtils;
  * <p>O veredito é gravado também NA SESSÃO que perguntou ({@link #VEREDITO_DA_SESSAO}): o cliente SSH é um só
  * por servidor, e uma tentativa velha ainda em andamento (o Mac dormiu no meio de um connect) não pode sujar a
  * leitura da tentativa nova. {@link #ultimo()} e {@link #ultimaDivergencia()} guardam só "o último de todos".
+ *
+ * <p>Quem lê o veredito de uma sessão usa {@link #vereditoDa(ClientSession)}, e não o atributo direto: o MINA APAGA os atributos de uma sessão quando ela fecha, e recusar a chave do host
+ * fecha a sessão na hora. Lendo o atributo depois, o veredito "divergente" podia se perder e a tela dizer só "não consegui conectar" em vez de "a chave do servidor mudou". Por isso o
+ * veredito também fica numa tabela de referência fraca por sessão (some junto com a sessão, sem vazar).
  */
 public final class VerificadorDeChaveDoServidor implements ServerKeyVerifier {
 
@@ -40,6 +47,7 @@ public final class VerificadorDeChaveDoServidor implements ServerKeyVerifier {
     public static final AttributeKey<Veredito> VEREDITO_DA_SESSAO = new AttributeKey<>();
 
     private final Supplier<List<Pin>> pins;
+    private final Map<ClientSession, Veredito> porSessao = Collections.synchronizedMap(new WeakHashMap<>());
     private volatile Resultado ultimo = Resultado.NAO_VERIFICADO;
     private volatile Divergencia ultimaDivergencia;
 
@@ -68,8 +76,18 @@ public final class VerificadorDeChaveDoServidor implements ServerKeyVerifier {
         ultimo = veredito.resultado();
         if (sessao != null) {
             sessao.setAttribute(VEREDITO_DA_SESSAO, veredito);
+            porSessao.put(sessao, veredito);
         }
         return veredito.resultado() == Resultado.OK;
+    }
+
+    /** O veredito que ESTA sessão recebeu (mesmo depois de ela fechar), ou {@code null} se o verificador nunca foi perguntado por ela. */
+    public Veredito vereditoDa(ClientSession sessao) {
+        if (sessao == null) {
+            return null;
+        }
+        Veredito doAtributo = sessao.getAttribute(VEREDITO_DA_SESSAO);
+        return doAtributo != null ? doAtributo : porSessao.get(sessao);
     }
 
     public Resultado ultimo() {

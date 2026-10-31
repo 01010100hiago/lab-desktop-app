@@ -29,6 +29,11 @@ public record ConfigDoTunel(Duration prazoParaSubir, Duration passoDaEspera, int
         return new ConfigDoTunel(Duration.ofSeconds(4), Duration.ofMillis(10), 3, Duration.ofMillis(300));
     }
 
+    /** A mesma configuração com outra espera pela causa de uma queda (o teste que prova a causa dá folga: a espera acaba assim que o programa sai, então folga não custa tempo). */
+    public ConfigDoTunel comEsperaPelaCausa(Duration nova) {
+        return new ConfigDoTunel(prazoParaSubir, passoDaEspera, tentativasDePorta, nova);
+    }
+
     public ConfigDoTunel comPrazo(Duration novo) {
         return new ConfigDoTunel(novo, passoDaEspera, tentativasDePorta, esperaPelaCausa);
     }

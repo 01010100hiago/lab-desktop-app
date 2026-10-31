@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
  * que os argumentos pedem ({@code --url 127.0.0.1:PORTA} ou {@code localPortNumber=PORTA}) SÓ em 127.0.0.1 e repassa cada conexão para a porta de um servidor (por exemplo o SSHD embutido
  * do teste), dada na variável {@code LABTEST_ALVO}. Não fala com a internet, não conhece AWS nem Cloudflare.
  *
- * <p>Variáveis para o teste programar o comportamento: {@code LABTEST_MORRER_APOS_MS} (sai sozinho depois de escutar), {@code LABTEST_SAIR_LOGO_TEXTO} (escreve o texto e sai na hora,
+ * <p>Variáveis para o teste programar o comportamento: {@code LABTEST_MORRER_APOS_MS} (sai sozinho depois de escutar), {@code LABTEST_MORRER_QUANDO_EXISTIR} (sai quando o teste cria o arquivo, apagando-o), {@code LABTEST_SAIR_LOGO_TEXTO} (escreve o texto e sai na hora,
  * sem escutar), {@code LABTEST_NAO_ESCUTAR} (fica de pé e nunca escuta), {@code LABTEST_NETO_ARQUIVO} (cria um processo filho que grava o próprio pid nesse arquivo e fica dormindo: prova que os descendentes também morrem) e
  * {@code LABTEST_PATH_ARQUIVO} (grava o PATH que o app pediu para o filho).
  */
@@ -79,6 +79,26 @@ public final class FerramentaFalsaDeTunel {
                 try {
                     Thread.sleep(Long.parseLong(morrer));
                 } catch (InterruptedException e) {
+                    return;
+                }
+                System.out.println("An error occurred (ExpiredToken) when calling the StartSession operation");
+                System.out.flush();
+                System.exit(7);
+            });
+            t.setDaemon(true);
+            t.start();
+        }
+        String gatilho = System.getenv("LABTEST_MORRER_QUANDO_EXISTIR");
+        if (gatilho != null) {
+            // morre quando o TESTE manda (cria o arquivo), e não depois de um tempo fixo: num computador lento o tempo fixo vencia antes de a conexão ficar pronta. O arquivo é apagado ao
+            // ser visto, para o túnel seguinte (a reconexão) não morrer à toa.
+            Thread t = new Thread(() -> {
+                Path arquivo = Path.of(gatilho);
+                try {
+                    while (!java.nio.file.Files.deleteIfExists(arquivo)) {
+                        Thread.sleep(10);
+                    }
+                } catch (InterruptedException | java.io.IOException e) {
                     return;
                 }
                 System.out.println("An error occurred (ExpiredToken) when calling the StartSession operation");

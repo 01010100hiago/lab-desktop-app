@@ -105,9 +105,10 @@ class VerificadorDeChaveDoServidorTest {
                 assertThrows(IOException.class, () -> segunda.auth().verify(prazo));
 
                 // O veredito sai no key exchange; com a máquina carregada o auth() pode devolver o erro antes de o
-                // veredito chegar na sessão, então a leitura espera por ele em vez de supor a ordem.
-                var daPrimeira = esperarVeredito(primeira, prazo);
-                var daSegunda = esperarVeredito(segunda, prazo);
+                // veredito chegar. A leitura é por vereditoDa(), que sobrevive ao fechamento da sessão (o MINA apaga os atributos de uma sessão
+                // fechada, e recusar o host a fecha na hora: era essa a corrida, vista em ~1 de cada 8 execuções com a máquina carregada).
+                var daPrimeira = esperarVeredito(verificador, primeira, prazo);
+                var daSegunda = esperarVeredito(verificador, segunda, prazo);
                 assertEquals(VerificadorDeChaveDoServidor.Resultado.OK, daPrimeira.resultado());
                 assertNull(daPrimeira.divergencia());
                 assertEquals(VerificadorDeChaveDoServidor.Resultado.DIVERGENTE, daSegunda.resultado());
@@ -121,11 +122,37 @@ class VerificadorDeChaveDoServidorTest {
         }
     }
 
-    private static VerificadorDeChaveDoServidor.Veredito esperarVeredito(ClientSession sessao, Duration prazo)
+    @Test
+    void oVereditoDeUmaSessaoRecusadaSobreviveAoFechamentoDela() throws Exception {
+        // O MINA apaga os atributos de uma sessão quando ela fecha, e recusar a chave do host fecha a sessão. Quem classifica a falha lê depois: sem isto a tela dizia "não consegui
+        // conectar" em vez de "a chave do servidor mudou".
+        try (ServidorSshDeTeste servidor = ServidorSshDeTeste.ed25519()) {
+            KeyPair outra = KeyUtils.generateKeyPair("ssh-ed25519", 256);
+            var verificador = new VerificadorDeChaveDoServidor(() -> List.of(Pin.de(outra.getPublic())));
+            SshClient cliente = ClienteSshFactory.criar(verificador, ConfigSsh.rapida(), List.of("ssh-ed25519"));
+            cliente.start();
+            try {
+                Duration prazo = Duration.ofSeconds(15);
+                ClientSession sessao = cliente.connect("u", "127.0.0.1", servidor.porta()).verify(prazo).getSession();
+                var antes = esperarVeredito(verificador, sessao, prazo);
+                assertEquals(VerificadorDeChaveDoServidor.Resultado.DIVERGENTE, antes.resultado());
+                sessao.close(true);
+                assertFalse(sessao.isOpen());
+                var depois = verificador.vereditoDa(sessao);
+                assertNotNull(depois, "o veredito não some com a sessão fechada");
+                assertEquals(antes, depois);
+                assertNull(verificador.vereditoDa(null));
+            } finally {
+                cliente.stop();
+            }
+        }
+    }
+
+    private static VerificadorDeChaveDoServidor.Veredito esperarVeredito(VerificadorDeChaveDoServidor verificador, ClientSession sessao, Duration prazo)
         throws InterruptedException {
         long limite = System.nanoTime() + prazo.toNanos();
         while (System.nanoTime() < limite) {
-            var veredito = sessao.getAttribute(VerificadorDeChaveDoServidor.VEREDITO_DA_SESSAO);
+            var veredito = verificador.vereditoDa(sessao);
             if (veredito != null) {
                 return veredito;
             }

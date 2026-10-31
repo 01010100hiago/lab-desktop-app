@@ -186,9 +186,13 @@ class PrimeiroAcessoPeloTunelTest {
             () -> lab.estado().conexao() == EstadoConexao.SSH_OK_SEM_AGENTE || lab.estado().conexao() == EstadoConexao.CONECTADO);
 
         // Cloudflare -> SSM: o servidor é o mesmo, o pin fica, e a conexão volta sem pedir conferência
+        int lancamentosAntes = lancador.lancados.size();
         var troca = gerenciador.atualizar(lab.id(), dados.comTransporte(SSM));
         assertFalse(troca.impressaoApagada(), "trocar o modo não apaga a confiança");
         assertEquals(List.of(pin), cofre.servidor(lab.id()).orElseThrow().pins());
+        // O estado "conectado" da conexão ANTIGA (a da Cloudflare) ainda vale por um instante depois do atualizar: só a conexão nova, que sobe o túnel do aws, conta. Espera pelo observável
+        // (um túnel novo lançado, e o último é o aws) e só então pelo estado; antes, no runner lento, a leitura pegava o último túnel ainda o do cloudflared.
+        Espera.ate(PRAZO, () -> "lançamentos=" + lancador.lancados.size() + " (antes " + lancamentosAntes + ")", () -> lancador.lancados.size() > lancamentosAntes);
         Espera.ate(PRAZO, () -> "estado=" + lab.estado().conexao() + " falha=" + lab.estado().falha(),
             () -> lab.estado().conexao() == EstadoConexao.SSH_OK_SEM_AGENTE || lab.estado().conexao() == EstadoConexao.CONECTADO);
         assertEquals("/ferramentas/aws", lancador.lancados.get(lancador.lancados.size() - 1).argumentosDoApp().get(0));

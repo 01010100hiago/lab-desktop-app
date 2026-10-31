@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -322,7 +323,8 @@ class LeitorDeGitComGitDeVerdadeTest {
             g.escrever(p, "f" + i + ".txt", "x" + i);
             g.git(p, "add", "-A");
             String assunto = i % 2 == 0 ? "assunto\u001edois\u001ftres " + i : "normal " + i;
-            g.git(p, "-c", "user.name=Ana\u001fSilva\u001e", "commit", "-q", "-m", assunto);
+            // assunto e autor com os separadores antigos, mas fora dos ARGUMENTOS (o Windows não os deixa ir por lá): mensagem pela entrada e autor pelo ambiente
+            g.commitarComMensagemPorEntrada(p, Map.of("GIT_AUTHOR_NAME", "Ana\u001fSilva\u001e", "GIT_COMMITTER_NAME", "Ana\u001fSilva\u001e"), assunto, "commit", "-q");
         }
         PaginaDeCommits a = leitor(p).commits(null, 0, 2).valorOuNulo();
         assertEquals(2, a.commits().size(), "os dois commits da página aparecem, os de assunto estranho também");

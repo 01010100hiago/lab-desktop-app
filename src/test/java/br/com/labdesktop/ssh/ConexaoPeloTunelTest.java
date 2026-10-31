@@ -19,12 +19,15 @@ import br.com.labdesktop.transporte.FerramentaExterna;
 import br.com.labdesktop.transporte.LocalizadorDeFerramenta;
 import br.com.labdesktop.transporte.PortasLocais;
 import br.com.labdesktop.transporte.RegistroDeTuneis;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * A conexão SEM PORTA ABERTA de ponta a ponta: o SSH embutido do repo, um túnel externo de verdade (um processo Java do teste que faz o papel do aws e do cloudflared, rodado
@@ -41,6 +44,13 @@ class ConexaoPeloTunelTest {
 
     private AbridorDeTuneis abridor(br.com.labdesktop.transporte.LancadorDeProcesso lancador, LocalizadorDeFerramenta localizador) {
         return new AbridorDeTuneis(lancador, localizador, PortasLocais.doSistema(), registro, ConfigDoTunel.padrao().comPrazo(Duration.ofSeconds(25)),
+            AmbienteDoSistema.de(SistemaOperacional.MAC, "/Users/ana", "ana", Map.of("PATH", "/usr/bin:/bin")));
+    }
+
+    /** Como {@link #abridor}, mas com folga para o programa do túnel ser dado como morto: a espera acaba assim que ele sai, então num runner lento a causa não se perde por 1 s a menos. */
+    private AbridorDeTuneis abridorComFolgaParaACausa(br.com.labdesktop.transporte.LancadorDeProcesso lancador, LocalizadorDeFerramenta localizador) {
+        return new AbridorDeTuneis(lancador, localizador, PortasLocais.doSistema(), registro,
+            ConfigDoTunel.padrao().comPrazo(Duration.ofSeconds(25)).comEsperaPelaCausa(Duration.ofSeconds(15)),
             AmbienteDoSistema.de(SistemaOperacional.MAC, "/Users/ana", "ana", Map.of("PATH", "/usr/bin:/bin")));
     }
 
@@ -301,20 +311,73 @@ class ConexaoPeloTunelTest {
     }
 
     @Test
-    void seOProgramaDoTunelMorrerComAConexaoDePeAConexaoCaiComAMensagemClaraEVoltaPeloBackoff() throws Exception {
+    void seOProgramaDoTunelMorrerComAConexaoDePeAConexaoCaiComAMensagemClaraEVoltaPeloBackoff(@TempDir Path tmp) throws Exception {
         AtomicInteger portaDoSsh = new AtomicInteger();
-        LancadorDeFerramentaFalsaAdiado lancador = new LancadorDeFerramentaFalsaAdiado(portaDoSsh, Map.of("LABTEST_MORRER_APOS_MS", "1500"));
-        try (CenarioDeConexao c = CenarioDeConexao.pelaTunel(SSM, abridor(lancador, tudoInstalado()), ConfigSsh.rapida(), null)) {
+        // o programa do túnel só morre quando o teste manda (depois de a conexão estar de pé): nada de tempo fixo, que num runner lento vencia antes do CONECTADO
+        Path gatilho = tmp.resolve("morrer-agora");
+        LancadorDeFerramentaFalsaAdiado lancador = new LancadorDeFerramentaFalsaAdiado(portaDoSsh, Map.of("LABTEST_MORRER_QUANDO_EXISTIR", gatilho.toString()));
+        try (CenarioDeConexao c = CenarioDeConexao.pelaTunel(SSM, abridorComFolgaParaACausa(lancador, tudoInstalado()), ConfigSsh.rapida(), null)) {
             portaDoSsh.set(c.ssh.porta());
             c.conexao.iniciar();
             Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.CONECTADO);
-            Espera.ate(PRAZO, () -> "estado=" + c.info() + " falha=" + c.info().falha(), () -> c.estado() == EstadoConexao.RECONECTANDO);
-            Falha f = c.info().falha();
-            assertEquals(Falha.Tipo.TRANSPORTE_LOGIN_AWS, f.tipo(), "a causa do túnel, e não 'conexão caiu'");
-            assertTrue(c.info().tentativa() >= 1);
-            assertNotNull(c.info().proximaTentativaEm(), "a reconexão foi agendada pelo backoff, não em laço apertado");
+            Files.createFile(gatilho);
+            // lê o retrato do RECONECTANDO no histórico da conexão, e não o estado de agora: num runner lento a janela do RECONECTANDO pode passar entre a espera e a leitura
+            Espera.ate(PRAZO, () -> "histórico=" + c.historico, () -> c.historico.stream().anyMatch(i -> i.estado() == EstadoConexao.RECONECTANDO));
+            InfoConexao reconectando = c.historico.stream().filter(i -> i.estado() == EstadoConexao.RECONECTANDO).findFirst().orElseThrow();
+            assertEquals(Falha.Tipo.TRANSPORTE_LOGIN_AWS, reconectando.falha().tipo(), "a causa do túnel, e não 'conexão caiu'");
+            assertTrue(reconectando.tentativa() >= 1);
+            assertNotNull(reconectando.proximaTentativaEm(), "a reconexão foi agendada pelo backoff, não em laço apertado");
             // e volta a conectar sozinha (um túnel novo, outra porta)
             Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.CONECTADO && lancador.real().lancados.size() >= 2);
+        }
+    }
+
+    @Test
+    void seOTunelMorreAindaConectandoACausaChegaDepoisDoSocketEAindaAssimEDita() throws Exception {
+        // A corrida de verdade, sem depender de tempo: o socket do túnel fecha (o SSH falha) ANTES de o programa ser dado como morto, então no instante da falha o destino ainda não sabe a
+        // causa; ela só aparece na espera de falhaDoTunelAposPerderASessao(). Antes, a tela dizia "conexão caiu" (REDE) e a causa se perdia.
+        try (java.net.ServerSocket quemFecha = new java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())) {
+            Thread aceitador = Thread.ofVirtual().start(() -> {
+                while (!quemFecha.isClosed()) {
+                    try {
+                        quemFecha.accept().close();
+                    } catch (java.io.IOException e) {
+                        return;
+                    }
+                }
+            });
+            var causa = new br.com.labdesktop.transporte.FalhaDoTunel(br.com.labdesktop.transporte.FalhaDoTunel.Tipo.LOGIN_AWS_EXPIRADO, "Seu login da AWS expirou.", null);
+            var consultas = new AtomicInteger();
+            br.com.labdesktop.transporte.AbridorDeDestino abridorQueDemoraACausa = (transporte, host, porta, aoCair) -> new br.com.labdesktop.transporte.DestinoSsh() {
+                @Override
+                public String host() {
+                    return "127.0.0.1";
+                }
+
+                @Override
+                public int porta() {
+                    return quemFecha.getLocalPort();
+                }
+
+                @Override
+                public Optional<br.com.labdesktop.transporte.FalhaDoTunel> falhaDoTunelAposPerderASessao() {
+                    consultas.incrementAndGet();
+                    return Optional.of(causa); // depois da espera, o programa já foi dado como morto e a saída foi lida
+                }
+
+                @Override
+                public void close() { }
+            };
+            try (CenarioDeConexao c = CenarioDeConexao.pelaTunel(SSM, abridorQueDemoraACausa, ConfigSsh.rapida(), null)) {
+                c.conexao.iniciar();
+                Espera.ate(PRAZO, () -> "histórico=" + c.historico, () -> c.historico.stream().anyMatch(i -> i.estado() == EstadoConexao.RECONECTANDO && i.falha() != null));
+                InfoConexao reconectando = c.historico.stream().filter(i -> i.estado() == EstadoConexao.RECONECTANDO && i.falha() != null).findFirst().orElseThrow();
+                assertEquals(Falha.Tipo.TRANSPORTE_LOGIN_AWS, reconectando.falha().tipo(), "a causa do túnel, e não 'conexão caiu'");
+                assertTrue(consultas.get() >= 1, "esperou a causa do túnel antes de dar a falha por rede");
+            } finally {
+                quemFecha.close();
+                aceitador.join(2_000);
+            }
         }
     }
 

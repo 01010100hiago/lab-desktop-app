@@ -128,6 +128,8 @@ class BaixadorDeBackupsTest {
             escreverBackup(c, "grande.sql.gz", 30 * 1024 * 1024);
             Path destino = Files.createDirectories(tmp.resolve("dl"));
             c.escolhedor.pastaDeDownload = destino;
+            // o servidor para de responder depois de 1 MB: o download NÃO termina sozinho enquanto o teste fotografa e clica (em máquina rápida os 30 MB locais acabavam antes do clique)
+            Runnable liberar = c.sftp.ssh.segurarLeiturasAPartirDe(1024 * 1024);
             BaixadorDeBackups b = baixador(c);
             Visual.naEdt(() -> b.baixar(List.of(new Backup("grande.sql.gz", 30L * 1024 * 1024, QUANDO))));
             Espera.ate(CenaDeArquivos.PRAZO, "andando", () -> Visual.naEdt(() -> b.fila() != null && !b.fila().retratos().isEmpty()
@@ -136,6 +138,7 @@ class BaixadorDeBackupsTest {
             assertTrue(Visual.naEdt(() -> linha.botaoCancelar().isVisible()), "Cancelar aparece enquanto baixa");
             fotografar(b, "backups-download-andando");
             Visual.naEdt(() -> linha.botaoCancelar().doClick(0));
+            liberar.run(); // o cancelamento já foi pedido; agora a leitura presa pode voltar e o download vê que foi cancelado
             esperarFim(b, 1);
             assertEquals(Estado.CANCELADA, primeiro(b).estado());
             assertTrue(Visual.naEdt(b::textoDoResultado).startsWith("Download cancelado"), Visual.naEdt(b::textoDoResultado));
