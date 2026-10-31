@@ -17,7 +17,7 @@ O app leva dentro de si o agente de monitoramento: um programa pequeno, só de l
 
 ## Instalar no Windows
 
-> **Windows: EXPERIMENTAL.** O app e o instalador abrem no Windows, mas ainda não foram provados lá de ponta a ponta. A parte por **SSH** (servidores, terminal, arquivos e Git do servidor) é a esperada; os recursos que mexem no **próprio computador** (Este computador, importar uma pasta daqui, Git local, gravar o compose, arquivos e terminal locais) **ainda não passam nos testes automáticos** e podem falhar. No Mac e no Linux tudo isso passa. O roteiro do que falta está em `docs/CI.md`, seção "Windows: o que falta".
+> **Windows: EXPERIMENTAL.** O app e o instalador abrem no Windows, mas ainda não foram provados lá de ponta a ponta. A parte por **SSH** (servidores, terminal, arquivos e Git do servidor) é a esperada; os recursos que mexem no **próprio computador** (Este computador, importar uma pasta daqui, gravar o compose, criar repositório Git, arquivos locais) já passam nos testes automáticos do Windows, mas com o Docker SIMULADO: o Docker de verdade (Docker Desktop e WSL 2), o terminal local e a proteção do cofre por permissão do Windows **ainda não foram provados lá** e podem falhar, e cerca de 60 testes (telas, nomes de arquivo, permissões) ainda falham no Windows. No Mac e no Linux tudo passa. O roteiro do que falta está em `docs/CI.md`, seção "Windows: o que falta".
 
 Funciona no Windows 10 (versão 22H2 ou mais nova) e no Windows 11, 64 bits. Em computadores com processador ARM o programa roda pela emulação do Windows (mais lento, mas funciona).
 

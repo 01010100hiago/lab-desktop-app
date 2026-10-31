@@ -73,7 +73,7 @@ Baixe o instalador do seu sistema (veja [docs/INSTALAR.md](docs/INSTALAR.md)) ou
 
 [![build](https://github.com/01010100hiago/lab-desktop-app/actions/workflows/build.yml/badge.svg)](https://github.com/01010100hiago/lab-desktop-app/actions/workflows/build.yml) [![instaladores](https://github.com/01010100hiago/lab-desktop-app/actions/workflows/instaladores.yml/badge.svg)](https://github.com/01010100hiago/lab-desktop-app/actions/workflows/instaladores.yml)
 
-O `./gradlew build` roda 3.962 testes automáticos (13 ficam pulados quando falta o Docker de verdade, o `node` ou dados reais de um servidor; telas desenhadas sem abrir janela, SSH e agente de mentira, cofre, Git) e confere as dependências. No GitHub o `build` roda em Linux, Mac e Windows: Linux e Mac são exigidos (se falharem, o commit fica reprovado); o Windows é experimental e informativo (o resultado aparece, mas não reprova). Os selos acima mostram o resultado do momento, que pode estar verde ou vermelho. Para rodar tudo no seu computador: `./gradlew build`. O que falta no Windows está em [docs/CI.md](docs/CI.md), na seção "Windows: o que falta".
+O `./gradlew build` roda 3.982 testes automáticos (14 ficam pulados quando falta o Docker de verdade, o `node` ou dados reais de um servidor; telas desenhadas sem abrir janela, SSH e agente de mentira, cofre, Git) e confere as dependências. No GitHub o `build` roda em Linux, Mac e Windows: Linux e Mac são exigidos (se falharem, o commit fica reprovado); o Windows é experimental e informativo (o resultado aparece, mas não reprova). Os selos acima mostram o resultado do momento, que pode estar verde ou vermelho. Para rodar tudo no seu computador: `./gradlew build`. O que falta no Windows está em [docs/CI.md](docs/CI.md), na seção "Windows: o que falta".
 
 ## Limites de hoje
 
@@ -84,7 +84,7 @@ O `./gradlew build` roda 3.962 testes automáticos (13 ficam pulados quando falt
 - O Git do projeto lê e cria o repositório local. Aprovar e mesclar, desfazer e publicar não existem.
 - O app procura o repositório Git da pasta do projeto NO SERVIDOR; um repositório que está só no seu computador ou no GitHub só aparece depois de ser clonado ou enviado para lá.
 - Os instaladores não têm assinatura de código paga.
-- O Windows é experimental (no primeiro CI, 271 de 3904 testes falharam nele; veja `docs/CI.md`), e Linux e Windows não têm prova de ponta a ponta: o CI do Linux passa a suíte, mas a janela, o Docker e os servidores foram provados à mão só no Mac.
+- O Windows é experimental (no primeiro CI, 271 de 3904 testes falharam nele; depois da correção dos caminhos, 64 de 3973; veja `docs/CI.md`), e Linux e Windows não têm prova de ponta a ponta: o CI do Linux passa a suíte, mas a janela, o Docker e os servidores foram provados à mão só no Mac.
 
 ## Documentação
 
