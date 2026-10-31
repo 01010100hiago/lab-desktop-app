@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.labdesktop.teste.SistemaDoTeste;
 import br.com.labdesktop.Espera;
 import br.com.labdesktop.instalador.Cancelamento;
 import br.com.labdesktop.instalador.EstadoDoPasso;
@@ -20,7 +21,6 @@ import br.com.labdesktop.local.PassoDoLaboratorio;
 import br.com.labdesktop.local.PlanoDeInstalacao;
 import br.com.labdesktop.local.PlataformaLocal;
 import br.com.labdesktop.local.RelatorioDoComputador;
-import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.local.VerificacoesDoComputador;
 import br.com.labdesktop.teste.ComputadorSimulado;
 import br.com.labdesktop.teste.SondaFalsa;
@@ -35,7 +35,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -111,7 +110,7 @@ class DialogoPrepararComputadorTest {
     @BeforeEach
     void preparar() {
         Visual.tema(Tema.CLARO);
-        plataforma = new PlataformaLocal(SistemaOperacional.MAC, tmp.toString(), Map.of());
+        plataforma = SistemaDoTeste.plataformaDoMac(tmp);
         pasta = plataforma.pastaDeProjetosPadrao();
         sonda.programas.add("brew");
     }

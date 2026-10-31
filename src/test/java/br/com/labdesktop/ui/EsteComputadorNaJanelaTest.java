@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.labdesktop.teste.SistemaDoTeste;
 import br.com.labdesktop.Espera;
 import br.com.labdesktop.api.PedidoDeCodigo2fa;
 import br.com.labdesktop.arquivos.ServicosDeArquivos;
@@ -12,7 +13,6 @@ import br.com.labdesktop.cofre.ParametrosKdf;
 import br.com.labdesktop.local.ConfigLocal;
 import br.com.labdesktop.local.PlataformaLocal;
 import br.com.labdesktop.local.ServicosLocais;
-import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.GerenciadorServidores;
 import br.com.labdesktop.servidor.ServidorLab;
@@ -31,7 +31,6 @@ import br.com.labdesktop.util.Preferencias.Tema;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,7 +73,7 @@ class EsteComputadorNaJanelaTest {
         });
         SondaFalsa sonda = new SondaFalsa();
         sonda.programas.add("brew");
-        PlataformaLocal plataforma = new PlataformaLocal(SistemaOperacional.MAC, tmp.toString(), Map.of());
+        PlataformaLocal plataforma = SistemaDoTeste.plataforma(tmp);
         cofre = CofreDeChaves.criar(CaminhosApp.de(tmp.resolve("dados"), tmp.resolve("logs")), SENHA.clone(), ParametrosKdf.MINIMO);
         gerenciador = new GerenciadorServidores(cofre, PedidoDeCodigo2fa.NUNCA, ConfigSsh.rapida(),
             new ServicosLocais(pc, plataforma, sonda, ConfigLocal.rapida()));
@@ -156,7 +155,7 @@ class EsteComputadorNaJanelaTest {
         Espera.ate(PRAZO, () -> "página=" + Visual.naEdt(d::paginaAtual), () -> "resultado".equals(Visual.naEdt(d::paginaAtual)));
         assertTrue(pc.escritas().isEmpty(), "só leituras até o clique: " + pc.escritas());
         assertFalse(Visual.naEdt(() -> d.botaoCriar().getText()).isEmpty());
-        assertTrue(Visual.naEdt(() -> d.campoDaPasta().getText()).endsWith("LabLocal/projects"), Visual.naEdt(() -> d.campoDaPasta().getText()));
+        assertTrue(Visual.naEdt(() -> d.campoDaPasta().getText()).endsWith(Path.of("LabLocal", "projects").toString()), Visual.naEdt(() -> d.campoDaPasta().getText()));
         assertEquals("7070", Visual.naEdt(() -> d.campoDaPorta().getText()), "a porta padrão do local não é a 7000 (AirPlay)");
     }
 

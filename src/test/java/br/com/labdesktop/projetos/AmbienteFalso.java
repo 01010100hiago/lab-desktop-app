@@ -1,11 +1,11 @@
 package br.com.labdesktop.projetos;
 
-import br.com.labdesktop.arquivos.CaminhosLocais;
 import br.com.labdesktop.arquivos.ClienteSftp;
 import br.com.labdesktop.arquivos.ClienteSftpLocal;
 import br.com.labdesktop.arquivos.ErroSftp;
 import br.com.labdesktop.arquivos.FabricaDeClienteSftp;
 import br.com.labdesktop.ssh.ResultadoExec;
+import br.com.labdesktop.teste.SistemaDoTeste;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
@@ -61,13 +61,19 @@ public final class AmbienteFalso {
         return new ResultadoExec(status, new byte[0], stderr.getBytes(StandardCharsets.UTF_8), false);
     }
 
+    /** A raiz dos projetos no caminho do app (no Windows, {@code /D:/a/...}). */
     public String raizDoApp() {
-        return raiz.toString();
+        return app(raiz);
+    }
+
+    /** O caminho do app de uma pasta ou arquivo deste computador de teste. */
+    public static String app(Path caminhoDoSistema) {
+        return SistemaDoTeste.app(caminhoDoSistema);
     }
 
     private FabricaDeClienteSftp fabrica() {
         return () -> {
-            ClienteSftp real = new ClienteSftpLocal(new CaminhosLocais(false), casa.toString());
+            ClienteSftp real = new ClienteSftpLocal(SistemaDoTeste.caminhos(), app(casa));
             abertos.incrementAndGet();
             return (ClienteSftp) Proxy.newProxyInstance(ClienteSftp.class.getClassLoader(), new Class<?>[] {ClienteSftp.class}, (proxy, metodo, args) -> {
                 if (metodo.getName().equals("close")) {
@@ -92,9 +98,9 @@ public final class AmbienteFalso {
         };
     }
 
-    /** Como o computador local: comandos de lista (sem a regra de caracteres seguros) e caminhos do sistema iguais aos do app. */
+    /** Como o computador local: comandos de lista (sem a regra de caracteres seguros) e o caminho do app convertido para o do sistema, como em produção. */
     public AmbienteDeProjetos local() {
-        return new AmbienteDeProjetos(true, raizDoApp(), fabrica(), executor(), caminho -> caminho);
+        return new AmbienteDeProjetos(true, raizDoApp(), fabrica(), executor(), SistemaDoTeste.paraOSistema());
     }
 
     /** Como um servidor por SSH: o MESMO roteiro, mas cada comando passa antes pela linha remota (só argumentos seguros). */

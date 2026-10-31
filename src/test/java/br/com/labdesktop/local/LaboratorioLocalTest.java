@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.labdesktop.teste.SistemaDoTeste;
 import br.com.labdesktop.instalador.Cancelamento;
 import br.com.labdesktop.instalador.EstadoDoPasso;
 import br.com.labdesktop.instalador.GanchosDaInstalacao;
@@ -28,7 +29,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import br.com.labdesktop.plataforma.SistemaOperacional;
 
 /** "Criar meu laboratório local" e "Remover laboratório local" com o computador simulado: passos, idempotência, desfazer e o que nunca se apaga. */
 class LaboratorioLocalTest {
@@ -79,7 +79,7 @@ class LaboratorioLocalTest {
 
     @BeforeEach
     void montar() {
-        plataforma = new PlataformaLocal(SistemaOperacional.MAC, tmp.toString(), Map.of());
+        plataforma = SistemaDoTeste.plataforma(tmp);
         projetos = tmp.resolve("LabLocal").resolve("projects");
         p = ParametrosDoLaboratorio.padrao(7070, projetos.toString());
     }
@@ -137,7 +137,8 @@ class LaboratorioLocalTest {
         assertTrue(run.contains("--pid") && run.contains("host") && run.indexOf("host") == run.indexOf("--pid") + 1, "só o pid do host, dito no aviso: " + run);
         assertTrue(run.stream().noneMatch(a -> a.contains(projetos.toString())), "a pasta dos projetos não entra no container do agente de monitoramento: " + run);
         assertFalse(run.contains("/:/host:ro"), "nem a raiz do disco: " + run);
-        assertEquals(3, run.stream().filter("--mount"::equals).count(), "só os três arquivos que o agente lê, com --mount (nunca -v): " + run);
+        assertEquals(SistemaDoTeste.windows() ? 0 : 3, run.stream().filter("--mount"::equals).count(),
+            "no Mac e no Linux só os três arquivos que o agente lê, com --mount (nunca -v); no Windows nenhum (a montagem pelo WSL não foi verificada): " + run);
         assertTrue(run.stream().noneMatch(a -> a.startsWith("br.com.labdesktop.pasta")), "sem rótulo da pasta: " + run);
         assertTrue(run.contains("PAINEL_EXIGE_TOKEN=1"));
         assertTrue(run.contains("PAINEL_ESCUTA=todas"));

@@ -300,21 +300,29 @@ class VerificacoesDoComputadorTest {
 
     @Test
     void oLocalizadorDoMacNuncaDevolveOAtalhoDeUsrBinEAchaOGitDeVerdade() {
-        java.util.Set<String> existentes = java.util.Set.of("/usr/bin/git", "/usr/bin/python3", "/usr/bin/open");
-        LocalizadorDeProgramas soAtalho = new LocalizadorDeProgramas(SistemaOperacional.MAC, List.of("/usr/bin", "/opt/homebrew/bin"),
-            p -> existentes.contains(p.toString()));
+        // os caminhos são comparados como Path: o Windows os escreve com barra invertida, e o que vale é o mesmo caminho nos dois
+        java.util.Set<java.nio.file.Path> existentes = caminhos("/usr/bin/git", "/usr/bin/python3", "/usr/bin/open");
+        LocalizadorDeProgramas soAtalho = new LocalizadorDeProgramas(SistemaOperacional.MAC, List.of("/usr/bin", "/opt/homebrew/bin"), existentes::contains);
         assertTrue(soAtalho.localizar("git").isEmpty(), "o atalho da Apple não conta como git instalado");
         assertTrue(soAtalho.localizar("python3").isEmpty());
-        assertEquals("/usr/bin/open", soAtalho.localizar("open").orElseThrow().toString(), "o resto de /usr/bin continua valendo");
-        java.util.Set<String> comBrew = java.util.Set.of("/usr/bin/git", "/opt/homebrew/bin/git");
-        LocalizadorDeProgramas l = new LocalizadorDeProgramas(SistemaOperacional.MAC, List.of("/usr/bin", "/opt/homebrew/bin"), p -> comBrew.contains(p.toString()));
-        assertEquals("/opt/homebrew/bin/git", l.localizar("git").orElseThrow().toString());
-        java.util.Set<String> clt = java.util.Set.of("/usr/bin/git", "/Library/Developer/CommandLineTools/usr/bin/git");
-        assertEquals("/Library/Developer/CommandLineTools/usr/bin/git", new LocalizadorDeProgramas(SistemaOperacional.MAC,
-            new PlataformaLocal(SistemaOperacional.MAC, "/Users/ana", Map.of()).diretoriosDeProgramas(), p -> clt.contains(p.toString())).localizar("git").orElseThrow().toString());
+        assertEquals(java.nio.file.Path.of("/usr/bin/open"), soAtalho.localizar("open").orElseThrow(), "o resto de /usr/bin continua valendo");
+        java.util.Set<java.nio.file.Path> comBrew = caminhos("/usr/bin/git", "/opt/homebrew/bin/git");
+        LocalizadorDeProgramas l = new LocalizadorDeProgramas(SistemaOperacional.MAC, List.of("/usr/bin", "/opt/homebrew/bin"), comBrew::contains);
+        assertEquals(java.nio.file.Path.of("/opt/homebrew/bin/git"), l.localizar("git").orElseThrow());
+        java.util.Set<java.nio.file.Path> clt = caminhos("/usr/bin/git", "/Library/Developer/CommandLineTools/usr/bin/git");
+        assertEquals(java.nio.file.Path.of("/Library/Developer/CommandLineTools/usr/bin/git"), new LocalizadorDeProgramas(SistemaOperacional.MAC,
+            new PlataformaLocal(SistemaOperacional.MAC, "/Users/ana", Map.of()).diretoriosDeProgramas(), clt::contains).localizar("git").orElseThrow());
         // no Linux e no Windows /usr/bin/git é o git de verdade
-        assertEquals("/usr/bin/git", new LocalizadorDeProgramas(SistemaOperacional.LINUX, List.of("/usr/bin"), p -> p.toString().equals("/usr/bin/git"))
-            .localizar("git").orElseThrow().toString());
+        assertEquals(java.nio.file.Path.of("/usr/bin/git"), new LocalizadorDeProgramas(SistemaOperacional.LINUX, List.of("/usr/bin"), java.nio.file.Path.of("/usr/bin/git")::equals)
+            .localizar("git").orElseThrow());
+    }
+
+    private static java.util.Set<java.nio.file.Path> caminhos(String... textos) {
+        java.util.Set<java.nio.file.Path> s = new java.util.HashSet<>();
+        for (String t : textos) {
+            s.add(java.nio.file.Path.of(t));
+        }
+        return s;
     }
 
     private ComputadorSimulado.Cont laboratorioDoAppRodandoNa(int porta) {

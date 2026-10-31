@@ -638,7 +638,7 @@ class DialogoNovoProjetoTest {
         Visual.naEdt(() -> d.botaoPrincipal().doClick());
         Espera.ate(PRAZO, "importou", () -> !concluidos.isEmpty());
         assertEquals(new FiltroDeEnvio(false, false), filtroRecebido);
-        assertEquals(List.of("pasta /tmp/Meu Codigo meu-codigo"), chamadas);
+        assertEquals(List.of("pasta " + Path.of("/tmp/Meu Codigo") + " meu-codigo"), chamadas, "o caminho como o sistema o escreve");
     }
 
     @Test

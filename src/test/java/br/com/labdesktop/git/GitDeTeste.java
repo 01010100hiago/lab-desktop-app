@@ -2,7 +2,6 @@ package br.com.labdesktop.git;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import br.com.labdesktop.arquivos.CaminhosLocais;
 import br.com.labdesktop.arquivos.ClienteSftp;
 import br.com.labdesktop.arquivos.ClienteSftpLocal;
 import br.com.labdesktop.arquivos.FabricaDeClienteSftp;
@@ -13,6 +12,7 @@ import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.projetos.AmbienteDeProjetos;
 import br.com.labdesktop.projetos.ExecutorDeArgumentos;
 import br.com.labdesktop.ssh.ResultadoExec;
+import br.com.labdesktop.teste.SistemaDoTeste;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -104,18 +104,18 @@ public final class GitDeTeste {
 
     public FabricaDeClienteSftp arquivos() {
         return () -> {
-            ClienteSftp c = new ClienteSftpLocal(new CaminhosLocais(false), casa.toString());
+            ClienteSftp c = new ClienteSftpLocal(SistemaDoTeste.caminhos(), SistemaDoTeste.app(casa));
             return c;
         };
     }
 
     /** O ambiente de projetos "Este computador" desta pasta, com o executor isolado. */
     public AmbienteDeProjetos ambiente() {
-        return new AmbienteDeProjetos(true, raiz.toString(), arquivos(), executor(), c -> c);
+        return new AmbienteDeProjetos(true, pastaNoApp(raiz), arquivos(), executor(), SistemaDoTeste.paraOSistema());
     }
 
     public AmbienteDeProjetos ambiente(ExecutorDeArgumentos executor) {
-        return new AmbienteDeProjetos(true, raiz.toString(), arquivos(), executor, c -> c);
+        return new AmbienteDeProjetos(true, pastaNoApp(raiz), arquivos(), executor, SistemaDoTeste.paraOSistema());
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -128,6 +128,14 @@ public final class GitDeTeste {
     }
 
     public ResultadoExec bruto(Path pasta, String... args) {
+        return bruto(pasta, Map.of(), new byte[0], args);
+    }
+
+    /**
+     * Roda o git com variáveis de ambiente a mais e texto na entrada padrão. É por onde passa o que o Windows não deixa ir como ARGUMENTO de um programa (o app recusa, certo: mensagem de
+     * várias linhas e caractere de controle chegariam quebrados): a mensagem do commit vai por {@code -F -} e o nome do autor por {@code GIT_AUTHOR_NAME}.
+     */
+    public ResultadoExec bruto(Path pasta, Map<String, String> ambienteExtra, byte[] entrada, String... args) {
         List<String> l = new ArrayList<>();
         l.add("git");
         l.add("-C");
@@ -135,7 +143,8 @@ public final class GitDeTeste {
         l.addAll(List.of(args));
         try {
             Map<String, String> env = new HashMap<>(extra);
-            return processos.executar(l, env, new byte[0], Duration.ofSeconds(60));
+            env.putAll(ambienteExtra);
+            return processos.executar(l, env, entrada, Duration.ofSeconds(60));
         } catch (Exception e) {
             throw new AssertionError(e);
         }
@@ -176,12 +185,24 @@ public final class GitDeTeste {
     /** {@code git add -A} e commit com a mensagem; devolve o hash inteiro. */
     public String commitar(Path pasta, String mensagem) {
         git(pasta, "add", "-A");
-        git(pasta, "commit", "-q", "-m", mensagem);
+        commitarComMensagemPorEntrada(pasta, Map.of(), mensagem, "commit", "-q");
         return git(pasta, "rev-parse", "HEAD").strip();
     }
 
-    /** O app como "caminho do app" desta pasta: o mesmo texto no computador local. */
+    /**
+     * Commit com a mensagem pela entrada padrão ({@code -F -}), e não em {@code -m}: uma mensagem de várias linhas (ou com caractere de controle) como argumento o app recusa no Windows,
+     * e com razão. {@code argsAntes} são as opções do {@code git commit} (sem a mensagem); {@code ambienteExtra} traz, por exemplo, {@code GIT_AUTHOR_NAME}.
+     */
+    public void commitarComMensagemPorEntrada(Path pasta, Map<String, String> ambienteExtra, String mensagem, String... comandoEOpcoes) {
+        List<String> args = new ArrayList<>(List.of(comandoEOpcoes));
+        args.add("-F");
+        args.add("-");
+        ResultadoExec r = bruto(pasta, ambienteExtra, mensagem.getBytes(StandardCharsets.UTF_8), args.toArray(String[]::new));
+        assertEquals(0, r.status(), "git " + String.join(" ", args) + ": " + r.stderr());
+    }
+
+    /** O "caminho do app" desta pasta ({@code /tmp/x} no Mac e no Linux; no Windows, {@code /D:/a/x}). */
     public String pastaNoApp(Path pasta) {
-        return pasta.toString();
+        return SistemaDoTeste.app(pasta);
     }
 }

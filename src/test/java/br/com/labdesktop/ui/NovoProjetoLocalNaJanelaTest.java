@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.labdesktop.teste.SistemaDoTeste;
 import br.com.labdesktop.Espera;
 import br.com.labdesktop.api.PedidoDeCodigo2fa;
 import br.com.labdesktop.arquivos.ServicosDeArquivos;
@@ -13,7 +14,6 @@ import br.com.labdesktop.cofre.ParametrosKdf;
 import br.com.labdesktop.local.ConfigLocal;
 import br.com.labdesktop.local.PlataformaLocal;
 import br.com.labdesktop.local.ServicosLocais;
-import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.projetos.ModelosDeContainer.Modelo;
 import br.com.labdesktop.servidor.AssistenteDeServidor;
 import br.com.labdesktop.servidor.GerenciadorServidores;
@@ -34,7 +34,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
@@ -74,7 +73,7 @@ class NovoProjetoLocalNaJanelaTest {
         System.setProperty(FluxosDeProjeto.PROPRIEDADE_ACOES, "true"); // a trava das ações de escrita, ligada (é UMA flag)
         pc = new ComputadorSimulado();
         SondaFalsa sonda = new SondaFalsa();
-        PlataformaLocal plataforma = new PlataformaLocal(SistemaOperacional.MAC, tmp.toString(), Map.of());
+        PlataformaLocal plataforma = SistemaDoTeste.plataforma(tmp);
         cofre = CofreDeChaves.criar(CaminhosApp.de(tmp.resolve("dados"), tmp.resolve("logs")), SENHA.clone(), ParametrosKdf.MINIMO);
         gerenciador = new GerenciadorServidores(cofre, PedidoDeCodigo2fa.NUNCA, ConfigSsh.rapida(), new ServicosLocais(pc, plataforma, sonda, ConfigLocal.rapida()));
         assistente = new AssistenteDeServidor(cofre, gerenciador, ConfigSsh.rapida());

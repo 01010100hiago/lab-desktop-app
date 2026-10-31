@@ -5,8 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import br.com.labdesktop.teste.SistemaDoTeste;
 import br.com.labdesktop.arquivos.Cancelamento;
 import br.com.labdesktop.git.ConferenciaDoRepositorio.Situacao;
 import br.com.labdesktop.projetos.AmbienteDeProjetos;
@@ -42,9 +44,18 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
         g = new GitDeTeste(tmp);
     }
 
-    /** O leitor da pasta principal pelo {@code find} (regra de linha remota ligada, como no SSH). */
+    /**
+     * O leitor da pasta principal pelo {@code find} (regra de linha remota ligada, como no SSH). O {@code find} é de um servidor Linux por SSH: não existe num Windows (o {@code find.exe}
+     * dele é outro programa) e o computador dele nunca faz o papel de servidor. Lá o leitor é o do disco, o único caminho que "Este computador" tem; o do {@code find} fica provado no Linux e
+     * no Mac.
+     */
     LeitorDeGit viaFind(Path pasta) {
-        return new LeitorDeGitPorExecutor(g.executorComRegraDeSsh(), pasta.toString(), false);
+        return SistemaDoTeste.windows() ? viaDisco(pasta) : new LeitorDeGitPorExecutor(g.executorComRegraDeSsh(), pasta.toString(), false);
+    }
+
+    /** Os leitores que valem neste sistema: o do {@code find} (onde existe) e o do disco. */
+    private List<LeitorDeGit> leitores(Path projeto) {
+        return SistemaDoTeste.windows() ? List.of(viaDisco(projeto)) : List.of(viaFind(projeto), viaDisco(projeto));
     }
 
     /** O leitor da pasta principal pelo disco, como em "Este computador". */
@@ -67,7 +78,7 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
     }
 
     private void igualNosDoisCaminhos(Path projeto, List<String> esperado) throws Exception {
-        for (LeitorDeGit l : List.of(viaFind(projeto), viaDisco(projeto))) {
+        for (LeitorDeGit l : leitores(projeto)) {
             ResumoDoRepositorio r = l.resumo().valorOuNulo();
             assertEquals(ResumoDoRepositorio.Estado.REPOSITORIOS_ABAIXO, r.estado(), String.valueOf(r.falha()));
             assertEquals(esperado, caminhos(r), l.getClass().getSimpleName());
@@ -97,7 +108,7 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
         repoEm("painel-api", "api", "x");
         repoEm("painel-api", "web", "y");
         Path projeto = g.raiz.resolve("painel-api");
-        for (LeitorDeGit l : List.of(viaFind(projeto), viaDisco(projeto))) {
+        for (LeitorDeGit l : leitores(projeto)) {
             ResumoDoRepositorio r = l.resumo().valorOuNulo();
             assertEquals(List.of("api", "web"), caminhos(r));
             for (RepositorioAbaixo a : r.abaixo()) {
@@ -134,7 +145,7 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
         for (int i = 0; i < 25; i++) {
             g.git(g.projeto(String.format("muitos/r%02d", i)), "init", "-q", "-b", "main");
         }
-        for (LeitorDeGit l : List.of(viaFind(projeto), viaDisco(projeto))) {
+        for (LeitorDeGit l : leitores(projeto)) {
             ResumoDoRepositorio r = l.resumo().valorOuNulo();
             assertEquals(20, r.abaixo().size());
             assertTrue(r.abaixoCortado());
@@ -146,10 +157,11 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
     @Test
     void pastaComNomeEstranhoEAchadaELidaSemNadaDentroDoNomeViraComando() throws Exception {
         Path projeto = g.projeto("estranho");
-        String nome = "ação d'ávila \"x\" $(touch ARMADILHA) `ls` $HOME;rm";
+        // o NTFS não aceita aspas duplas num nome: no Windows o nome leva o resto dos símbolos de shell
+        String nome = SistemaDoTeste.windows() ? "ação d'ávila x $(touch ARMADILHA) `ls` $HOME;rm" : "ação d'ávila \"x\" $(touch ARMADILHA) `ls` $HOME;rm";
         repoEm("estranho", nome, "z");
         repoEm("estranho", "normal", "n");
-        for (LeitorDeGit l : List.of(viaFind(projeto), viaDisco(projeto))) {
+        for (LeitorDeGit l : leitores(projeto)) {
             ResumoDoRepositorio r = l.resumo().valorOuNulo();
             assertEquals(List.of(nome, "normal").stream().sorted().toList(), caminhos(r));
         }
@@ -164,6 +176,9 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
     }
 
     private LeitorDeGit subLeitor(Path projeto, String sub) {
+        if (SistemaDoTeste.windows()) {
+            return new LeitorDeGitPorExecutor(g.executor(), ValidadorDeGit.juntar(projeto.toString(), sub), true, null, sub);
+        }
         return new LeitorDeGitPorExecutor(g.executorComRegraDeSsh(), ValidadorDeGit.juntar(projeto.toString(), sub), false, null, sub);
     }
 
@@ -186,6 +201,7 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void oFindEFixoEPorListaNuncaRecebeTextoDoDono() throws Exception {
+        assumeFalse(SistemaDoTeste.windows(), "o find é de um servidor Linux por SSH: não existe no Windows");
         g.projeto("loja-web");
         repoEm("loja-web", "app", "a");
         Path projeto = g.raiz.resolve("loja-web");
@@ -200,6 +216,7 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void seAProcuraFalhaOAppNaoDizSemGitNemLiberaCriar() throws Exception {
+        assumeFalse(SistemaDoTeste.windows(), "a busca por find é de um servidor Linux por SSH: não existe no Windows");
         g.projeto("loja-web");
         repoEm("loja-web", "app", "a");
         Path projeto = g.raiz.resolve("loja-web");
@@ -434,7 +451,7 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
         } catch (RuntimeException | AssertionError e) {
             assumeTrue(false, "este sistema de arquivos não aceita o nome de teste");
         }
-        for (LeitorDeGit l : List.of(viaFind(projeto), viaDisco(projeto))) {
+        for (LeitorDeGit l : leitores(projeto)) {
             ResumoDoRepositorio r = l.resumo().valorOuNulo();
             assertEquals(ResumoDoRepositorio.Estado.REPOSITORIOS_ABAIXO, r.estado(), String.valueOf(r.falha()));
             assertEquals(List.of("app"), caminhos(r), l.getClass().getSimpleName());
@@ -459,7 +476,7 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
         } catch (RuntimeException | AssertionError e) {
             assumeTrue(false, "este sistema de arquivos não aceita o nome de teste");
         }
-        for (LeitorDeGit l : List.of(viaFind(projeto), viaDisco(projeto))) {
+        for (LeitorDeGit l : leitores(projeto)) {
             ResumoDoRepositorio r = l.resumo().valorOuNulo();
             assertEquals(ResumoDoRepositorio.Estado.ERRO, r.estado(), "todos descartados pela validação: erro de busca, não 'sem Git'");
             assertTrue(r.falha().frase().contains("nome que o app não mostra com segurança (1)"), r.falha().frase());
@@ -471,6 +488,7 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
 
     @Test
     void umaRaizComBarraInvertidaNoNomeAindaAcha() throws Exception {
+        assumeFalse(SistemaDoTeste.windows(), "no Windows a barra invertida separa pastas: não existe nome de pasta com ela");
         Path raiz = null;
         try {
             raiz = g.projeto("loja\\web");
@@ -486,7 +504,7 @@ class RepositoriosEmSubpastaComGitDeVerdadeTest {
     // ---------------------------------------------------------------------------------------------
 
     private CriadorDeRepositorio criador(Path pasta) {
-        return new CriadorDeRepositorio(g.ambiente(), pasta.toString());
+        return new CriadorDeRepositorio(g.ambiente(), g.pastaNoApp(pasta));
     }
 
     @Test

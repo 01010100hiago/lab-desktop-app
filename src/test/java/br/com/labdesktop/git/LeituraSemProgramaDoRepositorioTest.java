@@ -42,12 +42,17 @@ class LeituraSemProgramaDoRepositorioTest {
         g.commitar(repo, "Primeiro commit");
         marcador = tmp.resolve("MARCADOR-DO-PROGRAMA");
         Path programa = tmp.resolve("limpar.sh");
-        Files.writeString(programa, "#!/bin/sh\necho executou >> '" + marcador + "'\ncat\n");
+        Files.writeString(programa, "#!/bin/sh\necho executou >> '" + paraOGit(marcador) + "'\ncat\n");
         programa.toFile().setExecutable(true);
-        g.git(repo, "config", "--local", "filter.x.clean", programa.toString());
+        g.git(repo, "config", "--local", "filter.x.clean", paraOGit(programa));
         // alterado e novo, para o status e o diff terem o que comparar
         g.escrever(repo, "a.txt", "um\ndois\ntres\n");
         g.escrever(repo, "novo.txt", "oi\n");
+    }
+
+    /** O caminho como o {@code sh} do git o lê (o filtro roda por ele): com barra comum, porque a barra invertida do Windows seria um escape. Fora do Windows é o mesmo texto. */
+    private static String paraOGit(Path p) {
+        return p.toString().replace('\\', '/');
     }
 
     private static int versaoDoGit(GitDeTeste g, Path repo) {

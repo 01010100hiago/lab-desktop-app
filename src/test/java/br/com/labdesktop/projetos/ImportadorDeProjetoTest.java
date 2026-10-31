@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.labdesktop.arquivos.Cancelamento;
 import br.com.labdesktop.ssh.ComandoDemorouException;
+import br.com.labdesktop.teste.SistemaDoTeste;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -25,6 +26,11 @@ class ImportadorDeProjetoTest {
 
     private static final UrlDeGit URL = UrlDeGit.conferir("https://github.com/usuario/repo.git").url();
 
+    /** O caminho do app (com barras; no Windows, {@code /D:/a/...}) de uma pasta ou arquivo deste computador de teste. */
+    private static String app(Path p) {
+        return AmbienteFalso.app(p);
+    }
+
     private static void escrever(Path p, String texto) throws IOException {
         Files.createDirectories(p.getParent());
         Files.writeString(p, texto, StandardCharsets.UTF_8);
@@ -40,7 +46,7 @@ class ImportadorDeProjetoTest {
     private static AmbienteFalso.Roteiro clonando(String... arquivosEConteudos) {
         return c -> {
             if (c.argumentos().contains("git")) {
-                Path destino = Path.of(c.argumentos().get(c.argumentos().size() - 1));
+                Path destino = SistemaDoTeste.path(c.argumentos().get(c.argumentos().size() - 1));
                 for (int i = 0; i < arquivosEConteudos.length; i += 2) {
                     escrever(destino.resolve(arquivosEConteudos[i]), arquivosEConteudos[i + 1]);
                 }
@@ -64,7 +70,7 @@ class ImportadorDeProjetoTest {
         a.roteiro = clonando("package.json", "{}", "src/index.js", "x");
         ImportadorDeProjeto.Resultado r = new ImportadorDeProjeto(a.remoto()).clonar(URL, "repo", ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA);
         assertEquals("repo", r.nome());
-        assertEquals(List.of(List.of("timeout", "600", "git", "clone", "--", "https://github.com/usuario/repo.git", a.raiz.resolve(".repo.clonando").toString())), soGit(a),
+        assertEquals(List.of(List.of("timeout", "600", "git", "clone", "--", "https://github.com/usuario/repo.git", app(a.raiz.resolve(".repo.clonando")))), soGit(a),
             "o clone vai para uma pasta provisória, com o limite de tempo do servidor");
         assertTrue(Files.isDirectory(a.raiz.resolve("repo")) && !Files.exists(a.raiz.resolve(".repo.clonando")), "e só vira o projeto no fim");
         AmbienteFalso.Chamada git = a.chamadas.get(0);
@@ -125,7 +131,7 @@ class ImportadorDeProjetoTest {
         AmbienteFalso a = new AmbienteFalso(tmp);
         a.roteiro = c -> {
             if (c.argumentos().contains("git")) {
-                Files.createDirectories(Path.of(c.argumentos().get(c.argumentos().size() - 1)));
+                Files.createDirectories(SistemaDoTeste.path(c.argumentos().get(c.argumentos().size() - 1)));
                 return AmbienteFalso.erro(128, "fatal: could not read Username for 'https://github.com': terminal prompts disabled");
             }
             return AmbienteFalso.ok("");
@@ -141,7 +147,7 @@ class ImportadorDeProjetoTest {
     void cloneQueDemoraDemaisParaEApagaOQueFicou() throws Exception {
         AmbienteFalso a = new AmbienteFalso(tmp);
         a.roteiro = c -> {
-            Files.createDirectories(Path.of(c.argumentos().get(c.argumentos().size() - 1)));
+            Files.createDirectories(SistemaDoTeste.path(c.argumentos().get(c.argumentos().size() - 1)));
             throw new ComandoDemorouException(600);
         };
         FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).clonar(URL, "repo", ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA));
@@ -167,7 +173,7 @@ class ImportadorDeProjetoTest {
         AmbienteFalso a = new AmbienteFalso(tmp);
         a.roteiro = c -> {
             if (c.argumentos().contains("git")) {
-                Files.createDirectories(Path.of(c.argumentos().get(c.argumentos().size() - 1)));
+                Files.createDirectories(SistemaDoTeste.path(c.argumentos().get(c.argumentos().size() - 1)));
                 return AmbienteFalso.erro(127, "sh: 1: git: not found");
             }
             return AmbienteFalso.ok("");
@@ -193,7 +199,7 @@ class ImportadorDeProjetoTest {
     void cloneInterrompidoApagaEPropagaAInterrupcao() throws Exception {
         AmbienteFalso a = new AmbienteFalso(tmp);
         a.roteiro = c -> {
-            Files.createDirectories(Path.of(c.argumentos().get(c.argumentos().size() - 1)));
+            Files.createDirectories(SistemaDoTeste.path(c.argumentos().get(c.argumentos().size() - 1)));
             throw new InterruptedException("cancelado");
         };
         assertThrows(InterruptedException.class, () -> new ImportadorDeProjeto(a.remoto()).clonar(URL, "repo", ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA));
@@ -222,7 +228,7 @@ class ImportadorDeProjetoTest {
             return AmbienteFalso.ok("");
         };
         new ImportadorDeProjeto(a.localComConversao(p -> "SIS:" + p)).clonar(URL, "repo", ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA);
-        assertEquals("SIS:" + a.raiz.resolve(".repo.clonando"), a.comandos().get(0).get(4), "no computador local não há timeout (o programa não existe no Windows)");
+        assertEquals("SIS:" + app(a.raiz.resolve(".repo.clonando")), a.comandos().get(0).get(4), "no computador local não há timeout (o programa não existe no Windows)");
         assertTrue(Files.isDirectory(a.raiz.resolve("repo")));
     }
 
@@ -363,10 +369,10 @@ class ImportadorDeProjetoTest {
                 return AmbienteFalso.ok("");
             }
             if (v.get(i).equals("mv")) {
-                Files.move(Path.of(v.get(i + 3)), Path.of(v.get(i + 4)));
+                Files.move(SistemaDoTeste.path(v.get(i + 3)), SistemaDoTeste.path(v.get(i + 4)));
             } else {
-                Path de = Path.of(v.get(i + 3));
-                Path para = Path.of(v.get(i + 4));
+                Path de = SistemaDoTeste.path(v.get(i + 3));
+                Path para = SistemaDoTeste.path(v.get(i + 4));
                 try (Stream<Path> s = Files.walk(de)) {
                     for (Path x : s.toList()) {
                         Path alvo = para.resolve(de.relativize(x).toString());
@@ -399,9 +405,9 @@ class ImportadorDeProjetoTest {
     void adotarMoverTrazAPastaEOComandoEExato() throws Exception {
         AmbienteFalso a = comMvECp();
         escrever(a.casa.resolve("meuapp/src/a.js"), "x");
-        ImportadorDeProjeto.Resultado r = new ImportadorDeProjeto(a.remoto()).adotar(a.casa.resolve("meuapp").toString(), "meu-app", ImportadorDeProjeto.Modo.MOVER,
+        ImportadorDeProjeto.Resultado r = new ImportadorDeProjeto(a.remoto()).adotar(app(a.casa.resolve("meuapp")), "meu-app", ImportadorDeProjeto.Modo.MOVER,
             ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA);
-        assertEquals(List.of("timeout", "1800", "mv", "-nT", "--", a.casa.resolve("meuapp").toString(), a.raiz.resolve("meu-app").toString()), a.comandos().get(0));
+        assertEquals(List.of("timeout", "1800", "mv", "-nT", "--", app(a.casa.resolve("meuapp")), app(a.raiz.resolve("meu-app"))), a.comandos().get(0));
         assertFalse(Files.exists(a.casa.resolve("meuapp")), "a pasta saiu do lugar de antes");
         assertTrue(Files.exists(a.raiz.resolve("meu-app/src/a.js")));
         assertTrue(r.composeCriado());
@@ -411,8 +417,8 @@ class ImportadorDeProjetoTest {
     void adotarCopiarDeixaAOriginal() throws Exception {
         AmbienteFalso a = comMvECp();
         escrever(a.casa.resolve("meuapp/src/a.js"), "x");
-        new ImportadorDeProjeto(a.remoto()).adotar(a.casa.resolve("meuapp").toString(), "meu-app", ImportadorDeProjeto.Modo.COPIAR, ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA);
-        assertEquals(List.of("timeout", "600", "cp", "-aT", "--", a.casa.resolve("meuapp").toString(), a.raiz.resolve(".meu-app.copiando").toString()), a.comandos().get(0),
+        new ImportadorDeProjeto(a.remoto()).adotar(app(a.casa.resolve("meuapp")), "meu-app", ImportadorDeProjeto.Modo.COPIAR, ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA);
+        assertEquals(List.of("timeout", "600", "cp", "-aT", "--", app(a.casa.resolve("meuapp")), app(a.raiz.resolve(".meu-app.copiando"))), a.comandos().get(0),
             "a cópia vai para uma provisória e só vira o projeto no fim");
         assertFalse(Files.exists(a.raiz.resolve(".meu-app.copiando")));
         assertTrue(Files.exists(a.casa.resolve("meuapp/src/a.js")));
@@ -424,10 +430,10 @@ class ImportadorDeProjetoTest {
         AmbienteFalso a = comMvECp();
         escrever(a.casa.resolve("meuapp/a.js"), "x");
         a.roteiro = c -> AmbienteFalso.erro(1, "mv: cannot move: Permission denied");
-        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(a.casa.resolve("meuapp").toString(), "meu-app",
+        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(app(a.casa.resolve("meuapp")), "meu-app",
             ImportadorDeProjeto.Modo.MOVER, ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA));
         assertEquals(FalhaDoProjeto.Tipo.SEM_PERMISSAO, f.tipo());
-        assertEquals("mv -nT -- " + a.casa.resolve("meuapp") + " " + a.raiz.resolve("meu-app"), f.comandoParaCopiar());
+        assertEquals("mv -nT -- " + app(a.casa.resolve("meuapp")) + " " + app(a.raiz.resolve("meu-app")), f.comandoParaCopiar());
         assertTrue(Files.exists(a.casa.resolve("meuapp/a.js")), "nada mudou");
     }
 
@@ -435,10 +441,10 @@ class ImportadorDeProjetoTest {
     void adotarPastaComEspacoNaoPassaPelaLinhaRemotaMasDaOComando() throws Exception {
         AmbienteFalso a = comMvECp();
         escrever(a.casa.resolve("meu app/a.js"), "x");
-        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(a.casa.resolve("meu app").toString(), "meu-app",
+        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(app(a.casa.resolve("meu app")), "meu-app",
             ImportadorDeProjeto.Modo.MOVER, ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA));
         assertEquals(FalhaDoProjeto.Tipo.RECUSADO, f.tipo());
-        assertEquals("mv -nT -- '" + a.casa.resolve("meu app") + "' " + a.raiz.resolve("meu-app"), f.comandoParaCopiar());
+        assertEquals("mv -nT -- '" + app(a.casa.resolve("meu app")) + "' " + app(a.raiz.resolve("meu-app")), f.comandoParaCopiar());
         assertEquals(List.of(), a.comandos(), "nada foi enviado ao servidor");
         assertTrue(Files.exists(a.casa.resolve("meu app/a.js")));
     }
@@ -450,15 +456,15 @@ class ImportadorDeProjetoTest {
         escrever(a.casa.resolve("arq.txt"), "x");
         Files.createSymbolicLink(a.casa.resolve("atalho"), a.casa.resolve("LabLocal"));
         Files.createDirectories(a.casa.resolve("meuapp"));
-        List<String> ruins = List.of("/", a.casa.toString(), a.casa.getParent().toString(), a.casa.resolve("LabLocal").toString(), a.raiz.toString(),
-            a.raiz.resolve("ja").toString(), a.casa.resolve("arq.txt").toString(), a.casa.resolve("atalho").toString(), a.casa.resolve("nao-existe").toString());
+        List<String> ruins = List.of("/", app(a.casa), app(a.casa.getParent()), app(a.casa.resolve("LabLocal")), app(a.raiz),
+            app(a.raiz.resolve("ja")), app(a.casa.resolve("arq.txt")), app(a.casa.resolve("atalho")), app(a.casa.resolve("nao-existe")));
         for (String ruim : ruins) {
             assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(ruim, "novo", ImportadorDeProjeto.Modo.MOVER,
                 ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA), ruim);
         }
         assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar("relativo/x", "novo", ImportadorDeProjeto.Modo.MOVER,
             ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA));
-        assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(a.casa.resolve("meuapp").toString(), "ja", ImportadorDeProjeto.Modo.MOVER,
+        assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(app(a.casa.resolve("meuapp")), "ja", ImportadorDeProjeto.Modo.MOVER,
             ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA), "destino existe");
         assertEquals(List.of(), a.comandos(), "nenhum comando saiu");
     }
@@ -467,7 +473,7 @@ class ImportadorDeProjetoTest {
     void adotarNoLocalNaoExiste() throws Exception {
         AmbienteFalso a = comMvECp();
         Files.createDirectories(a.casa.resolve("meuapp"));
-        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.local()).adotar(a.casa.resolve("meuapp").toString(), "novo",
+        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.local()).adotar(app(a.casa.resolve("meuapp")), "novo",
             ImportadorDeProjeto.Modo.MOVER, ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA));
         assertTrue(f.mensagem().contains("Pasta do meu computador"));
         assertEquals(List.of(), a.comandos());
@@ -482,7 +488,7 @@ class ImportadorDeProjetoTest {
         AmbienteFalso a = new AmbienteFalso(tmp);
         a.roteiro = c -> {
             if (c.argumentos().contains("git")) {
-                Files.createDirectories(Path.of(c.argumentos().get(c.argumentos().size() - 1)));
+                Files.createDirectories(SistemaDoTeste.path(c.argumentos().get(c.argumentos().size() - 1)));
                 escrever(a.raiz.resolve("repo/do-outro.txt"), "de outro cliente"); // apareceu entre a conferência e o fim do clone
             }
             return AmbienteFalso.ok("");
@@ -504,7 +510,7 @@ class ImportadorDeProjetoTest {
             escrever(a.raiz.resolve("meu-app/do-outro.txt"), "de outro cliente");
             return res;
         };
-        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(a.casa.resolve("meuapp").toString(), "meu-app",
+        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(app(a.casa.resolve("meuapp")), "meu-app",
             ImportadorDeProjeto.Modo.COPIAR, ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA));
         assertEquals(FalhaDoProjeto.Tipo.RECUSADO, f.tipo());
         assertEquals("de outro cliente", Files.readString(a.raiz.resolve("meu-app/do-outro.txt")));
@@ -520,7 +526,7 @@ class ImportadorDeProjetoTest {
         FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).clonar(URL, "repo", ImportadorDeProjeto.Observador.NENHUM, c));
         assertEquals(FalhaDoProjeto.Tipo.CANCELADO, f.tipo());
         assertEquals(List.of(), a.comandos());
-        FalhaDoProjeto g = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(a.casa.resolve("x").toString(), "novo",
+        FalhaDoProjeto g = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(app(a.casa.resolve("x")), "novo",
             ImportadorDeProjeto.Modo.MOVER, ImportadorDeProjeto.Observador.NENHUM, c));
         assertEquals(FalhaDoProjeto.Tipo.CANCELADO, g.tipo(), "a adoção também respeita o Parar desde o início");
         assertEquals(List.of(), a.comandos());
@@ -537,7 +543,7 @@ class ImportadorDeProjetoTest {
                 }
                 throw (IOException) causa;
             };
-            FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(a.casa.resolve("meuapp").toString(), "meu-app",
+            FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(app(a.casa.resolve("meuapp")), "meu-app",
                 ImportadorDeProjeto.Modo.MOVER, ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA), causa.toString());
             assertEquals(FalhaDoProjeto.Tipo.INCERTO, f.tipo());
             assertTrue(f.mensagem().contains("Não sei se a pasta terminou"), f.mensagem());
@@ -552,7 +558,7 @@ class ImportadorDeProjetoTest {
         AmbienteFalso a = comMvECp();
         escrever(a.casa.resolve("meuapp/a.js"), "x");
         a.roteiro = c -> AmbienteFalso.erro(124, "");
-        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(a.casa.resolve("meuapp").toString(), "meu-app",
+        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(app(a.casa.resolve("meuapp")), "meu-app",
             ImportadorDeProjeto.Modo.MOVER, ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA));
         assertEquals(FalhaDoProjeto.Tipo.INCERTO, f.tipo());
     }
@@ -565,7 +571,7 @@ class ImportadorDeProjetoTest {
             escrever(a.raiz.resolve("meu-app/do-outro.txt"), "outro"); // o mv -n respeitou o que apareceu e saiu com 0 sem mover
             return AmbienteFalso.ok("");
         };
-        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(a.casa.resolve("meuapp").toString(), "meu-app",
+        FalhaDoProjeto f = assertThrows(FalhaDoProjeto.class, () -> new ImportadorDeProjeto(a.remoto()).adotar(app(a.casa.resolve("meuapp")), "meu-app",
             ImportadorDeProjeto.Modo.MOVER, ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA));
         assertTrue(f.mensagem().contains("não foi movida"), f.mensagem());
         assertTrue(Files.exists(a.casa.resolve("meuapp/a.js")));
@@ -576,7 +582,7 @@ class ImportadorDeProjetoTest {
     void moverAvisaQueContainersComVolumeNaPastaPerdemOCaminho() throws Exception {
         AmbienteFalso a = comMvECp();
         escrever(a.casa.resolve("meuapp/a.js"), "x");
-        ImportadorDeProjeto.Resultado r = new ImportadorDeProjeto(a.remoto()).adotar(a.casa.resolve("meuapp").toString(), "meu-app", ImportadorDeProjeto.Modo.MOVER,
+        ImportadorDeProjeto.Resultado r = new ImportadorDeProjeto(a.remoto()).adotar(app(a.casa.resolve("meuapp")), "meu-app", ImportadorDeProjeto.Modo.MOVER,
             ImportadorDeProjeto.Observador.NENHUM, Cancelamento.NUNCA);
         assertTrue(r.avisos().stream().anyMatch(x -> x.contains("volume") && x.contains("recrie")), r.avisos().toString());
     }

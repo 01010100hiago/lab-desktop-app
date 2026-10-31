@@ -40,7 +40,7 @@ class CriarRepositorioNaJanelaComGitDeVerdadeTest {
     Path tmp;
 
     private DialogoCriarRepositorio abrir(GitDeTeste g, Path projeto, boolean liberada, java.util.concurrent.atomic.AtomicInteger criacoes) {
-        CriadorDeRepositorio criador = new CriadorDeRepositorio(g.ambiente(), projeto.toString());
+        CriadorDeRepositorio criador = new CriadorDeRepositorio(g.ambiente(), g.pastaNoApp(projeto));
         DialogoCriarRepositorio.Motor motor = new DialogoCriarRepositorio.Motor() {
             @Override
             public ConferenciaDoRepositorio conferir() throws Exception {

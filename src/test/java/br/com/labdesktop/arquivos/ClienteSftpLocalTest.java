@@ -1,12 +1,14 @@
 package br.com.labdesktop.arquivos;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.labdesktop.arquivos.EntradaRemota.Tipo;
+import br.com.labdesktop.teste.SistemaDoTeste;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,11 +34,16 @@ class ClienteSftpLocalTest {
     void montar() throws Exception {
         raiz = tmp.toRealPath().resolve("lab");
         Files.createDirectories(raiz);
-        c = new ClienteSftpLocal(new CaminhosLocais(false), tmp.toRealPath().toString());
+        c = new ClienteSftpLocal(SistemaDoTeste.caminhos(), SistemaDoTeste.app(tmp.toRealPath()));
     }
 
     private String t(String relativo) {
-        return raiz.resolve(relativo).toString();
+        return app(raiz.resolve(relativo));
+    }
+
+    /** O caminho do app (no Windows, {@code /D:/a/...}) de uma pasta ou arquivo deste computador de teste. */
+    private static String app(Path p) {
+        return SistemaDoTeste.app(p);
     }
 
     private static ErroSftp.Tipo tipoDe(org.junit.jupiter.api.function.Executable e) {
@@ -51,7 +58,7 @@ class ClienteSftpLocalTest {
         Files.writeString(raiz.resolve(".oculto"), "x");
         Files.setPosixFilePermissions(raiz.resolve("a.txt"), PosixFilePermissions.fromString("rw-r-----"));
 
-        ListagemDePasta l = c.listar(raiz.toString(), 100);
+        ListagemDePasta l = c.listar(app(raiz), 100);
 
         assertEquals(3, l.total());
         assertFalse(l.truncada());
@@ -60,7 +67,7 @@ class ClienteSftpLocalTest {
         assertEquals(5, a.tamanho());
         assertEquals(0640, a.permissoes());
         assertEquals(System.getProperty("user.name"), a.dono());
-        assertEquals(raiz.resolve("a.txt").toString(), a.caminho());
+        assertEquals(app(raiz.resolve("a.txt")), a.caminho());
         assertTrue(l.entradas().stream().anyMatch(e -> e.nome().equals("pasta") && e.ehPasta()));
         assertTrue(l.entradas().stream().anyMatch(e -> e.nome().equals(".oculto") && e.oculto()));
         assertTrue(l.entradas().stream().noneMatch(e -> e.nome().equals(".") || e.nome().equals("..")));
@@ -71,11 +78,11 @@ class ClienteSftpLocalTest {
         for (int i = 0; i < 12; i++) {
             Files.writeString(raiz.resolve("f" + i), "x");
         }
-        ListagemDePasta l = c.listar(raiz.toString(), 5);
+        ListagemDePasta l = c.listar(app(raiz), 5);
         assertEquals(5, l.entradas().size());
         assertEquals(12, l.total());
         assertTrue(l.truncada());
-        assertEquals(1, c.listar(raiz.toString(), 5, n -> n.equals("f3")).total());
+        assertEquals(1, c.listar(app(raiz), 5, n -> n.equals("f3")).total());
     }
 
     @Test
@@ -83,22 +90,23 @@ class ClienteSftpLocalTest {
         Files.createDirectories(raiz.resolve("real"));
         Files.createSymbolicLink(raiz.resolve("atalho"), raiz.resolve("real"));
         Files.createSymbolicLink(raiz.resolve("quebrado"), raiz.resolve("nao-existe"));
-        ListagemDePasta l = c.listar(raiz.toString(), 100);
+        ListagemDePasta l = c.listar(app(raiz), 100);
         EntradaRemota atalho = l.entradas().stream().filter(e -> e.nome().equals("atalho")).findFirst().orElseThrow();
         assertTrue(atalho.link());
         assertEquals(Tipo.PASTA, atalho.tipo(), "vê através do link");
-        assertEquals(raiz.resolve("real").toString(), atalho.destinoDoLink());
+        assertEquals(app(raiz.resolve("real")), atalho.destinoDoLink());
         assertEquals(Tipo.LINK_QUEBRADO, l.entradas().stream().filter(e -> e.nome().equals("quebrado")).findFirst().orElseThrow().tipo());
         EntradaRemota pura = c.estatisticas(t("atalho"));
         assertTrue(pura.link(), "estatisticas não segue o link");
-        assertEquals(raiz.resolve("real").toString(), c.lerLink(t("atalho")));
+        assertEquals(app(raiz.resolve("real")), c.lerLink(t("atalho")));
     }
 
     @Test
     void erroDeLeituraVemEmPortuguesComOTipoCerto() {
         assertEquals(ErroSftp.Tipo.NAO_EXISTE, tipoDe(() -> c.listar(t("nao-existe"), 10)));
         assertEquals(ErroSftp.Tipo.NOME_INVALIDO, tipoDe(() -> c.listar("relativo", 10)));
-        assertEquals(ErroSftp.Tipo.NOME_INVALIDO, tipoDe(() -> c.listar(t("a\nb"), 10)));
+        assertEquals(ErroSftp.Tipo.NOME_INVALIDO, tipoDe(() -> c.listar(app(raiz) + "/a\nb", 10)),
+            "o nome com quebra de linha é montado como texto: o NTFS nem deixa criar um Path assim");
         assertEquals(ErroSftp.Tipo.NAO_EXISTE, tipoDe(() -> c.lerArquivo(t("nao-existe"), 10)));
     }
 
@@ -119,7 +127,7 @@ class ClienteSftpLocalTest {
         Files.setPosixFilePermissions(f, PosixFilePermissions.fromString("rw-r-----"));
         Object antes = Files.readAttributes(f, java.nio.file.attribute.BasicFileAttributes.class).fileKey();
 
-        c.gravarNoLugar(f.toString(), "novo\n".getBytes(StandardCharsets.UTF_8));
+        c.gravarNoLugar(app(f), "novo\n".getBytes(StandardCharsets.UTF_8));
 
         assertEquals("novo\n", Files.readString(f), "o conteúdo foi trocado por inteiro (truncou)");
         assertEquals(0640, ClienteSftpLocal.bitsDe(Files.getPosixFilePermissions(f)));
@@ -142,7 +150,7 @@ class ClienteSftpLocalTest {
         Files.writeString(f, "velho");
         Files.setPosixFilePermissions(f, PosixFilePermissions.fromString("rw-r--r--"));
 
-        c.gravarAtomico(f.toString(), "novo conteúdo".getBytes(StandardCharsets.UTF_8), -1);
+        c.gravarAtomico(app(f), "novo conteúdo".getBytes(StandardCharsets.UTF_8), -1);
 
         assertEquals("novo conteúdo", Files.readString(f));
         assertEquals(0644, ClienteSftpLocal.bitsDe(Files.getPosixFilePermissions(f)), "-1 mantém as do arquivo existente");
@@ -161,7 +169,7 @@ class ClienteSftpLocalTest {
         Files.setPosixFilePermissions(ro, PosixFilePermissions.fromString("r-xr-xr-x"));
         try {
             org.junit.jupiter.api.Assumptions.assumeFalse("root".equals(System.getProperty("user.name")));
-            assertEquals(ErroSftp.Tipo.SEM_PERMISSAO, tipoDe(() -> c.gravarAtomico(ro.resolve("x").toString(), new byte[] {1}, -1)));
+            assertEquals(ErroSftp.Tipo.SEM_PERMISSAO, tipoDe(() -> c.gravarAtomico(app(ro.resolve("x")), new byte[] {1}, -1)));
         } finally {
             Files.setPosixFilePermissions(ro, PosixFilePermissions.fromString("rwxr-xr-x"));
         }
@@ -250,14 +258,34 @@ class ClienteSftpLocalTest {
 
     @Test
     void caminhoCanonicoDoPontoEAPastaPessoalEOResto() throws Exception {
-        assertEquals(tmp.toRealPath().toString(), c.caminhoCanonico("."));
+        assertEquals(app(tmp.toRealPath()), c.caminhoCanonico("."));
         assertEquals("/a/c", c.caminhoCanonico("/a/b/../c"));
+    }
+
+    @Test
+    void noWindowsABarraInvertidaNoCaminhoDoAppERecusadaAntesDeTocarNoDisco() {
+        // no Windows a barra invertida separa pastas: "a\\..\\..\\fora" seria UM nome para a cerca (que só conhece a barra comum) e saltaria para fora dela
+        ClienteSftpLocal w = new ClienteSftpLocal(new CaminhosLocais(true), "/C:/Users/ana");
+        for (String ruim : List.of("/C:/projetos/x\\..\\..\\fora", "/C:\\Users", "/C:/a\\b", "/D:/x/\\")) {
+            assertEquals(ErroSftp.Tipo.NOME_INVALIDO, tipoDe(() -> w.existe(ruim)), ruim);
+            assertEquals(ErroSftp.Tipo.NOME_INVALIDO, tipoDe(() -> w.criarPasta(ruim)), ruim);
+            assertEquals(ErroSftp.Tipo.NOME_INVALIDO, tipoDe(() -> w.listar(ruim, 10)), ruim);
+        }
+        assertEquals("/C:/Users/ana", assertDoesNotThrow(() -> w.caminhoCanonico(".")));
+    }
+
+    @Test
+    void noMacENoLinuxABarraInvertidaEUmNomeDeArquivoComum() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeFalse(SistemaDoTeste.windows(), "o Windows não aceita barra invertida num nome");
+        c.criarArquivoVazio(t("a\\b.txt"));
+        assertTrue(Files.exists(raiz.resolve("a\\b.txt")), "o nome tem a barra invertida e não é uma subpasta");
+        assertTrue(c.existe(t("a\\b.txt")));
     }
 
     @Test
     void fechadoNaoOperaMais() {
         c.close();
-        assertEquals(ErroSftp.Tipo.SEM_CONEXAO, tipoDe(() -> c.listar(raiz.toString(), 10)));
+        assertEquals(ErroSftp.Tipo.SEM_CONEXAO, tipoDe(() -> c.listar(app(raiz), 10)));
     }
 
     @Test
@@ -266,12 +294,28 @@ class ClienteSftpLocalTest {
         Files.writeString(raiz.resolve("projeto/README.md"), "# oi");
         Path fora = Files.createDirectories(tmp.resolve("fora"));
         Files.createSymbolicLink(raiz.resolve("projeto/escapa"), fora);
-        String casa = tmp.toRealPath().toString();
-        ServicoDeArquivos s = new ServicoDeArquivos(c, Escopo.projeto(raiz.toString(), "projeto", casa));
-        ListagemDePasta l = s.listar(raiz.resolve("projeto").toString(), 100, n -> true);
+        String casa = app(tmp.toRealPath());
+        ServicoDeArquivos s = new ServicoDeArquivos(c, Escopo.projeto(app(raiz), "projeto", casa));
+        ListagemDePasta l = s.listar(app(raiz.resolve("projeto")), 100, n -> true);
         assertTrue(l.entradas().stream().anyMatch(e -> e.nome().equals("README.md")));
-        assertEquals(ErroSftp.Tipo.FORA_DA_RAIZ, tipoDe(() -> s.listar(raiz.resolve("projeto/escapa").toString(), 100, n -> true)),
+        assertEquals(ErroSftp.Tipo.FORA_DA_RAIZ, tipoDe(() -> s.listar(app(raiz.resolve("projeto/escapa")), 100, n -> true)),
             "a cerca resolve o link e recusa o que sai da pasta do projeto: igual ao remoto");
+    }
+
+    @Test
+    void noWindowsUmLinkRelativoComBarraInvertidaParaForaDaPastaDoProjetoERecusado() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(SistemaDoTeste.windows(), "o alvo de link com barra invertida só existe no Windows");
+        Path projeto = Files.createDirectories(raiz.resolve("projeto"));
+        Path fora = Files.createDirectories(tmp.resolve("fora"));
+        Files.writeString(fora.resolve("segredo.txt"), "x");
+        // o alvo relativo, escrito como o Windows o escreve (barra invertida): de projeto/escapa sobe duas pastas e cai em fora/
+        Files.createSymbolicLink(projeto.resolve("escapa"), Path.of("..\\..\\fora"));
+        assertEquals("../../fora", c.lerLink(t("projeto/escapa")), "o alvo chega à cerca em caminho do app, com barra comum");
+        ServicoDeArquivos s = new ServicoDeArquivos(c, Escopo.projeto(app(raiz), "projeto", app(tmp.toRealPath())));
+        assertEquals(ErroSftp.Tipo.FORA_DA_RAIZ, tipoDe(() -> s.listar(app(projeto.resolve("escapa")), 100, n -> true)),
+            "a cerca não segue o link para fora da pasta do projeto (no cliente local um link não traz alvo na consulta de um item, e a cerca o recusa)");
+        assertEquals(ErroSftp.Tipo.FORA_DA_RAIZ, tipoDe(() -> s.estatisticas(app(projeto.resolve("escapa")) + "/segredo.txt")),
+            "nem o arquivo que está do outro lado do link");
     }
 
     /** Os atributos de uma JUNÇÃO do Windows como o Java a vê: pasta comum, mas "outra coisa" (ponto de reparse), e não link simbólico. */
@@ -347,22 +391,22 @@ class ClienteSftpLocalTest {
         Path dados = Files.createDirectories(raiz.resolve("AppDados"));
         Files.writeString(dados.resolve("cofre.labcofre"), "segredo");
         Files.createDirectories(raiz.resolve("outra"));
-        Escopo tudo = Escopo.servidor("Tudo (/)", "/", raiz.resolve("projects").toString(), raiz.toString()).comBlindados(java.util.Set.of(dados.toString()));
+        Escopo tudo = Escopo.servidor("Tudo (/)", "/", app(raiz.resolve("projects")), app(raiz)).comBlindados(java.util.Set.of(app(dados)));
         ServicoDeArquivos s = new ServicoDeArquivos(c, tudo);
-        EntradaRemota cofre = s.estatisticas(dados.resolve("cofre.labcofre").toString());
+        EntradaRemota cofre = s.estatisticas(app(dados.resolve("cofre.labcofre")));
 
         ErroSftp erro = assertThrows(ErroSftp.class, () -> s.apagar(cofre));
         assertEquals(ErroSftp.Tipo.PROTEGIDO, erro.tipo());
         assertTrue(erro.getMessage().contains("do próprio Lab Desktop"), erro.getMessage());
         assertEquals(ErroSftp.Tipo.PROTEGIDO, tipoDe(() -> s.renomear(cofre, "outro-nome")));
-        var lote = s.mover(List.of(cofre), raiz.resolve("outra").toString());
+        var lote = s.mover(List.of(cofre), app(raiz.resolve("outra")));
         assertEquals(0, lote.feitos());
         assertEquals(1, lote.falhas().size());
         assertEquals(ErroSftp.Tipo.PROTEGIDO, tipoDe(() -> s.resumirParaApagar(cofre, Cancelamento.NUNCA)));
         assertEquals("segredo", Files.readString(dados.resolve("cofre.labcofre")), "o cofre ficou como estava");
         // o resto do computador continua livre
         Files.writeString(raiz.resolve("qualquer.txt"), "x");
-        s.apagar(s.estatisticas(raiz.resolve("qualquer.txt").toString()));
+        s.apagar(s.estatisticas(app(raiz.resolve("qualquer.txt"))));
         assertFalse(Files.exists(raiz.resolve("qualquer.txt")));
     }
 }

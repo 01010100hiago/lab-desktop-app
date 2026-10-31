@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import br.com.labdesktop.teste.SistemaDoTeste;
 import br.com.labdesktop.arquivos.Cancelamento;
 import br.com.labdesktop.arquivos.ClienteSftp;
 import br.com.labdesktop.arquivos.ErroSftp;
@@ -51,7 +52,7 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
     }
 
     private CriadorDeRepositorio criador(Path pasta) {
-        return new CriadorDeRepositorio(g.ambiente(), pasta.toString());
+        return new CriadorDeRepositorio(g.ambiente(), g.pastaNoApp(pasta));
     }
 
     /** Um projeto parecido com os de verdade: segredos, node_modules, um arquivo grande e um clone de dentro. */
@@ -375,7 +376,7 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
     @Test
     void semGitAConferenciaDizGitAusenteENaoEscreveNada() throws Exception {
         Path p = g.projeto("loja-web");
-        CriadorDeRepositorio criador = new CriadorDeRepositorio(g.ambiente(executorSemGit()), p.toString());
+        CriadorDeRepositorio criador = new CriadorDeRepositorio(g.ambiente(executorSemGit()), g.pastaNoApp(p));
         ConferenciaDoRepositorio c = criador.conferirCriacao();
         assertEquals(Situacao.GIT_AUSENTE, c.situacao());
         assertEquals(FalhaDoGit.Tipo.GIT_NAO_INSTALADO, c.falha().tipo());
@@ -389,7 +390,7 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
     void semGitPorSshAFraseDoShellTambemVira() throws Exception {
         Path p = g.projeto("loja-web");
         ExecutorDeArgumentos shell = (argumentos, ambiente, stdin, prazo) -> new ResultadoExec(127, new byte[0], "sh: 1: git: not found\n".getBytes(StandardCharsets.UTF_8), false);
-        ConferenciaDoRepositorio c = new CriadorDeRepositorio(g.ambiente(shell), p.toString()).conferirCriacao();
+        ConferenciaDoRepositorio c = new CriadorDeRepositorio(g.ambiente(shell), g.pastaNoApp(p)).conferirCriacao();
         assertEquals(Situacao.GIT_AUSENTE, c.situacao());
     }
 
@@ -397,7 +398,7 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
     void gitAntigoDemaisNaoCria() throws Exception {
         Path p = g.projeto("loja-web");
         ExecutorDeArgumentos antigo = (argumentos, ambiente, stdin, prazo) -> new ResultadoExec(0, "git version 2.20.1\n".getBytes(StandardCharsets.UTF_8), new byte[0], false);
-        ConferenciaDoRepositorio c = new CriadorDeRepositorio(g.ambiente(antigo), p.toString()).conferirCriacao();
+        ConferenciaDoRepositorio c = new CriadorDeRepositorio(g.ambiente(antigo), g.pastaNoApp(p)).conferirCriacao();
         assertEquals(Situacao.GIT_ANTIGO, c.situacao());
         assertEquals(FalhaDoGit.Tipo.GIT_ANTIGO, c.falha().tipo());
         assertTrue(c.falha().frase().contains("2.28"));
@@ -424,8 +425,8 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
     @Test
     void seOGitignoreNaoGravaOAppDizOQueFezOQueNaoFezEOComandoEOGitContinuaLa() throws Exception {
         Path p = projetoCompleto();
-        AmbienteDeProjetos amb = new AmbienteDeProjetos(true, g.raiz.toString(), fabricaQueNaoGrava(), g.executor(), c -> c);
-        CriadorDeRepositorio criador = new CriadorDeRepositorio(amb, p.toString());
+        AmbienteDeProjetos amb = new AmbienteDeProjetos(true, g.pastaNoApp(g.raiz), fabricaQueNaoGrava(), g.executor(), SistemaDoTeste.paraOSistema());
+        CriadorDeRepositorio criador = new CriadorDeRepositorio(amb, g.pastaNoApp(p));
         ConferenciaDoRepositorio c = criador.conferirCriacao();
         ResultadoDaCriacao r = criador.criarRepositorio(pedido(c, false), OperacoesDeGit.Observador.NENHUM, new Cancelamento());
         assertFalse(r.criou());
@@ -434,7 +435,7 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
         assertTrue(r.naoFeito().stream().anyMatch(s -> s.contains(".gitignore")), r.naoFeito().toString());
         assertTrue(r.naoFeito().stream().anyMatch(s -> s.contains("git add")));
         assertTrue(r.naoFeito().stream().anyMatch(s -> s.contains("primeiro commit")));
-        assertEquals("rm -rf " + p + "/.git", r.comandoParaDesfazer());
+        assertEquals(comandoParaDesfazer(p, false), r.comandoParaDesfazer());
         assertTrue(r.mensagem().contains("NÃO apaga nada sozinho"), r.mensagem());
         assertTrue(r.mensagem().contains("Sem permissão para gravar aqui."), r.mensagem());
         assertTrue(Files.isDirectory(p.resolve(".git")), "o app NÃO apagou o .git");
@@ -468,11 +469,11 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
     void comandoParaDesfazerUsaAspasQuandoAPastaTemEspaco() throws Exception {
         Path p = g.projeto("meu projeto");
         g.escrever(p, "a.txt", "a");
-        AmbienteDeProjetos amb = new AmbienteDeProjetos(true, g.raiz.toString(), fabricaQueNaoGrava(), g.executor(), c -> c);
-        CriadorDeRepositorio criador = new CriadorDeRepositorio(amb, p.toString());
+        AmbienteDeProjetos amb = new AmbienteDeProjetos(true, g.pastaNoApp(g.raiz), fabricaQueNaoGrava(), g.executor(), SistemaDoTeste.paraOSistema());
+        CriadorDeRepositorio criador = new CriadorDeRepositorio(amb, g.pastaNoApp(p));
         ConferenciaDoRepositorio c = criador.conferirCriacao();
         ResultadoDaCriacao r = criador.criarRepositorio(pedido(c, false), OperacoesDeGit.Observador.NENHUM, new Cancelamento());
-        assertEquals("rm -rf '" + p + "/.git'", r.comandoParaDesfazer());
+        assertEquals(comandoParaDesfazer(p, true), r.comandoParaDesfazer());
     }
 
     @Test
@@ -492,6 +493,17 @@ class CriadorDeRepositorioComGitDeVerdadeTest {
     }
 
     // ---------------------------------------------------------------------------------------------
+
+    /**
+     * O comando que o app mostra para tirar o {@code .git} que criou, em cada sistema: no Mac e no Linux {@code rm -rf <pasta>/.git} (com aspas simples se a pasta tem espaço ou
+     * símbolo); no Windows {@code rmdir /s /q "<pasta>\.git"} (o PowerShell e o cmd o entendem; o {@code rm -rf} não).
+     */
+    private static String comandoParaDesfazer(Path pasta, boolean aspas) {
+        if (SistemaDoTeste.windows()) {
+            return "rmdir /s /q \"" + pasta + "\\.git\"";
+        }
+        return aspas ? "rm -rf '" + pasta + "/.git'" : "rm -rf " + pasta + "/.git";
+    }
 
     private String fotografia(Path p) throws IOException {
         try (Stream<Path> s = Files.walk(p)) {

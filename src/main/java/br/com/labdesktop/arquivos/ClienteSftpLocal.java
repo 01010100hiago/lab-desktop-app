@@ -68,6 +68,10 @@ public final class ClienteSftpLocal implements ClienteSftp {
         if (caminho == null || caminho.isEmpty() || !CaminhoRemoto.semControle(caminho) || caminho.charAt(0) != '/') {
             throw ErroSftp.nomeInvalido("O caminho tem caracteres que não posso usar.");
         }
+        if (caminhos.windows() && caminho.indexOf('\\') >= 0) {
+            // no Windows a barra invertida separa pastas: "a\..\..\fora" seria UM nome para a cerca do gerenciador (que só conhece a barra comum) e saltaria para fora dela
+            throw ErroSftp.nomeInvalido("O caminho tem caracteres que não posso usar.");
+        }
         try {
             Path r = caminhos.path(caminho);
             if (r == null) {
@@ -81,6 +85,12 @@ public final class ClienteSftpLocal implements ClienteSftp {
 
     private String texto(Path p) {
         return caminhos.texto(p);
+    }
+
+    /** O alvo de um link no texto do app (no Windows, {@code ..\\x} vira {@code ../x} e {@code D:\\x} vira {@code /D:/x}); {@code null} se não dá para dizer. */
+    private String alvoDoLink(Path link, String destinoDoSistema) {
+        Path pasta = link.getParent();
+        return caminhos.alvoDoLink(pasta == null ? null : texto(pasta), destinoDoSistema);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -141,7 +151,7 @@ public final class ClienteSftpLocal implements ClienteSftp {
         String destino = null;
         if (link && resolverLink) {
             try {
-                destino = Files.readSymbolicLink(caminho).toString();
+                destino = alvoDoLink(caminho, Files.readSymbolicLink(caminho).toString());
             } catch (IOException | RuntimeException e) {
                 destino = null;
             }
@@ -510,7 +520,14 @@ public final class ClienteSftpLocal implements ClienteSftp {
     @Override
     public String lerLink(String caminho) throws ErroSftp {
         try {
-            return Files.readSymbolicLink(p(caminho)).toString();
+            Path link = p(caminho);
+            String alvo = alvoDoLink(link, Files.readSymbolicLink(link).toString());
+            if (alvo == null) {
+                throw new ErroSftp(ErroSftp.Tipo.OUTRO, "Não consegui dizer para onde este link aponta.");
+            }
+            return alvo;
+        } catch (ErroSftp e) {
+            throw e;
         } catch (IOException | RuntimeException e) {
             throw ErroSftp.de(e, "ler este link");
         }
