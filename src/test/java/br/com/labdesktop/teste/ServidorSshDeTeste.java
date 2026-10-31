@@ -180,9 +180,47 @@ public final class ServidorSshDeTeste implements AutoCloseable {
      */
     public ServidorSshDeTeste comSftp(java.nio.file.Path raiz) {
         sftp = new org.apache.sshd.sftp.server.SftpSubsystemFactory();
+        instalarOuvinteDeSegurar();
         sshd.setSubsystemFactories(List.of(sftp));
         sshd.setFileSystemFactory(new org.apache.sshd.common.file.virtualfs.VirtualFileSystemFactory(raiz));
         return this;
+    }
+
+    /** Quanto o servidor SFTP deixa passar antes de segurar (-1 = não segura) e o trinco que o libera; lidos pelo ouvinte único instalado em {@link #comSftp}. */
+    private volatile long segurarLeituraDe = -1;
+    private volatile long segurarEscritaDe = -1;
+    private final java.util.concurrent.CountDownLatch trincoDeLeitura = new java.util.concurrent.CountDownLatch(1);
+    private final java.util.concurrent.CountDownLatch trincoDeEscrita = new java.util.concurrent.CountDownLatch(1);
+
+    /**
+     * O MINA fotografa a lista de ouvintes quando abre o subsistema SFTP de CADA sessão: um ouvinte acrescentado depois que a conexão já abriu o SFTP (o app reaproveita a sessão) nunca
+     * seria chamado. Por isso há UM ouvinte, instalado já em {@link #comSftp}, que só consulta os limites abaixo.
+     */
+    private void instalarOuvinteDeSegurar() {
+        sftp.addSftpEventListener(new org.apache.sshd.sftp.server.AbstractSftpEventListenerAdapter() {
+            @Override
+            public void reading(org.apache.sshd.server.session.ServerSession sessao, String handle, org.apache.sshd.sftp.server.FileHandle local, long deslocamento,
+                                byte[] dados, int inicio, int tamanho) {
+                esperarSe(segurarLeituraDe, deslocamento, trincoDeLeitura);
+            }
+
+            @Override
+            public void writing(org.apache.sshd.server.session.ServerSession sessao, String handle, org.apache.sshd.sftp.server.FileHandle local, long deslocamento,
+                                byte[] dados, int inicio, int tamanho) {
+                esperarSe(segurarEscritaDe, deslocamento, trincoDeEscrita);
+            }
+        });
+    }
+
+    private static void esperarSe(long limite, long deslocamento, java.util.concurrent.CountDownLatch trinco) {
+        if (limite < 0 || deslocamento < limite) {
+            return;
+        }
+        try {
+            trinco.await(60, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
@@ -193,22 +231,20 @@ public final class ServidorSshDeTeste implements AutoCloseable {
      * @return o que libera as leituras presas (idempotente)
      */
     public Runnable segurarLeiturasAPartirDe(long offset) {
-        java.util.concurrent.CountDownLatch liberar = new java.util.concurrent.CountDownLatch(1);
-        sftp.addSftpEventListener(new org.apache.sshd.sftp.server.AbstractSftpEventListenerAdapter() {
-            @Override
-            public void reading(org.apache.sshd.server.session.ServerSession sessao, String handle, org.apache.sshd.sftp.server.FileHandle local, long deslocamento,
-                                byte[] dados, int inicio, int tamanho) {
-                if (deslocamento < offset) {
-                    return;
-                }
-                try {
-                    liberar.await(60, java.util.concurrent.TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-        });
-        return liberar::countDown;
+        segurarLeituraDe = offset;
+        return trincoDeLeitura::countDown;
+    }
+
+    /**
+     * O par de {@link #segurarLeiturasAPartirDe}, para ENVIOS: o servidor SFTP PARA de aceitar as escritas que passam de {@code offset} bytes, até alguém chamar o que este método
+     * devolve (ou o teste acabar: a espera tem teto). Sem isso os MB locais acabam de subir entre duas olhadas do teste, e ele nunca vê o envio "andando" para clicar em Cancelar.
+     * Precisa de {@link #comSftp} antes.
+     *
+     * @return o que libera as escritas presas (idempotente)
+     */
+    public Runnable segurarEscritasAPartirDe(long offset) {
+        segurarEscritaDe = offset;
+        return trincoDeEscrita::countDown;
     }
 
     /** Só aceita encaminhar para 127.0.0.1:{@code porta} (o que o {@code permitopen} do authorized_keys faz). */

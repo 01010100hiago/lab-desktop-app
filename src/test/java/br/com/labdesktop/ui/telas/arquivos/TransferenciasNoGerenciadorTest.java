@@ -227,6 +227,8 @@ class TransferenciasNoGerenciadorTest {
         try (CenaDeArquivos c = cena(tmp)) {
             Path grande = Files.write(tmp.resolve("grande.bin"), new byte[30 * 1024 * 1024]);
             c.escolhedor.paraEnviar = List.of(grande);
+            // o servidor para de aceitar escritas depois de 1 MB: o envio NÃO termina sozinho enquanto o teste espera "andando" e clica (num runner rápido ou lento os 30 MB locais acabavam entre uma olhada e outra)
+            Runnable liberar = c.sftp.ssh.segurarEscritasAPartirDe(1024 * 1024);
             c.clicar("enviar");
             Espera.ate(CenaDeArquivos.PRAZO, "andando", () -> {
                 Retrato r = primeiro(c);
@@ -236,6 +238,7 @@ class TransferenciasNoGerenciadorTest {
             assertTrue(Visual.naEdt(() -> linha.botaoCancelar().isVisible()));
             assertEquals("Enviando", Visual.naEdt(linha::estadoEmTexto));
             Visual.naEdt(() -> linha.botaoCancelar().doClick(0));
+            liberar.run(); // o cancelamento já foi pedido; agora a escrita presa pode voltar e o envio vê que foi cancelado
             esperarFim(c, 1);
             assertEquals(Estado.CANCELADA, primeiro(c).estado());
             assertEquals("Cancelada", Visual.naEdt(linha::estadoEmTexto));
