@@ -208,9 +208,11 @@ class FilaDeTransferenciasTest {
     void cancelarNoMeioDeUmEnvioGrandeParaSemDeixarArquivoPela(@TempDir Path tmp) throws Exception {
         try (CenarioDeSftp c = new CenarioDeSftp(tmp); FilaDeTransferencias f = fila(c, x -> sempre(Escolha.CANCELAR, false))) {
             Path grande = Files.write(tmp.resolve("grande.bin"), new byte[24 * 1024 * 1024]);
+            Runnable liberar = c.ssh.segurarEscritasAPartirDe(1024 * 1024); // o envio não termina sozinho antes do cancelamento
             long id = f.enviar(List.of(grande), O);
             Espera.ate(PRAZO, () -> "andando", () -> achar(f, id).bytesFeitos() > 512 * 1024);
             f.cancelar(id);
+            liberar.run();
             Retrato fim = esperarFim(f, id);
             assertEquals(Estado.CANCELADA, fim.estado());
             assertEquals("Cancelada.", fim.mensagem());

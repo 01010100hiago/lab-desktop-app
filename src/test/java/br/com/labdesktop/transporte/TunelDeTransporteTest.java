@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.labdesktop.Espera;
 import br.com.labdesktop.cofre.Transporte;
 import br.com.labdesktop.plataforma.SistemaOperacional;
 import br.com.labdesktop.teste.LancadorFalso;
@@ -15,7 +16,9 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -167,26 +170,24 @@ class TunelDeTransporteTest {
 
     @Test
     void sessaoPerdidaComOSocketFechadoUmInstanteAntesDoProcessoMorrerEsperaACausaEAchaOLoginDaAws() throws Exception {
-        // a corrida real: o sistema fecha os sockets do túnel (e a sessão SSH cai) ANTES de o processo ser dado como morto e de a saída ser lida
+        // a corrida real: o sistema fecha os sockets do túnel (e a sessão SSH cai) ANTES de o processo ser dado como morto e de a saída ser lida.
+        // Sem relógio: a espera da configuração é longa (60 s) e quem decide quando o processo morre é o teste, por sinal, depois de ver a chamada presa esperando.
         LancadorFalso lancador = LancadorFalso.queSobe(portas);
-        TunelDeTransporte t = TunelDeTransporte.abrir(SSM, deps(lancador), f -> { });
+        ConfigDoTunel espera = ConfigDoTunel.rapida().comEsperaPelaCausa(Duration.ofSeconds(60));
+        TunelDeTransporte t = TunelDeTransporte.abrir(SSM, deps(lancador, tudoInstalado(), espera, SistemaOperacional.MAC, "/usr/bin:/bin"), f -> { });
         LancadorFalso.Lancamento l = lancador.lancamentos.get(0);
         assertTrue(t.vivo()); // o socket já fechou e a sessão SSH caiu, mas o processo ainda consta como vivo
         assertTrue(t.falhaDoTunel().isEmpty(), "na hora ainda não há causa: é a janela da corrida");
-        Thread morre = Thread.ofVirtual().start(() -> {
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                return;
-            }
-            l.processo.escrever("An error occurred (ExpiredToken) when calling the StartSession operation");
-            l.cair(255);
-        });
-        long inicio = System.nanoTime();
-        FalhaDoTunel f = t.falhaDoTunelAposPerderASessao().orElseThrow();
-        assertEquals(FalhaDoTunel.Tipo.LOGIN_AWS_EXPIRADO, f.tipo(), "a causa chegou durante a espera curta, e não 'conexão caiu'");
-        assertTrue(Duration.ofNanos(System.nanoTime() - inicio).toMillis() < 1_400, "espera só o que precisa");
-        morre.join();
+        CompletableFuture<Optional<FalhaDoTunel>> resposta = new CompletableFuture<>();
+        Thread chamada = Thread.ofPlatform().start(() -> resposta.complete(t.falhaDoTunelAposPerderASessao()));
+        Espera.ate(Duration.ofSeconds(30), "a chamada fica presa esperando o processo morrer",
+            () -> chamada.getState() == Thread.State.WAITING || chamada.getState() == Thread.State.TIMED_WAITING);
+        assertFalse(resposta.isDone(), "enquanto o processo segue 'vivo' a chamada espera: não devolve 'sem causa' antes da hora");
+        l.processo.escrever("An error occurred (ExpiredToken) when calling the StartSession operation");
+        l.cair(255);
+        FalhaDoTunel f = resposta.get(30, TimeUnit.SECONDS).orElseThrow();
+        assertEquals(FalhaDoTunel.Tipo.LOGIN_AWS_EXPIRADO, f.tipo(), "a causa chegou durante a espera, e não 'conexão caiu'");
+        chamada.join();
         t.close();
     }
 
@@ -205,12 +206,14 @@ class TunelDeTransporteTest {
     @Test
     void sessaoPerdidaComACausaJaConhecidaNaoEsperaNada() throws Exception {
         LancadorFalso lancador = LancadorFalso.queSobe(portas);
-        TunelDeTransporte t = TunelDeTransporte.abrir(SSM, deps(lancador), f -> { });
+        // com a espera longa, "responde na hora" é provado pelo resultado voltar bem antes dela, e não por um limite de milissegundos
+        ConfigDoTunel espera = ConfigDoTunel.rapida().comEsperaPelaCausa(Duration.ofSeconds(60));
+        TunelDeTransporte t = TunelDeTransporte.abrir(SSM, deps(lancador, tudoInstalado(), espera, SistemaOperacional.MAC, "/usr/bin:/bin"), f -> { });
         lancador.lancamentos.get(0).processo.escrever("An error occurred (ExpiredToken) when calling the StartSession operation");
         lancador.lancamentos.get(0).cair(255);
         long inicio = System.nanoTime();
         assertEquals(FalhaDoTunel.Tipo.LOGIN_AWS_EXPIRADO, t.falhaDoTunelAposPerderASessao().orElseThrow().tipo());
-        assertTrue(Duration.ofNanos(System.nanoTime() - inicio).toMillis() < 250, "o processo já morreu: responde na hora");
+        assertTrue(Duration.ofNanos(System.nanoTime() - inicio).toSeconds() < 30, "o processo já morreu: responde sem esperar os 60 s");
         t.close();
     }
 
