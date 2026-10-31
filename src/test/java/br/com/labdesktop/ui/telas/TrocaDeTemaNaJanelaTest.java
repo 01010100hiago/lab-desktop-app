@@ -131,9 +131,20 @@ class TrocaDeTemaNaJanelaTest {
                         Visual.naEdt(() -> mostrar(velha, cenario, t));
                         Visual.naEdt(() -> mostrar(nova, cenario, t));
                     }
-                    BufferedImage a = Visual.renderizar(velha, 1440, 860);
-                    BufferedImage b = Visual.renderizar(nova, 1440, 860);
-                    double diferenca = porMil(a, b);
+                    // As duas janelas têm o que anda sozinho (o arco que gira, a hora da leitura, dados que chegam por rede): num runner lento uma das duas ainda está uns quadros atrás. Um defeito de
+                    // verdade (cor guardada de antes da troca, contorno que volta) dá a MESMA diferença em toda tentativa; por isso vale a primeira em que as duas coincidem, até 20 s.
+                    BufferedImage a;
+                    BufferedImage b;
+                    double diferenca;
+                    long limite = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+                    do {
+                        a = Visual.renderizar(velha, 1440, 860);
+                        b = Visual.renderizar(nova, 1440, 860);
+                        diferenca = porMil(a, b);
+                        if (diferenca > TOLERANCIA_POR_MIL) {
+                            Espera.dormir(250);
+                        }
+                    } while (diferenca > TOLERANCIA_POR_MIL && System.nanoTime() < limite);
                     tabela.append(String.format("%s -> %s | %-18s | %.3f por mil pixels diferentes%n", de, para, t, diferenca));
                     if (diferenca > TOLERANCIA_POR_MIL) {
                         ruins.add(String.format("%s -> %s | %s | %.3f por mil", de, para, t, diferenca));

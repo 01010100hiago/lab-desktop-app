@@ -30,7 +30,20 @@ final class ProcessosDeVerdade implements AutoCloseable {
         p.waitFor(10, TimeUnit.SECONDS);
         int pid = Integer.parseInt(saida);
         abertos.add(pid);
+        // O filho do "&" nasce com o nome do shell (bash no Mac, onde /bin/sh é o bash) e só vira "sleep" quando o exec acontece: quem confere a identidade logo em seguida via
+        // "bash" e acha que o número foi reaproveitado. Espera pelo fato observável (o nome já é sleep), nunca por um número de milissegundos.
+        long limite = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (!comando(pid).endsWith("sleep") && System.nanoTime() < limite) {
+            Thread.sleep(20);
+        }
         return pid;
+    }
+
+    private static String comando(int pid) throws IOException, InterruptedException {
+        Process p = new ProcessBuilder("/bin/sh", "-c", "ps -o comm= -p " + pid).start();
+        String s = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+        p.waitFor(10, TimeUnit.SECONDS);
+        return s;
     }
 
     static boolean vivo(int pid) {

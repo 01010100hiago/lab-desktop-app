@@ -286,7 +286,8 @@ class ConexaoPeloTunelTest {
             Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.BLOQUEADO_COFRE);
             esperarMorrer(pid);
             assertFalse(vivo(pid), "bloquear o cofre encerra o programa do túnel");
-            assertEquals(0, registro.quantos());
+            // o registro solta o túnel logo DEPOIS de o programa morrer, na thread que o fechou: espera pelo fato, não vale ler no mesmo instante
+            Espera.ate(PRAZO, () -> "registro=" + registro.quantos(), () -> registro.quantos() == 0);
             Espera.naoAcontece(Duration.ofMillis(600), "reconectar com o cofre bloqueado", () -> lancador.real().lancados.size() > 1);
         }
     }
@@ -304,7 +305,7 @@ class ConexaoPeloTunelTest {
             Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.SUSPENSO);
             esperarMorrer(pid);
             assertFalse(vivo(pid), "o túnel do computador que dormiu é encerrado: a sessão dele já morreu");
-            assertEquals(0, registro.quantos());
+            Espera.ate(PRAZO, () -> "registro=" + registro.quantos(), () -> registro.quantos() == 0); // o registro solta o túnel logo depois de o programa morrer
             c.conexao.aoAcordar();
             Espera.ate(PRAZO, () -> "estado=" + c.info(), () -> c.estado() == EstadoConexao.CONECTADO && lancador.real().lancados.size() == 2);
         }
